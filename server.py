@@ -78,6 +78,15 @@ PER_ADDRESS   = int(os.environ.get("DIRECTORY_PER_ADDRESS", "1"))
 MIN_SECONDS   = int(os.environ.get("DIRECTORY_MIN_SECONDS", "30"))
 BODY_MAX      = 4096
 
+# The heartbeats are nothing: a board posts 200 bytes every ten minutes, so
+# ten thousand boards is seventeen requests a second. The page is the part
+# that could actually be hammered, if somebody links it somewhere busy, so
+# it is rendered at most once every PAGE_CACHE seconds and handed out from
+# memory in between. A list that changes every few minutes does not need to
+# be built fresh for every reader.
+PAGE_CACHE    = int(os.environ.get("DIRECTORY_PAGE_CACHE", "10"))
+_cache = {}
+
 # A board is counted offline when it has missed this many of its own
 # intervals. Three lets a board reboot, or ride out a flaky evening,
 # without losing the hours it spent earning its listing.
@@ -167,7 +176,10 @@ def public_in(row, now):
 
 def settle(con, now):
     """Move listings between states. Called on every announce, which is
-    often enough for a list that changes every few minutes."""
+    often enough for a list that changes every few minutes. Returns how
+    many listings moved, so the page cache can be dropped when, and only
+    when, the page would actually look different."""
+    before = con.total_changes
     grace = f"(interval_min * 60 * {MISSED_BEATS})"
     con.execute(
         f"UPDATE boards SET state='offline' "
@@ -178,6 +190,7 @@ def settle(con, now):
         (now, int(PENDING_HOURS * 3600)))
     con.execute("DELETE FROM boards WHERE ? - last_seen > ?",
                 (now, int(EXPIRE_DAYS * 86400)))
+    return con.total_changes - before
 
 
 def rate_limited(con, address, now):
@@ -229,7 +242,8 @@ def announce(payload, address):
     with db() as con:
         if rate_limited(con, address, now):
             return 429, {"error": "slow down"}, {}
-        settle(con, now)
+        if settle(con, now):
+            _cache.clear()                             # somebody came or went
 
         row = None
         if token:
@@ -247,6 +261,8 @@ def announce(payload, address):
                 f"state=?, streak_start=? WHERE id=?",
                 args + [now, state, streak, row["id"]])
             fresh = con.execute("SELECT * FROM boards WHERE id=?", (row["id"],)).fetchone()
+            if fresh["state"] != row["state"]:
+                _cache.clear()                         # the page says something new now
             return 200, listing(fresh, now), {"X-Listing-Token": token}
 
         # a board we have not met before
@@ -261,6 +277,7 @@ def announce(payload, address):
             f"streak_start, beats) VALUES(?, {marks}, ?, ?, ?, ?, 1)",
             [token] + list(fields.values()) + [state, now, now, now])
         fresh = con.execute("SELECT * FROM boards WHERE token=?", (token,)).fetchone()
+        _cache.clear()                                 # a board we had not met before
         return 200, listing(fresh, now), {"X-Listing-Token": token}
 
 
@@ -361,10 +378,20 @@ def board_rows(rows, now):
     return "".join(out)
 
 
+def cached(key, seconds, build):
+    hit = _cache.get(key)
+    now = time.time()
+    if hit and now - hit[0] < seconds:
+        return hit[1]
+    value = build()
+    _cache[key] = (now, value)
+    return value
+
+
 def index_page():
     now = int(time.time())
     with db() as con:
-        settle(con, now)
+        settle(con, now)                               # keep the list honest on read
         rows = con.execute(
             "SELECT * FROM boards WHERE state IN ('online','offline') "
             "ORDER BY state='online' DESC, "
@@ -444,21 +471,22 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/":
-            self.reply(200, index_page())
+            self.reply(200, cached("index", PAGE_CACHE, index_page))
         elif path == "/rules":
             self.reply(200, simple_page("House rules", RULES))
         elif path == "/how":
             self.reply(200, simple_page("How to get listed", HOW))
         elif path == "/api/boards.json":
-            now = int(time.time())
-            with db() as con:
-                settle(con, now)
-                rows = con.execute(
-                    "SELECT name, owner, description, host, address, port, nodes, busy, "
-                    "state, calls24, minutes24, streak_start, last_seen FROM boards "
-                    "WHERE state IN ('online','offline')").fetchall()
-            out = [dict(r) for r in rows]
-            self.reply(200, json.dumps({"boards": out}, indent=1),
+            def build():
+                now = int(time.time())
+                with db() as con:
+                    settle(con, now)
+                    rows = con.execute(
+                        "SELECT name, owner, description, host, address, port, nodes, busy, "
+                        "state, calls24, minutes24, streak_start, last_seen FROM boards "
+                        "WHERE state IN ('online','offline')").fetchall()
+                return json.dumps({"boards": [dict(r) for r in rows]}, indent=1)
+            self.reply(200, cached("json", PAGE_CACHE, build),
                        "application/json; charset=utf-8")
         elif path == "/health":
             self.reply(200, "ok\n", "text/plain; charset=utf-8")

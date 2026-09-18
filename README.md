@@ -71,10 +71,14 @@ On a fresh Debian or Ubuntu box:
 ```sh
 git clone https://github.com/rwmech/unleashed_directory.git
 cd unleashed_directory
-sudo ./deploy/setup.sh
+sudo ./deploy/setup.sh example.com example.net example.org
 ```
 
-That installs Caddy and Python, creates a `directory` system user that owns nothing but its database, installs the service and the web configuration, and opens ports 22, 80 and 443. It is safe to run again after a `git pull`.
+The first domain is the real one and any others redirect to it. With no arguments it serves plain HTTP on port 80, which is enough to try it.
+
+That installs Caddy and Python, creates a `directory` system user that owns nothing but its database, writes the web configuration for your domains, starts the service, and opens ports 22, 80 and 443. Safe to run again after a `git pull`.
+
+The full walkthrough, including making the droplet and pointing DNS at it, is in [INSTALL.md](INSTALL.md).
 
 ⚠️ **The one thing not to change in `deploy/Caddyfile`:** `/announce` must stay reachable over plain HTTP with **no redirect to HTTPS**. Boards are microcontrollers with no TLS stack. Caddy's default is to redirect every `http://` request, and a board that receives a 308 reports it to its sysop as "refused" with no way to find out why. The supplied configuration carves that one path out and sends everything else to HTTPS.
 
@@ -106,6 +110,21 @@ SELECT * FROM reports ORDER BY at DESC;
 - Get along.
 
 **These rules bind the directory, not its users.** Anyone can run one with different rules, or none. Delisting a board removes it from one web page; it does not remove it from the internet, and it was never meant to.
+
+## Documentation
+
+| File | For |
+|---|---|
+| [INSTALL.md](INSTALL.md) | standing one up from nothing, on a $4 droplet |
+| [PROTOCOL.md](PROTOCOL.md) | the wire format, for other implementations |
+| [CHANGELOG.md](CHANGELOG.md) | what changed |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | what it depends on, which is close to nothing |
+
+## Licence
+
+GNU General Public License v2 or later, the same terms as
+[µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. Every file
+carries an SPDX line. See [LICENSE](LICENSE).
 
 ## Protocol
 
