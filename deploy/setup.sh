@@ -104,7 +104,17 @@ fi
 say "User and directories"
 id -u directory >/dev/null 2>&1 || useradd --system --home "$DATA" --shell /usr/sbin/nologin directory
 install -d -o directory -g directory -m 750 "$DATA"
-install -d -m 755 "$DEST" /var/log/caddy
+install -d -m 755 "$DEST"
+
+# Caddy runs as its own user and writes an access log. A root-owned log
+# directory means it cannot open the file, and Caddy treats that as a bad
+# config and refuses to start at all: the symptom is nothing listening on
+# 80 or 443, and the cause is one line about "setting up custom log".
+if id -u caddy >/dev/null 2>&1; then
+    install -d -o caddy -g caddy -m 755 /var/log/caddy
+else
+    install -d -m 755 /var/log/caddy
+fi
 
 say "Code"
 install -m 644 "$SRC/server.py"   "$DEST/server.py"
@@ -194,8 +204,17 @@ else
 fi
 
 # A broken Caddyfile that gets installed anyway takes the site down with it.
+# Note that validate only reads the file: it cannot tell whether Caddy will
+# be allowed to open the log it names, which is checked below instead.
 caddy validate --config "$CADDY"
 systemctl reload caddy || systemctl restart caddy
+sleep 1
+if ! systemctl is-active --quiet caddy; then
+    echo
+    echo "Caddy did not start. The last few lines say why:"
+    journalctl -u caddy -n 12 --no-pager || true
+    exit 1
+fi
 
 say "Firewall"
 ufw allow 22/tcp  >/dev/null
@@ -208,6 +227,7 @@ say "State"
 systemctl --no-pager --lines=3 status unleashed-directory || true
 echo
 curl -fsS http://127.0.0.1:8080/health >/dev/null && echo "directory answering on 8080"
+systemctl is-active --quiet caddy && echo "caddy running on 80 and 443"
 
 if [ ${#DOMAINS[@]} -gt 0 ]; then
     echo
