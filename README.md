@@ -21,6 +21,20 @@ It is the server behind [unleashedbbs.com](https://unleashedbbs.com), and it is 
 
 Companion to [µnleashed BBS](https://github.com/rwmech/unleashed_BBS), though it will list anything that speaks the protocol.
 
+## One server, three faces
+
+The same process serves three sites, chosen by the `Host` header, so one small
+machine covers all of it:
+
+| Role | Serves |
+|---|---|
+| **list** | the boards that are up right now, the house rules, how to get listed |
+| **about** | what this is and where it came from, at length |
+| **data** | the API and what is in it |
+
+Give the installer one domain and it serves everything; give it three and each
+gets its own face. Nothing about the split is required to run your own.
+
 ## What it does
 
 - Takes `POST /announce` heartbeats from boards.
@@ -28,6 +42,7 @@ Companion to [µnleashed BBS](https://github.com/rwmech/unleashed_BBS), though i
 - Holds a new listing back until it has sustained heartbeats for three hours.
 - Shows which boards are up, which have gone quiet, and how long each has been running.
 - Tells each board the public address its heartbeat arrived from, which is dynamic DNS as a side effect.
+- Publishes new boards as an RSS feed at `/feed.xml`, so people can follow the list without an account, an email address or anything that knows who is reading.
 
 ## What it will not do
 
@@ -55,6 +70,10 @@ Settings come from the environment, so a deployment never edits the code:
 | `DIRECTORY_EXPIRE_DAYS` | `7` | silence before a listing is deleted and its name freed |
 | `DIRECTORY_PER_ADDRESS` | `1` | automatic listings per address, per `/64` on IPv6. The rest queue for a human |
 | `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one address |
+| `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page and feed are reused |
+| `DIRECTORY_LIST_DOMAIN` | | the domain that shows the board list |
+| `DIRECTORY_ABOUT_DOMAIN` | | the domain that shows what this is |
+| `DIRECTORY_DATA_DOMAIN` | | the domain that shows the API |
 
 ## Tests
 
@@ -62,7 +81,7 @@ Settings come from the environment, so a deployment never edits the code:
 python3 selftest.py
 ```
 
-Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, and the pages. 28 checks, no network access beyond loopback.
+Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, the three faces, the feed and the pages. 39 checks, no network access beyond loopback.
 
 ## Deploying it
 
@@ -71,10 +90,12 @@ On a fresh Debian or Ubuntu box:
 ```sh
 git clone https://github.com/rwmech/unleashed_directory.git
 cd unleashed_directory
-sudo ./deploy/setup.sh example.com example.net example.org
+sudo ./deploy/setup.sh example.com example.org example.net
 ```
 
-The first domain is the real one and any others redirect to it. With no arguments it serves plain HTTP on port 80, which is enough to try it.
+The domains are positional and map to the three faces: **list**, **about**, **data**. With no arguments it serves plain HTTP on port 80, which is enough to try it.
+
+Certificates are Caddy's own job. It obtains them on first start and renews them in the background, so there is no certbot here and no cron job to add.
 
 That installs Caddy and Python, creates a `directory` system user that owns nothing but its database, writes the web configuration for your domains, starts the service, and opens ports 22, 80 and 443. Safe to run again after a `git pull`.
 

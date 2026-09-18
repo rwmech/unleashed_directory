@@ -55,8 +55,11 @@ def post(payload):
         return e.code, json.loads(e.read().decode() or "{}"), dict(e.headers)
 
 
-def get(path):
-    with urllib.request.urlopen(f"{BASE}{path}", timeout=5) as r:
+def get(path, host=None):
+    req = urllib.request.Request(f"{BASE}{path}")
+    if host:
+        req.add_header("Host", host)
+    with urllib.request.urlopen(req, timeout=5) as r:
         return r.status, r.read().decode()
 
 
@@ -70,7 +73,10 @@ def main():
                DIRECTORY_DB=db,
                DIRECTORY_PORT=str(PORT),
                DIRECTORY_PENDING_HOURS="0.0006",     # about two seconds
-               DIRECTORY_MIN_SECONDS="0")
+               DIRECTORY_MIN_SECONDS="0",
+               DIRECTORY_LIST_DOMAIN="boards.example",
+               DIRECTORY_ABOUT_DOMAIN="about.example",
+               DIRECTORY_DATA_DOMAIN="data.example")
     server = subprocess.Popen([sys.executable, "server.py"], env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
@@ -144,6 +150,27 @@ def main():
         check("a board with no name is refused", code == 400)
         code, body, _ = post({"name": "Bad Port", "port": 99999})
         check("a silly port is refused", code == 400)
+
+        print("One server, three faces")
+        _, page = get("/", host="about.example")
+        check("the about domain serves the argument", "Electronic freedom" in page)
+        check("with the history on it", "CBBS" in page and "1978" in page)
+        check("and points at the other two", "boards.example" in page and "data.example" in page)
+
+        _, page = get("/", host="data.example")
+        check("the data domain documents the API", "/api/boards.json" in page)
+        check("and says what is not in it", "Nothing about callers" in page)
+
+        _, page = get("/", host="boards.example")
+        check("the list domain still lists boards", "Rusty Modem" in page)
+
+        print("The feed")
+        code, feed = get("/feed.xml")
+        check("there is an RSS feed", code == 200 and "<rss version=\"2.0\"" in feed)
+        check("the board that went public is in it", "Rusty Modem" in feed)
+        check("with a date and a stable id", "pubDate" in feed and "board-" in feed)
+        check("the queued one is not", "Squatter" not in feed)
+        check("the page tells readers where the feed is", "application/rss+xml" in page)
 
         print("The rest of the site")
         code, page = get("/rules")

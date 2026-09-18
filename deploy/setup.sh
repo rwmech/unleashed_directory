@@ -7,12 +7,19 @@
 # Purpose:     Turns a fresh Debian or Ubuntu box into a directory server.
 #              Safe to run again: every step checks before it acts.
 #
-# Usage:       sudo ./deploy/setup.sh example.com [alias.com ...]
+# Usage:       sudo ./deploy/setup.sh <list> [about] [data]
 #              sudo ./deploy/setup.sh                  (no TLS, port 80 only)
 #
-#              The first domain is the real one. Any others redirect to it,
-#              which is what you want when you have bought the .net and the
-#              .org as well. Caddy gets the certificates by itself.
+#              One server, up to three faces, chosen by the Host header:
+#
+#                list    the boards that are up              example.com
+#                about   what this is, and where it came from example.org
+#                data    the API, and what is in it           example.net
+#
+#              Give one domain and it serves all of it. Give three and each
+#              gets its own face. Caddy obtains the certificates itself and
+#              renews them in the background: there is no certbot here, no
+#              cron job to add, and adding one would fight it.
 #
 # What it does:
 #   - installs Caddy and python3
@@ -69,6 +76,19 @@ install -m 644 "$SRC/selftest.py" "$DEST/selftest.py"
 say "Service"
 install -m 644 "$SRC/deploy/unleashed-directory.service" \
     /etc/systemd/system/unleashed-directory.service
+
+# Which domain plays which part, in a drop-in, so the unit that ships in the
+# repository never needs editing for a deployment.
+mkdir -p /etc/systemd/system/unleashed-directory.service.d
+{
+    echo "# Written by deploy/setup.sh"
+    echo "[Service]"
+    [ -n "${DOMAINS[0]:-}" ] && echo "Environment=DIRECTORY_LIST_DOMAIN=${DOMAINS[0]}"
+    [ -n "${DOMAINS[1]:-}" ] && echo "Environment=DIRECTORY_ABOUT_DOMAIN=${DOMAINS[1]}"
+    [ -n "${DOMAINS[2]:-}" ] && echo "Environment=DIRECTORY_DATA_DOMAIN=${DOMAINS[2]}"
+    true
+} > /etc/systemd/system/unleashed-directory.service.d/domains.conf
+
 systemctl daemon-reload
 systemctl enable unleashed-directory >/dev/null
 systemctl restart unleashed-directory
@@ -102,15 +122,11 @@ else
         ALL="${ALL:+$ALL, }$d, www.$d"
         HTTP_ALL="${HTTP_ALL:+$HTTP_ALL, }http://$d, http://www.$d"
     done
-    EXTRA=""
-    if [ ${#DOMAINS[@]} -gt 1 ]; then
-        for d in "${DOMAINS[@]:1}"; do
-            EXTRA="${EXTRA:+$EXTRA, }$d, www.$d"
-        done
-    fi
 
-    echo "main domain: $MAIN"
-    [ -n "$EXTRA" ] && echo "redirecting:  $EXTRA"
+    echo "board list: $MAIN"
+    [ -n "${DOMAINS[1]:-}" ] && echo "about:      ${DOMAINS[1]}"
+    [ -n "${DOMAINS[2]:-}" ] && echo "data:       ${DOMAINS[2]}"
+    true
 
     {
         echo "# Written by deploy/setup.sh. Edit deploy/setup.sh, not this file."
@@ -126,8 +142,10 @@ else
         echo "		redir https://$MAIN{uri} permanent"
         echo "	}"
         echo "}"
+        # Every domain is served rather than redirected: the server works out
+        # which face to show from the Host header it is handed.
         echo
-        echo "$MAIN, www.$MAIN {"
+        echo "$ALL {"
         echo "	encode gzip"
         echo "	reverse_proxy 127.0.0.1:8080"
         echo "	log {"
@@ -135,12 +153,6 @@ else
         echo "		format console"
         echo "	}"
         echo "}"
-        if [ -n "$EXTRA" ]; then
-            echo
-            echo "$EXTRA {"
-            echo "	redir https://$MAIN{uri} permanent"
-            echo "}"
-        fi
     } > "$CADDY"
 fi
 
@@ -164,4 +176,7 @@ if [ ${#DOMAINS[@]} -gt 0 ]; then
     echo
     echo "Point a board at:  http://${DOMAINS[0]}/announce"
     echo "Then wait three hours of heartbeats for it to appear."
+    echo
+    echo "Certificates are Caddy's own job and it renews them in the"
+    echo "background. There is no cron to add."
 fi

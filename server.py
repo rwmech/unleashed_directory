@@ -72,6 +72,13 @@ BIND_PORT     = int(os.environ.get("DIRECTORY_PORT", "8080"))
 SITE_NAME     = os.environ.get("DIRECTORY_NAME", "unleashed BBS directory")
 SITE_URL      = os.environ.get("DIRECTORY_URL", "https://unleashedbbs.com")
 
+# One server, three faces, chosen by the Host header. A deployment with a
+# single domain gets all three under paths instead, so none of this is
+# required to run your own.
+LIST_DOMAIN   = os.environ.get("DIRECTORY_LIST_DOMAIN", "")   # the board list
+ABOUT_DOMAIN  = os.environ.get("DIRECTORY_ABOUT_DOMAIN", "")  # what this is, and why
+DATA_DOMAIN   = os.environ.get("DIRECTORY_DATA_DOMAIN", "")   # the machine-readable side
+
 PENDING_HOURS = float(os.environ.get("DIRECTORY_PENDING_HOURS", "3"))
 EXPIRE_DAYS   = float(os.environ.get("DIRECTORY_EXPIRE_DAYS", "7"))
 PER_ADDRESS   = int(os.environ.get("DIRECTORY_PER_ADDRESS", "1"))
@@ -115,6 +122,7 @@ CREATE TABLE IF NOT EXISTS boards (
     first_seen   INTEGER NOT NULL,
     last_seen    INTEGER NOT NULL,
     streak_start INTEGER NOT NULL,
+    public_at    INTEGER NOT NULL DEFAULT 0,
     beats        INTEGER NOT NULL DEFAULT 0,
     note         TEXT NOT NULL DEFAULT ''
 );
@@ -134,6 +142,30 @@ CREATE TABLE IF NOT EXISTS hits (
 CLEAN = re.compile(r"[\x00-\x1f\x7f]")
 
 
+def role_for(host):
+    """Which of the three sites a request is asking for."""
+    host = (host or "").split(":")[0].lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if ABOUT_DOMAIN and host == ABOUT_DOMAIN:
+        return "about"
+    if DATA_DOMAIN and host == DATA_DOMAIN:
+        return "data"
+    return "list"
+
+
+def other_sites(role):
+    """The footer line that points at the other two."""
+    bits = []
+    if LIST_DOMAIN and role != "list":
+        bits.append(f'<a href="https://{LIST_DOMAIN}/">boards that are up</a>')
+    if ABOUT_DOMAIN and role != "about":
+        bits.append(f'<a href="https://{ABOUT_DOMAIN}/">what this is</a>')
+    if DATA_DOMAIN and role != "data":
+        bits.append(f'<a href="https://{DATA_DOMAIN}/">the data</a>')
+    return " &middot; ".join(bits)
+
+
 def db():
     con = sqlite3.connect(DB_PATH, timeout=10)
     con.row_factory = sqlite3.Row
@@ -144,6 +176,11 @@ def db():
 def setup():
     with db() as con:
         con.executescript(SCHEMA)
+        # Databases made before the feed existed have no public_at column.
+        have = {r["name"] for r in con.execute("PRAGMA table_info(boards)")}
+        if "public_at" not in have:
+            con.execute("ALTER TABLE boards ADD COLUMN public_at INTEGER NOT NULL DEFAULT 0")
+            con.execute("UPDATE boards SET public_at=streak_start WHERE state='online'")
 
 
 def tidy(value, limit):
@@ -184,10 +221,13 @@ def settle(con, now):
     con.execute(
         f"UPDATE boards SET state='offline' "
         f"WHERE state='online' AND ? - last_seen > {grace}", (now,))
+    # public_at is set once, the first time a board earns its listing, so the
+    # feed does not re-announce a board every time it comes back from a nap.
     con.execute(
-        "UPDATE boards SET state='online' "
+        "UPDATE boards SET state='online', "
+        "public_at=CASE WHEN public_at=0 THEN ? ELSE public_at END "
         "WHERE state='pending' AND ? - streak_start >= ?",
-        (now, int(PENDING_HOURS * 3600)))
+        (now, now, int(PENDING_HOURS * 3600)))
     con.execute("DELETE FROM boards WHERE ? - last_seen > ?",
                 (now, int(EXPIRE_DAYS * 86400)))
     return con.total_changes - before
@@ -300,6 +340,7 @@ PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<link rel="alternate" type="application/rss+xml" title="New boards" href="/feed.xml">
 <style>
 :root {{ color-scheme: dark; }}
 body {{ background:#0b0b0f; color:#c8c8c8; font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;
@@ -322,6 +363,14 @@ tr:hover td {{ background:#111; }}
 .pending {{ color:#d0b050; }}
 .none {{ color:#666; padding:24px 8px; }}
 footer {{ margin-top:28px; color:#555; border-top:1px solid #222; padding-top:12px; }}
+article {{ max-width:70ch; }}
+article h2 {{ color:#4ce0e0; font-size:15px; margin:28px 0 6px; font-weight:normal; }}
+article p {{ margin:0 0 14px; }}
+article b {{ color:#e8e8e8; font-weight:normal; }}
+article .pull {{ color:#6ee36e; border-left:2px solid #234; padding-left:12px; margin:18px 0; }}
+pre {{ background:#111; border:1px solid #222; padding:12px; overflow-x:auto; color:#9fb; }}
+code {{ color:#9fb; }}
+dl {{ margin:0 0 14px; }} dt {{ color:#d0b050; margin-top:10px; }} dd {{ margin:2px 0 0 16px; }}
 </style></head><body><main>
 <h1>{title} <span>{count} boards</span></h1>
 <p class="lead">Boards that are up right now. Dial them with any telnet client.</p>
@@ -402,12 +451,113 @@ def index_page():
                 + board_rows(rows, now) + "</table>")
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
-    footer = ('<a href="/how">How to get listed</a> &middot; '
+    links = other_sites("list")
+    footer = ((links + "<br><br>") if links else "") + (
+              '<a href="/how">How to get listed</a> &middot; '
               '<a href="/rules">House rules</a> &middot; '
+              '<a href="/feed.xml">RSS</a> &middot; '
               '<a href="/api/boards.json">JSON</a><br><br>'
               'Activity figures are reported by the boards themselves. '
               '"Up for" is measured here and cannot be fudged.')
     return PAGE.format(title=html.escape(SITE_NAME), count=len(rows), body=body, footer=footer)
+
+
+def rss_date(when):
+    """RFC 822, which is what RSS wants."""
+    return time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(when))
+
+
+def feed_xml():
+    """New boards, as RSS.
+
+    A feed is the privacy-forward way to follow something: the reader pulls
+    when it likes, there is no account, no email address, nothing to
+    unsubscribe from and nothing here that knows who is reading. It carries
+    exactly what the public page carries.
+    """
+    now = int(time.time())
+    site = f"https://{LIST_DOMAIN}" if LIST_DOMAIN else SITE_URL
+    with db() as con:
+        settle(con, now)
+        rows = con.execute(
+            "SELECT * FROM boards WHERE public_at > 0 "
+            "ORDER BY public_at DESC LIMIT 40").fetchall()
+
+    items = []
+    for r in rows:
+        where = html.escape(f"{r['host'] or r['address']} {r['port']}")
+        desc = html.escape(r["description"] or "")
+        owner = html.escape(r["owner"] or "")
+        body = f"{desc}<br>Dial: {where}"
+        if owner:
+            body += f"<br>Sysop: {owner}"
+        items.append(
+            "<item>"
+            f"<title>{html.escape(r['name'])}</title>"
+            f"<link>{site}/</link>"
+            f"<guid isPermaLink=\"false\">board-{r['id']}</guid>"
+            f"<pubDate>{rss_date(r['public_at'])}</pubDate>"
+            f"<description>{html.escape(body)}</description>"
+            "</item>")
+
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<rss version="2.0"><channel>'
+            f"<title>{html.escape(SITE_NAME)}</title>"
+            f"<link>{site}/</link>"
+            "<description>Bulletin boards as they come online</description>"
+            f"<lastBuildDate>{rss_date(now)}</lastBuildDate>"
+            "<ttl>60</ttl>"
+            + "".join(items) +
+            "</channel></rss>")
+
+
+def data_page():
+    """What .net serves: the API, and what is in it."""
+    now = int(time.time())
+    with db() as con:
+        settle(con, now)
+        counts = con.execute(
+            "SELECT state, COUNT(*) AS n FROM boards GROUP BY state").fetchall()
+    tally = {r["state"]: r["n"] for r in counts}
+    rows = "".join(
+        f"<tr><td>{html.escape(k)}</td><td>{v}</td></tr>"
+        for k, v in sorted(tally.items())) or "<tr><td colspan=2>nothing yet</td></tr>"
+
+    return """<h1>Data</h1>
+<p class="lead">The directory, machine readable. No key, no signup, no rate limit worth
+mentioning. It is a list of hobby BBSes.</p>
+<article>
+
+<h2>Right now</h2>
+<table><tr><th>State</th><th>Boards</th></tr>""" + rows + """</table>
+
+<h2>Endpoints</h2>
+<dl>
+<dt><code>GET /api/boards.json</code></dt>
+<dd>Every listed board: name, owner, description, where to dial it, how many lines it
+has and how many are busy, whether it is up, and how long it has been up. Cached for
+a few seconds.</dd>
+<dt><code>POST /announce</code></dt>
+<dd>How a board lists itself. One JSON object, about 200 bytes, repeated every few
+minutes. Plain HTTP on purpose: the boards are microcontrollers with no TLS stack.</dd>
+<dt><code>GET /health</code></dt>
+<dd>Two bytes, for uptime checks.</dd>
+</dl>
+
+<h2>What is not in it</h2>
+<p>Nothing about callers. Not handles, not addresses, not counts of who did what, not a
+word anybody typed. Boards do not send it and this server would drop it if they did.
+The activity figures some boards publish are counts of calls and caller-minutes, given
+voluntarily by the sysop, and they are marked as self-reported because they are.</p>
+
+<h2>Writing something that lists itself</h2>
+<p>The protocol is published and deliberately dull: any software that sends the payload
+gets listed, whatever it runs on. It is documented in
+<a href="https://github.com/rwmech/unleashed_directory/blob/main/PROTOCOL.md">PROTOCOL.md</a>,
+and this whole server is free software, so you can run your own directory instead of
+using this one. That is the intended outcome, not a grudging permission.</p>
+
+</article>"""
 
 
 RULES = """<h1>House rules</h1>
@@ -440,8 +590,265 @@ it is documented in <a href="https://github.com/rwmech/unleashed_directory">the
 server repository</a>. Anything that speaks it gets listed.</p>"""
 
 
-def simple_page(title, body):
-    return PAGE.format(title=html.escape(title), count="", body=body, footer='<a href="/">Back to the list</a>')
+ANIM = """
+<style>
+.scene { position:relative; height:7.4em; margin:18px 0 22px; }
+.scene pre { position:absolute; left:0; top:0; margin:0; opacity:0;
+             color:#6ee36e; background:none; border:0; padding:0;
+             animation: flip 3.2s steps(1,end) infinite; }
+.scene pre:nth-child(1) { animation-delay:0.0s }
+.scene pre:nth-child(2) { animation-delay:0.4s }
+.scene pre:nth-child(3) { animation-delay:0.8s }
+.scene pre:nth-child(4) { animation-delay:1.2s }
+.scene pre:nth-child(5) { animation-delay:1.6s }
+.scene pre:nth-child(6) { animation-delay:2.0s }
+.scene pre:nth-child(7) { animation-delay:2.4s }
+.scene pre:nth-child(8) { animation-delay:2.8s }
+@keyframes flip { 0%,12.4% { opacity:1 } 12.5%,100% { opacity:0 } }
+@media (prefers-reduced-motion: reduce) {
+  .scene { height:auto }
+  .scene pre { position:static; opacity:1; animation:none }
+  .scene pre:not(:first-child) { display:none }
+}
+.chart { color:#8a8a8a; background:#0d0d12; border:1px solid #1d1d24;
+         padding:14px; overflow-x:auto; line-height:1.35; }
+.chart b { color:#e06c6c; font-weight:normal; }
+.chart i { color:#6ee36e; font-style:normal; }
+</style>
+<div class="scene">
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |  o--------------------------------------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |  ---o-----------------------------------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |  -------o-------------------------------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |  -----------o---------------------------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |     ---------------------------o--------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |     -----------------------o------------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |     -----------------o------------------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+<pre>   [ YOU ]                                   [ THE BOARD ]
+     |                                              |
+     |     -----------o------------------------     |
+     |                                              |
+   40 columns of text                       a chip on a shelf</pre>
+</div>"""
+
+
+ABOUT = """<h1>&micro;nleashed</h1>
+<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
+""" + ANIM + """
+<article>
+
+<p><b>A bulletin board is a machine that answers a phone number.</b> Somebody put a
+spare computer in a spare room, hung a modem off it, and other people called it.
+No terms of service. No algorithm deciding what you saw. No third party keeping a
+copy for later. The sysop was a person you could ring up and argue with, and if
+you did not like how a board was run you started your own, because the barrier to
+entry was a second phone line.</p>
+
+<h2>Where this came from</h2>
+
+<p><a href="https://en.wikipedia.org/wiki/CBBS">CBBS</a> went online in Chicago on
+16 February 1978, written by Ward Christensen with hardware by Randy Suess. The
+January blizzard that shut the city down handed them the quiet weeks to finish it.
+It ran on an S-100 machine with 64 kilobytes of memory and answered one caller at
+a time.</p>
+
+<p>Thousands of boards followed. Each one was somebody's own idea of what a
+community should look like: a music board, a board for one town, a board that was
+really just its sysop and eleven friends. At the
+<a href="https://en.wikipedia.org/wiki/Bulletin_board_system">peak in the
+mid-1990s</a> an estimated 60,000 were running in the United States alone, and
+<a href="https://en.wikipedia.org/wiki/FidoNet">FidoNet</a> tied tens of thousands
+of them into a store-and-forward network that moved mail around the world overnight,
+for free, run entirely by hobbyists.</p>
+
+<p>Almost all of them ran on hardware weaker than the five dollar chip this software
+runs on.</p>
+
+<h2>What replaced it</h2>
+
+<p>The web arrived and it was better at almost everything, and then it consolidated.
+Now the conversation lives on machines you cannot see, indexed, scraped to train
+something, ranked, monetised, and deleted at somebody else's discretion. You do not
+own the room, the member list, the history, or the right to keep any of it. You rent
+all of it, and the rent is paid in attention and data.</p>
+
+<p class="pull">The thing that was lost was not the modem noise. It was that the
+system belonged to somebody you could name.</p>
+
+<h2>What this is</h2>
+
+<p>A telnet BBS that runs on a bare ESP32, a microcontroller the size of a postage
+stamp, and grows into an IoT terminal server through plugins. Nodes, handles, a user
+list, a chat room in the style of DDial and Gtalk, messages, doors, a caller log, a
+sysop who can page you.</p>
+
+<p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
+server farm, not a feature that can be deprecated out from under you. A chip you own,
+on a port you chose, running software you can read all of in an afternoon and change
+when you disagree with it. Switch it off and it is off. Leave it in a drawer for a
+year, plug it back in, and it still works, because there is nothing at the other end
+that has to still exist.</p>
+
+<p>The user list is a text file. The settings are a text file. A message goes from one
+caller to another through a chip on your shelf and is gone the moment it is read.
+There is no account to create, nothing to subscribe to, and no vendor who can change
+the deal. It is GPL, so nobody can take it away from you later, including the person
+who wrote it.</p>
+
+<h2>Privacy forward, and what that actually means</h2>
+
+<p>Every system you use was built by somebody, and the question worth asking is who it
+was built to serve. A board is built to serve the person who owns it. That is the whole
+of the privacy argument, and everything else follows from it.</p>
+
+<p><b>There is no third party in the middle.</b> Not a company, not a platform, not an
+advertiser, not a model being trained. A message goes from one caller to another through
+a chip on somebody's shelf and it is gone when it is read. Nobody is standing between
+those two people taking a copy, because there is nowhere for a copy to go and nobody
+whose business it would be.</p>
+
+<p>Here is the difference, drawn out.</p>
+
+<pre class="chart">  CALLING A WEBSITE
+
+  you  -->  DNS  -->  CDN  -->  load balancer  -->  the app
+             |         |             |                 |
+             v         v             v                 v
+         <b>who asked</b>  <b>edge logs</b>   <b>session</b>          <b>account</b>
+         <b>and when</b>   <b>your IP</b>     <b>fingerprint</b>      <b>history</b>
+             |         |             |                 |
+             +---------+------+------+-----------------+
+                              |
+                              v
+                <b>analytics . ad exchange . data broker</b>
+                <b>model training . retention policy</b>
+                <b>breach disclosure in eighteen months</b>
+                              |
+                              v
+                    <b>you cannot audit any of it</b>
+
+
+  CALLING A BOARD
+
+  you  -->  your router  -->  <i>a chip you own</i>
+                                    |
+                                    v
+                            <i>a text file you</i>
+                            <i>can open and read</i>
+
+                     <i>that is the entire list</i></pre>
+
+<p>The left-hand column is not a conspiracy. Every box on it exists for a reason
+somebody could defend, and most of them were added by decent engineers solving a real
+problem. It is simply what a modern service is made of, and the effect of all those
+reasonable decisions together is that you cannot say who holds what about you, or for
+how long, or what it will be used for next year.</p>
+
+<p>The right-hand column has no boxes to add. There is no account system to breach, no
+analytics to leak, no retention policy to change, no company to be acquired by somebody
+with different ideas. What is not built cannot be exploited, and what was never
+collected cannot be handed over.</p>
+
+<h2>The power is in your hands, literally</h2>
+
+<p>You flash the firmware. You set the password. You decide who gets a handle, what the
+board is called, what the rules are, and whether it is on the internet at all. You can
+read every line of the software before you trust it, and change the parts you disagree
+with, and nobody can stop you, because the licence says so and the source is right
+there.</p>
+
+<p class="pull">If you switch it off, it is off. Nobody else gets a say in that.</p>
+
+<p>Turn the board off and the service ends. Not "your account is deactivated but we
+retain your data for legitimate business purposes" — ends. Pull the plug and the chip
+stops answering. Wipe the flash and the user list is gone. That is what owning something
+means, and it is startling how unusual it has become.</p>
+
+<h2>Honest about the limits</h2>
+
+<p>Telnet is plain text, because a Commodore 64 cannot do TLS and pretending otherwise
+would be worse than saying so. This keeps a board off the public internet's record;
+it does not keep it off the wire. If a conversation has to survive somebody watching
+the link, put the board behind a VPN or leave it on the local network. Privacy you can
+explain in one sentence beats privacy you have to take on faith.</p>
+
+<h2>Small on purpose</h2>
+
+<p>One static binary. Static allocation, no heap in the main loop, a fixed memory
+budget on a chip with 520 KB of RAM. No web stack, no scripting runtime, no package
+tree to audit at two in the morning, no telemetry, no update that arrives without you.
+What is not built cannot be exploited, and what fits in one head can be trusted by the
+person whose head it fits in.</p>
+
+<h2>Serial did not die</h2>
+
+<p><a href="https://en.wikipedia.org/wiki/RS-232">RS-232</a> was standardised by the
+EIA in 1960 and still runs the console and management ports on network equipment,
+industrial controllers and test gear, and its asynchronous framing survives on nearly
+every microcontroller made since as a
+<a href="https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter">TTL-level
+UART</a>. Sixty-five years on, the way a machine from 1982 talks is still the way you
+talk to the switch in the rack. That is why a
+<a href="https://en.wikipedia.org/wiki/Commodore_64">Commodore 64</a> and a laptop
+bought this year can both call one of these boards, and why a board can turn round and
+drive whatever is hanging off its own serial port.</p>
+
+<h2>Why the micro sign</h2>
+
+<p>Because it runs on a microcontroller, and because microcomputers are what put
+computing into the hands of people who were never going to be given time on a
+mainframe. The <a href="https://en.wikipedia.org/wiki/Altair_8800">Altair 8800</a> in
+1975, then the Apple II, the Commodore PET and the TRS-80 in
+<a href="https://en.wikipedia.org/wiki/History_of_personal_computers#1977_and_the_emergence_of_the_%22Trinity%22">1977</a>,
+took the computer out of the raised-floor room that somebody else controlled and put it
+on a kitchen table. This is the same move, one more time, on a chip you can lose in a
+drawer. Where the symbol cannot be shown, it is written <code>unleashed</code>.</p>
+
+<h2>You can do this today</h2>
+
+<p>Not as a re-enactment: as a live system with callers on it tonight. Flash a board,
+give it your wifi, forward one port on your router, and you are running a public BBS.
+No hosting bill, no domain required, no provider to ask permission from, no account
+with anybody. A chip on a shelf and one line in your router.</p>
+
+<p><a href="https://github.com/rwmech/unleashed_BBS">The source, the documentation and
+the build instructions are here.</a> It is free software under the GNU General Public
+License, version 2 or later.</p>
+
+</article>"""
+
+
+def simple_page(title, body, role="list"):
+    links = other_sites(role)
+    return PAGE.format(title=html.escape(title), count="", body=body,
+                       footer=links or '<a href="/">Back to the list</a>')
 
 
 # --------------------------------------------------------------------------
@@ -470,8 +877,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+        role = role_for(self.headers.get("Host", ""))
         if path == "/":
-            self.reply(200, cached("index", PAGE_CACHE, index_page))
+            if role == "about":
+                self.reply(200, simple_page("unleashed", ABOUT, "about"))
+            elif role == "data":
+                self.reply(200, cached("data", PAGE_CACHE,
+                                       lambda: simple_page("Data", data_page(), "data")))
+            else:
+                self.reply(200, cached("index", PAGE_CACHE, index_page))
         elif path == "/rules":
             self.reply(200, simple_page("House rules", RULES))
         elif path == "/how":
@@ -488,6 +902,9 @@ class Handler(BaseHTTPRequestHandler):
                 return json.dumps({"boards": [dict(r) for r in rows]}, indent=1)
             self.reply(200, cached("json", PAGE_CACHE, build),
                        "application/json; charset=utf-8")
+        elif path == "/feed.xml":
+            self.reply(200, cached("feed", PAGE_CACHE, feed_xml),
+                       "application/rss+xml; charset=utf-8")
         elif path == "/health":
             self.reply(200, "ok\n", "text/plain; charset=utf-8")
         else:

@@ -62,10 +62,20 @@ ssh root@your.droplet.address
 apt-get update -y && apt-get install -y git
 git clone https://github.com/rwmech/unleashed_directory.git
 cd unleashed_directory
-./deploy/setup.sh example.com example.net example.org
+./deploy/setup.sh example.com example.org example.net
 ```
 
-The first domain is the real one; the rest redirect to it. To try it without TLS or domains at all, run `./deploy/setup.sh` with no arguments and it serves plain HTTP on port 80.
+The three domains are positional, and each gets its own face:
+
+| Position | Role | Serves |
+|---|---|---|
+| first | **list** | the boards that are up |
+| second | **about** | what this is and where it came from |
+| third | **data** | the API and what is in it |
+
+Give it one domain and that domain serves everything. To try it without TLS or domains at all, run `./deploy/setup.sh` with no arguments and it serves plain HTTP on port 80.
+
+Certificates are handled by Caddy: it obtains them on first start and renews them in the background. There is no certbot to install and no renewal cron to add, and adding one would fight it.
 
 The script installs Caddy and Python, creates a `directory` system user that owns nothing but its database, writes the web configuration for your domains, starts the service, and opens ports 22, 80 and 443. Run it again any time after a `git pull`.
 
