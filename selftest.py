@@ -163,6 +163,18 @@ def main():
 
         _, page = get("/", host="boards.example")
         check("the list domain still lists boards", "Rusty Modem" in page)
+        check("the list page owns the board-list heading",
+              "Boards that are up right now" in page)
+
+        # The board list's heading used to live in the shared page shell, so
+        # it turned up above the manifesto as well. Every page brings its own.
+        _, page = get("/", host="about.example")
+        check("the about page does not inherit the list heading",
+              "Boards that are up right now" not in page)
+        _, page = get("/", host="data.example")
+        check("nor does the data page",
+              "Boards that are up right now" not in page)
+        check("the data page has its own heading", "<h1>Data</h1>" in page)
 
         print("The feed")
         code, feed = get("/feed.xml")

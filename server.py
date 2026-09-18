@@ -372,8 +372,6 @@ pre {{ background:#111; border:1px solid #222; padding:12px; overflow-x:auto; co
 code {{ color:#9fb; }}
 dl {{ margin:0 0 14px; }} dt {{ color:#d0b050; margin-top:10px; }} dd {{ margin:2px 0 0 16px; }}
 </style></head><body><main>
-<h1>{title} <span>{count} boards</span></h1>
-<p class="lead">Boards that are up right now. Dial them with any telnet client.</p>
 {body}
 <footer>{footer}</footer>
 </main></body></html>"""
@@ -445,12 +443,16 @@ def index_page():
             "SELECT * FROM boards WHERE state IN ('online','offline') "
             "ORDER BY state='online' DESC, "
             "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC").fetchall()
+    head = (f"<h1>{html.escape(SITE_NAME)} <span>{len(rows)} boards</span></h1>"
+            '<p class="lead">Boards that are up right now. '
+            "Dial them with any telnet client.</p>")
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>Sysop</th>"
                 "<th>State</th><th>Activity</th><th>Up for</th></tr>"
                 + board_rows(rows, now) + "</table>")
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
+    body = head + body
     links = other_sites("list")
     footer = ((links + "<br><br>") if links else "") + (
               '<a href="/how">How to get listed</a> &middot; '
@@ -459,7 +461,7 @@ def index_page():
               '<a href="/api/boards.json">JSON</a><br><br>'
               'Activity figures are reported by the boards themselves. '
               '"Up for" is measured here and cannot be fudged.')
-    return PAGE.format(title=html.escape(SITE_NAME), count=len(rows), body=body, footer=footer)
+    return PAGE.format(title=html.escape(SITE_NAME), body=body, footer=footer)
 
 
 def rss_date(when):
@@ -847,7 +849,7 @@ License, version 2 or later.</p>
 
 def simple_page(title, body, role="list"):
     links = other_sites(role)
-    return PAGE.format(title=html.escape(title), count="", body=body,
+    return PAGE.format(title=html.escape(title), body=body,
                        footer=links or '<a href="/">Back to the list</a>')
 
 
