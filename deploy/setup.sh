@@ -101,6 +101,12 @@ else
     echo "caddy already installed"
 fi
 
+# Remember what this install was given, so deploy/update.sh can repeat it
+# without being told again and without getting it wrong.
+install -d -m 755 /etc/unleashed-directory
+printf '%s
+' "${DOMAINS[*]:-}" > /etc/unleashed-directory/domains
+
 say "User and directories"
 id -u directory >/dev/null 2>&1 || useradd --system --home "$DATA" --shell /usr/sbin/nologin directory
 install -d -o directory -g directory -m 750 "$DATA"
@@ -235,5 +241,9 @@ if [ ${#DOMAINS[@]} -gt 0 ]; then
     echo "Then wait three hours of heartbeats for it to appear."
     echo
     echo "Certificates are Caddy's own job and it renews them in the"
-    echo "background. There is no cron to add."
+    echo "background. There is no cron to add for those."
+    echo
+    echo "To keep the software itself current:"
+    echo "  ./deploy/update.sh                  pull, install, check, report"
+    echo "  ./deploy/update.sh --install-timer   do that daily, quietly"
 fi

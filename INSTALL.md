@@ -119,8 +119,38 @@ echo '/swapfile none swap sw 0 0' >> /etc/fstab
 ## Keeping it
 
 ```bash
-cd ~/unleashed_directory && git pull && sudo ./deploy/setup.sh example.com example.net example.org
+sudo ~/unleashed_directory/deploy/update.sh
 ```
+
+That pulls, re-installs using the domains this box was set up with, restarts,
+checks the site is actually serving and that `/announce` has not started
+redirecting, and prints the changelog for everything it pulled in. Run it any
+time; it does nothing when there is nothing to do.
+
+Unattended, for a machine you will not think about again:
+
+```bash
+sudo ~/unleashed_directory/deploy/update.sh --install-timer
+```
+
+Daily, with a randomised delay, and quiet unless something changed or broke.
+`journalctl -u unleashed-directory-update` has the history.
+
+To hear about it, point it at a webhook:
+
+```bash
+echo 'https://ntfy.sh/pick-a-topic' > /etc/unleashed-directory/notify
+```
+
+Cron mail is the obvious alternative and it will not work here: there is no mail
+server on the droplet, and if these domains publish `v=spf1 -all` then anything
+sent as `root@yourdomain` is being declared a forgery by your own DNS. A webhook
+sidesteps both problems.
+
+🔴 One thing to decide deliberately: an automatic update means whatever is
+pushed to that repository runs on this machine. That is fine when it is your own
+repository and you control who can push to it. If it ever is not, use `--check`
+on a timer instead and update by hand.
 
 Unattended security updates are worth having on a machine you will forget about:
 

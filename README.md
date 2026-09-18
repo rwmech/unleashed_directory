@@ -75,6 +75,41 @@ Settings come from the environment, so a deployment never edits the code:
 | `DIRECTORY_ABOUT_DOMAIN` | | the domain that shows what this is |
 | `DIRECTORY_DATA_DOMAIN` | | the domain that shows the API |
 
+## Keeping it current
+
+```sh
+sudo ./deploy/update.sh
+```
+
+Pulls, re-installs with the domains the first install was given, restarts, then
+proves the site still works and **prints the changelog entries for whatever it
+just pulled in**. Safe to run when there is nothing to do.
+
+| | |
+|---|---|
+| `--check` | is there an update? change nothing. Exits 2 if there is |
+| `--quiet` | say nothing unless something changed or broke |
+| `--install-timer` | run it daily, quietly, via a systemd timer |
+
+For a box you will forget about:
+
+```sh
+sudo ./deploy/update.sh --install-timer
+```
+
+Daily, with a randomised delay so every directory in the world does not pull at
+the same second. Watch it with `journalctl -u unleashed-directory-update`.
+
+To be told when it happens, drop a webhook URL in place:
+
+```sh
+echo 'https://ntfy.sh/your-topic' > /etc/unleashed-directory/notify
+```
+
+Not email. Email would need a mail server on the box, and a directory's own
+domains usually publish `v=spf1 -all` to say they send none, so anything it
+emitted would be correctly rejected. A webhook needs neither.
+
 ## Tests
 
 ```sh
