@@ -582,7 +582,10 @@ enabled     = yes
 name        = The Rusty Modem
 owner       = KE9CXN
 description = A BBS on a chip in a shack in Illinois
-servers     = http://unleashedbbs.com/announce</pre>
+servers     = http://unleashedbbs.net/announce</pre>
+<p>Any of this directory's names will take a heartbeat, but <code>.net</code> is the
+one meant for machines: <code>.com</code> is the list people read and
+<code>.org</code> is what the project is for.</p>
 <p>Switch it on and wait. A listing becomes public after three hours of
 uninterrupted heartbeats, which is what keeps drive-by spam off the page, and
 it disappears when the heartbeats stop. <code>ANNOUNCE</code> on your board

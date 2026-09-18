@@ -27,7 +27,7 @@ A directory **must** serve `/announce` over plain HTTP with no redirect. A board
 
 ```
 POST /announce HTTP/1.1
-Host: unleashedbbs.com
+Host: unleashedbbs.net
 User-Agent: unleashed/0.13.0
 Content-Type: application/json
 Content-Length: 204
