@@ -1,0 +1,68 @@
+# unleashed directory: project context
+
+The directory server for µnleashed BBS. Boards post a small JSON heartbeat,
+this keeps a list of the ones that are up, and serves three faces from one
+process. GPL v2 or later, same as the BBS.
+
+Read PROTOCOL.md for the wire format, INSTALL.md for a fresh droplet,
+README.md for what it is. This file is the process and the design history.
+
+## Processes
+
+Not preferences. The process. Getting these wrong wastes Rob's time.
+
+- **Rob deploys. I never do.** The change goes in this repo and gets pushed;
+  Rob runs `sudo /srv/unleashed_directory/deploy/update.sh` on the droplet.
+  I have no SSH access and am not to go looking for a way in. "Get it on the
+  website" means "get it into the repo".
+- **Settings live in the systemd unit, not in the code.** `DIRECTORY_NAME`,
+  the three domains, the thresholds. A change to a default in `server.py`
+  does nothing on the live box unless `deploy/unleashed-directory.service`
+  changes too, because systemd's value wins. This has bitten once already.
+- **Tests stay on 127.0.0.1.** Never point anything at the live directory.
+- **`python selftest.py` before every commit.** It is the whole test suite,
+  it takes seconds, and it needs no network.
+- **CHANGELOG.md is updated in the same commit**, not afterwards.
+- **Never commit** the database, or anything with a token in it.
+
+## Shape
+
+- Python 3 standard library only. SQLite. One file, `server.py`. No
+  framework, no dependencies, because a directory nobody can afford to run
+  is not a directory.
+- Listens on loopback. Caddy faces the internet and holds the certificates.
+- `role_for(host)` serves three faces from one process by Host header: the
+  board list, the argument (the manifesto), and the machine-readable data.
+- Pages are cached and the cache is dropped only when `settle()` actually
+  moved something, so the page is never stale but is also not rebuilt for
+  every reader.
+- No JavaScript anywhere on the site. The manifesto page makes a point of
+  it, so anything that would add a script needs a better reason than
+  convenience. The ASCII animation is CSS.
+
+## Anti-spam, and why it is shaped this way
+
+- A listing is earned by three hours of sustained heartbeats, not by asking.
+- One automatic listing per address, per `/64` on IPv6.
+- **Never an outbound probe.** A directory that connects to whatever address
+  a stranger posts is a port scanner with a public API.
+- Tokens are anti-hijack only and PROTOCOL.md says so plainly. They are
+  server-issued and random, never derived from a name or a MAC, because
+  anything derivable is forgeable by anyone reading the source, and the
+  source is public on purpose.
+
+## Known holes
+
+- `PER_ADDRESS` counts rows of any state, so a board that loses its token is
+  queued behind its own dead listing until the 7 day reaper clears it.
+- `queued` is a dead end: `settle()` only promotes `pending`, and the update
+  path only moves `offline` back to `pending`. A queued board heartbeats
+  forever, so it never expires either, and never gets promoted.
+- Both are the same root cause: state transitions were written in one
+  direction only. Fix is to skip `offline` rows in the admission count and
+  re-evaluate `queued` on each heartbeat. Not yet done, Rob has seen it.
+
+## Reference
+
+- The BBS side lives in `esp32-bbs`, plugin `src/plugins/announce.cpp`.
+- Boards announce to the data face (`.net`), not the list face.
