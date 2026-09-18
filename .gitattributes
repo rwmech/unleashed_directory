@@ -1,0 +1,10 @@
+# ===========================================================================
+#  µnleashed BBS directory
+#  Line endings. The server runs on Linux; a CRLF in a shell script gives
+#  "bad interpreter" and a CRLF in a systemd unit is quietly ignored.
+# ===========================================================================
+* text=auto eol=lf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.service text eol=lf
+Caddyfile text eol=lf
