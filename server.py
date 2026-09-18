@@ -364,6 +364,7 @@ pre.logo i:nth-child(2) {{ color:#b48ef0; }}
 pre.logo i:nth-child(3) {{ color:#8f7ae8; }}
 pre.logo i:nth-child(4) {{ color:#6f84e0; }}
 pre.logo i:nth-child(5) {{ color:#4a7fc8; }}
+pre.logo i:nth-child(6) {{ color:#3f6cab; }}
 h1 {{ color:var(--ink); font-size:13px; font-weight:normal; letter-spacing:3px;
      margin:0 0 4px; text-transform:uppercase; }}
 h1 span {{ color:var(--faint); letter-spacing:0; text-transform:none; }}
@@ -399,17 +400,25 @@ dl {{ margin:0 0 14px; }} dt {{ color:var(--warm); margin-top:10px; }} dd {{ mar
 
 
 # --------------------------------------------------------------------------
-# The wordmark: a 6x10 pixel face drawn with half-block characters, which
+# The wordmark: a 6x12 pixel face drawn with half-block characters, which
 # carry two pixels per cell vertically and so allow a real stroke weight
-# instead of the chunky squares a plain block font gives. Five rows, 62
-# columns, one <i> per row so the colour can sweep down it.
+# instead of the chunky squares a plain block font gives.
+#
+# The capitals stand 10 pixels tall and sit on a baseline two rows from the
+# bottom. The micro sign is a lowercase letter, so it is set to an x-height:
+# its bowl starts lower, lands on that same baseline, and the left stem
+# carries on below it. The last row is empty under every other letter, which
+# is what a descender is meant to look like.
+#
+# Six rows, 62 columns, one <i> per row so the colour can sweep down it.
 # --------------------------------------------------------------------------
 LOGO_ROWS = (
-    "\u2588\u2588  \u2588\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588\u2588\u2588\u2588\u2588 \u2584\u2588\u2580\u2580\u2588\u2584 \u2584\u2588\u2580\u2580\u2580\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2580\u2580\u2588\u2584",
+    "       \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588\u2588\u2588\u2588\u2588 \u2584\u2588\u2580\u2580\u2588\u2584 \u2584\u2588\u2580\u2580\u2580\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2580\u2580\u2588\u2584",
     "\u2588\u2588  \u2588\u2588 \u2588\u2588\u2588 \u2588\u2588 \u2588\u2588     \u2588\u2588     \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588  \u2588\u2588",
     "\u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2584\u2588\u2588 \u2588\u2588     \u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588  \u2580\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588  \u2588\u2588  \u2588\u2588",
-    "\u2588\u2588\u2584\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588\u2588 \u2588\u2588     \u2588\u2588     \u2588\u2588  \u2588\u2588 \u2584\u2584  \u2588\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588  \u2588\u2588",
-    "\u2588\u2588     \u2588\u2588 \u2580\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588  \u2588\u2588 \u2580\u2588\u2588\u2588\u2588  \u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2584\u2584\u2588\u2580",
+    "\u2588\u2588  \u2588\u2588 \u2588\u2588 \u2588\u2588\u2588 \u2588\u2588     \u2588\u2588     \u2588\u2588  \u2588\u2588 \u2584\u2584  \u2588\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588  \u2588\u2588",
+    "\u2588\u2588\u2584\u2584\u2588\u2588 \u2588\u2588 \u2580\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588  \u2588\u2588 \u2580\u2588\u2588\u2588\u2588  \u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2584\u2584\u2588\u2580",
+    "\u2588\u2588",
 )
 
 
