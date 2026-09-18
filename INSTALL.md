@@ -65,6 +65,14 @@ cd unleashed_directory
 ./deploy/setup.sh example.com example.org example.net
 ```
 
+A fresh cloud image often has no `git`, which is why it is installed first. The
+script installs everything else it needs, including `gnupg`, which a minimal
+image also tends to lack and which the Caddy step depends on.
+
+If the clone asks for a username and password, the repository is private:
+GitHub has not accepted account passwords for git since 2021. Either make the
+repository public, or add a read-only deploy key to it and clone over SSH.
+
 The three domains are positional, and each gets its own face:
 
 | Position | Role | Serves |

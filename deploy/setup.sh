@@ -22,7 +22,8 @@
 #              cron job to add, and adding one would fight it.
 #
 # What it does:
-#   - installs Caddy and python3
+#   - installs everything it needs: python3, sqlite3, curl, gnupg, git, ufw
+#     and Caddy. A minimal cloud image has fewer of these than you expect
 #   - makes a "directory" system user that owns nothing but its database
 #   - copies the code to /srv/unleashed_directory
 #   - writes /etc/caddy/Caddyfile for the domains you gave it
@@ -48,18 +49,54 @@ say() { printf '\n== %s\n' "$1"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "run this with sudo"; exit 1; }
 
+command -v apt-get >/dev/null || {
+    echo "This script installs packages with apt, so it wants Debian or Ubuntu."
+    echo "On anything else, install python3 and a web server yourself and run"
+    echo "server.py behind it. There is nothing else to it."
+    exit 1
+}
+
+# Everything used later, including the tools the install itself leans on. A
+# minimal cloud image has less than you would expect: gnupg in particular is
+# often missing, and the Caddy step pipes a key straight into gpg.
 say "Packages"
 apt-get update -y
-apt-get install -y python3 curl ufw debian-keyring debian-archive-keyring apt-transport-https
+apt-get install -y \
+    python3 \
+    sqlite3 \
+    curl \
+    gnupg \
+    ca-certificates \
+    git \
+    ufw \
+    debian-keyring \
+    debian-archive-keyring \
+    apt-transport-https
+
+# Say what is missing rather than failing three steps later inside a pipe.
+missing=""
+for tool in python3 sqlite3 curl gpg git ufw; do
+    command -v "$tool" >/dev/null || missing="$missing $tool"
+done
+[ -z "$missing" ] || { echo "could not install:$missing"; exit 1; }
 
 if ! command -v caddy >/dev/null; then
     say "Caddy"
-    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-        | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    KEYRING=/usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    if [ ! -s "$KEYRING" ]; then
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+            | gpg --dearmor -o "$KEYRING"
+    fi
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-        | tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+        > /etc/apt/sources.list.d/caddy-stable.list
     apt-get update -y
     apt-get install -y caddy
+    command -v caddy >/dev/null || {
+        echo "Caddy did not install. The directory itself is fine without it:"
+        echo "run server.py and put any web server in front, but remember that"
+        echo "/announce has to stay on plain HTTP with no redirect."
+        exit 1
+    }
 else
     echo "caddy already installed"
 fi
