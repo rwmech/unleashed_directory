@@ -69,7 +69,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 DB_PATH       = os.environ.get("DIRECTORY_DB", "directory.db")
 BIND_HOST     = os.environ.get("DIRECTORY_HOST", "127.0.0.1")
 BIND_PORT     = int(os.environ.get("DIRECTORY_PORT", "8080"))
-SITE_NAME     = os.environ.get("DIRECTORY_NAME", "unleashed BBS directory")
+SITE_NAME     = os.environ.get("DIRECTORY_NAME", "µnleashed BBS directory")
 SITE_URL      = os.environ.get("DIRECTORY_URL", "https://unleashedbbs.com")
 
 # One server, three faces, chosen by the Host header. A deployment with a
@@ -342,39 +342,83 @@ PAGE = """<!doctype html>
 <title>{title}</title>
 <link rel="alternate" type="application/rss+xml" title="New boards" href="/feed.xml">
 <style>
-:root {{ color-scheme: dark; }}
-body {{ background:#0b0b0f; color:#c8c8c8; font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;
+:root {{ color-scheme: dark;
+  --bg:#0b0b0f; --ink:#c8c8c8; --dim:#8a8a8a; --faint:#6a6a72; --rule:#1e1e26;
+  --live:#5ddc7a;   /* up, and nothing else */
+  --warm:#e0a94e;   /* the human: sysop, and a board still earning its place */
+  --name:#b48ef0;   /* a board's own identity */
+  --dial:#7fd4ff;   /* things you can act on */
+  --busy:#ef8b5a;   /* activity */
+  --struct:#4ce0e0; /* structure only: headings and column names */ }}
+body {{ background:var(--bg); color:var(--ink); font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;
        margin:0; padding:16px; }}
 main {{ max-width:900px; margin:0 auto; }}
-h1 {{ color:#4ce0e0; font-size:18px; margin:0 0 4px; }}
-h1 span {{ color:#666; }}
-p.lead {{ color:#888; margin:0 0 20px; }}
-a {{ color:#6cf; }}
+/* The wordmark is 62 columns of half-block art. Monospace cells are about
+   0.6em wide, so the type scales with the viewport and never overflows a
+   phone, instead of scrolling sideways or being cut off. */
+pre.logo {{ background:none; border:0; padding:0; margin:0 0 6px; overflow:visible;
+       line-height:1; font-size:clamp(5px, calc((100vw - 44px) / 38), 15px); }}
+pre.logo i {{ font-style:normal; display:block; }}
+pre.logo i:nth-child(1) {{ color:#e2d4ff; }}
+pre.logo i:nth-child(2) {{ color:#b48ef0; }}
+pre.logo i:nth-child(3) {{ color:#8f7ae8; }}
+pre.logo i:nth-child(4) {{ color:#6f84e0; }}
+pre.logo i:nth-child(5) {{ color:#4a7fc8; }}
+h1 {{ color:var(--ink); font-size:13px; font-weight:normal; letter-spacing:3px;
+     margin:0 0 4px; text-transform:uppercase; }}
+h1 span {{ color:var(--faint); letter-spacing:0; text-transform:none; }}
+p.lead {{ color:var(--dim); margin:0 0 20px; }}
+a {{ color:var(--dial); }}
 table {{ border-collapse:collapse; width:100%; }}
-th {{ text-align:left; color:#4ce0e0; border-bottom:1px solid #222; padding:6px 8px; font-weight:normal; }}
+th {{ text-align:left; color:var(--struct); border-bottom:1px solid var(--rule); padding:6px 8px; font-weight:normal; }}
 td {{ padding:6px 8px; border-bottom:1px solid #161616; vertical-align:top; }}
 tr:hover td {{ background:#111; }}
-.name {{ color:#6ee36e; }}
-.addr {{ color:#e8e8e8; }}
-.desc {{ color:#8a8a8a; }}
-.owner {{ color:#d0b050; }}
-.on {{ color:#6ee36e; }}
-.off {{ color:#666; }}
-.pending {{ color:#d0b050; }}
-.none {{ color:#666; padding:24px 8px; }}
-footer {{ margin-top:28px; color:#555; border-top:1px solid #222; padding-top:12px; }}
+.name {{ color:var(--name); }}
+.addr a {{ color:var(--dial); text-decoration:none; border-bottom:1px dotted #35566b; }}
+.addr a:hover {{ border-bottom-style:solid; }}
+.desc {{ color:var(--dim); }}
+.act {{ color:var(--busy); }}
+.owner {{ color:var(--warm); }}
+.on {{ color:var(--live); }}
+.off {{ color:var(--faint); }}
+.pending {{ color:var(--warm); }}
+.none {{ color:var(--faint); padding:24px 8px; }}
+footer {{ margin-top:28px; color:#555; border-top:1px solid var(--rule); padding-top:12px; }}
 article {{ max-width:70ch; }}
-article h2 {{ color:#4ce0e0; font-size:15px; margin:28px 0 6px; font-weight:normal; }}
+article h2 {{ color:var(--struct); font-size:15px; margin:28px 0 6px; font-weight:normal; }}
 article p {{ margin:0 0 14px; }}
 article b {{ color:#e8e8e8; font-weight:normal; }}
-article .pull {{ color:#6ee36e; border-left:2px solid #234; padding-left:12px; margin:18px 0; }}
-pre {{ background:#111; border:1px solid #222; padding:12px; overflow-x:auto; color:#9fb; }}
-code {{ color:#9fb; }}
-dl {{ margin:0 0 14px; }} dt {{ color:#d0b050; margin-top:10px; }} dd {{ margin:2px 0 0 16px; }}
+article .pull {{ color:var(--name); border-left:2px solid #3a2f5c; padding-left:12px; margin:18px 0; }}
+pre {{ background:#111; border:1px solid var(--rule); padding:12px; overflow-x:auto; color:#9fb; }}
+code {{ color:var(--live); }}
+dl {{ margin:0 0 14px; }} dt {{ color:var(--warm); margin-top:10px; }} dd {{ margin:2px 0 0 16px; }}
 </style></head><body><main>
 {body}
 <footer>{footer}</footer>
 </main></body></html>"""
+
+
+# --------------------------------------------------------------------------
+# The wordmark: a 6x10 pixel face drawn with half-block characters, which
+# carry two pixels per cell vertically and so allow a real stroke weight
+# instead of the chunky squares a plain block font gives. Five rows, 62
+# columns, one <i> per row so the colour can sweep down it.
+# --------------------------------------------------------------------------
+LOGO_ROWS = (
+    "\u2588\u2588  \u2588\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588\u2588\u2588\u2588\u2588 \u2584\u2588\u2580\u2580\u2588\u2584 \u2584\u2588\u2580\u2580\u2580\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2580\u2580\u2588\u2584",
+    "\u2588\u2588  \u2588\u2588 \u2588\u2588\u2588 \u2588\u2588 \u2588\u2588     \u2588\u2588     \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588  \u2588\u2588",
+    "\u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2584\u2588\u2588 \u2588\u2588     \u2588\u2588\u2588\u2588\u2588  \u2588\u2588\u2588\u2588\u2588\u2588  \u2580\u2588\u2588\u2588\u2584 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588  \u2588\u2588  \u2588\u2588",
+    "\u2588\u2588\u2584\u2584\u2588\u2588 \u2588\u2588 \u2588\u2588\u2588 \u2588\u2588     \u2588\u2588     \u2588\u2588  \u2588\u2588 \u2584\u2584  \u2588\u2588 \u2588\u2588  \u2588\u2588 \u2588\u2588     \u2588\u2588  \u2588\u2588",
+    "\u2588\u2588     \u2588\u2588 \u2580\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588  \u2588\u2588 \u2580\u2588\u2588\u2588\u2588  \u2588\u2588  \u2588\u2588 \u2588\u2588\u2588\u2588\u2588\u2588 \u2588\u2588\u2584\u2584\u2588\u2580",
+)
+
+
+def logo_html():
+    """The wordmark, one <i> per row. No newlines inside the <pre>, because
+    each row is a block element, so nothing depends on source whitespace."""
+    return ('<pre class="logo" role="img" aria-label="\u00b5nleashed">'
+            + "".join(f"<i>{row}</i>" for row in LOGO_ROWS)
+            + "</pre>")
 
 
 def human_ago(seconds):
@@ -412,14 +456,17 @@ def board_rows(rows, now):
             activity = f"{r['minutes24']} caller-min/24h"
         elif r["calls24"] is not None:
             activity = f"{r['calls24']} calls/24h"
+        dial = html.escape(f"telnet://{where}:{r['port']}", quote=True)
         out.append(
             "<tr>"
             f"<td class='name'>{html.escape(r['name'])}<br>"
             f"<span class='desc'>{html.escape(r['description'])}</span></td>"
-            f"<td class='addr'>{html.escape(where)} {r['port']}</td>"
+            f"<td class='addr'><a href='{dial}' title='Opens your terminal "
+            f"program if one is registered for telnet:// links'>"
+            f"{html.escape(where)} {r['port']}</a></td>"
             f"<td class='owner'>{html.escape(r['owner'])}</td>"
             f"<td class='{klass}'>{html.escape(label)}</td>"
-            f"<td class='desc'>{html.escape(activity)}</td>"
+            f"<td class='act'>{html.escape(activity)}</td>"
             f"<td class='desc'>{human_streak(now - r['streak_start'])}</td>"
             "</tr>")
     return "".join(out)
@@ -443,9 +490,11 @@ def index_page():
             "SELECT * FROM boards WHERE state IN ('online','offline') "
             "ORDER BY state='online' DESC, "
             "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC").fetchall()
-    head = (f"<h1>{html.escape(SITE_NAME)} <span>{len(rows)} boards</span></h1>"
-            '<p class="lead">Boards that are up right now. '
-            "Dial them with any telnet client.</p>")
+    head = (logo_html()
+            + f"<h1>BBS directory <span>&middot; {len(rows)} listed</span></h1>"
+            + '<p class="lead">Boards that are up right now. '
+            "Dial one with any telnet client, or click an address if you have "
+            "one installed.</p>")
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>Sysop</th>"
                 "<th>State</th><th>Activity</th><th>Up for</th></tr>"
@@ -525,7 +574,7 @@ def data_page():
         f"<tr><td>{html.escape(k)}</td><td>{v}</td></tr>"
         for k, v in sorted(tally.items())) or "<tr><td colspan=2>nothing yet</td></tr>"
 
-    return """<h1>Data</h1>
+    return logo_html() + """<h1>Data</h1>
 <p class="lead">The directory, machine readable. No key, no signup, no rate limit worth
 mentioning. It is a list of hobby BBSes.</p>
 <article>
@@ -625,47 +674,46 @@ ANIM = """
      |                                              |
      |  o--------------------------------------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 <pre>   [ YOU ]                                   [ THE BOARD ]
      |                                              |
      |  ---o-----------------------------------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 <pre>   [ YOU ]                                   [ THE BOARD ]
      |                                              |
      |  -------o-------------------------------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 <pre>   [ YOU ]                                   [ THE BOARD ]
      |                                              |
      |  -----------o---------------------------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 <pre>   [ YOU ]                                   [ THE BOARD ]
      |                                              |
      |     ---------------------------o--------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 <pre>   [ YOU ]                                   [ THE BOARD ]
      |                                              |
      |     -----------------------o------------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 <pre>   [ YOU ]                                   [ THE BOARD ]
      |                                              |
      |     -----------------o------------------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 <pre>   [ YOU ]                                   [ THE BOARD ]
      |                                              |
      |     -----------o------------------------     |
      |                                              |
-   40 columns of text                       a chip on a shelf</pre>
+   any terminal, anywhere                   a chip on a shelf</pre>
 </div>"""
 
 
-ABOUT = """<h1>&micro;nleashed</h1>
-<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
+ABOUT = logo_html() + """<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
 """ + ANIM + """
 <article>
 

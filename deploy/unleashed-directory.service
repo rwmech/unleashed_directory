@@ -24,7 +24,7 @@ Environment=DIRECTORY_HOST=127.0.0.1
 Environment=DIRECTORY_PORT=8080
 # Quoted: systemd splits an unquoted Environment= value on spaces, which
 # silently turned this into just "unleashed".
-Environment="DIRECTORY_NAME=unleashed BBS directory"
+Environment="DIRECTORY_NAME=µnleashed BBS directory"
 Environment=DIRECTORY_URL=https://unleashedbbs.com
 Environment=DIRECTORY_PENDING_HOURS=3
 Environment=DIRECTORY_EXPIRE_DAYS=7
