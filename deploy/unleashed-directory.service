@@ -1,0 +1,50 @@
+# ===========================================================================
+#  µnleashed BBS directory: service unit
+#  Copyright 2026 - Robert Mech
+#  SPDX-License-Identifier: GPL-2.0-or-later
+# ===========================================================================
+[Unit]
+Description=unleashed BBS directory
+Documentation=https://github.com/rwmech/unleashed_directory
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=directory
+Group=directory
+WorkingDirectory=/srv/unleashed_directory
+ExecStart=/usr/bin/python3 /srv/unleashed_directory/server.py
+Restart=always
+RestartSec=3
+
+# Settings live here, so the code needs no deployment-specific edits.
+Environment=DIRECTORY_DB=/var/lib/unleashed-directory/directory.db
+Environment=DIRECTORY_HOST=127.0.0.1
+Environment=DIRECTORY_PORT=8080
+Environment=DIRECTORY_NAME=unleashed BBS directory
+Environment=DIRECTORY_URL=https://unleashedbbs.com
+Environment=DIRECTORY_PENDING_HOURS=3
+Environment=DIRECTORY_EXPIRE_DAYS=7
+Environment=DIRECTORY_PER_ADDRESS=1
+Environment=DIRECTORY_MIN_SECONDS=30
+
+# It listens on loopback only and Caddy is the thing facing the internet, so
+# it needs nothing else: no new privileges, no write access beyond its own
+# database, no view of anybody's home directory.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+ReadWritePaths=/var/lib/unleashed-directory
+
+[Install]
+WantedBy=multi-user.target

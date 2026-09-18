@@ -1,0 +1,55 @@
+# ===========================================================================
+#  µnleashed BBS directory: web front end
+# ===========================================================================
+#
+# File:        deploy/Caddyfile
+# Purpose:     TLS and routing for the directory. Caddy gets certificates on
+#              its own; nothing here needs a cron job.
+#
+# THE ONE THING NOT TO CHANGE:
+#
+#   /announce must stay reachable over PLAIN HTTP with no redirect.
+#
+# A board is a microcontroller with no TLS stack and never will have one.
+# Caddy's default behaviour is to redirect every http:// request to https://,
+# and a board that gets a 308 reports it to its sysop as "refused". That
+# single default would break every heartbeat on the network, silently, and
+# the boards would have no way to tell you why. The http:// block below
+# carves that one path out and sends everything else upstairs.
+#
+# Copyright 2026 - Robert Mech
+# License:     GNU General Public License v2 or later
+# SPDX-License-Identifier: GPL-2.0-or-later
+# ===========================================================================
+
+# --- plain HTTP: the heartbeat endpoint, and a push upstairs for people ----
+http://unleashedbbs.com, http://www.unleashedbbs.com,
+http://unleashedbbs.net, http://www.unleashedbbs.net,
+http://unleashedbbs.org, http://www.unleashedbbs.org {
+
+	@announce path /announce
+	handle @announce {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# A browser that arrives on port 80 gets sent to the secure site.
+	handle {
+		redir https://unleashedbbs.com{uri} permanent
+	}
+}
+
+# --- the site itself --------------------------------------------------------
+unleashedbbs.com, www.unleashedbbs.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:8080
+	log {
+		output file /var/log/caddy/directory.log
+		format console
+	}
+}
+
+# --- the other two names point at the first ---------------------------------
+unleashedbbs.net, www.unleashedbbs.net,
+unleashedbbs.org, www.unleashedbbs.org {
+	redir https://unleashedbbs.com{uri} permanent
+}

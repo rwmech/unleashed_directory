@@ -1,0 +1,15 @@
+# ===========================================================================
+#  µnleashed BBS directory
+#  Files that never belong in the repository.
+# ===========================================================================
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+*.pyc
+# never, under any circumstances
+*.pem
+id_*
+*_rsa
+*_ed25519
+.env

@@ -1,0 +1,130 @@
+<!--
+ ===========================================================================
+  µnleashed BBS directory
+ ===========================================================================
+
+ File:         PROTOCOL.md
+ Purpose:      The wire format, so anything can be listed and anybody can
+               run a directory.
+
+ Copyright 2026 - Robert Mech
+ License:      GNU General Public License v2 or later
+ SPDX-License-Identifier: GPL-2.0-or-later
+ ===========================================================================
+-->
+
+# The announce protocol
+
+One HTTP POST, a JSON body of about 200 bytes, repeated every few minutes. That is the whole protocol. It is deliberately small enough to implement on a microcontroller with no libraries, and plain enough to implement in any language in an afternoon.
+
+## Why plain HTTP
+
+Because the boards are microcontrollers. A TLS stack costs more memory than the entire announce feature on an ESP32, and every field in the payload is public information by definition: it is a listing, written to be read by strangers. The one thing worth protecting is somebody claiming to be your board, and a token does that without a certificate store.
+
+A directory **must** serve `/announce` over plain HTTP with no redirect. A board that receives a 308 cannot follow it.
+
+## Request
+
+```
+POST /announce HTTP/1.1
+Host: unleashedbbs.com
+User-Agent: unleashed/0.13.0
+Content-Type: application/json
+Content-Length: 204
+Connection: close
+
+{"software":"unleashed","version":"0.13.0",
+ "name":"The Rusty Modem","owner":"KE9CXN",
+ "description":"A BBS on a chip in a shack in Illinois",
+ "host":"","port":6400,"nodes":6,"busy":0,
+ "uptime":3600,"interval":10,"token":""}
+```
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `software` | string | no | what is running. `unleashed` from this firmware; a directory should accept anything |
+| `version` | string | no | its version |
+| `name` | string | **yes** | the board's name, up to 40 characters |
+| `owner` | string | no | who runs it, up to 40 characters |
+| `description` | string | no | one line, up to 120 characters |
+| `host` | string | no | the name to list. Empty means "use the address this arrived from" |
+| `port` | number | **yes** | the port callers dial, 1 to 65535 |
+| `nodes` | number | no | how many caller lines the board has |
+| `busy` | number | no | how many are in use right now |
+| `uptime` | number | no | seconds since the board booted |
+| `interval` | number | no | minutes between heartbeats. Tells the directory when to call the board quiet. Default 10 |
+| `token` | string | no | empty on the first announce, then whatever the directory issued |
+| `calls24` | number | no | calls in the last 24 hours. Only when the sysop opted in |
+| `minutes24` | number | no | caller-minutes in the last 24 hours. Only when the sysop opted in |
+
+**No field identifies a caller, and none ever should.** Not handles, not addresses, not what anybody typed. A directory receiving such a field should drop it.
+
+## Response
+
+`200` means listed. Anything else is a refusal and boards report it to their sysop as such.
+
+```
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Seen-Address: 203.0.113.9
+X-Listing-Token: 1935bc3ca80c43fcd52bacf6d3db6673
+X-Listing-State: pending
+X-Listing-Public-In: 9840
+
+{"state":"pending","public_in":9840,"seen":"203.0.113.9",
+ "name":"The Rusty Modem","beats":1,
+ "token":"1935bc3ca80c43fcd52bacf6d3db6673"}
+```
+
+| Header | Meaning |
+|---|---|
+| `X-Seen-Address` | the address the request arrived from. A board behind a changing home address learns its public address this way, which is the cheapest dynamic DNS there is. Sending it costs nothing and is good manners |
+| `X-Listing-Token` | the token for this listing. On the first announce this is newly minted; the board **must** save it and send it from then on |
+| `X-Listing-State` | `pending`, `online`, `offline` or `queued` |
+| `X-Listing-Public-In` | seconds until a pending listing appears. Lets a board show `public in 2h41m` instead of silence |
+
+The same values are in the JSON body, for implementations that would rather parse one thing than two.
+
+| Status | Meaning |
+|---|---|
+| `200` | listed or updated |
+| `400` | the payload is malformed, has no name, or an impossible port |
+| `413` | body too large |
+| `429` | heartbeats are arriving too fast |
+
+## The token
+
+Minted by the directory on the first announce, random, and tied to that listing. A board saves it and sends it forever after.
+
+**What it is for:** stopping somebody taking over your listing.
+
+**What it is not for:** stopping spam. Tokens are free to mint, so anyone can have as many as they like. Do not build a spam defence on them.
+
+**What it must not be:** derived from anything public. A token computed from the board's name, or from its MAC address, is a lock whose key is printed on the door, and since both the firmware and this server are open source, everybody has the algorithm. Random, server-issued, or it is decoration.
+
+A directory that receives an unknown token treats the request as a brand new listing. It never transfers an existing one.
+
+## Listing states
+
+| State | Meaning |
+|---|---|
+| `pending` | heartbeats are accumulating. Not on the public list |
+| `online` | public, and a heartbeat has arrived within three of the board's own intervals |
+| `offline` | public but marked quiet. A reboot or a bad evening must not cost a board the hours it spent becoming public |
+| `queued` | waiting for a human, usually because another listing already exists at that address |
+
+Silence for seven days deletes the listing and frees its name and token.
+
+## What a directory is expected to do
+
+- Record the listing against the source address, or against `host` when the board supplies one.
+- Hold a new listing back until it has sustained heartbeats for a few hours. This is the anti-spam measure that costs a spammer real infrastructure and costs a real board nothing, because it was going to be up anyway.
+- Limit automatic listings per source address, counting per `/64` on IPv6, and queue the rest for a human. Addresses are the scarce resource, which makes this the control that actually bites.
+- Rate limit the endpoint.
+- Never publish anything the board did not send.
+- Never connect outwards to verify a listing. See the README for why.
+- Treat activity figures as self-reported, because they are. If you rank by them, say so, and pair them with something you measured yourself, such as how long the board has been continuously up.
+
+## Implementing it elsewhere
+
+Any software that sends this payload gets listed. There is nothing µnleashed-specific in it, and `software` is a free-text field precisely so other BBS packages can announce themselves. If you implement it and something here is ambiguous, that is a bug in this document.
