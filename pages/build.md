@@ -72,6 +72,10 @@ new callers that before they choose a password, and so should you.
 
 If that is fine with you, it was fine with everybody in 1985 too.
 
+[How to forward a port on your router](/forward), with step by step pages for
+NETGEAR, TP-Link, ASUS, Xfinity gateways, eero and Google Nest Wifi, and an
+honest list of the things that will stop it working.
+
 ## Listing it here
 
 Turn on the `announce` plugin and the board sends a small heartbeat every ten

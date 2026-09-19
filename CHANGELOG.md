@@ -14,6 +14,13 @@
 
 # Changelog
 
+## 0.7.0, 2026-09-19
+
+- Five port forwarding guides, one per router family: NETGEAR, TP-Link, ASUS, Xfinity gateways, and the app-only meshes (eero, Google Nest Wifi). Each was researched against the vendor's own documentation, and where a vendor documents nothing the page says so rather than inventing a menu path. A confidently wrong click path wastes more of a reader's time than an honest gap.
+- An index page that warns before it instructs: what a port forward actually does to a home network, that telnet carries every password in the clear, that an open port is found by scanners within minutes, and the two things that silently stop it working whatever you click (double NAT, and CGNAT which no router setting can fix).
+- Any file in `pages/` is now served at its own name. That lookup runs last in the routing chain on purpose: placed earlier it swallowed `/health`, which is the endpoint `update.sh` uses to decide whether a deployment worked.
+- Markdown gained third-level headings and a blockquote that renders as a warning, styled to interrupt rather than blend in.
+
 ## 0.6.2, 2026-09-19
 
 - One width across all three faces. `main` was already 1080 everywhere, but `article` capped itself at 78ch, so the pages built from articles sat narrower than the board list and it looked like two different sites. The frame is now one job, and the reading measure applies only to body text.

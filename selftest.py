@@ -59,8 +59,13 @@ def get(path, host=None):
     req = urllib.request.Request(f"{BASE}{path}")
     if host:
         req.add_header("Host", host)
-    with urllib.request.urlopen(req, timeout=5) as r:
-        return r.status, r.read().decode()
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, r.read().decode()
+    except urllib.error.HTTPError as e:
+        # A 404 is an answer, not a failure. Checking that something is
+        # absent is as much a test as checking it is there.
+        return e.code, e.read().decode(errors="replace")
 
 
 def main():
@@ -195,6 +200,23 @@ def main():
         check("the house rules are there", code == 200 and "No hate" in page)
         code, page = get("/how")
         check("so is how to get listed", code == 200 and "announce" in page)
+
+        # Pages are files in pages/, routed by name. That lookup runs last
+        # on purpose: put it earlier and it swallows real endpoints, which
+        # is exactly what happened to /health the first time.
+        for name in ("build", "forward", "forward-netgear", "forward-tplink",
+                     "forward-asus", "forward-xfinity", "forward-mesh"):
+            code, page = get("/" + name)
+            check(f"/{name} renders", code == 200 and "<article>" in page)
+        code, page = get("/forward")
+        check("the forwarding index warns before it instructs",
+              'class="warn"' in page and "responsible" in page)
+        check("and names the two things that silently stop it working",
+              "Double NAT" in page and "CGNAT" in page)
+        code, _ = get("/nosuchpage")
+        check("an unknown page is not a page", code == 404)
+        code, body = get("/health")
+        check("the health endpoint still answers", code == 200 and "ok" in body)
 
         print("Busy hours")
         # The chart is built from the caller counts a board already

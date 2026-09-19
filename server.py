@@ -356,6 +356,9 @@ def busiest(hours):
 
 
 PAGES_DIR = pathlib.Path(__file__).resolve().parent / "pages"
+# A page name is a name, not a path: no slashes, no dots, nothing to
+# climb out of the directory with.
+PAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 _MD_LINK   = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MD_CODE   = re.compile(r"`([^`]+)`")
@@ -405,9 +408,15 @@ def md_render(text):
         if line.startswith("```"):
             flush()
             code = []
+        elif line.startswith("### "):
+            flush()
+            out.append(f"<h3>{md_inline(line[4:])}</h3>")
         elif line.startswith("## "):
             flush()
             out.append(f"<h2>{md_inline(line[3:])}</h2>")
+        elif line.startswith("> "):
+            flush()
+            out.append(f'<p class="warn">{md_inline(line[2:])}</p>')
         elif line.startswith("# "):
             flush()
             out.append(f"<h1>{md_inline(line[2:])}</h1>")
@@ -779,6 +788,12 @@ article figure, article .wide {{ max-width:none; margin:20px 0; }}
 .gallery figcaption {{ color:var(--faint); font-size:12px; margin-top:6px; }}
 .gallery .credit {{ display:block; color:#55555f; font-size:11px; margin-top:3px; }}
 article h2 {{ color:var(--struct); font-size:15px; margin:28px 0 6px; font-weight:normal; }}
+article h3 {{ color:var(--ink); font-size:13px; margin:20px 0 4px; font-weight:normal;
+        letter-spacing:1px; text-transform:uppercase; }}
+/* A warning that is styled like everything else is a warning nobody
+   reads. This one is meant to interrupt. */
+article .warn {{ color:#f0c674; background:#241d10; border-left:3px solid #8a6d39;
+        padding:10px 14px; margin:14px 0; max-width:78ch; }}
 article p {{ margin:0 0 14px; }}
 article b {{ color:#e8e8e8; font-weight:normal; }}
 article .pull {{ color:var(--name); border-left:2px solid #3a2f5c; padding-left:12px; margin:18px 0; }}
@@ -1597,6 +1612,17 @@ class Handler(BaseHTTPRequestHandler):
                        "application/rss+xml; charset=utf-8")
         elif path == "/health":
             self.reply(200, "ok\n", "text/plain; charset=utf-8")
+        # Last, deliberately. Every branch above is a real endpoint, and a
+        # generic page lookup placed before them silently swallows whichever
+        # ones happen to look like a page name. It took /health the first
+        # time, which is precisely the endpoint update.sh uses to decide
+        # whether a deployment worked.
+        elif PAGE_NAME.match(path[1:] or ""):
+            page = md_page(path[1:], role)
+            if page is None:
+                self.reply(404, "no such page\n", "text/plain; charset=utf-8")
+            else:
+                self.reply(200, page)
         else:
             self.reply(404, simple_page("Not here", "<h1>Not here</h1>"))
 
