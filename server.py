@@ -1112,7 +1112,8 @@ def board_rows(rows, now, charts=None):
             + ((charts or {}).get(r["id"]) or "")
             + "</td>"
             f"<td class='addr'><a href='{dial}' title='Opens your terminal "
-            f"program if one is registered for telnet:// links'>"
+            f"program if one is registered for telnet:// links. See /dialing "
+            f"if nothing happens.'>"
             f"{html.escape(where)} {r['port']}</a></td>"
             f"<td class='owner'>{html.escape(r['owner'])}</td>"
             f"<td class='{klass}'>{html.escape(label)} {fresh}</td>"

@@ -14,6 +14,12 @@
 
 # Changelog
 
+## 0.10.0, 2026-09-19
+
+- A **dialing** page explaining why clicking a `telnet://` address often does nothing, and how to fix it. Install SyncTERM first; registry editing last, behind a warning, and using the per-user key that needs no administrator.
+- It names the actual trap: Tera Term's installer takes the association but adds a verb of its own rather than replacing `open`, so a browser still reaches the stock handler, which runs a `telnet.exe` that Windows does not install by default. Also that Tera Term only negotiates telnet options on port 23, so it says nothing on a board running anywhere else.
+- Linked from the Dial column on every listing and from the terminals page.
+
 ## 0.9.0, 2026-09-19
 
 - A **Terminals** page and menu heading: what to call a board with. SyncTERM first for anyone who just wants one that works, then the modern options with their caveats, then the machines this is really for. Commodore, Atari, Apple, Amiga, MSX, Spectrum, CP/M, DOS, and actual terminals down to a Teletype Model 33 at 110 baud. Every mention of terminal software across the site links to it.

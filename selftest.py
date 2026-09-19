@@ -204,7 +204,7 @@ def main():
         # Pages are files in pages/, routed by name. That lookup runs last
         # on purpose: put it earlier and it swallows real endpoints, which
         # is exactly what happened to /health the first time.
-        for name in ("build", "forward", "terminals", "forward-netgear",
+        for name in ("build", "forward", "terminals", "dialing", "forward-netgear",
                      "forward-tplink", "forward-asus", "forward-xfinity",
                      "forward-mesh"):
             code, page = get("/" + name)
@@ -219,6 +219,11 @@ def main():
               "<table>" in page and "SyncTERM" in page)
         check("and the menu carries it on every page",
               ">Terminals</a>" in page)
+        code, page = get("/dialing")
+        check("the dialing page leads with the fix, not the registry",
+              page.index("SyncTERM") < page.index("Registry"))
+        check("and warns before any registry editing",
+              'class="warn"' in page and "break unrelated associations" in page)
         code, _ = get("/nosuchpage")
         check("an unknown page is not a page", code == 404)
         code, body = get("/health")
