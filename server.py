@@ -81,6 +81,14 @@ ABOUT_DOMAIN  = os.environ.get("DIRECTORY_ABOUT_DOMAIN", "")  # what this is, an
 DATA_DOMAIN   = os.environ.get("DIRECTORY_DATA_DOMAIN", "")   # the machine-readable side
 
 PENDING_HOURS = float(os.environ.get("DIRECTORY_PENDING_HOURS", "3"))
+# How long a board that has already earned its listing may stay dark and
+# still come straight back on to the page. The pending hours are the spam
+# stop and they are meant to be paid once, not every time somebody unplugs
+# a board to move a desk. Past this it has been gone long enough that the
+# address, the owner and the intent are all worth re-establishing, and it
+# serves the hours again. Sits inside EXPIRE_DAYS on purpose: gone longer
+# than that and there is no row left to relist.
+RELIST_DAYS   = float(os.environ.get("DIRECTORY_RELIST_DAYS", "4"))
 EXPIRE_DAYS   = float(os.environ.get("DIRECTORY_EXPIRE_DAYS", "7"))
 PER_ADDRESS   = int(os.environ.get("DIRECTORY_PER_ADDRESS", "1"))
 MIN_SECONDS   = int(os.environ.get("DIRECTORY_MIN_SECONDS", "30"))
@@ -690,7 +698,18 @@ def announce(payload, address):
             state = row["state"]
             streak = row["streak_start"]
             if state == "offline":                     # back after a gap
-                state, streak = "pending", now
+                # A listing only ever reaches 'offline' from 'online', and
+                # 'online' is only reachable by serving the pending hours, so
+                # this board has already paid. Sending it round again as
+                # 'pending' took it straight off the public page the moment it
+                # came back, because the page lists 'online' and 'offline' and
+                # not 'pending': an hour of downtime cost three hours of
+                # invisibility, and every sysop who reboots paid it. The
+                # protocol already promised it would not work this way.
+                if now - row["last_seen"] <= RELIST_DAYS * 86400:
+                    state = "online"                   # streak untouched
+                else:
+                    state, streak = "pending", now     # dark too long, serve it again
             elif state == "queued":
                 # Whatever was in the way may be long gone. Re-ask on every
                 # heartbeat rather than leaving it stuck for ever.
@@ -702,8 +721,10 @@ def announce(payload, address):
                     state, streak = "pending", now
             con.execute(
                 f"UPDATE boards SET {sets}, last_seen=?, beats=beats+1, "
-                f"state=?, streak_start=? WHERE id=?",
-                args + [now, state, streak, row["id"]])
+                f"state=?, streak_start=?, "
+                f"public_at=CASE WHEN public_at=0 AND ?='online' THEN ? "
+                f"ELSE public_at END WHERE id=?",
+                args + [now, state, streak, state, now, row["id"]])
             sample(con, row["id"], fields.get("busy") or 0, tz, now)
             fresh = con.execute("SELECT * FROM boards WHERE id=?", (row["id"],)).fetchone()
             if fresh["state"] != row["state"]:

@@ -114,12 +114,20 @@ A directory that receives an unknown token treats the request as a brand new lis
 | `offline` | public but marked quiet. A reboot or a bad evening must not cost a board the hours it spent becoming public |
 | `queued` | waiting for a human, usually because another listing already exists at that address |
 
+An `offline` board that comes back within four days returns to `online` and
+keeps the hours it already served. The pending hours are a spam stop, and a
+spam stop is paid once: charging it again every time somebody unplugs a board
+to move a desk punishes the sysops who are actually there. Past four days it
+goes back to `pending` and serves them again, because a board nobody could
+call for most of a week is worth re-establishing.
+
 Silence for seven days deletes the listing and frees its name and token.
 
 ## What a directory is expected to do
 
 - Record the listing against the source address, or against `host` when the board supplies one.
 - Hold a new listing back until it has sustained heartbeats for a few hours. This is the anti-spam measure that costs a spammer real infrastructure and costs a real board nothing, because it was going to be up anyway.
+- Charge those hours once. A board that has already earned its listing and then goes quiet for a while should come back to it, not re-earn it. Getting this wrong is worse than it sounds: if the public list does not render the holding state, then reconnecting, rather than disconnecting, is what removes a board from the page.
 - Limit automatic listings per source address, counting per `/64` on IPv6, and queue the rest for a human. Addresses are the scarce resource, which makes this the control that actually bites.
 - Rate limit the endpoint.
 - Never publish anything the board did not send.

@@ -14,6 +14,13 @@
 
 # Changelog
 
+## 0.10.2, 2026-09-19
+
+- **Fixed: coming back from a reboot was what delisted a board.** A listing that had gone quiet was demoted from `offline` to `pending` on its next heartbeat, and the public page renders `online` and `offline` but not `pending`. So a board was still listed, shown as quiet, the whole time it was switched off, and vanished the moment it reconnected. It then had to serve the three pending hours over again. Found on the live directory: a board unplugged for an hour to have an SD card wired to it came back and was gone, telling its sysop "public in 2h54m".
+- A board that has already earned its listing now keeps it. Back within `DIRECTORY_RELIST_DAYS` (four) and it returns straight to `online` with its streak untouched; past that it serves the hours again, because a board nobody could call for most of a week is worth re-establishing. The window sits inside the seven day expiry on purpose: gone longer than that and there is no row left to relist.
+- `public_at` is now filled in when a listing resumes, so a row that was `offline` when that column was added can still reach the feed.
+- The self test had no case for the most ordinary thing that happens to a directory: a board keeps its token, goes quiet, and comes back. The nearest test covers a board that *lost* its token and accepts either state deliberately, so it walked straight past this. Eight checks now cover both sides of the window, including that the board is on the page after a day off and not on it after five.
+
 ## 0.10.1, 2026-09-19
 
 - **Fixed: the menu shipped with no styling at all.** The stylesheet for it was written in one patch, dropped by a rewrite of that patch, and never checked, so every page ran the menu items together as plain underlined links. It is a menu bar now: reverse video on hover, the current page filled, spacing that makes the items separate things.

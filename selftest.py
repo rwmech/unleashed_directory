@@ -251,6 +251,75 @@ def main():
         check("the chart expands without any javascript",
               "<details" in page and "<script" not in page)
 
+        # ------------------------------------------------------------------
+        # Coming back after a gap.
+        #
+        # This is the one that cost a real listing. A board was unplugged for
+        # an hour to have an SD card wired to it, and when it came back the
+        # server demoted it from 'offline' to 'pending' and restarted the
+        # three hour clock. The public page lists 'online' and 'offline' and
+        # not 'pending', so reconnecting is what removed it from the page.
+        # Taking it offline never had.
+        #
+        # There was no test for this. The nearest one covers a board that
+        # lost its token and accepts either state on purpose, so it walked
+        # straight past. A board that keeps its token and goes quiet is the
+        # single most ordinary thing that happens to a directory, and it was
+        # the untested path.
+        print("A board that goes quiet and comes back")
+        import sqlite3
+
+        def age(token, seconds, state, streak_back=0):
+            """Put one row into the past: last_seen, state, and optionally
+            how long ago it started earning its listing."""
+            con = sqlite3.connect(db)
+            con.execute(
+                "UPDATE boards SET last_seen = strftime('%s','now') - ?, "
+                "state = ?, streak_start = strftime('%s','now') - ? "
+                "WHERE token = ?",
+                (seconds, state, streak_back or seconds, token))
+            con.commit()
+            con.close()
+
+        code, first, _ = post({"name": "The Napping Board", "owner": "Rip",
+                               "description": "goes quiet, comes back",
+                               "port": 6400, "interval": 10})
+        nap = first.get("token", "")
+        check("a new board gets a token", len(nap) >= 16)
+
+        # It serves its hours and is published, then goes dark for a day.
+        age(nap, 86400, "offline", streak_back=86400 + 4 * 3600)
+        code, back, _ = post({"name": "The Napping Board", "owner": "Rip",
+                              "description": "goes quiet, comes back",
+                              "port": 6400, "interval": 10, "token": nap})
+        check("a day off is answered", code == 200)
+        check("and it resumes the listing it already earned",
+              back.get("state") == "online")
+        check("with no probation to serve again", back.get("public_in") == 0)
+        _, page = get("/", host="boards.example")
+        check("so it is back on the public page", "The Napping Board" in page)
+
+        # Gone long enough and it serves the hours again. That is the spam
+        # stop: an address that posts once, vanishes for a week and returns
+        # is not a board anybody has been able to call.
+        age(nap, int(5 * 86400), "offline", streak_back=int(6 * 86400))
+        code, stale, _ = post({"name": "The Napping Board", "owner": "Rip",
+                               "description": "goes quiet, comes back",
+                               "port": 6400, "interval": 10, "token": nap})
+        check("gone past the relist window, it is pending again",
+              stale.get("state") == "pending")
+        check("and is told how long it has to wait",
+              stale.get("public_in", 0) > 0)
+        _, page = get("/", host="boards.example")
+        check("and is not on the page while it waits",
+              "The Napping Board" not in page)
+
+        # Leave nothing behind for the checks that follow.
+        con = sqlite3.connect(db)
+        con.execute("DELETE FROM boards WHERE token = ?", (nap,))
+        con.commit()
+        con.close()
+
         # Last, because it uses up everything one address may hold.
         #
         # This is the bug that put ninety rows on the live directory. A board
