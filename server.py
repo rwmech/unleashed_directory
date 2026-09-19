@@ -1284,17 +1284,15 @@ system belonged to somebody you could name.</p>
 
 <h2>What this is</h2>
 
-<p>A telnet BBS that runs on a bare ESP32, a microcontroller the size of a postage
-stamp, and grows into an IoT terminal server through plugins. Nodes, handles, a user
-list, a chat room in the style of DDial and Gtalk, messages, doors, a caller log, a
-sysop who can page you.</p>
+<p>A telnet BBS that runs on a bare ESP32 and grows into an IoT terminal server
+through plugins. Nodes, handles, a user list, a chat room in the style of DDial and
+Gtalk, messages, doors, a caller log, a sysop who can page you.</p>
 
 <p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
 server farm, not a feature that can be deprecated out from under you. A chip you own,
 on a port you chose, running software you can read all of in an afternoon and change
-when you disagree with it. Switch it off and it is off. Leave it in a drawer for a
-year, plug it back in, and it still works, because there is nothing at the other end
-that has to still exist.</p>
+when you disagree with it. Leave it in a drawer for a year, plug it back in, and it
+still works, because there is nothing at the other end that has to still exist.</p>
 
 <p>The user list is a text file. The settings are a text file. A message goes from one
 caller to another through a chip on your shelf and is gone the moment it is read.
@@ -1366,10 +1364,9 @@ there.</p>
 
 <p class="pull">If you switch it off, it is off. Nobody else gets a say in that.</p>
 
-<p>Turn the board off and the service ends. Not "your account is deactivated but we
-retain your data for legitimate business purposes" — ends. Pull the plug and the chip
-stops answering. Wipe the flash and the user list is gone. That is what owning something
-means, and it is startling how unusual it has become.</p>
+<p>Not "your account is deactivated but we retain your data for legitimate business
+purposes". Pull the plug and the chip stops answering. Wipe the flash and the user
+list is gone.</p>
 
 <h2>Honest about the limits</h2>
 
@@ -1411,14 +1408,12 @@ took the computer out of the raised-floor room that somebody else controlled and
 on a kitchen table. This is the same move, one more time, on a chip you can lose in a
 drawer. Where the symbol cannot be shown, it is written <code>unleashed</code>.</p>
 
-<p class="pull">I started my career on
+<p class="pull">In 1989 I was working on
 <a href="https://en.wikipedia.org/wiki/IBM_4300">IBM 4381 mainframes</a>. I have
 stood inside the raised-floor room, and the point is that it was somebody else's
 room. You booked time on that machine. You did not own it, you could not take it
-home, and what you were allowed to do with it was a decision made by people who
-were not you. Everything since has been an argument about who the computer
-belongs to, and this is a chip on a shelf that belongs to
-whoever put it there.<br><br><span class="sig">&mdash; QuantumRob</span></p>
+home, and what you were allowed to do with it was decided by people who were not
+you.<br><br><span class="sig">&mdash; QuantumRob</span></p>
 
 <h2>You can do this today</h2>
 
