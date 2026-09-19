@@ -186,6 +186,66 @@ def other_sites(role):
     return " &middot; ".join(bits)
 
 
+def site_url(target, role, path="/"):
+    """A link to one of the three faces: absolute only when it crosses a
+    domain, so a single-host deployment is never sent to a name that is not
+    configured."""
+    host = {"list": LIST_DOMAIN, "about": ABOUT_DOMAIN, "data": DATA_DOMAIN}.get(target, "")
+    if target == role or not host:
+        return path
+    return f"https://{host}{path}"
+
+
+# What is in the menu, in the order a newcomer needs it: what is up, what
+# this is, how to have one, how to open it up, how to be listed, the data.
+NAV = (("list",  "/",        "Boards"),
+       ("about", "/",        "What this is"),
+       ("list",  "/build",   "Build one"),
+       ("list",  "/forward", "Go public"),
+       ("list",  "/how",     "Get listed"),
+       ("data",  "/",        "Data"))
+
+
+def nav_html(role, here=""):
+    out = []
+    for target, path, label in NAV:
+        current = (target == role and path == here) or \
+                  (here in ("", "/") and path == "/" and target == role)
+        # Built by concatenation rather than an f-string: a backslash is not
+        # allowed inside an f-string expression before Python 3.12, and the
+        # server has to run on whatever the droplet ships.
+        cls = ' class="here"' if current else ""
+        href = site_url(target, role, path)
+        out.append('<a' + cls + ' href="' + href + '">' + label + '</a>')
+    return "<nav>" + "".join(out) + "</nav>"
+
+
+def head_html(role, here=""):
+    """The top of every page: wordmark, then the same menu everywhere."""
+    return logo_html() + nav_html(role, here)
+
+
+def foot_html(role, extra=""):
+    """The bottom of every page: the other faces, then the same links.
+
+    Identical on all three so a reader learns it once. Anything specific to
+    one page goes in extra, underneath.
+    """
+    others = other_sites(role)
+    links = (f'<a href="{site_url("list", role, "/build")}">Build one</a> &middot; '
+             f'<a href="{site_url("list", role, "/forward")}">Go public</a> &middot; '
+             f'<a href="{site_url("list", role, "/how")}">Get listed</a> &middot; '
+             f'<a href="{site_url("list", role, "/rules")}">House rules</a> &middot; '
+             f'<a href="{site_url("list", role, "/feed.xml")}">RSS</a> &middot; '
+             f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>')
+    parts = [others, links] if others else [links]
+    if extra:
+        parts.append(extra)
+    return "<br><br>".join(parts)
+
+
+
+
 def db():
     con = sqlite3.connect(DB_PATH, timeout=10)
     con.row_factory = sqlite3.Row
@@ -452,7 +512,8 @@ def md_page(name, role="list"):
              '<a href="/how">how to get listed</a> &middot; '
              '<a href="/rules">house rules</a>')
     return PAGE.format(refresh="", title=html.escape(SITE_NAME),
-                       body=logo_html() + body, footer=footer)
+                       body=head_html(role, "/" + name) + body,
+                       footer=foot_html(role))
 
 
 STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
@@ -763,7 +824,10 @@ details.chart .note {{ color:var(--faint); font-size:11px; }}
 .none {{ color:var(--faint); padding:24px 8px; }}
 footer {{ margin-top:28px; color:#555; border-top:1px solid var(--rule); padding-top:12px; }}
 article {{ max-width:none; }}
-article p, article li, article dd, article dt {{ max-width:78ch; }}
+/* Full width, so a floated picture has text on both sides of it rather
+   than a column that stops before it starts. Line height carries the
+   longer measure. */
+article p, article li, article dd {{ max-width:none; line-height:1.62; }}
 /* Anything drawn rather than written gets the whole width: diagrams and
    charts are not prose and should not be squeezed into its measure. */
 article figure, article .wide {{ max-width:none; margin:20px 0; }}
@@ -775,8 +839,8 @@ article figure, article .wide {{ max-width:none; margin:20px 0; }}
    paragraphs wrap, the way any article would set a photograph. A source
    image straight off a phone is several thousand pixels wide, so it is
    capped here rather than trusted to be sensible. */
-.gallery.one {{ display:block; float:right; width:min(38%, 360px);
-        margin:4px 0 16px 26px; }}
+.gallery.one {{ display:block; float:right; width:min(34%, 380px);
+        margin:6px 0 18px 30px; }}
 .gallery figure {{ margin:0; }}
 .gallery img {{ width:100%; height:auto; display:block; border:1px solid var(--rule); }}
 .gallery.one img {{ max-height:420px; object-fit:cover; }}
@@ -794,9 +858,20 @@ article h3 {{ color:var(--ink); font-size:13px; margin:20px 0 4px; font-weight:n
    reads. This one is meant to interrupt. */
 article .warn {{ color:#f0c674; background:#241d10; border-left:3px solid #8a6d39;
         padding:10px 14px; margin:14px 0; max-width:78ch; }}
+article .freedom {{ background:#1d1a10; border:1px solid #4a411f;
+        border-radius:8px; padding:14px 20px 4px; margin:18px 0 18px 30px;
+        max-width:66ch; }}
+article .freedom h4 {{ color:#e8c65c; font-size:13px; font-weight:normal;
+        letter-spacing:1px; text-transform:uppercase; margin:0 0 6px; }}
+article .freedom p {{ color:#cfc7ae; margin:0 0 12px; }}
 article p {{ margin:0 0 14px; }}
 article b {{ color:#e8e8e8; font-weight:normal; }}
-article .pull {{ color:var(--name); border-left:2px solid #3a2f5c; padding-left:12px; margin:18px 0; }}
+article .byline {{ color:var(--dim); border-bottom:1px solid var(--rule);
+        padding-bottom:16px; margin-bottom:22px; }}
+article .byline b {{ color:var(--warm); font-weight:normal; }}
+article .pull {{ color:var(--name); border-left:2px solid #4a3d73;
+        padding:4px 0 4px 20px; margin:22px 0 22px 36px; max-width:70ch;
+        font-style:normal; }}
 article .pull .sig {{ color:var(--faint); }}
 pre {{ background:#111; border:1px solid var(--rule); padding:12px; overflow-x:auto; color:#9fb; }}
 code {{ color:var(--live); }}
@@ -1038,7 +1113,7 @@ def index_page():
             if hours:
                 charts[r["id"]] = chart_html(hours)
 
-    head = (logo_html()
+    head = (head_html("list", "/")
             + f"<h1>BBS directory <span>&middot; {len(rows)} listed{who}</span></h1>"
             + '<p class="lead">Boards that are up right now. '
             "Dial one with any telnet client, or click an address if you have "
@@ -1050,19 +1125,12 @@ def index_page():
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
     body = head + body
-    links = other_sites("list")
-    footer = ((links + "<br><br>") if links else "") + (
-              '<a href="/build">Build one</a> &middot; '
-              '<a href="/how">How to get listed</a> &middot; '
-              '<a href="/rules">House rules</a> &middot; '
-              '<a href="/feed.xml">RSS</a> &middot; '
-              '<a href="/api/boards.json">JSON</a><br><br>'
-              'Activity is the last 24 hours: how many calls, and how long '
-              'callers were connected in total. Caller counts and activity are '
-              'reported by the boards '
-              'themselves, and are only as fresh as each board\'s last '
-              'heartbeat: the small figure next to the state is how old that '
-              'reading is. "Up for" is measured here and cannot be fudged.')
+    footer = foot_html("list",
+        "Activity is the last 24 hours: how many calls, and how long callers "
+        "were connected in total. Caller counts and activity are reported by "
+        "the boards themselves, and are only as fresh as each board's last "
+        "heartbeat: the small figure next to the state is how old that reading "
+        'is. "Up for" is measured here and cannot be fudged.')
     return PAGE.format(title=html.escape(SITE_NAME), body=body, footer=footer,
                        refresh=LIST_REFRESH)
 
@@ -1128,7 +1196,7 @@ def data_page():
         f"<tr><td>{html.escape(k)}</td><td>{v}</td></tr>"
         for k, v in sorted(tally.items())) or "<tr><td colspan=2>nothing yet</td></tr>"
 
-    return logo_html() + """<h1>Data</h1>
+    return """<h1>Data</h1>
 <p class="lead">The directory, machine readable. No key, no signup, no rate limit worth
 mentioning. It is a list of hobby BBSes.</p>
 <article>
@@ -1297,7 +1365,12 @@ ANIM = """
 </div>"""
 
 
-ABOUT = logo_html() + """<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
+ABOUT = """<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
+
+<p class="byline">Written and built by <b>QuantumRob</b>, who has been doing this
+since the 4381 was the computer in the room. The argument below is his; the
+software is free for anybody who agrees with it, and for anybody who does
+not.</p>
 """ + ANIM + """
 <article>
 
@@ -1442,6 +1515,82 @@ analytics to leak, no retention policy to change, no company to be acquired by s
 with different ideas. What is not built cannot be exploited, and what was never
 collected cannot be handed over.</p>
 
+<h2>Freedoms gained</h2>
+
+<p>Every one of these is something you cannot have on a platform, at any price,
+because the platform's business depends on you not having it.</p>
+
+<div class="freedom">
+<h4>Nobody is watching, and everything is public anyway</h4>
+<p>There is no analytics, no telemetry, no model being trained, and nobody
+between you and the person you are talking to. It works like radio rather than
+like a service: what is said in the room is heard by whoever is in the room,
+and nothing is recorded anywhere you cannot reach. Hold a meeting about
+something sensitive and the only people who know it happened are the people who
+were there.</p>
+</div>
+
+<div class="freedom">
+<h4>You define the terms, and the theme, and the rules</h4>
+<p>No terms of service written by somebody else's lawyers. No content policy
+that changes next quarter. No appeals process you did not design. You decide
+what the board is called, what it is for, who is welcome, what is allowed and
+what is not. If somebody disagrees strongly enough, the correct answer has
+always been that they can run their own, and here they actually can.</p>
+</div>
+
+<div class="freedom">
+<h4>Nobody can deplatform you</h4>
+<p>There is no account to suspend, no host to complain to, no payment processor
+to lean on, no app store to delist you from. The board is a chip you own on a
+connection you pay for. The only person who can switch it off is you, and the
+only thing that can take it down is the electricity bill.</p>
+</div>
+
+<div class="freedom">
+<h4>What you say stops existing when you say it should</h4>
+<p>A message goes from one caller to another through a chip on your shelf and is
+gone once it has been read. Delete the user list and it is deleted. Wipe the
+flash and there is no backup in a data centre, no retention policy, no
+"deactivated but retained for legitimate business purposes". Forgetting is the
+default, which is how conversation worked for the whole of human history until
+about twenty years ago.</p>
+</div>
+
+<div class="freedom">
+<h4>You can read every line of it, and change any of them</h4>
+<p>It is free software under the GPL. Not source-available, not "open" with a
+licence that revokes itself if you compete: actually free. Read it, change it,
+run the changed version, give it to somebody else. If this project goes in a
+direction you hate, take the last version you liked and carry on without
+asking.</p>
+</div>
+
+<div class="freedom">
+<h4>No account, no email address, no phone number</h4>
+<p>A caller types a handle and is in. A guest does not even need that. Nothing
+is verified because there is nothing to verify against, and no identity is
+being assembled anywhere. Being unknown to a system is the normal condition of
+being a person, and it should not require effort.</p>
+</div>
+
+<div class="freedom">
+<h4>It keeps working when nothing else does</h4>
+<p>No certificate to renew, no API to be deprecated, no subscription to lapse,
+no company to be acquired and shut down. Leave the board in a drawer for a
+year, plug it in, and it answers, because there is nothing at the other end
+that has to still exist. Software that outlives the company that made it used
+to be ordinary.</p>
+</div>
+
+<div class="freedom">
+<h4>You can be found, or not, entirely as you choose</h4>
+<p>List the board in a directory and strangers can call it. Leave it off and it
+exists only for people you tell. Take it off the internet and it serves your own
+house. Nobody makes that decision but you, and no algorithm decides how visible
+you are once you have made it.</p>
+</div>
+
 <h2>The power is in your hands, literally</h2>
 
 <p>You flash the firmware. You set the password. You decide who gets a handle, what the
@@ -1529,10 +1678,12 @@ the arguing was two-sided. Credit where it is due.</p>
 </article>"""
 
 
-def simple_page(title, body, role="list"):
-    links = other_sites(role)
-    return PAGE.format(refresh="", title=html.escape(title), body=body,
-                       footer=links or '<a href="/">Back to the list</a>')
+def simple_page(title, body, role="list", here=""):
+    """Any page that is a block of prose. The header and footer are added
+    here and nowhere else, so no page carries its own copy of either."""
+    return PAGE.format(refresh="", title=html.escape(title),
+                       body=head_html(role, here) + body,
+                       footer=foot_html(role))
 
 
 # --------------------------------------------------------------------------

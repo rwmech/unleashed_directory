@@ -14,6 +14,14 @@
 
 # Changelog
 
+## 0.8.0, 2026-09-19
+
+- One header, one menu and one footer on all three faces. Navigation previously existed only as a footer line that differed per page, so getting from the manifesto to the board list meant scrolling to the bottom and hoping. Cross-domain links are absolute and same-domain links relative, so a single-host deployment still works.
+- Fixed the width and the floated picture, which were the same mistake: paragraphs were capped at 78ch while the photograph floated at the container edge, so the text column stopped before it reached the picture and nothing wrapped. Articles run the full width now.
+- A byline at the top of the manifesto. A manifesto should say who is making the argument.
+- **Freedoms gained**: eight of them, each in a box of its own, stated as freedoms rather than as features. Nobody watching, you write the rules, nobody can deplatform you, what you say stops existing when you say so, you can read and change every line, no account or email or phone number, it keeps working when nothing else does, and you choose whether to be findable at all.
+- Pull quotes are indented and no longer align flush with the body text.
+
 ## 0.7.0, 2026-09-19
 
 - Five port forwarding guides, one per router family: NETGEAR, TP-Link, ASUS, Xfinity gateways, and the app-only meshes (eero, Google Nest Wifi). Each was researched against the vendor's own documentation, and where a vendor documents nothing the page says so rather than inventing a menu path. A confidently wrong click path wastes more of a reader's time than an honest gap.
