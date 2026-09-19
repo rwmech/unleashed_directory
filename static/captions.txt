@@ -1,0 +1,7 @@
+# One "filename | caption" per line. Drop images in this folder and they
+# appear on the manifesto page, in filename order. A picture with no caption
+# still shows; a caption with no picture is ignored.
+#
+# board.jpg      | The whole board: an ESP32-WROOM-32E and a USB cable.
+# c64.jpg        | A Commodore 64 calling in through a TeensyROM.
+# case.jpg       | 3D printed case, because it should look like a computer.

@@ -14,6 +14,14 @@
 
 # Changelog
 
+## 0.6.0, 2026-09-19
+
+- A **Build one** page, written as Markdown in `pages/` and rendered by the server, so the prose lives in a file somebody can edit rather than inside a Python string. What you need, how to flash it, how to call it, and what forwarding a port actually means.
+- Pages are 1080 wide instead of 900. The terminal look does not require a column of text a third of the way across a monitor. Prose keeps a readable measure inside that; diagrams and charts get the full width.
+- The busy-hours chart is drawn as SVG rather than block characters. Block art reads as an affectation on a web page and lands differently in every font. Same information, still no JavaScript, and it scales to a phone on its own.
+- The manifesto has a section about the hardware, because "a five dollar chip" is a good line and not a description: what an ESP32 actually is, how it compares to the 64 KB machine CBBS ran on, and why that is the argument in one object.
+- Photographs: drop images in `static/` and they appear on the manifesto, captioned from `static/captions.txt`. The section is simply absent when the folder is empty. Filenames are validated rather than paths, so there is nothing to climb out of.
+
 ## 0.5.2, 2026-09-19
 
 - The manifesto carries a note from QuantumRob about meeting Ward Christensen once, at a Maker Faire, before he died in October 2024.

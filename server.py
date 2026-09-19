@@ -56,6 +56,7 @@ import html
 import ipaddress
 import json
 import os
+import pathlib
 import re
 import secrets
 import sqlite3
@@ -343,6 +344,149 @@ def busiest(hours):
     return f"{at:02d}:00-{(at + 2) % 24:02d}:00"
 
 
+PAGES_DIR = pathlib.Path(__file__).resolve().parent / "pages"
+
+_MD_LINK   = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_MD_CODE   = re.compile(r"`([^`]+)`")
+_MD_BOLD   = re.compile(r"\*\*([^*]+)\*\*")
+
+
+def md_inline(s):
+    """Escape first, then the handful of inline forms we allow."""
+    s = html.escape(s)
+    s = _MD_CODE.sub(lambda m: f"<code>{m.group(1)}</code>", s)
+    s = _MD_BOLD.sub(lambda m: f"<b>{m.group(1)}</b>", s)
+
+    def link(m):
+        text, href = m.group(1), m.group(2)
+        # Only schemes a reader can follow safely, and nothing that could
+        # turn a page file into a way to run script.
+        if not href.startswith(("http://", "https://", "/", "#", "mailto:")):
+            return text
+        return f'<a href="{href}">{text}</a>'
+
+    return _MD_LINK.sub(link, s)
+
+
+def md_render(text):
+    """The small subset of Markdown the pages use."""
+    out, para, bullets, code = [], [], [], None
+    for raw in text.splitlines():
+        line = raw.rstrip()
+
+        if code is not None:                       # inside a fenced block
+            if line.startswith("```"):
+                out.append("<pre>" + html.escape("\n".join(code)) + "</pre>")
+                code = None
+            else:
+                code.append(raw)
+            continue
+
+        def flush():
+            if para:
+                out.append("<p>" + md_inline(" ".join(para)) + "</p>")
+                para.clear()
+            if bullets:
+                out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>"
+                                            for b in bullets) + "</ul>")
+                bullets.clear()
+
+        if line.startswith("```"):
+            flush()
+            code = []
+        elif line.startswith("## "):
+            flush()
+            out.append(f"<h2>{md_inline(line[3:])}</h2>")
+        elif line.startswith("# "):
+            flush()
+            out.append(f"<h1>{md_inline(line[2:])}</h1>")
+        elif line.startswith("- "):
+            if para:
+                flush()
+            bullets.append(line[2:])
+        elif not line:
+            flush()
+        elif bullets and raw.startswith("  "):
+            bullets[-1] += " " + line.strip()      # a wrapped bullet
+        else:
+            para.append(line.strip())
+
+    if code is not None:                            # unterminated fence
+        out.append("<pre>" + html.escape("\n".join(code)) + "</pre>")
+    if para:
+        out.append("<p>" + md_inline(" ".join(para)) + "</p>")
+    if bullets:
+        out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>" for b in bullets) + "</ul>")
+    return "".join(out)
+
+
+def md_page(name, role="list"):
+    """One of the pages/ files, as a whole page. None when there is no such file."""
+    f = PAGES_DIR / (name + ".md")
+    if not f.is_file():
+        return None
+    body = "<article>" + md_render(f.read_text(encoding="utf-8")) + "</article>"
+    links = other_sites(role)
+    footer = ((links + "<br><br>") if links else "") + (
+             '<a href="/">boards that are up</a> &middot; '
+             '<a href="/how">how to get listed</a> &middot; '
+             '<a href="/rules">house rules</a>')
+    return PAGE.format(refresh="", title=html.escape(SITE_NAME),
+                       body=logo_html() + body, footer=footer)
+
+
+STATIC_DIR = pathlib.Path(__file__).resolve().parent / "static"
+STATIC_OK  = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+STATIC_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
+
+
+def static_file(name):
+    """One file from static/, or None. Names are checked rather than paths:
+    no directories, no dots to climb with, nothing but a plain filename."""
+    if not STATIC_OK.match(name or ""):
+        return None
+    ext = pathlib.Path(name).suffix.lower()
+    if ext not in STATIC_TYPES:
+        return None
+    f = STATIC_DIR / name
+    if not f.is_file():
+        return None
+    return f.read_bytes(), STATIC_TYPES[ext]
+
+
+def gallery_html():
+    """Whatever is in static/, captioned by static/captions.txt.
+
+    One "file.jpg | what it is" per line. A picture with no caption still
+    shows; a caption with no picture is ignored.
+    """
+    if not STATIC_DIR.is_dir():
+        return ""
+    captions = {}
+    cap_file = STATIC_DIR / "captions.txt"
+    if cap_file.is_file():
+        for line in cap_file.read_text(encoding="utf-8").splitlines():
+            if "|" in line:
+                k, _, v = line.partition("|")
+                captions[k.strip()] = v.strip()
+
+    shots = sorted(f.name for f in STATIC_DIR.iterdir()
+                   if f.is_file() and f.suffix.lower() in STATIC_TYPES
+                   and STATIC_OK.match(f.name))
+    if not shots:
+        return ""
+
+    cells = []
+    for name in shots:
+        cap = html.escape(captions.get(name, ""))
+        cells.append(f'<figure><img src="/static/{html.escape(name)}" '
+                     f'alt="{cap or html.escape(name)}" loading="lazy">'
+                     + (f"<figcaption>{cap}</figcaption>" if cap else "")
+                     + "</figure>")
+    return ('<div class="wide gallery">' + "".join(cells) + "</div>")
+
+
 def rate_limited(con, address, now):
     row = con.execute("SELECT at FROM hits WHERE address=?", (address,)).fetchone()
     con.execute("REPLACE INTO hits(address, at) VALUES(?, ?)", (address, now))
@@ -523,7 +667,7 @@ PAGE = """<!doctype html>
   --struct:#4ce0e0; /* structure only: headings and column names */ }}
 body {{ background:var(--bg); color:var(--ink); font:14px/1.5 ui-monospace,Menlo,Consolas,monospace;
        margin:0; padding:16px; }}
-main {{ max-width:900px; margin:0 auto; }}
+main {{ max-width:1080px; margin:0 auto; }}
 /* The wordmark is 62 columns of half-block art. Monospace cells are about
    0.6em wide, so the type scales with the viewport and never overflows a
    phone, instead of scrolling sideways or being cut off. */
@@ -562,17 +706,33 @@ details.chart summary::-webkit-details-marker {{ display:none; }}
 .spark {{ color:var(--busy); letter-spacing:1px; }}
 .when {{ color:var(--faint); font-size:11px; margin-left:8px; }}
 details.chart[open] summary .when::after {{ content:" (click to close)"; }}
-pre.hours {{ background:#0d0d12; border:1px solid var(--rule); color:var(--busy);
-        font-size:12px; line-height:1.25; margin:6px 0 4px; padding:8px; }}
+svg.hours {{ display:block; width:100%; max-width:720px; height:auto;
+        background:#0d0d12; border:1px solid var(--rule); margin:8px 0 4px; }}
+svg.hours .bar {{ fill:var(--busy); opacity:0.75; }}
+svg.hours .bar.peak {{ opacity:1; }}
+svg.hours .grid {{ stroke:#20202a; stroke-width:1; }}
+svg.hours .axis {{ stroke:#2c2c38; stroke-width:1; }}
+svg.hours text {{ fill:var(--faint); font-family:inherit; font-size:11px; }}
 details.chart .note {{ color:var(--faint); font-size:11px; }}
 .pending {{ color:var(--warm); }}
 .none {{ color:var(--faint); padding:24px 8px; }}
 footer {{ margin-top:28px; color:#555; border-top:1px solid var(--rule); padding-top:12px; }}
-article {{ max-width:70ch; }}
+article {{ max-width:78ch; }}
+/* Anything drawn rather than written gets the whole width: diagrams and
+   charts are not prose and should not be squeezed into its measure. */
+article figure, article .wide {{ max-width:none; margin:20px 0; }}
+/* Photographs sit on a grid that reflows rather than a fixed row, so a
+   phone gets one across and a monitor gets three. */
+.gallery {{ display:grid; gap:14px; margin:20px 0;
+        grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }}
+.gallery figure {{ margin:0; }}
+.gallery img {{ width:100%; height:auto; display:block; border:1px solid var(--rule); }}
+.gallery figcaption {{ color:var(--faint); font-size:12px; margin-top:6px; }}
 article h2 {{ color:var(--struct); font-size:15px; margin:28px 0 6px; font-weight:normal; }}
 article p {{ margin:0 0 14px; }}
 article b {{ color:#e8e8e8; font-weight:normal; }}
 article .pull {{ color:var(--name); border-left:2px solid #3a2f5c; padding-left:12px; margin:18px 0; }}
+article .pull .sig {{ color:var(--faint); }}
 pre {{ background:#111; border:1px solid var(--rule); padding:12px; overflow-x:auto; color:#9fb; }}
 code {{ color:var(--live); }}
 dl {{ margin:0 0 14px; }} dt {{ color:var(--warm); margin-top:10px; }} dd {{ margin:2px 0 0 16px; }}
@@ -642,36 +802,64 @@ def human_streak(seconds):
     return f"{seconds // 86400}d"
 
 
-def day_chart(hours, rows=8):
-    """The day as vertical bars: hours across the bottom, callers up the side.
+def day_chart_svg(hours, firm):
+    """The day as a real bar chart.
 
-    Half blocks give two steps of height per text row, so eight rows carry
-    sixteen, which is enough for a shape without turning into a wall.
+    Drawn rather than typed: block characters are a terminal affectation on
+    a web page, they land differently in every font, and half of one is not
+    a shape anybody reads as a number. Still no JavaScript, and still
+    scales to a phone, because an SVG with a viewBox does that for free.
     """
     top = max(hours)
     if top <= 0:
         return ""
-    steps = [max(1, int(round((v / top) * rows * 2))) if v > 0 else 0 for v in hours]
+    W, H = 720.0, 190.0          # viewBox units, not pixels
+    left, bottom, pad = 34.0, 28.0, 10.0
+    plot_w = W - left - pad
+    plot_h = H - bottom - pad
+    slot = plot_w / 24.0
+    bar = slot * 0.66
 
-    out = []
-    for r in range(rows):                      # r = 0 is the top row
-        level = (rows - r) * 2                 # half steps this row reaches
-        line = ""
-        for h in steps:
-            if h >= level:
-                line += "\u2588"              # full
-            elif h == level - 1:
-                line += "\u2584"              # half, sitting on the row below
-            else:
-                line += " "
-        label = f"{top:4.1f}" if r == 0 else "    "
-        out.append(f"{label} \u2502{line}")
-    out.append("     \u2514" + "\u2500" * 24)
-    # One label every three hours, three characters each, so they line up
-    # under the columns they belong to.
-    ticks = "".join(f"{h:<3d}" for h in range(0, 24, 3))
-    out.append("      " + ticks)
-    return "\n".join(out)
+    parts = [f'<svg class="hours" viewBox="0 0 {W:.0f} {H:.0f}" '
+             f'role="img" aria-label="Callers by hour of the day" '
+             f'preserveAspectRatio="xMidYMid meet">']
+
+    # Two guide lines and their labels: enough to read a value off, not so
+    # many that the shape disappears behind a grid.
+    for frac in (1.0, 0.5):
+        y = pad + plot_h * (1.0 - frac)
+        parts.append(f'<line class="grid" x1="{left:.1f}" y1="{y:.1f}" '
+                     f'x2="{W - pad:.1f}" y2="{y:.1f}"/>')
+        parts.append(f'<text class="ylab" x="{left - 6:.1f}" y="{y + 4:.1f}" '
+                     f'text-anchor="end">{top * frac:.1f}</text>')
+
+    peak = hours.index(top)
+    for h in range(24):
+        v = hours[h]
+        if v <= 0:
+            continue
+        height = max(1.5, plot_h * (v / top))
+        x = left + slot * h + (slot - bar) / 2.0
+        y = pad + plot_h - height
+        cls = "bar peak" if h == peak else "bar"
+        parts.append(f'<rect class="{cls}" x="{x:.1f}" y="{y:.1f}" '
+                     f'width="{bar:.1f}" height="{height:.1f}" rx="1.5">'
+                     f'<title>{h:02d}:00 - {v:.1f} callers</title></rect>')
+
+    base = pad + plot_h
+    parts.append(f'<line class="axis" x1="{left:.1f}" y1="{base:.1f}" '
+                 f'x2="{W - pad:.1f}" y2="{base:.1f}"/>')
+    for h in range(0, 24, 3):
+        x = left + slot * h + slot / 2.0
+        parts.append(f'<text class="xlab" x="{x:.1f}" y="{base + 16:.1f}" '
+                     f'text-anchor="middle">{h:02d}</text>')
+
+    note = ("local time at the board" if firm
+            else "local time at the board, still filling in")
+    parts.append(f'<text class="xlab" x="{W - pad:.1f}" y="{H - 4:.1f}" '
+                 f'text-anchor="end">{note}</text>')
+    parts.append("</svg>")
+    return "".join(parts)
 
 
 def chart_html(info):
@@ -680,13 +868,12 @@ def chart_html(info):
         return ""
     hours, firm, seen = info
     when = busiest(hours)
-    body = html.escape(day_chart(hours))
     return ("<details class='chart'>"
             f"<summary><span class='spark'>{spark(hours)}</span>"
             f"<span class='when'>busiest {html.escape(when)}"
             f"{'' if firm else ' so far'}</span></summary>"
-            f"<pre class='hours'>{body}</pre>"
-            "<span class='note'>Average callers on, by hour, in this "
+            + day_chart_svg(hours, firm)
+            + "<span class='note'>Average callers on, by hour, in this "
             "board's local time. Built from the counts it already publishes; "
             "nothing about any individual caller is collected."
             + ("" if firm else
@@ -792,6 +979,7 @@ def index_page():
     body = head + body
     links = other_sites("list")
     footer = ((links + "<br><br>") if links else "") + (
+              '<a href="/build">Build one</a> &middot; '
               '<a href="/how">How to get listed</a> &middot; '
               '<a href="/rules">House rules</a> &middot; '
               '<a href="/feed.xml">RSS</a> &middot; '
@@ -1028,7 +1216,7 @@ would be the only time. He died on
 <a href="https://www.theregister.com/offbeat/2024/10/15/rip-ward-christensen-co-developer-of-the-cbss/492871">11
 October 2024</a>, and I wish I had spent longer talking to him while I had the
 chance. If you get to meet the person who built the thing you love, take the extra
-hour. &mdash; QuantumRob</p>
+hour.<br><br><span class="sig">&mdash; QuantumRob</span></p>
 
 <p>Thousands of boards followed. Each one was somebody's own idea of what a
 community should look like: a music board, a board for one town, a board that was
@@ -1041,6 +1229,30 @@ for free, run entirely by hobbyists.</p>
 
 <p>Almost all of them ran on hardware weaker than the five dollar chip this software
 runs on.</p>
+
+<h2>The whole computer</h2>
+
+<p>This is an <a href="https://en.wikipedia.org/wiki/ESP32">ESP32-WROOM-32E</a>. It
+is a microcontroller about the size of a postage stamp with a radio on it: a
+240 MHz dual-core processor, <b>520 kilobytes</b> of RAM, four megabytes of flash,
+and Wi-Fi. It costs a few dollars, draws a few tens of milliamps, and runs from a
+phone charger.</p>
+
+<p>CBBS answered one caller at a time on 64 kilobytes. This has eight times that
+memory and answers six at once, with a seventh line for the sysop. There is no
+operating system underneath it worth the name, no web stack, no database, no
+container: the whole board is one program that fits in a megabyte and never
+allocates memory while a caller is typing.</p>
+
+<p>That is the argument in one object. A community does not need a data centre.
+It needs a machine somebody owns, on a connection somebody pays for, run by a
+person who can be reached. This one fits in a pocket and you can build it in an
+afternoon.</p>
+
+@GALLERY@
+
+<p><a href="/build">Build one</a> if you want to. Everything needed is a dev
+board and a USB cable.</p>
 
 <h2>What replaced it</h2>
 
@@ -1231,12 +1443,33 @@ class Handler(BaseHTTPRequestHandler):
         role = role_for(self.headers.get("Host", ""))
         if path == "/":
             if role == "about":
-                self.reply(200, simple_page("unleashed", ABOUT, "about"))
+                # The gallery is whatever is in static/ right now, so it is put in
+                # at request time rather than baked into the constant.
+                self.reply(200, simple_page(
+                    "unleashed", ABOUT.replace("@GALLERY@", gallery_html()), "about"))
             elif role == "data":
                 self.reply(200, cached("data", PAGE_CACHE,
                                        lambda: simple_page("Data", data_page(), "data")))
             else:
                 self.reply(200, cached("index", PAGE_CACHE, index_page))
+        elif path.startswith("/static/"):
+            got = static_file(path[len("/static/"):])
+            if got is None:
+                self.reply(404, "no such file\n", "text/plain; charset=utf-8")
+            else:
+                blob, ctype = got
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(blob)))
+                self.send_header("Cache-Control", "public, max-age=3600")
+                self.end_headers()
+                self.wfile.write(blob)
+        elif path == "/build":
+            page = md_page("build", role)
+            if page is None:
+                self.reply(404, "no such page\n", "text/plain; charset=utf-8")
+            else:
+                self.reply(200, page)
         elif path == "/rules":
             self.reply(200, simple_page("House rules", RULES))
         elif path == "/how":
