@@ -126,6 +126,23 @@ say "Code"
 install -m 644 "$SRC/server.py"   "$DEST/server.py"
 install -m 644 "$SRC/selftest.py" "$DEST/selftest.py"
 
+# Pages are prose in Markdown and are replaced on every install, because the
+# repository is where they get edited.
+install -d -m 755 "$DEST/pages"
+for page in "$SRC"/pages/*.md; do
+    [ -f "$page" ] && install -m 644 "$page" "$DEST/pages/"
+done
+
+# Photographs work the other way round: copied in if the repository has any,
+# never removed. A sysop may well have put pictures straight on the server
+# with scp, and an update has no business throwing those away.
+install -d -m 755 "$DEST/static"
+if [ -d "$SRC/static" ]; then
+    for shot in "$SRC"/static/*; do
+        [ -f "$shot" ] && install -m 644 "$shot" "$DEST/static/"
+    done
+fi
+
 say "Service"
 install -m 644 "$SRC/deploy/unleashed-directory.service" \
     /etc/systemd/system/unleashed-directory.service
