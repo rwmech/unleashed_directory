@@ -14,6 +14,11 @@
 
 # Changelog
 
+## 0.9.0, 2026-09-19
+
+- A **Terminals** page and menu heading: what to call a board with. SyncTERM first for anyone who just wants one that works, then the modern options with their caveats, then the machines this is really for. Commodore, Atari, Apple, Amiga, MSX, Spectrum, CP/M, DOS, and actual terminals down to a Teletype Model 33 at 110 baud. Every mention of terminal software across the site links to it.
+- Markdown tables, since a list of machines and what each one needs is a table, and it has to stay readable in the source while somebody edits it. They scroll rather than squeeze on a phone.
+
 ## 0.8.0, 2026-09-19
 
 - One header, one menu and one footer on all three faces. Navigation previously existed only as a footer line that differed per page, so getting from the manifesto to the board list meant scrolling to the bottom and hoping. Cross-domain links are absolute and same-domain links relative, so a single-host deployment still works.

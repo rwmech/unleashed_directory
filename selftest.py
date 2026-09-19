@@ -204,8 +204,9 @@ def main():
         # Pages are files in pages/, routed by name. That lookup runs last
         # on purpose: put it earlier and it swallows real endpoints, which
         # is exactly what happened to /health the first time.
-        for name in ("build", "forward", "forward-netgear", "forward-tplink",
-                     "forward-asus", "forward-xfinity", "forward-mesh"):
+        for name in ("build", "forward", "terminals", "forward-netgear",
+                     "forward-tplink", "forward-asus", "forward-xfinity",
+                     "forward-mesh"):
             code, page = get("/" + name)
             check(f"/{name} renders", code == 200 and "<article>" in page)
         code, page = get("/forward")
@@ -213,6 +214,11 @@ def main():
               'class="warn"' in page and "responsible" in page)
         check("and names the two things that silently stop it working",
               "Double NAT" in page and "CGNAT" in page)
+        code, page = get("/terminals")
+        check("the terminal page renders its tables",
+              "<table>" in page and "SyncTERM" in page)
+        check("and the menu carries it on every page",
+              ">Terminals</a>" in page)
         code, _ = get("/nosuchpage")
         check("an unknown page is not a page", code == 404)
         code, body = get("/health")

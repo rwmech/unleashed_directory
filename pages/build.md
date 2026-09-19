@@ -46,10 +46,11 @@ the `hostname` setting doing double duty as the DHCP and mDNS name.
 
 ## Calling it
 
-Any telnet client. `telnet`, PuTTY, SyncTERM, or a Commodore 64 with a
-TeensyROM. The board works out what it is talking to on connect: ANSI with
-CP437 or UTF-8, PETSCII at 40 or 80 columns, or plain ASCII, and it draws
-itself accordingly.
+[Any telnet client](/terminals). SyncTERM is the one worth installing if you
+have none. A Commodore 64 with a TeensyROM works too, and so does a VT220 on a
+serial adapter. The board works out what it is talking to on connect: ANSI with
+CP437 or UTF-8, PETSCII at 40 or 80 columns, or plain ASCII, and it draws itself
+accordingly.
 
 ## Keeping it
 

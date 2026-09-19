@@ -83,7 +83,7 @@ than an honest gap.
 
 You do not have to open anything to run a board. On your own network it works
 immediately, and callers on the same wifi can dial it by address or by
-`unleashed.local`. If you want people outside to reach it without opening a
+`unleashed.local` with [any terminal program](/terminals). If you want people outside to reach it without opening a
 port, a VPN into your own network, or a tunnel from a machine you rent, both
 work and neither puts your address on a scanner's list.
 

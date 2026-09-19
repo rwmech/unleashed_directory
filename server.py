@@ -201,6 +201,7 @@ def site_url(target, role, path="/"):
 NAV = (("list",  "/",        "Boards"),
        ("about", "/",        "What this is"),
        ("list",  "/build",   "Build one"),
+       ("list",  "/terminals", "Terminals"),
        ("list",  "/forward", "Go public"),
        ("list",  "/how",     "Get listed"),
        ("data",  "/",        "Data"))
@@ -442,9 +443,21 @@ def md_inline(s):
     return _MD_LINK.sub(link, s)
 
 
+def md_row(line):
+    """One table row, as cells, or None. The separator row is not a row."""
+    s = line.strip()
+    if not (s.startswith("|") and s.endswith("|")):
+        return None
+    cells = [c.strip() for c in s[1:-1].split("|")]
+    if cells and all(set(c) <= set("-: ") and c for c in cells):
+        return "SEP"
+    return cells
+
+
 def md_render(text):
     """The small subset of Markdown the pages use."""
     out, para, bullets, code = [], [], [], None
+    table = None
     for raw in text.splitlines():
         line = raw.rstrip()
 
@@ -455,6 +468,17 @@ def md_render(text):
             else:
                 code.append(raw)
             continue
+
+        row = md_row(line)
+        if row is not None:
+            if table is None:
+                table = []
+            if row != "SEP":
+                table.append(row)
+            continue
+        if table is not None:                      # the table just ended
+            out.append(md_table(table))
+            table = None
 
         def flush():
             if para:
@@ -491,6 +515,8 @@ def md_render(text):
         else:
             para.append(line.strip())
 
+    if table is not None:                           # a table at the very end
+        out.append(md_table(table))
     if code is not None:                            # unterminated fence
         out.append("<pre>" + html.escape("\n".join(code)) + "</pre>")
     if para:
@@ -498,6 +524,16 @@ def md_render(text):
     if bullets:
         out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>" for b in bullets) + "</ul>")
     return "".join(out)
+
+
+def md_table(rows):
+    """First row is the header. Cells carry the same inline forms as text."""
+    if not rows:
+        return ""
+    head = "".join("<th>" + md_inline(c) + "</th>" for c in rows[0])
+    body = "".join("<tr>" + "".join("<td>" + md_inline(c) + "</td>" for c in r) + "</tr>"
+                   for r in rows[1:])
+    return '<div class="tablewrap"><table><tr>' + head + "</tr>" + body + "</table></div>"
 
 
 def md_page(name, role="list"):
@@ -850,6 +886,9 @@ article figure, article .wide {{ max-width:none; margin:20px 0; }}
   .gallery.one {{ float:none; width:100%; margin:18px 0; }}
 }}
 .gallery figcaption {{ color:var(--faint); font-size:12px; margin-top:6px; }}
+.tablewrap {{ overflow-x:auto; margin:16px 0; }}
+article table td {{ vertical-align:top; }}
+article table td:first-child {{ color:var(--ink); white-space:nowrap; }}
 .gallery .credit {{ display:block; color:#55555f; font-size:11px; margin-top:3px; }}
 article h2 {{ color:var(--struct); font-size:15px; margin:28px 0 6px; font-weight:normal; }}
 article h3 {{ color:var(--ink); font-size:13px; margin:20px 0 4px; font-weight:normal;
@@ -1116,8 +1155,8 @@ def index_page():
     head = (head_html("list", "/")
             + f"<h1>BBS directory <span>&middot; {len(rows)} listed{who}</span></h1>"
             + '<p class="lead">Boards that are up right now. '
-            "Dial one with any telnet client, or click an address if you have "
-            "one installed.</p>")
+            'Dial one with <a href="/terminals">any telnet client</a>, or click '
+            "an address if you have one installed.</p>")
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>Sysop</th>"
                 "<th>State</th><th>Activity</th><th>Up for</th></tr>"
