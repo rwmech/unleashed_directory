@@ -70,6 +70,8 @@ def main():
             os.remove(leftover)
 
     env = dict(os.environ,
+               DIRECTORY_PAGE_CACHE="0",   # tests read the page straight after changing it
+
                DIRECTORY_DB=db,
                DIRECTORY_PORT=str(PORT),
                DIRECTORY_PENDING_HOURS="0.0006",     # about two seconds
@@ -189,6 +191,28 @@ def main():
         check("the house rules are there", code == 200 and "No hate" in page)
         code, page = get("/how")
         check("so is how to get listed", code == 200 and "announce" in page)
+
+        print("Busy hours")
+        # The chart is built from the caller counts a board already
+        # publishes, so it needs no new data from anybody and knows nothing
+        # about any individual caller. Seeded directly here because the real
+        # thing takes a day of heartbeats to say anything.
+        import sqlite3
+        con = sqlite3.connect(db)
+        bid = con.execute("SELECT id FROM boards ORDER BY id LIMIT 1").fetchone()[0]
+        for h in range(24):
+            busy = {19: 3, 20: 6, 21: 8, 22: 5, 23: 2}.get(h, 0)
+            con.execute("INSERT OR REPLACE INTO activity(board_id,hour,beats,busy)"
+                        " VALUES(?,?,?,?)", (bid, h, 42, busy * 42))
+        con.commit()
+        con.close()
+        _, page = get("/", host="boards.example")
+        check("a board with a day of beats gets a busy-hours chart",
+              "class='spark'" in page or 'class="spark"' in page)
+        check("and is described by when it is actually busy",
+              "busiest 20:00-22:00" in page)
+        check("the chart expands without any javascript",
+              "<details" in page and "<script" not in page)
 
         # Last, because it uses up everything one address may hold.
         #

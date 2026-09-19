@@ -138,6 +138,13 @@ CREATE TABLE IF NOT EXISTS boards (
     beats        INTEGER NOT NULL DEFAULT 0,
     note         TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS activity (
+    board_id INTEGER NOT NULL,
+    hour     INTEGER NOT NULL,          -- 0..23, the board's local hour
+    beats    INTEGER NOT NULL DEFAULT 0,
+    busy     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, hour)
+);
 CREATE TABLE IF NOT EXISTS reports (
     id       INTEGER PRIMARY KEY,
     board_id INTEGER NOT NULL,
@@ -193,6 +200,10 @@ def setup():
         if "public_at" not in have:
             con.execute("ALTER TABLE boards ADD COLUMN public_at INTEGER NOT NULL DEFAULT 0")
             con.execute("UPDATE boards SET public_at=streak_start WHERE state='online'")
+        # Databases made before the busy-hours chart have no offset to
+        # bucket by. Zero means UTC, which is what they were doing anyway.
+        if "tz_offset" not in have:
+            con.execute("ALTER TABLE boards ADD COLUMN tz_offset INTEGER NOT NULL DEFAULT 0")
 
 
 def tidy(value, limit):
@@ -240,9 +251,83 @@ def settle(con, now):
         "public_at=CASE WHEN public_at=0 THEN ? ELSE public_at END "
         "WHERE state='pending' AND ? - streak_start >= ?",
         (now, now, int(PENDING_HOURS * 3600)))
+    con.execute(
+        "DELETE FROM activity WHERE board_id IN "
+        "(SELECT id FROM boards WHERE ? - last_seen > ?)",
+        (now, int(EXPIRE_DAYS * 86400)))
     con.execute("DELETE FROM boards WHERE ? - last_seen > ?",
                 (now, int(EXPIRE_DAYS * 86400)))
     return con.total_changes - before
+
+
+# How many samples one board's chart keeps before everything is halved.
+# 4032 is four weeks of ten minute beats. Halving rather than dropping gives
+# a slow fade, so a board that changes its habits is followed within a few
+# weeks instead of being judged for ever on its first month.
+ACTIVITY_CAP = int(os.environ.get("DIRECTORY_ACTIVITY_CAP", "4032"))
+
+
+def sample(con, board_id, busy, tz_offset, now):
+    """Fold one heartbeat into the board's hour-of-day chart."""
+    hour = int(((now + tz_offset * 60) % 86400) // 3600)
+    con.execute(
+        "INSERT INTO activity(board_id, hour, beats, busy) VALUES(?,?,1,?) "
+        "ON CONFLICT(board_id, hour) DO UPDATE SET beats=beats+1, busy=busy+?",
+        (board_id, hour, busy, busy))
+    total = con.execute("SELECT SUM(beats) AS n FROM activity WHERE board_id=?",
+                        (board_id,)).fetchone()["n"] or 0
+    if total > ACTIVITY_CAP:
+        con.execute("UPDATE activity SET beats=beats/2, busy=busy/2 WHERE board_id=?",
+                    (board_id,))
+        con.execute("DELETE FROM activity WHERE board_id=? AND beats=0", (board_id,))
+
+
+def hours_for(con, board_id):
+    """24 means, one per local hour, or None when there is not enough yet."""
+    rows = con.execute(
+        "SELECT hour, beats, busy FROM activity WHERE board_id=?", (board_id,)).fetchall()
+    if not rows:
+        return None
+    seen = sum(r["beats"] for r in rows)
+    # A day of beats before guessing at anybody's habits. A chart drawn from
+    # an afternoon is not a forecast, it is a rumour.
+    if seen < 144:
+        return None
+    out = [0.0] * 24
+    for r in rows:
+        if r["beats"]:
+            out[r["hour"]] = r["busy"] / r["beats"]
+    return out if any(out) else None
+
+
+SPARK = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+
+
+def spark(hours):
+    """24 cells, scaled against this board's own busiest hour."""
+    top = max(hours)
+    if top <= 0:
+        return ""
+    out = []
+    for v in hours:
+        if v <= 0:
+            out.append("\u00b7")               # nothing ever, not "a little"
+        else:
+            step = int(round((v / top) * (len(SPARK) - 1)))
+            out.append(SPARK[step])
+    return "".join(out)
+
+
+def busiest(hours):
+    """The best two hour window, as a human would say it."""
+    top, at = -1.0, 0
+    for h in range(24):
+        pair = hours[h] + hours[(h + 1) % 24]
+        if pair > top:
+            top, at = pair, h
+    if top <= 0:
+        return ""
+    return f"{at:02d}:00-{(at + 2) % 24:02d}:00"
 
 
 def rate_limited(con, address, now):
@@ -286,6 +371,13 @@ def announce(payload, address):
         "uptime":      int(payload.get("uptime") or 0),
         "interval_min": interval,
     }
+    # Minutes east of UTC, so the busy-hours chart can be drawn in the hours
+    # this board's own callers keep rather than in UTC. Clamped to the range
+    # real timezones occupy, and absent on boards running older firmware.
+    tz = payload.get("tz")
+    tz = int(tz) if isinstance(tz, int) and -720 <= tz <= 840 else 0
+    fields["tz_offset"] = tz
+
     # Activity is optional and only there when the sysop turned it on.
     for key in ("calls24", "minutes24"):
         value = payload.get(key)
@@ -321,6 +413,7 @@ def announce(payload, address):
                 f"UPDATE boards SET {sets}, last_seen=?, beats=beats+1, "
                 f"state=?, streak_start=? WHERE id=?",
                 args + [now, state, streak, row["id"]])
+            sample(con, row["id"], fields.get("busy") or 0, tz, now)
             fresh = con.execute("SELECT * FROM boards WHERE id=?", (row["id"],)).fetchone()
             if fresh["state"] != row["state"]:
                 _cache.clear()                         # the page says something new now
@@ -354,6 +447,7 @@ def announce(payload, address):
             f"streak_start, beats) VALUES(?, {marks}, ?, ?, ?, ?, 1)",
             [token] + list(fields.values()) + [state, now, now, now])
         fresh = con.execute("SELECT * FROM boards WHERE token=?", (token,)).fetchone()
+        sample(con, fresh["id"], fields.get("busy") or 0, tz, now)
         _cache.clear()                                 # a board we had not met before
         return 200, listing(fresh, now), {"X-Listing-Token": token}
 
@@ -422,6 +516,15 @@ tr:hover td {{ background:#111; }}
 .off {{ color:var(--faint); }}
 .muted {{ color:var(--faint); }}
 .fresh {{ color:var(--faint); font-size:11px; }}
+details.chart {{ margin-top:3px; }}
+details.chart summary {{ list-style:none; cursor:pointer; }}
+details.chart summary::-webkit-details-marker {{ display:none; }}
+.spark {{ color:var(--busy); letter-spacing:1px; }}
+.when {{ color:var(--faint); font-size:11px; margin-left:8px; }}
+details.chart[open] summary .when::after {{ content:" (click to close)"; }}
+pre.hours {{ background:#0d0d12; border:1px solid var(--rule); color:var(--busy);
+        font-size:12px; line-height:1.25; margin:6px 0 4px; padding:8px; }}
+details.chart .note {{ color:var(--faint); font-size:11px; }}
 .pending {{ color:var(--warm); }}
 .none {{ color:var(--faint); padding:24px 8px; }}
 footer {{ margin-top:28px; color:#555; border-top:1px solid var(--rule); padding-top:12px; }}
@@ -499,7 +602,55 @@ def human_streak(seconds):
     return f"{seconds // 86400}d"
 
 
-def board_rows(rows, now):
+def day_chart(hours, rows=8):
+    """The day as vertical bars: hours across the bottom, callers up the side.
+
+    Half blocks give two steps of height per text row, so eight rows carry
+    sixteen, which is enough for a shape without turning into a wall.
+    """
+    top = max(hours)
+    if top <= 0:
+        return ""
+    steps = [max(1, int(round((v / top) * rows * 2))) if v > 0 else 0 for v in hours]
+
+    out = []
+    for r in range(rows):                      # r = 0 is the top row
+        level = (rows - r) * 2                 # half steps this row reaches
+        line = ""
+        for h in steps:
+            if h >= level:
+                line += "\u2588"              # full
+            elif h == level - 1:
+                line += "\u2584"              # half, sitting on the row below
+            else:
+                line += " "
+        label = f"{top:4.1f}" if r == 0 else "    "
+        out.append(f"{label} \u2502{line}")
+    out.append("     \u2514" + "\u2500" * 24)
+    # One label every three hours, three characters each, so they line up
+    # under the columns they belong to.
+    ticks = "".join(f"{h:<3d}" for h in range(0, 24, 3))
+    out.append("      " + ticks)
+    return "\n".join(out)
+
+
+def chart_html(hours):
+    """A sparkline you can read in the table, and the whole day on a click."""
+    if not hours:
+        return ""
+    when = busiest(hours)
+    body = html.escape(day_chart(hours))
+    return ("<details class='chart'>"
+            f"<summary><span class='spark'>{spark(hours)}</span>"
+            f"<span class='when'>busiest {html.escape(when)}</span></summary>"
+            f"<pre class='hours'>{body}</pre>"
+            "<span class='note'>Average callers on, by hour, in this "
+            "board's local time. Built from the counts it already publishes; "
+            "nothing about any individual caller is collected.</span>"
+            "</details>")
+
+
+def board_rows(rows, now, charts=None):
     out = []
     for r in rows:
         where = r["host"] or r["address"]
@@ -538,7 +689,9 @@ def board_rows(rows, now):
         out.append(
             "<tr>"
             f"<td class='name'>{html.escape(r['name'])}<br>"
-            f"<span class='desc'>{html.escape(r['description'])}</span></td>"
+            f"<span class='desc'>{html.escape(r['description'])}</span>"
+            + ((charts or {}).get(r["id"]) or "")
+            + "</td>"
             f"<td class='addr'><a href='{dial}' title='Opens your terminal "
             f"program if one is registered for telnet:// links'>"
             f"{html.escape(where)} {r['port']}</a></td>"
@@ -573,6 +726,13 @@ def index_page():
     on = sum(r["busy"] or 0 for r in live)
     who = (f" &middot; {on} caller{'' if on == 1 else 's'} on"
            if on else " &middot; nobody on right now")
+    with db() as con:
+        charts = {}
+        for r in rows:
+            hours = hours_for(con, r["id"])
+            if hours:
+                charts[r["id"]] = chart_html(hours)
+
     head = (logo_html()
             + f"<h1>BBS directory <span>&middot; {len(rows)} listed{who}</span></h1>"
             + '<p class="lead">Boards that are up right now. '
@@ -581,7 +741,7 @@ def index_page():
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>Sysop</th>"
                 "<th>State</th><th>Activity</th><th>Up for</th></tr>"
-                + board_rows(rows, now) + "</table>")
+                + board_rows(rows, now, charts) + "</table>")
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
     body = head + body

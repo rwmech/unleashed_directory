@@ -52,6 +52,7 @@ Connection: close
 | `nodes` | number | no | how many caller lines the board has |
 | `busy` | number | no | how many are in use right now |
 | `uptime` | number | no | seconds since the board booted |
+| `tz` | number | no | minutes east of UTC, daylight saving applied. Only used to bucket this board's own busy hours into local time. Ignored outside -720..840 |
 | `interval` | number | no | minutes between heartbeats. Tells the directory when to call the board quiet. Default 10 |
 | `token` | string | no | empty on the first announce, then whatever the directory issued |
 | `calls24` | number | no | calls in the last 24 hours. Only when the sysop opted in |

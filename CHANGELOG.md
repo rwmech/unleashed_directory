@@ -14,6 +14,16 @@
 
 # Changelog
 
+## 0.5.0, 2026-09-19
+
+When a board is worth calling.
+
+- Every listing can now show when it is actually busy: a sparkline of the day in the table, and a bar chart of all twenty four hours when you click it. Hours run in the board's own local time, so "busiest 20:00-22:00" means the evening where the board is, not somewhere else.
+- It needs nothing new from anybody. Every heartbeat already carries how many callers are on, so the chart is built from figures the board is publishing anyway, and nothing about any individual caller is collected, stored or inferred.
+- Boards send `tz`, their offset from UTC, so the hours can be bucketed locally. Older boards simply bucket at UTC.
+- A board's samples are halved once it has four weeks of them, so a board that changes its habits is followed within a few weeks rather than being judged for ever on its first month. A chart is not drawn at all until there is a day of heartbeats behind it, because a shape drawn from one afternoon is a rumour, not a forecast.
+- Still no JavaScript: the chart expands with `<details>`.
+
 ## 0.4.0, 2026-09-19
 
 Stops one board being able to fill the table.
