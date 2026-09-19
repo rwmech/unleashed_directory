@@ -14,6 +14,10 @@
 
 # Changelog
 
+## 0.6.1, 2026-09-19
+
+- Two notes from QuantumRob on the manifesto: starting his career on IBM 4381 mainframes, which sits directly under the paragraph about people who were never given time on one, and an acknowledgement that the project was built with Claude's help.
+
 ## 0.6.0, 2026-09-19
 
 - A **Build one** page, written as Markdown in `pages/` and rendered by the server, so the prose lives in a file somebody can edit rather than inside a Python string. What you need, how to flash it, how to call it, and what forwarding a port actually means.

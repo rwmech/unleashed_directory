@@ -1411,6 +1411,15 @@ took the computer out of the raised-floor room that somebody else controlled and
 on a kitchen table. This is the same move, one more time, on a chip you can lose in a
 drawer. Where the symbol cannot be shown, it is written <code>unleashed</code>.</p>
 
+<p class="pull">I started my career on
+<a href="https://en.wikipedia.org/wiki/IBM_4300">IBM 4381 mainframes</a>. I have
+stood inside the raised-floor room, and the point is that it was somebody else's
+room. You booked time on that machine. You did not own it, you could not take it
+home, and what you were allowed to do with it was a decision made by people who
+were not you. Everything since has been an argument about who the computer
+belongs to, and this is a chip on a shelf that belongs to
+whoever put it there.<br><br><span class="sig">&mdash; QuantumRob</span></p>
+
 <h2>You can do this today</h2>
 
 <p>Not as a re-enactment: as a live system with callers on it tonight. Flash a board,
@@ -1421,6 +1430,18 @@ with anybody. A chip on a shelf and one line in your router.</p>
 <p><a href="https://github.com/rwmech/unleashed_BBS">The source, the documentation and
 the build instructions are here.</a> It is free software under the GNU General Public
 License, version 2 or later.</p>
+
+<h2>How it was built</h2>
+
+<p>I built this with <a href="https://www.anthropic.com/claude">Claude</a>, and I
+want that said plainly rather than left for somebody to work out. I have spent
+thirty years writing software and I could have written this alone. What I did not
+have was the time. A BBS, a directory server, a protocol and the documentation for
+all three do not come out of the evenings left over after a working week.</p>
+
+<p>The decisions are mine: what it should be, what it should refuse to do, what
+goes in and what stays out. A great deal of the typing is not, and quite a lot of
+the arguing was two-sided. Credit where it is due.</p>
 
 </article>"""
 
