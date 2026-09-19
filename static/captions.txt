@@ -1,7 +1,19 @@
-# One "filename | caption" per line. Drop images in this folder and they
-# appear on the manifesto page, in filename order. A picture with no caption
-# still shows; a caption with no picture is ignored.
+# One line per picture, in this format:
 #
-# board.jpg      | The whole board: an ESP32-WROOM-32E and a USB cable.
-# c64.jpg        | A Commodore 64 calling in through a TeensyROM.
-# case.jpg       | 3D printed case, because it should look like a computer.
+#   filename.jpg | what it is | who made it and under what licence
+#
+# The credit is optional but expected for anything you did not take
+# yourself. Markdown links work in it: [text](url).
+#
+# Properly licensed ESP32 photographs, if you want placeholders before your
+# own board and 3D prints are ready. Download the file from Commons, drop it
+# in this folder, and uncomment the matching line:
+#
+# esp32-module.jpg | The whole computer: an ESP32-WROOM-32 module. | [Wikimedia Commons](https://commons.wikimedia.org/wiki/Category:ESP32), Ubahnverleih, CC0
+# esp32-devboard.jpg | A dev board. USB cable and nothing else. | [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:ESP32_Espressif_ESP-WROOM-32_Dev_Board.jpg), CC BY-SA 4.0
+#
+# Your own, later:
+#
+# board.jpg | The board this directory runs on. | QuantumRob
+# c64.jpg   | A Commodore 64 calling in through a TeensyROM. | QuantumRob
+# case.jpg  | 3D printed case, because it should look like a computer. | QuantumRob

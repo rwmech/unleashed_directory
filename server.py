@@ -458,18 +458,28 @@ def static_file(name):
 def gallery_html():
     """Whatever is in static/, captioned by static/captions.txt.
 
-    One "file.jpg | what it is" per line. A picture with no caption still
-    shows; a caption with no picture is ignored.
+    One line per picture:
+
+        file.jpg | what it is | who made it and under what licence
+
+    The third field is optional and shown in small type under the caption.
+    Somebody else's photograph carries a licence whether or not we mention
+    it, and a site that argues about who owns what should be the last one
+    to be sloppy about attribution. A picture with no caption still shows;
+    a caption naming a file that is not there is ignored.
     """
     if not STATIC_DIR.is_dir():
         return ""
-    captions = {}
+    captions, credits = {}, {}
     cap_file = STATIC_DIR / "captions.txt"
     if cap_file.is_file():
         for line in cap_file.read_text(encoding="utf-8").splitlines():
-            if "|" in line:
-                k, _, v = line.partition("|")
-                captions[k.strip()] = v.strip()
+            if line.lstrip().startswith("#") or "|" not in line:
+                continue
+            bits = [b.strip() for b in line.split("|")]
+            captions[bits[0]] = bits[1] if len(bits) > 1 else ""
+            if len(bits) > 2 and bits[2]:
+                credits[bits[0]] = bits[2]
 
     shots = sorted(f.name for f in STATIC_DIR.iterdir()
                    if f.is_file() and f.suffix.lower() in STATIC_TYPES
@@ -480,9 +490,15 @@ def gallery_html():
     cells = []
     for name in shots:
         cap = html.escape(captions.get(name, ""))
+        cred = md_inline(credits[name]) if name in credits else ""
+        body = ""
+        if cap:
+            body += cap
+        if cred:
+            body += f'<span class="credit">{cred}</span>'
         cells.append(f'<figure><img src="/static/{html.escape(name)}" '
                      f'alt="{cap or html.escape(name)}" loading="lazy">'
-                     + (f"<figcaption>{cap}</figcaption>" if cap else "")
+                     + (f"<figcaption>{body}</figcaption>" if body else "")
                      + "</figure>")
     return ('<div class="wide gallery">' + "".join(cells) + "</div>")
 
@@ -728,6 +744,7 @@ article figure, article .wide {{ max-width:none; margin:20px 0; }}
 .gallery figure {{ margin:0; }}
 .gallery img {{ width:100%; height:auto; display:block; border:1px solid var(--rule); }}
 .gallery figcaption {{ color:var(--faint); font-size:12px; margin-top:6px; }}
+.gallery .credit {{ display:block; color:#55555f; font-size:11px; margin-top:3px; }}
 article h2 {{ color:var(--struct); font-size:15px; margin:28px 0 6px; font-weight:normal; }}
 article p {{ margin:0 0 14px; }}
 article b {{ color:#e8e8e8; font-weight:normal; }}
