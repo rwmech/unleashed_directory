@@ -430,14 +430,41 @@ def announce(payload, address):
         # loop, would otherwise mint a fresh listing on every post for ever.
         # The cap is the thing that was missing: PER_ADDRESS only ever chose
         # what state a new row got, and then inserted it regardless.
+        # At the cap, make room by dropping the deadest entry this address
+        # holds rather than refusing outright.
+        #
+        # Refusing was wrong and I shipped it: a board that legitimately
+        # loses its token, which is what a reflash used to do, could then
+        # never list again, and it was told "too often, will settle" while
+        # settling was the one thing that could not happen.
+        #
+        # Only an entry that has stopped beating is evicted. One that is
+        # still alive is somebody's board, whoever they are, and a stranger
+        # arriving from the same address must never be able to push it out.
         held = con.execute(
-            "SELECT COUNT(*) AS n FROM boards WHERE group_key=?", (group,)).fetchone()["n"]
-        if held >= PER_ADDRESS + SPARE_ROWS:
-            return 429, {"error": "too many listings from this address"}, {}
+            "SELECT * FROM boards WHERE group_key=? ORDER BY last_seen ASC",
+            (group,)).fetchall()
+        if len(held) >= PER_ADDRESS + SPARE_ROWS:
+            stalest = held[0]
+            gone = now - stalest["last_seen"] > stalest["interval_min"] * 60 * MISSED_BEATS
+            if not gone:
+                # Everything this address holds is still talking, so this is
+                # either a lot of real boards or somebody being a nuisance.
+                return 429, {"error": "too many listings from this address"}, {}
+            con.execute("DELETE FROM activity WHERE board_id=?", (stalest["id"],))
+            con.execute("DELETE FROM boards WHERE id=?", (stalest["id"],))
+            held = held[1:]
+            _cache.clear()
 
-        live = con.execute(
-            "SELECT COUNT(*) AS n FROM boards WHERE group_key=? "
-            "AND state IN ('pending','online')", (group,)).fetchone()["n"]
+        # Only entries that are actually alive hold a published slot. A
+        # listing that has gone quiet should not keep a returning board out.
+        live = 0
+        for other in held:
+            if other["state"] not in ("pending", "online"):
+                continue
+            if now - other["last_seen"] > other["interval_min"] * 60 * MISSED_BEATS:
+                continue                      # published, but not answering
+            live += 1
         state = "pending" if live < PER_ADDRESS else "queued"
         token = secrets.token_hex(16)
         cols  = ", ".join(fields)

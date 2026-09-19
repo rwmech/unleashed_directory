@@ -221,6 +221,28 @@ def main():
         # per-address rule only chose what state the new row got before
         # inserting it regardless, so the table grew on every heartbeat with
         # nothing to stop it. Anybody with curl and a loop could do the same.
+        print("A board that lost its token can come back")
+        # What actually happened to Rob's board. It was reflashed, lost the
+        # token, and posted as a stranger. The cap then refused it for ever
+        # while telling him "too often, will settle", and settling was the
+        # one thing that could not happen. A dead entry gets out of the way.
+        import sqlite3
+        con = sqlite3.connect(db)
+        con.execute("UPDATE boards SET last_seen = last_seen - 86400")   # all gone quiet
+        con.commit()
+        con.close()
+        code, back, _ = post({"name": "The Dead Zone", "owner": "Mercury",
+                              "description": "same board, new token", "port": 6400})
+        check("it is not refused", code == 200)
+        check("and is listed rather than queued behind its own husk",
+              back.get("state") in ("pending", "online"))
+        # Put the clock back so the checks after this one do not inherit a
+        # directory where every board has been quiet for a day.
+        con = sqlite3.connect(db)
+        con.execute("UPDATE boards SET last_seen = strftime('%s','now')")
+        con.commit()
+        con.close()
+
         print("One address cannot fill the table")
         before = json.loads(get("/api/boards.json", host="data.example")[1])["boards"]
         codes = [post({"name": "Forgetful %d" % i, "port": 6400})[0]
