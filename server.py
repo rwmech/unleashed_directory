@@ -465,6 +465,7 @@ def md_row(line):
 def md_render(text):
     """The small subset of Markdown the pages use."""
     out, para, bullets, code = [], [], [], None
+    quote = []            # consecutive "> " lines: one warning, not one per line
     table = None
     for raw in text.splitlines():
         line = raw.rstrip()
@@ -496,6 +497,9 @@ def md_render(text):
                 out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>"
                                             for b in bullets) + "</ul>")
                 bullets.clear()
+            if quote:
+                out.append('<p class="warn">' + md_inline(" ".join(quote)) + "</p>")
+                quote.clear()
 
         if line.startswith("```"):
             flush()
@@ -507,8 +511,9 @@ def md_render(text):
             flush()
             out.append(f"<h2>{md_inline(line[3:])}</h2>")
         elif line.startswith("> "):
-            flush()
-            out.append(f'<p class="warn">{md_inline(line[2:])}</p>')
+            if para or bullets:
+                flush()
+            quote.append(line[2:])            # consecutive lines are one warning
         elif line.startswith("# "):
             flush()
             out.append(f"<h1>{md_inline(line[2:])}</h1>")
@@ -531,6 +536,8 @@ def md_render(text):
         out.append("<p>" + md_inline(" ".join(para)) + "</p>")
     if bullets:
         out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>" for b in bullets) + "</ul>")
+    if quote:
+        out.append('<p class="warn">' + md_inline(" ".join(quote)) + "</p>")
     return "".join(out)
 
 

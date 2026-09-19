@@ -204,9 +204,9 @@ def main():
         # Pages are files in pages/, routed by name. That lookup runs last
         # on purpose: put it earlier and it swallows real endpoints, which
         # is exactly what happened to /health the first time.
-        for name in ("build", "forward", "terminals", "dialing", "forward-netgear",
-                     "forward-tplink", "forward-asus", "forward-xfinity",
-                     "forward-mesh"):
+        for name in ("build", "forward", "terminals", "dialing", "sdcard",
+                     "forward-netgear", "forward-tplink", "forward-asus",
+                     "forward-xfinity", "forward-mesh"):
             code, page = get("/" + name)
             check(f"/{name} renders", code == 200 and "<article>" in page)
         code, page = get("/forward")
@@ -214,6 +214,25 @@ def main():
               'class="warn"' in page and "responsible" in page)
         check("and names the two things that silently stop it working",
               "Double NAT" in page and "CGNAT" in page)
+        code, page = get("/sdcard")
+        check("the SD page gives the pin map", "<table>" in page and "GPIO5" in page)
+        # A blockquote is one warning, not one per line. Each line used to be
+        # closed into its own box, so a three line warning rendered as three
+        # stacked boxes: border, background and padding repeated, reading as
+        # three unrelated alarms. Every warning on the router pages looked
+        # like that, and nothing caught it because the text was all present.
+        body = page.split("<article>")[1].split("</article>")[0]
+        check("a multi-line warning is one box, not one per line",
+              body.count('class="warn"') == 2)
+        check("and it holds the whole quote",
+              "exFAT" in body and "diskpart" in body and
+              body.index("exFAT") < body.index("diskpart") <
+              body.index("Use the 3V3 pin"))
+        check("and warns about 5 V before the wiring table",
+              page.index("Not VIN") < page.index("GPIO18"))
+        code, page = get("/build")
+        check("and build links to it", 'href="/sdcard"' in page)
+
         code, page = get("/terminals")
         check("the terminal page renders its tables",
               "<table>" in page and "SyncTERM" in page)

@@ -96,6 +96,13 @@ You do not have to use this directory. The protocol is documented, the server
 is a single Python file, and a board can post to several directories at once.
 A directory nobody can replace would contradict the whole point.
 
+## Adding an SD card
+
+Optional, four wires, about two dollars. It is what gets you message bases,
+file areas and screens of your own; without one the board is still a board.
+Pin map and the three things that usually go wrong are on the
+[SD card page](/sdcard).
+
 ## The source
 
 Everything is at [github.com/rwmech/unleashed_BBS](https://github.com/rwmech/unleashed_BBS),
