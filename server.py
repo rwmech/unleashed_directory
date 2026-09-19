@@ -282,22 +282,35 @@ def sample(con, board_id, busy, tz_offset, now):
         con.execute("DELETE FROM activity WHERE board_id=? AND beats=0", (board_id,))
 
 
+# Enough of a shape to be worth drawing, and enough to stop calling it
+# provisional. The first is deliberately low: a directory that shows a board
+# nothing for a whole day is a directory nobody believes is working. The
+# second is a full day of ten minute beats.
+CHART_MIN  = int(os.environ.get("DIRECTORY_CHART_MIN", "18"))
+CHART_FIRM = int(os.environ.get("DIRECTORY_CHART_FIRM", "144"))
+
+
 def hours_for(con, board_id):
-    """24 means, one per local hour, or None when there is not enough yet."""
+    """(24 hourly means, is it settled yet), or None when there is too little.
+
+    A chart drawn from one afternoon is a rumour rather than a forecast, so
+    it says so until it has a day behind it. It is still shown, because
+    watching it fill in is the only way a sysop can tell the thing works.
+    """
     rows = con.execute(
         "SELECT hour, beats, busy FROM activity WHERE board_id=?", (board_id,)).fetchall()
     if not rows:
         return None
     seen = sum(r["beats"] for r in rows)
-    # A day of beats before guessing at anybody's habits. A chart drawn from
-    # an afternoon is not a forecast, it is a rumour.
-    if seen < 144:
+    if seen < CHART_MIN:
         return None
     out = [0.0] * 24
     for r in rows:
         if r["beats"]:
             out[r["hour"]] = r["busy"] / r["beats"]
-    return out if any(out) else None
+    if not any(out):
+        return None
+    return out, seen >= CHART_FIRM, seen
 
 
 SPARK = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
@@ -661,20 +674,25 @@ def day_chart(hours, rows=8):
     return "\n".join(out)
 
 
-def chart_html(hours):
+def chart_html(info):
     """A sparkline you can read in the table, and the whole day on a click."""
-    if not hours:
+    if not info:
         return ""
+    hours, firm, seen = info
     when = busiest(hours)
     body = html.escape(day_chart(hours))
     return ("<details class='chart'>"
             f"<summary><span class='spark'>{spark(hours)}</span>"
-            f"<span class='when'>busiest {html.escape(when)}</span></summary>"
+            f"<span class='when'>busiest {html.escape(when)}"
+            f"{'' if firm else ' so far'}</span></summary>"
             f"<pre class='hours'>{body}</pre>"
             "<span class='note'>Average callers on, by hour, in this "
             "board's local time. Built from the counts it already publishes; "
-            "nothing about any individual caller is collected.</span>"
-            "</details>")
+            "nothing about any individual caller is collected."
+            + ("" if firm else
+               f" Still filling in: {seen} readings so far, so treat the "
+               "shape as provisional.")
+            + "</span></details>")
 
 
 def board_rows(rows, now, charts=None):
