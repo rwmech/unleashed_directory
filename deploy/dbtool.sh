@@ -129,8 +129,11 @@ resolve() {
     case "$1" in
         ''|*[!0-9]*)
             safe="$(echo "$1" | sed "s/'/''/g")"
-            ids="$(q "SELECT id FROM boards WHERE name = '$safe' COLLATE NOCASE;")"
-            [ -n "$ids" ] || ids="$(q "SELECT id FROM boards WHERE name LIKE '%$safe%';")"
+            # GROUP_CONCAT, because sqlite3 prints one id per line and those
+            # go straight into an SQL "IN (...)" list. Newlines there produce
+            # "IN (1 2)", which is a syntax error rather than two ids.
+            ids="$(q "SELECT GROUP_CONCAT(id) FROM boards WHERE name = '$safe' COLLATE NOCASE;")"
+            [ -n "$ids" ] || ids="$(q "SELECT GROUP_CONCAT(id) FROM boards WHERE name LIKE '%$safe%';")"
             if [ -z "$ids" ]; then
                 echo "No listing matching '$1'. What is there:" >&2
                 q -column -header "SELECT id, name, state FROM boards ORDER BY id;" >&2
@@ -197,6 +200,17 @@ prune)
 promote)
     [ $# -ge 2 ] || die "usage: $0 promote <id|name>"
     id="$(resolve "$2")"
+    # Publishing two listings because a name matched twice is exactly the
+    # mess this tool exists to clean up, so it asks rather than guesses.
+    case "$id" in
+        *,*)
+            echo "'$2' matches more than one listing:" >&2
+            q -column -header \
+              "SELECT id, name, state, datetime(last_seen,'unixepoch') AS last_seen
+                 FROM boards WHERE id IN ($id);" >&2
+            die "Promote one of them by id, or run dedupe first."
+            ;;
+    esac
     confirm "Publish listing $id now, without waiting out the pending hours?"
     backup
     # Backdate the streak rather than forcing the state: settle() then
