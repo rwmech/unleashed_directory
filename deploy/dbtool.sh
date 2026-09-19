@@ -174,6 +174,13 @@ dedupe)
     backup
     # Keep the entry each address heard from last: that is the board still
     # talking. The rest are the husks it left behind.
+    # The chart rows go with the listing. Leaving them orphaned means a
+    # board that is deduped away keeps feeding samples nothing can read,
+    # and the survivor looks like it has no history at all.
+    q "DELETE FROM activity WHERE board_id NOT IN
+         (SELECT id FROM boards b WHERE b.last_seen =
+            (SELECT MAX(c.last_seen) FROM boards c WHERE c.group_key = b.group_key)
+          GROUP BY b.group_key);"
     q "DELETE FROM boards WHERE id NOT IN
          (SELECT id FROM boards b WHERE b.last_seen =
             (SELECT MAX(c.last_seen) FROM boards c WHERE c.group_key = b.group_key)
@@ -190,6 +197,9 @@ prune)
     [ "$n" = "0" ] && { echo "Nothing older than $days days to prune."; exit 0; }
     confirm "Delete $n quiet or queued listing(s) not seen for $days days?"
     backup
+    q "DELETE FROM activity WHERE board_id IN
+         (SELECT id FROM boards WHERE state IN ('offline','queued')
+            AND strftime('%s','now') - last_seen > $days * 86400);"
     q "DELETE FROM boards
         WHERE state IN ('offline','queued')
           AND strftime('%s','now') - last_seen > $days * 86400;"
@@ -230,6 +240,7 @@ forget)
     q -column -header "SELECT id, name, state FROM boards WHERE id IN ($id);"
     confirm "Delete the listing(s) above?"
     backup
+    q "DELETE FROM activity WHERE board_id IN ($id);"
     q "DELETE FROM boards WHERE id IN ($id);"
     echo "Gone. If that board is still running it will list itself again."
     bounce
@@ -254,7 +265,7 @@ reset)
     confirm "Really wipe the whole table?"
     confirm "Last chance. Wipe $n listing(s)?"
     backup
-    q "DELETE FROM boards; DELETE FROM reports;"
+    q "DELETE FROM boards; DELETE FROM reports; DELETE FROM activity;"
     echo "Table emptied."
     bounce
     ;;

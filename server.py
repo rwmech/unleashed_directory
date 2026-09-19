@@ -1023,6 +1023,13 @@ January blizzard that shut the city down handed them the quiet weeks to finish i
 It ran on an S-100 machine with 64 kilobytes of memory and answered one caller at
 a time.</p>
 
+<p class="pull">I met Ward Christensen once, at a Maker Faire. I did not know it
+would be the only time. He died on
+<a href="https://www.theregister.com/offbeat/2024/10/15/rip-ward-christensen-co-developer-of-the-cbss/492871">11
+October 2024</a>, and I wish I had spent longer talking to him while I had the
+chance. If you get to meet the person who built the thing you love, take the extra
+hour. &mdash; QuantumRob</p>
+
 <p>Thousands of boards followed. Each one was somebody's own idea of what a
 community should look like: a music board, a board for one town, a board that was
 really just its sysop and eleven friends. At the

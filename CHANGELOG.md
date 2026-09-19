@@ -14,6 +14,11 @@
 
 # Changelog
 
+## 0.5.2, 2026-09-19
+
+- The manifesto carries a note from QuantumRob about meeting Ward Christensen once, at a Maker Faire, before he died in October 2024.
+- `dbtool.sh` deletes a listing's chart data along with the listing. Orphaned rows meant a board that was deduped away kept samples nothing could read, while the survivor looked like it had no history.
+
 ## 0.5.1, 2026-09-19
 
 - **Fixed: a board that lost its token could never list again.** Yesterday's cap refused any new entry from an address already holding a few, which stopped the table growing but also permanently locked out the ordinary case it was meant to tolerate: a board that was reflashed. Worse, the board reported it as "too often, will settle", and settling was the one thing that could not happen. At the cap the directory now drops the deadest entry that address holds and lets the board in. An entry still sending heartbeats is never evicted, whoever it belongs to, so a stranger sharing an address still cannot push a live board out.
