@@ -83,6 +83,10 @@ PENDING_HOURS = float(os.environ.get("DIRECTORY_PENDING_HOURS", "3"))
 EXPIRE_DAYS   = float(os.environ.get("DIRECTORY_EXPIRE_DAYS", "7"))
 PER_ADDRESS   = int(os.environ.get("DIRECTORY_PER_ADDRESS", "1"))
 MIN_SECONDS   = int(os.environ.get("DIRECTORY_MIN_SECONDS", "30"))
+# How many extra entries one address may hold beyond its published one,
+# waiting for a human. Small on purpose: it is the stop on a board that has
+# forgotten its token, or on somebody posting in a loop.
+SPARE_ROWS    = int(os.environ.get("DIRECTORY_SPARE_ROWS", "3"))
 BODY_MAX      = 4096
 
 # The heartbeats are nothing: a board posts 200 bytes every ten minutes, so
@@ -92,6 +96,14 @@ BODY_MAX      = 4096
 # memory in between. A list that changes every few minutes does not need to
 # be built fresh for every reader.
 PAGE_CACHE    = int(os.environ.get("DIRECTORY_PAGE_CACHE", "10"))
+# The board list is a live thing: who is on changes minute to minute, so the
+# page reloads itself rather than going stale in a tab somebody left open.
+# A meta refresh, not a script, because this site ships no JavaScript and a
+# reader should not have to run code to read a list. It is cheap: the page
+# is rendered at most once every PAGE_CACHE seconds however many ask for it.
+LIST_SECONDS  = int(os.environ.get("DIRECTORY_LIST_REFRESH", "60"))
+LIST_REFRESH  = (f'<meta http-equiv="refresh" content="{LIST_SECONDS}">'
+                 if LIST_SECONDS > 0 else "")
 _cache = {}
 
 # A board is counted offline when it has missed this many of its own
@@ -296,6 +308,15 @@ def announce(payload, address):
             streak = row["streak_start"]
             if state == "offline":                     # back after a gap
                 state, streak = "pending", now
+            elif state == "queued":
+                # Whatever was in the way may be long gone. Re-ask on every
+                # heartbeat rather than leaving it stuck for ever.
+                others = con.execute(
+                    "SELECT COUNT(*) AS n FROM boards WHERE group_key=? AND id<>? "
+                    "AND state IN ('pending','online')",
+                    (row["group_key"], row["id"])).fetchone()["n"]
+                if others < PER_ADDRESS:
+                    state, streak = "pending", now
             con.execute(
                 f"UPDATE boards SET {sets}, last_seen=?, beats=beats+1, "
                 f"state=?, streak_start=? WHERE id=?",
@@ -305,9 +326,25 @@ def announce(payload, address):
                 _cache.clear()                         # the page says something new now
             return 200, listing(fresh, now), {"X-Listing-Token": token}
 
-        # a board we have not met before
-        live = con.execute(
+        # A board we have not met before, or one that has forgotten its own
+        # token. It still gets an entry of its own rather than taking over
+        # the one this address already holds: two unrelated boards can share
+        # a public address, which is what CGNAT does to whole towns, and
+        # "same address" is nowhere near "same board".
+        #
+        # What is capped is how many entries an address may accumulate. A
+        # board that keeps forgetting its token, or anybody with curl and a
+        # loop, would otherwise mint a fresh listing on every post for ever.
+        # The cap is the thing that was missing: PER_ADDRESS only ever chose
+        # what state a new row got, and then inserted it regardless.
+        held = con.execute(
             "SELECT COUNT(*) AS n FROM boards WHERE group_key=?", (group,)).fetchone()["n"]
+        if held >= PER_ADDRESS + SPARE_ROWS:
+            return 429, {"error": "too many listings from this address"}, {}
+
+        live = con.execute(
+            "SELECT COUNT(*) AS n FROM boards WHERE group_key=? "
+            "AND state IN ('pending','online')", (group,)).fetchone()["n"]
         state = "pending" if live < PER_ADDRESS else "queued"
         token = secrets.token_hex(16)
         cols  = ", ".join(fields)
@@ -340,7 +377,7 @@ PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
-<link rel="alternate" type="application/rss+xml" title="New boards" href="/feed.xml">
+{refresh}<link rel="alternate" type="application/rss+xml" title="New boards" href="/feed.xml">
 <style>
 :root {{ color-scheme: dark;
   --bg:#0b0b0f; --ink:#c8c8c8; --dim:#8a8a8a; --faint:#6a6a72; --rule:#1e1e26;
@@ -381,7 +418,10 @@ tr:hover td {{ background:#111; }}
 .act {{ color:var(--busy); }}
 .owner {{ color:var(--warm); }}
 .on {{ color:var(--live); }}
+.idle {{ color:var(--dim); }}
 .off {{ color:var(--faint); }}
+.muted {{ color:var(--faint); }}
+.fresh {{ color:var(--faint); font-size:11px; }}
 .pending {{ color:var(--warm); }}
 .none {{ color:var(--faint); padding:24px 8px; }}
 footer {{ margin-top:28px; color:#555; border-top:1px solid var(--rule); padding-top:12px; }}
@@ -440,6 +480,17 @@ def human_ago(seconds):
     return f"{seconds // 86400} d ago"
 
 
+def human_short(seconds):
+    """An age in as few characters as possible: for freshness, not prose."""
+    if seconds < 90:
+        return "now"
+    if seconds < 5400:
+        return f"{seconds // 60}m"
+    if seconds < 172800:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 86400}d"
+
+
 def human_streak(seconds):
     if seconds < 5400:
         return f"{max(1, seconds // 60)}m"
@@ -453,18 +504,36 @@ def board_rows(rows, now):
     for r in rows:
         where = r["host"] or r["address"]
         state = r["state"]
-        klass = {"online": "on", "offline": "off", "pending": "pending"}.get(state, "off")
+        seen = now - r["last_seen"]
         if state == "online":
-            label = f"up, {r['busy']}/{r['nodes']} in use" if r["nodes"] else "up"
+            # Somebody actually being on is the thing worth seeing from across
+            # the room, so it gets the bright colour and a board that is up but
+            # empty does not.
+            if r["nodes"]:
+                label = f"{r['busy']} of {r['nodes']} on"
+            else:
+                label = "up"
+            klass = "on" if r["busy"] else "idle"
         elif state == "offline":
-            label = f"quiet, {human_ago(now - r['last_seen'])}"
+            label = f"quiet, {human_ago(seen)}"
+            klass = "off"
         else:
             label = state
-        activity = ""
+            klass = "pending"
+
+        # Every figure in this row came from that board's last heartbeat, so
+        # say how old the reading is rather than implying it is live. A board
+        # reporting every ten minutes cannot be more current than that, and
+        # pretending otherwise is the sort of thing this directory is against.
+        fresh = (f"<span class='fresh'>{human_short(seen)}</span>"
+                 if state == "online" else "")
+
         if r["minutes24"] is not None:
             activity = f"{r['minutes24']} caller-min/24h"
         elif r["calls24"] is not None:
             activity = f"{r['calls24']} calls/24h"
+        else:
+            activity = ""
         dial = html.escape(f"telnet://{where}:{r['port']}", quote=True)
         out.append(
             "<tr>"
@@ -474,10 +543,11 @@ def board_rows(rows, now):
             f"program if one is registered for telnet:// links'>"
             f"{html.escape(where)} {r['port']}</a></td>"
             f"<td class='owner'>{html.escape(r['owner'])}</td>"
-            f"<td class='{klass}'>{html.escape(label)}</td>"
-            f"<td class='act'>{html.escape(activity)}</td>"
-            f"<td class='desc'>{human_streak(now - r['streak_start'])}</td>"
-            "</tr>")
+            f"<td class='{klass}'>{html.escape(label)} {fresh}</td>"
+            + (f"<td class='act'>{html.escape(activity)}</td>"
+               if activity else "<td class='muted'>not shared</td>")
+            + f"<td class='desc'>{human_streak(now - r['streak_start'])}</td>"
+            + "</tr>")
     return "".join(out)
 
 
@@ -499,8 +569,12 @@ def index_page():
             "SELECT * FROM boards WHERE state IN ('online','offline') "
             "ORDER BY state='online' DESC, "
             "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC").fetchall()
+    live = [r for r in rows if r["state"] == "online"]
+    on = sum(r["busy"] or 0 for r in live)
+    who = (f" &middot; {on} caller{'' if on == 1 else 's'} on"
+           if on else " &middot; nobody on right now")
     head = (logo_html()
-            + f"<h1>BBS directory <span>&middot; {len(rows)} listed</span></h1>"
+            + f"<h1>BBS directory <span>&middot; {len(rows)} listed{who}</span></h1>"
             + '<p class="lead">Boards that are up right now. '
             "Dial one with any telnet client, or click an address if you have "
             "one installed.</p>")
@@ -517,9 +591,12 @@ def index_page():
               '<a href="/rules">House rules</a> &middot; '
               '<a href="/feed.xml">RSS</a> &middot; '
               '<a href="/api/boards.json">JSON</a><br><br>'
-              'Activity figures are reported by the boards themselves. '
-              '"Up for" is measured here and cannot be fudged.')
-    return PAGE.format(title=html.escape(SITE_NAME), body=body, footer=footer)
+              'Caller counts and activity are reported by the boards '
+              'themselves, and are only as fresh as each board\'s last '
+              'heartbeat: the small figure next to the state is how old that '
+              'reading is. "Up for" is measured here and cannot be fudged.')
+    return PAGE.format(title=html.escape(SITE_NAME), body=body, footer=footer,
+                       refresh=LIST_REFRESH)
 
 
 def rss_date(when):
@@ -909,7 +986,7 @@ License, version 2 or later.</p>
 
 def simple_page(title, body, role="list"):
     links = other_sites(role)
-    return PAGE.format(title=html.escape(title), body=body,
+    return PAGE.format(refresh="", title=html.escape(title), body=body,
                        footer=links or '<a href="/">Back to the list</a>')
 
 

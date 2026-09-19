@@ -14,6 +14,17 @@
 
 # Changelog
 
+## 0.4.0, 2026-09-19
+
+Stops one board being able to fill the table.
+
+- **Fixed: a board that forgot its token created a new listing on every heartbeat.** The per-address rule only ever decided what *state* a new row was given, and then inserted it regardless, so nothing bounded the table. A live directory reached ninety rows for one board in fourteen hours. An address may now hold a small number of entries and is refused beyond that. This was also a spam hole needing no board at all: curl in a loop would have done it.
+- A listing stuck in `queued` is re-considered on every heartbeat. Previously `settle()` only promoted `pending` and the update path only moved `offline` back to `pending`, so a queued board heartbeated for ever, never expired, and never got in.
+- An unknown token still never takes over an existing listing. That guarantee is deliberate: two unrelated boards can share one public address, which is what carrier-grade NAT does to whole towns, so "same address" is nowhere near "same board".
+- The board list refreshes itself once a minute. Who is on changes minute to minute and a list left open in a tab should not quietly go stale. A meta refresh, not a script, because this site still ships no JavaScript.
+- The list shows how many callers are on each board, and how old that reading is, since a board reporting every ten minutes cannot be more current than that. The heading totals the callers across the whole directory.
+- `deploy/dbtool.sh`: status, list, dupes, dedupe, prune, promote, forget, unstick, reset and restore. Everything that writes takes a backup first and prints the command to undo it.
+
 ## 0.3.0, 2026-09-18
 
 The site gets a face.

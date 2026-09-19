@@ -189,6 +189,23 @@ def main():
         check("the house rules are there", code == 200 and "No hate" in page)
         code, page = get("/how")
         check("so is how to get listed", code == 200 and "announce" in page)
+
+        # Last, because it uses up everything one address may hold.
+        #
+        # This is the bug that put ninety rows on the live directory. A board
+        # that forgets its token posts as a stranger every time, and the
+        # per-address rule only chose what state the new row got before
+        # inserting it regardless, so the table grew on every heartbeat with
+        # nothing to stop it. Anybody with curl and a loop could do the same.
+        print("One address cannot fill the table")
+        before = json.loads(get("/api/boards.json", host="data.example")[1])["boards"]
+        codes = [post({"name": "Forgetful %d" % i, "port": 6400})[0]
+                 for i in range(8)]
+        after = json.loads(get("/api/boards.json", host="data.example")[1])["boards"]
+        check("a board that keeps forgetting its token is refused eventually",
+              429 in codes)
+        check("nothing it posted reached the published list",
+              [b["name"] for b in after] == [b["name"] for b in before])
     finally:
         server.terminate()
         try:
