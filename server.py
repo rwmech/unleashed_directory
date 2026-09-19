@@ -814,6 +814,31 @@ pre.logo i:nth-child(3) {{ color:#8f7ae8; }}
 pre.logo i:nth-child(4) {{ color:#6f84e0; }}
 pre.logo i:nth-child(5) {{ color:#4a7fc8; }}
 pre.logo i:nth-child(6) {{ color:#3f6cab; }}
+/* The menu, as a menu bar rather than a run of links.
+   Reverse video is how a terminal shows a selection and how a Mac menu
+   showed the item you picked, so hovering fills the cell and the current
+   page stays filled. The current item also blinks three times when the page
+   loads, the way a Mac menu item flashed when you let go of the mouse, then
+   settles. Three times, not for ever: a permanently blinking thing on a page
+   is an irritation rather than a signal. */
+nav {{ margin:10px 0 24px; padding:10px 0; display:flex; flex-wrap:wrap;
+        gap:6px 4px; border-top:1px solid var(--rule);
+        border-bottom:1px solid var(--rule); }}
+nav a {{ color:var(--dim); text-decoration:none; font-size:12px;
+        letter-spacing:1px; text-transform:uppercase; padding:4px 12px;
+        white-space:nowrap; }}
+nav a:hover, nav a:focus {{ background:var(--ink); color:var(--bg); }}
+nav a.here {{ background:var(--name); color:var(--bg);
+        animation:macblink 0.16s steps(1) 3; }}
+@keyframes macblink {{
+  0%, 100% {{ background:var(--name); color:var(--bg); }}
+  50%      {{ background:transparent; color:var(--name); }}
+}}
+/* Somebody who has asked for less motion gets the selection without the
+   flash. The reverse video carries the meaning on its own. */
+@media (prefers-reduced-motion: reduce) {{
+  nav a.here {{ animation:none; }}
+}}
 h1 {{ color:var(--ink); font-size:13px; font-weight:normal; letter-spacing:3px;
      margin:0 0 4px; text-transform:uppercase; }}
 h1 span {{ color:var(--faint); letter-spacing:0; text-transform:none; }}

@@ -14,6 +14,11 @@
 
 # Changelog
 
+## 0.10.1, 2026-09-19
+
+- **Fixed: the menu shipped with no styling at all.** The stylesheet for it was written in one patch, dropped by a rewrite of that patch, and never checked, so every page ran the menu items together as plain underlined links. It is a menu bar now: reverse video on hover, the current page filled, spacing that makes the items separate things.
+- The current item flashes three times on load, the way a Mac menu item did when you let go of the mouse, then settles. Three times rather than for ever, and not at all for anyone who has asked for reduced motion.
+
 ## 0.10.0, 2026-09-19
 
 - A **dialing** page explaining why clicking a `telnet://` address often does nothing, and how to fix it. Install SyncTERM first; registry editing last, behind a warning, and using the per-user key that needs no administrator.
