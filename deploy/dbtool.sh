@@ -120,12 +120,22 @@ list_rows() {
          FROM boards $where ORDER BY last_seen DESC;"
 }
 
-# An id, or a name. Names are how a person thinks about their board.
+# An id, or a name. Names are how a person thinks about their board, so a
+# name is matched without caring about case, and then as a fragment, because
+# insisting on the exact spelling of something you can see on screen is a
+# tool arguing with you. When nothing matches, show what there is instead of
+# just saying no.
 resolve() {
     case "$1" in
         ''|*[!0-9]*)
-            ids="$(q "SELECT id FROM boards WHERE name = '$(echo "$1" | sed "s/'/''/g")';")"
-            [ -n "$ids" ] || die "no listing called '$1'"
+            safe="$(echo "$1" | sed "s/'/''/g")"
+            ids="$(q "SELECT id FROM boards WHERE name = '$safe' COLLATE NOCASE;")"
+            [ -n "$ids" ] || ids="$(q "SELECT id FROM boards WHERE name LIKE '%$safe%';")"
+            if [ -z "$ids" ]; then
+                echo "No listing matching '$1'. What is there:" >&2
+                q -column -header "SELECT id, name, state FROM boards ORDER BY id;" >&2
+                exit 1
+            fi
             echo "$ids"
             ;;
         *) echo "$1" ;;
