@@ -511,7 +511,8 @@ def gallery_html():
                      f'alt="{cap or html.escape(name)}" loading="lazy">'
                      + (f"<figcaption>{body}</figcaption>" if body else "")
                      + "</figure>")
-    return ('<div class="wide gallery">' + "".join(cells) + "</div>")
+    kind = "gallery one" if len(cells) == 1 else "wide gallery"
+    return (f'<div class="{kind}">' + "".join(cells) + "</div>")
 
 
 def rate_limited(con, address, now):
@@ -720,6 +721,11 @@ tr:hover td {{ background:#111; }}
 .addr a {{ color:var(--dial); text-decoration:none; border-bottom:1px dotted #35566b; }}
 .addr a:hover {{ border-bottom-style:solid; }}
 .desc {{ color:var(--dim); }}
+/* What a board runs, said quietly next to its name. Every board is
+   welcome here, and a directory that only ever shows one name does not
+   look like it means that. */
+.soft {{ color:var(--faint); font-size:11px; margin-left:8px;
+        border:1px solid var(--rule); border-radius:3px; padding:1px 5px; }}
 .act {{ color:var(--busy); }}
 .owner {{ color:var(--warm); }}
 .on {{ color:var(--live); }}
@@ -756,8 +762,20 @@ article figure, article .wide {{ max-width:none; margin:20px 0; }}
    phone gets one across and a monitor gets three. */
 .gallery {{ display:grid; gap:14px; margin:20px 0;
         grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); }}
+/* One picture belongs in the text, not across it: float it and let the
+   paragraphs wrap, the way any article would set a photograph. A source
+   image straight off a phone is several thousand pixels wide, so it is
+   capped here rather than trusted to be sensible. */
+.gallery.one {{ display:block; float:right; width:min(38%, 360px);
+        margin:4px 0 16px 26px; }}
 .gallery figure {{ margin:0; }}
 .gallery img {{ width:100%; height:auto; display:block; border:1px solid var(--rule); }}
+.gallery.one img {{ max-height:420px; object-fit:cover; }}
+/* A float on a phone is just a very narrow column of text beside a picture,
+   so below that width it goes back to being a block. */
+@media (max-width: 620px) {{
+  .gallery.one {{ float:none; width:100%; margin:18px 0; }}
+}}
 .gallery figcaption {{ color:var(--faint); font-size:12px; margin-top:6px; }}
 .gallery .credit {{ display:block; color:#55555f; font-size:11px; margin-top:3px; }}
 article h2 {{ color:var(--struct); font-size:15px; margin:28px 0 6px; font-weight:normal; }}
@@ -957,8 +975,11 @@ def board_rows(rows, now, charts=None):
         dial = html.escape(f"telnet://{where}:{r['port']}", quote=True)
         out.append(
             "<tr>"
-            f"<td class='name'>{html.escape(r['name'])}<br>"
-            f"<span class='desc'>{html.escape(r['description'])}</span>"
+            f"<td class='name'>{html.escape(r['name'])}"
+            + (f"<span class='soft'>{html.escape(r['software'])}</span>"
+               if r["software"] else "")
+            + "<br>"
+            + f"<span class='desc'>{html.escape(r['description'])}</span>"
             + ((charts or {}).get(r["id"]) or "")
             + "</td>"
             f"<td class='addr'><a href='{dial}' title='Opens your terminal "
@@ -1157,9 +1178,39 @@ one meant for machines: <code>.com</code> is the list people read and
 uninterrupted heartbeats, which is what keeps drive-by spam off the page, and
 it disappears when the heartbeats stop. <code>ANNOUNCE</code> on your board
 shows how long is left.</p>
-<p>Running something other than µnleashed? The protocol is a single HTTP POST and
-it is documented in <a href="https://github.com/rwmech/unleashed_directory">the
-server repository</a>. Anything that speaks it gets listed.</p>"""
+<h2>Running something else</h2>
+
+<p>Synchronet, Mystic, WWIV, ENiGMA, Citadel, something you wrote yourself in a
+weekend: all welcome, all listed the same way, and what you run is shown next to
+your board's name. This is a directory of boards that are up, not a directory of
+one program's users. If it were the second thing it would not be worth running.</p>
+
+<p>There is no plugin to install and no account to make. Post this every few
+minutes from anything that can make an HTTP request:</p>
+
+<pre>curl -X POST http://unleashedbbs.net/announce \
+  -H 'Content-Type: application/json' \
+  -d '{"software":"synchronet","version":"3.20",
+       "name":"The Rusty Modem","owner":"KE9CXN",
+       "description":"A BBS in a shack in Illinois",
+       "host":"bbs.example.com","port":23,
+       "nodes":4,"busy":0,"interval":10,
+       "token":""}'</pre>
+
+<p>The reply carries an <code>X-Listing-Token</code> header. Keep it and send it
+back in <code>token</code> on every later heartbeat: that is what stops somebody
+else taking over your entry. Send it whole. It is 32 characters and a fragment of
+one will be refused.</p>
+
+<p><b>The same rules apply to everyone.</b> Three hours of uninterrupted
+heartbeats before a listing goes public, and it disappears when the heartbeats
+stop. There is no exception for boards running this firmware, and that is the
+whole anti-spam design: staying listed costs a machine that keeps running, which
+is exactly what a spammer will not do and exactly what a real board does anyway.</p>
+
+<p>The full protocol, including every field and what the directory does with it,
+is in <a href="https://github.com/rwmech/unleashed_directory">the server
+repository</a>. It is one Python file and you are welcome to run your own.</p>"""
 
 
 ANIM = """
