@@ -314,22 +314,33 @@ def hours_for(con, board_id):
     return out, seen >= CHART_FIRM, seen
 
 
-SPARK = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
-
-
 def spark(hours):
-    """24 cells, scaled against this board's own busiest hour."""
+    """The day at a glance, as a small drawing.
+
+    This was block characters, which is the version everybody sees because
+    the full chart is behind a click. Half a block is not a shape anybody
+    reads as a number, and the ramp lands differently in every font.
+    """
     top = max(hours)
     if top <= 0:
         return ""
-    out = []
-    for v in hours:
+    W, H = 124.0, 18.0
+    slot = W / 24.0
+    bar = slot * 0.62
+    peak = hours.index(top)
+    parts = [f'<svg class="spark" viewBox="0 0 {W:.0f} {H:.0f}" '
+             f'role="img" aria-label="Busy hours">']
+    parts.append(f'<line class="base" x1="0" y1="{H - 1:.1f}" x2="{W:.0f}" y2="{H - 1:.1f}"/>')
+    for h, v in enumerate(hours):
         if v <= 0:
-            out.append("\u00b7")               # nothing ever, not "a little"
-        else:
-            step = int(round((v / top) * (len(SPARK) - 1)))
-            out.append(SPARK[step])
-    return "".join(out)
+            continue
+        height = max(1.5, (H - 2) * (v / top))
+        x = slot * h + (slot - bar) / 2.0
+        parts.append(f'<rect class="{"b peak" if h == peak else "b"}" '
+                     f'x="{x:.1f}" y="{H - 1 - height:.1f}" '
+                     f'width="{bar:.1f}" height="{height:.1f}"/>')
+    parts.append("</svg>")
+    return "".join(parts)
 
 
 def busiest(hours):
@@ -719,7 +730,10 @@ tr:hover td {{ background:#111; }}
 details.chart {{ margin-top:3px; }}
 details.chart summary {{ list-style:none; cursor:pointer; }}
 details.chart summary::-webkit-details-marker {{ display:none; }}
-.spark {{ color:var(--busy); letter-spacing:1px; }}
+svg.spark {{ width:124px; height:18px; vertical-align:-3px; }}
+svg.spark .b {{ fill:var(--busy); opacity:0.7; }}
+svg.spark .b.peak {{ opacity:1; }}
+svg.spark .base {{ stroke:#2c2c38; stroke-width:1; }}
 .when {{ color:var(--faint); font-size:11px; margin-left:8px; }}
 details.chart[open] summary .when::after {{ content:" (click to close)"; }}
 svg.hours {{ display:block; width:100%; max-width:720px; height:auto;
@@ -733,7 +747,8 @@ details.chart .note {{ color:var(--faint); font-size:11px; }}
 .pending {{ color:var(--warm); }}
 .none {{ color:var(--faint); padding:24px 8px; }}
 footer {{ margin-top:28px; color:#555; border-top:1px solid var(--rule); padding-top:12px; }}
-article {{ max-width:78ch; }}
+article {{ max-width:none; }}
+article p, article li, article dd, article dt {{ max-width:78ch; }}
 /* Anything drawn rather than written gets the whole width: diagrams and
    charts are not prose and should not be squeezed into its measure. */
 article figure, article .wide {{ max-width:none; margin:20px 0; }}
@@ -886,7 +901,7 @@ def chart_html(info):
     hours, firm, seen = info
     when = busiest(hours)
     return ("<details class='chart'>"
-            f"<summary><span class='spark'>{spark(hours)}</span>"
+            f"<summary>{spark(hours)}"
             f"<span class='when'>busiest {html.escape(when)}"
             f"{'' if firm else ' so far'}</span></summary>"
             + day_chart_svg(hours, firm)
@@ -929,9 +944,14 @@ def board_rows(rows, now, charts=None):
                  if state == "online" else "")
 
         if r["minutes24"] is not None:
-            activity = f"{r['minutes24']} caller-min/24h"
+            mins = int(r["minutes24"])
+            spent = f"{mins // 60}h {mins % 60:02d}m" if mins >= 60 else f"{mins}m"
+            if r["calls24"] is not None:
+                activity = f"{r['calls24']} calls, {spent} connected"
+            else:
+                activity = f"{spent} connected"
         elif r["calls24"] is not None:
-            activity = f"{r['calls24']} calls/24h"
+            activity = f"{r['calls24']} calls"
         else:
             activity = ""
         dial = html.escape(f"telnet://{where}:{r['port']}", quote=True)
@@ -1001,7 +1021,9 @@ def index_page():
               '<a href="/rules">House rules</a> &middot; '
               '<a href="/feed.xml">RSS</a> &middot; '
               '<a href="/api/boards.json">JSON</a><br><br>'
-              'Caller counts and activity are reported by the boards '
+              'Activity is the last 24 hours: how many calls, and how long '
+              'callers were connected in total. Caller counts and activity are '
+              'reported by the boards '
               'themselves, and are only as fresh as each board\'s last '
               'heartbeat: the small figure next to the state is how old that '
               'reading is. "Up for" is measured here and cannot be fudged.')

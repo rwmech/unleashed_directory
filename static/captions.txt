@@ -17,3 +17,5 @@
 # board.jpg | The board this directory runs on. | QuantumRob
 # c64.jpg   | A Commodore 64 calling in through a TeensyROM. | QuantumRob
 # case.jpg  | 3D printed case, because it should look like a computer. | QuantumRob
+
+esp32.jpg | The whole computer. An ESP32 module, and the BBS runs on it. | QuantumRob

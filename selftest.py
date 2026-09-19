@@ -127,7 +127,11 @@ def main():
         check("the board is on the page now", "Rusty Modem" in page)
         check("with its sysop", "KE9CXN" in page)
         check("and how to dial it", "6400" in page)
-        check("self-reported activity is shown", "caller-min" in page)
+        # Spelled out rather than abbreviated: "caller-min/24h" was read
+        # as calls per minute, which is a fair reading and a thousand
+        # times the truth.
+        check("self-reported activity is shown, in words",
+              "connected" in page and "calls" in page)
         check("the queued one still is not", "Squatter" not in page)
 
         print("The JSON list")

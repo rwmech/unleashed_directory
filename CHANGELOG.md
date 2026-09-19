@@ -14,6 +14,13 @@
 
 # Changelog
 
+## 0.6.2, 2026-09-19
+
+- One width across all three faces. `main` was already 1080 everywhere, but `article` capped itself at 78ch, so the pages built from articles sat narrower than the board list and it looked like two different sites. The frame is now one job, and the reading measure applies only to body text.
+- The sparkline in the table is drawn rather than typed, like the chart behind it. It is the version everybody actually sees, since the full chart is behind a click.
+- Activity says what it means: "11 calls, 7h 20m connected" rather than "440 caller-min/24h", which read as calls per minute and was therefore about a thousand times the truth.
+- A photograph of the board, with a caption.
+
 ## 0.6.1, 2026-09-19
 
 - Two notes from QuantumRob on the manifesto: starting his career on IBM 4381 mainframes, which sits directly under the paragraph about people who were never given time on one, and an acknowledgement that the project was built with Claude's help.
