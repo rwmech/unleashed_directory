@@ -167,6 +167,9 @@ check() {
 loud ""
 loud "Checking:"
 check "the directory answers"      "curl -fsS --max-time 10 http://127.0.0.1:8080/health"
+# The build page lives in pages/, which is a separate thing to deploy and so
+# a separate thing to forget. It was forgotten once already.
+check "the build page renders"    "curl -fsS --max-time 10 http://127.0.0.1:8080/build"
 check "the service is running"     "systemctl is-active --quiet unleashed-directory"
 check "caddy is running"           "systemctl is-active --quiet caddy"
 
