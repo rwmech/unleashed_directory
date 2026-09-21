@@ -34,7 +34,7 @@ Content-Length: 204
 Connection: close
 
 {"software":"unleashed","version":"0.13.0",
- "name":"The Rusty Modem","owner":"KE9CXN",
+ "name":"The Rusty Modem","owner":"Sparks",
  "description":"A BBS on a chip in a shack in Illinois",
  "host":"","port":6400,"nodes":6,"busy":0,
  "uptime":3600,"interval":10,"token":""}

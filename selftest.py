@@ -96,7 +96,7 @@ def main():
 
         print("A board announces itself")
         board = {"software": "unleashed", "version": "0.13.0",
-                 "name": "The Rusty Modem", "owner": "KE9CXN",
+                 "name": "The Rusty Modem", "owner": "Sparks",
                  "description": "A BBS on a chip in a shack", "host": "",
                  "port": 6400, "nodes": 6, "busy": 2, "uptime": 900,
                  "interval": 10, "calls24": 11, "minutes24": 300, "token": ""}
@@ -130,7 +130,7 @@ def main():
 
         _, page = get("/")
         check("the board is on the page now", "Rusty Modem" in page)
-        check("with its sysop", "KE9CXN" in page)
+        check("with its sysop", "Sparks" in page)
         check("and how to dial it", "6400" in page)
         # Spelled out rather than abbreviated: "caller-min/24h" was read
         # as calls per minute, which is a fair reading and a thousand
@@ -153,7 +153,7 @@ def main():
         check("an unknown token makes a new entry, it does not seize one",
               other["token"] != token and other["state"] in ("queued", "pending"))
         _, page = get("/")
-        check("the real listing still says who owns it", "KE9CXN" in page)
+        check("the real listing still says who owns it", "Sparks" in page)
         check("the impostor is not published", "Impostor" not in page)
 
         print("Rubbish is refused")
@@ -285,6 +285,33 @@ def main():
         # /dialing fixes the exact problem a first-time visitor hits, and
         # used to be reachable from one sentence at the bottom of /terminals
         # and a title= attribute, which is invisible on every touch device.
+        print("Who would actually want one of these")
+        code, page = get("/whofor")
+        check("the who-it's-for page exists and answers plainly",
+              code == 200 and page.index("Everyone.") < page.index("Schools"))
+        for who in ("Schools", "Ham radio", "Offices and teams",
+                    "One person, one board"):
+            check(f"it covers {who.lower()}", f">{who}</h" in page
+                  or f">{who}</h3>" in page or who in page)
+        check("it says the board is nobody else's to police",
+              "king of everything on the board" in page)
+        check("and names the things that make that true",
+              "deplatform" in page and "peer to peer" in page
+              and "off grid" in page)
+        check("it ends by telling somebody how to start",
+              'href="/build"' in page)
+        check("it is in the menu next to the manifesto",
+              ">Who it's for</a>" in page)
+        _, page = get("/", host="about.example")
+        check("and the manifesto points at it",
+              'href="/whofor"' in page)
+
+        # Rob's callsign is not on the site. The examples use a plain
+        # illustrative handle instead.
+        for path, host in (("/how", None), ("/", "boards.example")):
+            _, page = get(path, host=host)
+            check(f"no callsign on {path}", "KE9CXN" not in page)
+
         _, page = get("/")
         check("the front page offers a way out when a dial link does nothing",
               'href="/dialing">Nothing happened?' in page)
@@ -297,7 +324,7 @@ def main():
         # on purpose: put it earlier and it swallows real endpoints, which
         # is exactly what happened to /health the first time.
         for name in ("build", "forward", "terminals", "dialing", "sdcard",
-                     "firstcall", "privacy",
+                     "firstcall", "privacy", "whofor",
                      "forward-netgear", "forward-tplink", "forward-asus",
                      "forward-xfinity", "forward-mesh"):
             code, page = get("/" + name)
@@ -407,8 +434,39 @@ def main():
         _, page = get("/sdcard")
         check("a callout is indented from the body text, not flush with it",
               "margin:18px 0 18px 30px" in page)
-        check("prose has a reading measure",
-              "main p, main li, main dd { max-width:78ch; }" in page)
+        # Prose runs the full width of the column on a desktop. This was
+        # briefly capped at 78ch on typographic grounds and Rob reversed it
+        # after comparing the two, so the check is that the cap is GONE, not
+        # that it is some other number. The phone card layout above is a
+        # separate thing and stays: wide on a monitor, cards on a phone.
+        check("prose runs the full width of the column, with no reading cap",
+              "article p, article li, article dd { max-width:none;" in page
+              and "main p, main li, main dd" not in page
+              and "article pre { max-width" not in page)
+        # The boxes keep their own measures, which is where the width the
+        # reading cap was after is actually spent. Those were deliberate and
+        # are not what Rob reversed.
+        check("but the callout, the pull quote and the freedom boxes do not",
+              "max-width:78ch" in page and "max-width:70ch" in page
+              and "max-width:66ch" in page)
+        # The animated diagram scales rather than scrolling. overflow-x:auto
+        # stopped the page sliding sideways and put a scrollbar on the
+        # diagram instead, and it was a vertical one: when one axis is not
+        # visible, CSS computes the other to auto as well, and five printed
+        # lines at 1.5 line height are 105px in a 7.4em box.
+        _, page = get("/", host="about.example")
+        check("the diagram scales to fit instead of scrolling",
+              "overflow:hidden" in page and "clamp(6px" in page
+              and "overflow-x:auto;\n         font" not in page)
+        # The day chart's viewBox is sized to the column it lives in. A 720
+        # unit box in a 412px cell scaled by 0.57, so an 11px label rendered
+        # at 6.3px and the expanded chart was 110px tall.
+        _, page = get("/", host="boards.example")
+        check("the day chart is drawn at the size of the column it sits in",
+              'viewBox="0 0 380 300"' in page)
+        check("and its hour labels are set large enough to read",
+              "svg.hours text { fill:var(--dim); font-family:inherit; "
+              "font-size:13px; }" in page)
 
         # ------------------------------------------------------------------
         # Coming back after a gap.

@@ -213,10 +213,18 @@ def site_url(target, role, path="/"):
 
 
 # What is in the menu, in the order a newcomer needs it: what is up, what
-# this is, what to call one with, what happens when you do, how to have one,
-# how to open yours up, how to be listed, the data.
+# this is, who it suits, what to call one with, what happens when you do,
+# how to have one, how to open yours up, how to be listed, the data.
+#
+# "Who it's for" sits next to the manifesto on purpose, because the two
+# answer different questions: the manifesto is why any of this matters, and
+# that page is whether it is any use to the person reading. It is a page
+# rather than a section of the manifesto because its job is to talk somebody
+# into setting a board up, and that wants a link you can paste at a club or
+# a school, not an anchor two thirds of the way down a long argument.
 NAV = (("list",  "/",          "Boards"),
        ("about", "/",          "What this is"),
+       ("list",  "/whofor",    "Who it's for"),
        ("list",  "/terminals", "Terminals"),
        ("list",  "/firstcall", "First call"),
        ("list",  "/build",     "Build one"),
@@ -1026,30 +1034,35 @@ svg.hours {{ display:block; width:100%; max-width:720px; height:auto;
 svg.hours .bar {{ fill:var(--busy); opacity:0.75; }}
 svg.hours .bar.peak {{ opacity:1; }}
 svg.hours .grid {{ stroke:#20202a; stroke-width:1; }}
+svg.hours .tick {{ stroke:#191922; stroke-width:1; }}
 svg.hours .axis {{ stroke:#2c2c38; stroke-width:1; }}
-svg.hours text {{ fill:var(--dim); font-family:inherit; font-size:11px; }}
+/* Units, not pixels: this is inside a viewBox. It reads as roughly its own
+   number in px because the viewBox is sized to the column, which is what
+   the rewrite of day_chart_svg was for. */
+svg.hours text {{ fill:var(--dim); font-family:inherit; font-size:13px; }}
+svg.hours text.foot {{ font-size:11px; }}
 details.chart .note {{ color:var(--dim); font-size:12px; }}
 .pending {{ color:var(--warm); }}
 .none {{ color:var(--faint); padding:24px 8px; }}
 footer {{ margin-top:28px; color:var(--dim); border-top:1px solid var(--rule);
         padding-top:12px; line-height:1.7; }}
 article {{ max-width:none; }}
-/* A reading measure, at last. Every paragraph on the site ran to 140
-   characters, because one page has a floated photograph and the whole site
-   was given full width to suit it. The float is 367px in a 1080px column
-   and a 78ch paragraph is 600px, so 600 + 367 + 30px of margin still fits:
-   the float keeps its text beside it and everything else stops being a
-   140 character line.
+/* Full width, so a floated picture has text on both sides of it rather than
+   a column that stops before it starts. Line height carries the longer
+   measure.
 
-   main, not article: the lead and the byline on the manifesto sit outside
-   the article element, so an article-scoped rule misses exactly the two
-   paragraphs at the top of the page it matters most on. */
-article p, article li, article dd {{ line-height:1.62; }}
-main p, main li, main dd {{ max-width:78ch; }}
-/* Code slightly wider than prose, which is the right relationship. It had
-   no measure at all, so a six line shell snippet sat in a 140 character
-   box next to 78 character text. */
-article pre {{ max-width:92ch; }}
+   This was briefly capped at 78ch on typographic grounds and Rob reversed
+   it after comparing the two: the wide setting is the house style, on every
+   page, and it is not up for relitigating. The width the reading measure
+   was meant to protect is instead spent where it was always spent, on the
+   floated photograph on the manifesto and on the boxes below, which carry
+   their own measures on purpose.
+
+   Note this is the DESKTOP measure and has nothing to do with the phone.
+   The board list still becomes a card layout under 900px, which is a
+   different problem with a different fix. Wide on a monitor, cards on a
+   phone; the two were never in conflict. */
+article p, article li, article dd {{ max-width:none; line-height:1.62; }}
 /* Anything drawn rather than written gets the whole width: diagrams and
    charts are not prose and should not be squeezed into its measure. */
 article figure, article .wide {{ max-width:none; margin:20px 0; }}
@@ -1103,7 +1116,7 @@ article h3 {{ color:var(--dim); font-size:13px; margin:20px 0 4px; font-weight:n
    earlier attempt at this moved article .pull, which is a different
    element, and article .warn has never been touched since it was written. */
 article .warn {{ color:#f0c674; background:#241d10; border-left:3px solid #8a6d39;
-        padding:10px 16px; margin:18px 0 18px 30px; max-width:70ch; }}
+        padding:10px 16px; margin:18px 0 18px 30px; max-width:78ch; }}
 /* Same breakpoint as .gallery.one, and after the rule it overrides rather
    than before it: both selectors are (0,1,1), so source order decides and
    an earlier media query would simply have lost. 30px out of a 343px phone
@@ -1181,6 +1194,12 @@ footer a {{ display:inline-block; padding:6px 0; white-space:nowrap; }}
   main > table tr:first-child {{ display:none; }}          /* the header row */
   main > table td {{ display:block; border:0; padding:1px 0; width:auto; }}
   main > table td:nth-child(1) {{ order:1; padding-right:16ch; }}   /* board  */
+  /* The 16ch is there to keep the name clear of the state badge pinned top
+     right, and the badge is one line at the top of the cell. The day chart
+     is well below it, so it takes the width back rather than drawing itself
+     123px narrower than the card for no reason: it measured 237px inside a
+     358px card, which is where a third of its legibility was going. */
+  main > table td:nth-child(1) details.chart {{ margin-right:-16ch; }}
   main > table td:nth-child(4) {{ order:2; position:absolute; right:0;
         top:14px; width:15ch; text-align:right; }}
   main > table td:nth-child(2) {{ order:3; margin-top:6px; }}       /* dial   */
@@ -1289,20 +1308,45 @@ def day_chart_svg(hours, firm):
     a web page, they land differently in every font, and half of one is not
     a shape anybody reads as a number. Still no JavaScript, and still
     scales to a phone, because an SVG with a viewBox does that for free.
+
+    THE VIEWBOX IS SIZED TO THE COLUMN IT LIVES IN, and that is the whole
+    reason this was rewritten. The chart sits in the Board cell, which is
+    about 412px wide on a desktop and the full card width on a phone. A 720
+    unit viewBox in a 412px box scales by 0.57, so an 11px label rendered at
+    **6.3px** and the whole chart was 110px tall: measured, not guessed, and
+    Rob's verdict on the expanded view was "I cant read any times". On a
+    phone it was worse, 2.2px.
+
+    So the viewBox is 380 wide, which lands near 1:1 in the space there
+    actually is, and 300 tall, which is where the legibility comes from: the
+    chart is three times the height it was and the labels are twice the
+    size. Anything typed in here is in viewBox units, so a size set here is
+    very nearly a size in pixels, which is the point of choosing 380.
     """
     top = max(hours)
     if top <= 0:
         return ""
-    W, H = 720.0, 190.0          # viewBox units, not pixels
-    left, bottom, pad = 34.0, 28.0, 10.0
+    W, H = 380.0, 300.0          # viewBox units, sized to the column
+    # left holds a four character y label at 13 units; bottom holds the hour
+    # labels and the note under them.
+    left, bottom, pad = 40.0, 44.0, 8.0
     plot_w = W - left - pad
     plot_h = H - bottom - pad
     slot = plot_w / 24.0
-    bar = slot * 0.66
+    bar = slot * 0.7
 
     parts = [f'<svg class="hours" viewBox="0 0 {W:.0f} {H:.0f}" '
              f'role="img" aria-label="Callers by hour of the day" '
              f'preserveAspectRatio="xMidYMid meet">']
+
+    base = pad + plot_h
+
+    # A faint upright at every labelled hour, so a bar can be traced down to
+    # a time rather than counted across from the end.
+    for h in range(0, 24, 3):
+        x = left + slot * h
+        parts.append(f'<line class="tick" x1="{x:.1f}" y1="{pad:.1f}" '
+                     f'x2="{x:.1f}" y2="{base:.1f}"/>')
 
     # Two guide lines and their labels: enough to read a value off, not so
     # many that the shape disappears behind a grid.
@@ -1310,7 +1354,7 @@ def day_chart_svg(hours, firm):
         y = pad + plot_h * (1.0 - frac)
         parts.append(f'<line class="grid" x1="{left:.1f}" y1="{y:.1f}" '
                      f'x2="{W - pad:.1f}" y2="{y:.1f}"/>')
-        parts.append(f'<text class="ylab" x="{left - 6:.1f}" y="{y + 4:.1f}" '
+        parts.append(f'<text class="ylab" x="{left - 6:.1f}" y="{y + 5:.1f}" '
                      f'text-anchor="end">{top * frac:.1f}</text>')
 
     peak = hours.index(top)
@@ -1318,25 +1362,24 @@ def day_chart_svg(hours, firm):
         v = hours[h]
         if v <= 0:
             continue
-        height = max(1.5, plot_h * (v / top))
+        height = max(2.0, plot_h * (v / top))
         x = left + slot * h + (slot - bar) / 2.0
         y = pad + plot_h - height
         cls = "bar peak" if h == peak else "bar"
         parts.append(f'<rect class="{cls}" x="{x:.1f}" y="{y:.1f}" '
-                     f'width="{bar:.1f}" height="{height:.1f}" rx="1.5">'
+                     f'width="{bar:.1f}" height="{height:.1f}" rx="2">'
                      f'<title>{h:02d}:00 - {v:.1f} callers</title></rect>')
 
-    base = pad + plot_h
     parts.append(f'<line class="axis" x1="{left:.1f}" y1="{base:.1f}" '
                  f'x2="{W - pad:.1f}" y2="{base:.1f}"/>')
     for h in range(0, 24, 3):
         x = left + slot * h + slot / 2.0
-        parts.append(f'<text class="xlab" x="{x:.1f}" y="{base + 16:.1f}" '
+        parts.append(f'<text class="xlab" x="{x:.1f}" y="{base + 18:.1f}" '
                      f'text-anchor="middle">{h:02d}</text>')
 
     note = ("local time at the board" if firm
             else "local time at the board, still filling in")
-    parts.append(f'<text class="xlab" x="{W - pad:.1f}" y="{H - 4:.1f}" '
+    parts.append(f'<text class="foot" x="{W - pad:.1f}" y="{H - 5:.1f}" '
                  f'text-anchor="end">{note}</text>')
     parts.append("</svg>")
     return "".join(parts)
@@ -1630,7 +1673,7 @@ HOW = r"""<h1>How to get listed</h1>
 <pre>[plugin:announce]
 enabled     = yes
 name        = The Rusty Modem
-owner       = KE9CXN
+owner       = Sparks
 description = A BBS on a chip in a shack in Illinois
 servers     = http://unleashedbbs.net/announce</pre>
 <p>Any of this directory's names will take a heartbeat, but <code>.net</code> is the
@@ -1653,7 +1696,7 @@ minutes from anything that can make an HTTP request:</p>
 <pre>curl -X POST http://unleashedbbs.net/announce \
   -H 'Content-Type: application/json' \
   -d '{"software":"synchronet","version":"3.20",
-       "name":"The Rusty Modem","owner":"KE9CXN",
+       "name":"The Rusty Modem","owner":"Sparks",
        "description":"A BBS in a shack in Illinois",
        "host":"bbs.example.com","port":23,
        "nodes":4,"busy":0,"interval":10,
@@ -1678,15 +1721,32 @@ repository</a>. It is one Python file and you are welcome to run your own.</p>
 
 ANIM = """
 <style>
-/* overflow-x here, not on the page. The art is 61 characters, so 470px, and
-   a phone column is 358: .scene pre is position:absolute and unsets the
-   global pre rule's background and border but not its overflow-x, and an
-   absolutely positioned box with no width shrink-wraps to its content. The
-   whole about page, header and footer included, scrolled sideways by 96px.
-   .scene is already position:relative, so it contains the absolute children
-   and the diagram now scrolls inside its own box. */
-.scene { position:relative; height:7.4em; margin:18px 0 22px; overflow-x:auto; }
+/* The diagram is 61 characters of fixed-width art, so 470px at the body's
+   14px. A phone column is 358, and .scene pre is position:absolute with no
+   width, so it shrink-wrapped to its content and pushed the whole about
+   page sideways by 96px, header and footer included.
+
+   It scales instead of scrolling. Same trick the wordmark already uses:
+   the type shrinks with the viewport so 61 characters always fit, which is
+   the right answer for art with a fixed character count. An earlier attempt
+   put overflow-x:auto here, and that did stop the page moving but produced
+   a scrollbar on the diagram, because the five printed lines at 1.5 line
+   height are 105px against a 7.4em box, and when one axis is not visible
+   CSS computes the other to auto as well. So it was a VERTICAL scrollbar on
+   a fix aimed at horizontal overflow.
+
+   overflow:hidden is the backstop rather than the mechanism: with the
+   clamp, nothing should reach it, and if an unusual monospace font renders
+   a few percent wider then a decorative diagram loses a character off the
+   end, which beats a scrollbar and beats a page that slides sideways.
+
+   The divisor: 61 characters at 0.55em each is 33.6em, so (100vw - 44px)
+   over 37 leaves a margin and reaches the 14px cap at about 560px wide. */
+.scene { position:relative; margin:18px 0 22px; overflow:hidden;
+         font-size:clamp(6px, calc((100vw - 44px) / 37), 14px);
+         height:7.9em; }
 .scene pre { position:absolute; left:0; top:0; margin:0; opacity:0;
+             font-family:inherit; font-size:inherit; line-height:1.5;
              color:#6ee36e; background:none; border:0; padding:0;
              animation: flip 3.2s steps(1,end) infinite; }
 .scene pre:nth-child(1) { animation-delay:0.0s }
@@ -1817,6 +1877,9 @@ megabyte and never allocates memory while a caller is typing.</p>
 It needs a machine somebody owns, on a connection somebody pays for, run by a
 person who can be reached. This one fits in a pocket and you can build it in an
 afternoon.</p>
+
+<p>Schools, clubs, ham radio, offices, and one person with eleven friends:
+<a href="/whofor">who it's for, and why you might want one</a>.</p>
 
 @GALLERY@
 
@@ -2070,6 +2133,10 @@ you.<br><br><span class="sig">&mdash; QuantumRob</span></p>
 give it your wifi, forward one port on your router, and you are running a public BBS.
 No hosting bill, no domain required, no provider to ask permission from, no account
 with anybody. A chip on a shelf and one line in your router.</p>
+
+<p><a href="/whofor">Who it's for</a> is the short version of why you might:
+a classroom, a club, an office, a shelf in your own house, and the fact that
+on your own board you answer to nobody.</p>
 
 <p><a href="https://github.com/rwmech/unleashed_BBS">The source, the documentation and
 the build instructions are here.</a> It is free software under the GNU General Public
