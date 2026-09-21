@@ -2,7 +2,7 @@
 
 Optional. A board with no card is a complete board: chat, mail, accounts,
 screens, the caller log, a directory listing, the serial bridge. The card is
-what you add when you want file areas and screens of your own. Message bases
+what you add when you want file areas and screens of your own. Forums
 are being built now and will live on it too.
 
 Four wires and a module that costs about two dollars.

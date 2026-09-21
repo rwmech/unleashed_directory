@@ -80,6 +80,19 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   edge, and it is loud on purpose. A quiet remark that is not a warning is
   `[!NOTE]`. What does not exist, on purpose: nested lists, images, inline
   HTML, headings below `###`.
+  **Cards**, added for `/kids`: `::: cards` ... `:::` is a grid of short
+  boxes, each `## ` inside it starting one, and `::: hero` is the same with
+  one full width card in the warm colours. Inside a card, `?? Summary`
+  opens a `<details>` that runs to the end of that card, one per card and
+  always last, which is the only shape a card wants and means this needed
+  no nested block parsing. `!! file.png | alt text` is the card's picture
+  and **renders nothing at all until the file exists**, so the page is
+  correct today with `static/kids/` empty. Inline `*italics*` came with
+  them, after `**bold**` so the two cannot collide.
+  Why cards exist at all: the retro terminal look signals nothing to a ten
+  year old. Everywhere else it is doing real work because the audience
+  recognises it; on that one page it asked a reader to decode an
+  unfamiliar visual language before being given a reason to care.
   **A form that is not in the dialect does not fail, it renders as a
   paragraph**, which is how 53 numbered steps across the router pages were
   a wall of text for four versions with every word present and in the right
@@ -110,6 +123,12 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   should agree to the decimal. Headless Chrome will not open a window
   narrower than about 500px, so a 390 measurement has to go through an
   exactly sized iframe or it is silently a 504 measurement.
+  **The floor of a fit-to-viewport `clamp()` must stay in px.** The maximum
+  and the gutter scale; the minimum exists to stop art becoming invisible,
+  and in rem it grows with the root font until it is wider than the
+  viewport it was meant to fit inside. At 390px with the browser text at
+  200% that was a 437px wordmark in a 390px page. `selftest.py` allows
+  exactly that one px and no other.
 
 ## Anti-spam, and why it is shaped this way
 

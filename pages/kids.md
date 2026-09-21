@@ -1,118 +1,114 @@
 # A board of your own
 
-A BBS is a computer that answers when another computer calls it. You run it, it
-sits on your desk, and when a friend connects your machine talks straight to
-theirs. There is no company in the middle, no app to download, and no web page
-involved anywhere.
+::: hero
+## Run one. You pick who is on it.
 
-People did this constantly in the 1980s, and then the web arrived and most of
-the boards went quiet. It is a good hobby again now, and the parts cost about
-as much as lunch.
+!! hero.png | A blocky pixel drawing of a small computer with friends connected to it
 
-## What is it like?
+If you have ever run a game server for your friends, you already know what
+this is. You own the machine. Your friends connect to it. You decide who gets
+in, what it is called, and what the rules are. Nobody you did not invite is in
+the room.
 
-It is all text. There are no pictures, no video and no ads, just words on a
-screen, which sounds plain until you have built one and watched somebody else
-connect to it.
+The difference is that this one fits in your hand, costs about as much as
+lunch, and you can read every line of the program that runs it.
 
-Somebody calls your board and picks a name to go by. After that they can:
+**The chat room is the reason to run one.** Your friends, connected at the
+same time, typing to each other, in a room that belongs to *you*. No feed. No
+algorithm. No company in the middle deciding what you see.
+:::
 
-- Talk in a chat room with anybody else who is connected at the same time.
-- Leave mail for a friend who is not connected right now.
-- Send files to the board, or copy files off it.
+::: cards
+## What even is this?
 
-You are the sysop, which is short for system operator. The board belongs to
-you, so you decide what it is called, what it is for, and who is welcome on it.
+!! whatis.png | A pixel drawing of one computer calling another computer
 
-## What you need
+A board is a computer that answers when another computer calls it. You type,
+it types back. That is the whole thing.
 
-- An ESP32, which is a tiny computer on a board about the size of a stick of
-  gum. It costs a few dollars.
+There is no app to download and no account to make. People called these
+bulletin boards, or BBSes, and they were how you talked to strangers before
+the web existed.
+
+## Try one right now
+
+!! try.png | A pixel drawing of a phone and a laptop dialling out
+
+You do not have to build anything first. You can call a board that somebody
+else is already running, in about two minutes, on a computer you already have.
+
+[Pick one from the list](/) and [here is how to call it](/firstcall).
+
+?? What if nothing happens when I click an address?
+
+That is normal and it is fixable. [This page explains it](/dialing).
+
+## What you need to build one
+
+!! parts.png | A pixel drawing of a small circuit board and a usb cable
+
+- A small computer called an ESP32. It is about the size of a stick of gum.
 - A USB cable.
 - A computer to set it up from.
-- An adult to build it with.
+- A memory card, only if you want to share files.
 
-If you want to share files as well, you need a small memory card like the one
-that goes in a camera. That is the whole list.
+[Build one](/build) has the real steps.
 
-## Why it is worth building
+?? How long does it take?
 
-You end up with a real machine that other people can connect to, and you can
-hand a friend the address and watch them call it from their own computer.
+An afternoon. Most of that is deciding what to call it.
 
-You also get to see how the internet works underneath, which is a different
-thing from learning how to use an app. A board is small enough to understand
-completely, and almost nothing else on the internet is.
+## Who can actually get in
 
-And you are allowed to change it. The entire program is written down where
-anybody can read it, so if you do not like the way something works you can go
-and fix it. That also makes it a good science fair or school project, because
-you can explain every part of it yourself.
+!! doors.png | A pixel drawing of two doors, one closed and one open
 
-## Build it with a grown-up
+This is the part to decide on purpose, because the two options are different.
 
-Ask a parent, or another adult you trust, and treat this as something you are
-making together rather than something you are doing quietly.
+**Only your house.** The board sits on your home wifi and nobody outside can
+reach it. Your family, and friends who come round. This is a complete board
+and most people should stop here.
 
-There are real reasons for that, and they are better than just a rule:
+**Open to the internet.** Anybody in the world can find it and call it.
+Somebody has to change a setting on your home internet box to do that, and
+that is a real decision about your whole family's network. **That decision
+belongs to the adult**, not to you.
 
-- Anything that goes onto the internet is their decision, because it is their
-  home and their internet connection.
-- They probably know things you have not learned yet, like how to solder or
-  where the tools are kept.
-- Projects are more fun with two people, and most of the good ones are.
+A board that never leaves your house is finished work. It is not practice
+for a real one.
 
-Plenty of adults are waiting for an excuse to build something. This is a
-perfectly good excuse.
-
-## Two kinds of board
-
-**A board inside your house.** Only people on your home wifi can call it,
-which means your family and any friend who comes over. This is a real board
-and it does everything a board does. Most people should stop right here, and
-it is not a smaller version of the project.
-
-**A board on the internet.** Anybody in the world can call it. To do that,
-somebody has to change a setting on the box that brings the internet into your
-home. That is a serious thing to do, because it opens a door into the network
-your whole family uses.
-
-**That decision belongs to the adult, and not to you.** There is a whole page
-explaining what the setting does and why it needs thinking about first, and
-they should read it before anybody changes anything. [It is here](/forward).
-
-A board that never leaves your house is finished work. It is not practice for
-a real one.
+[What that setting actually does](/forward).
 
 ## Nothing you type is private
 
-This is the most important part of this page.
+!! open.png | A pixel drawing of an open envelope
 
-A board sends everything you type as plain text, and nothing is scrambled on
-the way. That has two consequences worth understanding.
+A board sends what you type as plain text. Nothing is scrambled on the way, so
+this is more like talking out loud than passing a note.
 
-The person who runs a board can read everything typed on it. On your own board
-that person is you. On somebody else's board it is them, and you have no way
-of knowing who they are.
+The person who runs a board can read everything typed on it. On your board
+that is you. On somebody else's, it is somebody you have never met.
 
-Somebody else on the same wifi could read it too, if they went looking.
+So type the sort of thing you would say out loud in a room full of people you
+do not know. [The long version is here](/privacy).
 
-So type only the sort of thing you would be happy saying out loud in a room
-full of people you do not know.
+## Never reuse a password
 
-Never use a password that you use anywhere else. If a board asks you to pick
-one, invent a new password that you use only for that board.
+!! key.png | A pixel drawing of a key
 
-## Calling other people's boards
+If a board asks you to pick a password, invent a brand new one that you use
+nowhere else. Not your school password, not your game one, not any of them.
 
-Running your own board and calling somebody else's are two different things,
-and the second one involves strangers.
+Because the board sends it as plain text, a password you use somewhere else is
+a password you have just read out loud.
 
-Your own board is your room and you know everybody on it. Other boards have
-people on them you have never met, so do that part with an adult, at least
-until you are used to it.
+## Keep yourself out of it
 
-Never type any of these into a board, whether it is yours or anybody else's:
+!! mask.png | A pixel drawing of a blank name badge
+
+Pick a made up name. That is what they have always been for, and it is all you
+need.
+
+Never type any of this into a board, yours or anybody else's:
 
 - Your real name
 - Your school
@@ -121,20 +117,65 @@ Never type any of these into a board, whether it is yours or anybody else's:
 - Your age
 - Anything that shows where you live
 
-A made up name is genuinely all you need, and that is what they have always
-been for.
+?? Somebody asked me for that stuff anyway
 
-Sometimes somebody will ask you for those things anyway. Sometimes they will
-want to move the conversation somewhere else, or tell you to keep it secret
-from your family. If that happens, stop typing and tell an adult. You will not
-be in trouble for it.
+Sometimes people ask. Sometimes they want to move the chat somewhere else, or
+tell you to keep it secret from your family.
+
+Stop typing and tell an adult. You will not be in trouble.
+
+## Calling other people's boards
+
+!! visit.png | A pixel drawing of a door on somebody else's house
+
+Running your own board and calling somebody else's are two different things.
+
+Your own board is your room and you know everybody in it. Other boards have
+people on them you have never met. That is genuinely fun and it is most of
+what a BBS ever was, but it is not a private room, so do that part with an
+adult until you are used to it.
+
+## Build it with a grown-up
+
+!! grownup.png | A pixel drawing of two people building something together
+
+Not because you need permission. Because of how it actually gets done.
+
+- It runs on hardware in their house, on their internet.
+- Anything that opens a door to the internet is their call.
+- They know where the tools are, and probably how to solder.
+- Projects are better with two people.
+
+Plenty of adults are waiting for an excuse to build something.
+
+## Make it yours
+
+!! yours.png | A pixel drawing of a sign being painted
+
+You are the sysop, which is short for system operator. It means the board
+belongs to you.
+
+You pick the name. You write the screen people see when they connect. You
+decide what it is for and who is welcome.
+
+And you can change the program. All of it is written down where anybody can
+read it, so if you do not like how something works, go and fix it. That also
+makes it a good school project, because you can explain every part yourself.
+
+## Being built now: forums
+
+!! forums.png | A pixel drawing of stacked message boards
+
+Right now a board does chat, mail between people, and files.
+
+Forums are being built at the moment. They will be topic areas that the sysop
+sets up, with conversations inside each one, read at the same prompt as
+everything else. They are not on any board yet.
 
 ## Where to go next
 
-[Build one](/build) has the actual steps. It was written for grown-ups, so go
-through it with one.
-
-[What to call a board with](/terminals) lists the programs that let a computer
-connect to a board.
-
-If you want to see which boards are up right now, [the list is here](/).
+- [Build one](/build), the real steps. Written for grown-ups, so use it with
+  one.
+- [What to call a board with](/terminals).
+- [Which boards are up right now](/).
+:::

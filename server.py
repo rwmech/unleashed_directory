@@ -614,6 +614,13 @@ PAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 _MD_LINK   = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MD_CODE   = re.compile(r"`([^`]+)`")
 _MD_BOLD   = re.compile(r"\*\*([^*]+)\*\*")
+# Italics, run after bold so a "**x**" is already gone by the time this
+# looks. The lookarounds keep it off any asterisk that is part of a bold
+# marker, and refusing a leading space keeps it off prose that happens to
+# use an asterisk for something else. Same known limit as bold, and it has
+# never bitten: an asterisk inside an inline `code` span is still seen.
+# Fenced blocks are safe, because they never go through md_inline at all.
+_MD_ITAL   = re.compile(r"(?<!\*)\*([^*\s][^*]*?)\*(?!\*)")
 # "1. " at the start of a line. The router pages are 53 numbered steps that
 # somebody follows one at a time with an admin page open in the other window,
 # and without this they all fell through to the paragraph branch and were
@@ -627,6 +634,7 @@ def md_inline(s):
     s = html.escape(s)
     s = _MD_CODE.sub(lambda m: f"<code>{m.group(1)}</code>", s)
     s = _MD_BOLD.sub(lambda m: f"<b>{m.group(1)}</b>", s)
+    s = _MD_ITAL.sub(lambda m: f"<i>{m.group(1)}</i>", s)
 
     def link(m):
         text, href = m.group(1), m.group(2)
@@ -674,6 +682,72 @@ def md_callout(quote):
     return f'<p class="{kind}">' + md_inline(" ".join(lines)) + "</p>"
 
 
+CARD_BLOCKS = ("cards", "hero")
+
+
+def md_cards(kind, lines):
+    """A ::: cards block: short boxes rather than continuous prose.
+
+    Written for /kids, where the retro terminal look is a barrier rather
+    than a joke: a ten year old has no idea what a BBS is, so the page
+    cannot spend its first screen asking them to decode an aesthetic. Short
+    units with a payoff each, dippable in any order.
+
+    Each "## " inside the block starts a card, and the grid is auto-fit, so
+    a wide screen gets several columns and a phone gets one **without any
+    order: tricks**. Source order is reading order, which is what a screen
+    reader follows and what somebody tabbing through gets.
+
+    A "?? " line inside a card opens a <details> that runs to the end of
+    that card. One per card and always last, which is the only shape a card
+    wants anyway, and it means this needs no nested block parsing: the
+    dialect has never had nesting and this does not introduce it.
+
+    "hero" is the same thing with one full width card in the warm colours
+    the invitation box on /whofor uses, so the page somebody lands on after
+    clicking that box opens in the same voice they clicked.
+    """
+    chunks, cur = [], []
+    for ln in lines:
+        if ln.startswith("## "):
+            if cur:
+                chunks.append(cur)
+            cur = [ln]
+        else:
+            cur.append(ln)
+    if cur:
+        chunks.append(cur)
+
+    out = []
+    for chunk in chunks:
+        head = chunk[0][3:].strip() if chunk[0].startswith("## ") else ""
+        body = chunk[1:] if head else chunk
+        # "!! file.png | what it shows" is the card's picture. It is pulled
+        # out wherever it is written and always drawn at the top, so the
+        # cards stay uniform whatever order somebody types them in, and it
+        # comes back empty until the file exists.
+        pix, rest = "", []
+        for ln in body:
+            if ln.startswith("!! "):
+                pix = pix or pix_html(ln[3:])
+            else:
+                rest.append(ln)
+        body = rest
+        more = None
+        for i, ln in enumerate(body):
+            if ln.startswith("?? "):
+                more, body = (ln[3:].strip(), body[i + 1:]), body[:i]
+                break
+        inner = pix + (f"<h2>{md_inline(head)}</h2>" if head else "")
+        inner += md_render("\n".join(body))
+        if more:
+            inner += ("<details><summary>" + md_inline(more[0]) + "</summary>"
+                      + md_render("\n".join(more[1])) + "</details>")
+        out.append('<section class="card">' + inner + "</section>")
+    cls = "cards hero" if kind == "hero" else "cards"
+    return f'<div class="{cls}">' + "".join(out) + "</div>"
+
+
 def md_row(line):
     """One table row, as cells, or None. The separator row is not a row."""
     s = line.strip()
@@ -691,8 +765,21 @@ def md_render(text):
     quote = []            # consecutive "> " lines: one warning, not one per line
     steps = []            # "1. " lines: a numbered list, not a paragraph
     table = None
+    card = None           # a "::: cards" block, collected whole
     for raw in text.splitlines():
         line = raw.rstrip()
+
+        # Collected first and raw, so nothing else in the dialect claims a
+        # line that belongs to a card. A ":::" at the start of a line closes
+        # the block wherever it appears, including inside a fenced example,
+        # which is the one thing this shape cannot express.
+        if card is not None:
+            if line.strip() == ":::":
+                out.append(md_cards(card[0], card[1]))
+                card = None
+            else:
+                card[1].append(line)
+            continue
 
         if code is not None:                       # inside a fenced block
             if line.startswith("```"):
@@ -729,7 +816,14 @@ def md_render(text):
                 out.append(md_callout(quote))
                 quote.clear()
 
-        if line.startswith("```"):
+        if line.startswith("::: ") and line[4:].strip() in CARD_BLOCKS:
+            flush()
+            card = (line[4:].strip(), [])
+            # An unknown name after ":::" deliberately does not match, so it
+            # falls through and renders as an ordinary paragraph. A typo is
+            # then visible on the page instead of silently swallowing the
+            # rest of it.
+        elif line.startswith("```"):
             flush()
             code = []
         elif line.startswith("### "):
@@ -764,6 +858,8 @@ def md_render(text):
 
     if table is not None:                           # a table at the very end
         out.append(md_table(table))
+    if card is not None:                            # unterminated ::: block
+        out.append(md_cards(card[0], card[1]))
     if code is not None:                            # unterminated fence
         out.append("<pre>" + html.escape("\n".join(code)) + "</pre>")
     if para:
@@ -830,7 +926,18 @@ STATIC_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"
                 ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
 
 
-def static_file(name):
+# Card art lives in its own folder rather than in static/, for two reasons.
+# gallery_html() shows everything in static/ on the manifesto page, and
+# blocky card art has no business in a gallery of photographs of real
+# hardware; iterdir() skips a subdirectory on its own because it is not a
+# file, so this needs no change there. And keeping it separate means the
+# name check below is reused exactly as it is against a different base,
+# rather than being loosened to understand a path, which is the change that
+# would actually be worth getting wrong.
+PIX_DIR = pathlib.Path(__file__).resolve().parent / "static" / "kids"
+
+
+def static_file(name, base=None):
     """One file from static/, or None. Names are checked rather than paths:
     no directories, no dots to climb with, nothing but a plain filename."""
     if not STATIC_OK.match(name or ""):
@@ -838,10 +945,35 @@ def static_file(name):
     ext = pathlib.Path(name).suffix.lower()
     if ext not in STATIC_TYPES:
         return None
-    f = STATIC_DIR / name
+    f = (base or STATIC_DIR) / name
     if not f.is_file():
         return None
     return f.read_bytes(), STATIC_TYPES[ext]
+
+
+def pix_html(spec):
+    """A "!! file.png | what it shows" line inside a card.
+
+    **Renders nothing at all when the file is not there.** The page has to
+    read correctly with every image switched off, and it does that now,
+    today, with none of them drawn: no broken-image box, no reserved gap,
+    no alt text standing in for a picture that was never made. Drop a file
+    in and the slot fills on the next render.
+
+    The alt text is required and carries what the picture means rather than
+    what it looks like, because somebody who cannot see it needs the point,
+    not a description of the pixels.
+    """
+    name, _, alt = spec.partition("|")
+    name, alt = name.strip(), alt.strip()
+    if not alt or not STATIC_OK.match(name or ""):
+        return ""
+    if pathlib.Path(name).suffix.lower() not in STATIC_TYPES:
+        return ""
+    if not (PIX_DIR / name).is_file():
+        return ""
+    return (f'<img class="pix" src="/pix/{html.escape(name)}" '
+            f'alt="{html.escape(alt, quote=True)}" loading="lazy">')
 
 
 def gallery_html():
@@ -1129,7 +1261,7 @@ main {{ max-width:67.5rem; margin:0 auto; }}
    0.6em wide, so the type scales with the viewport and never overflows a
    phone, instead of scrolling sideways or being cut off. */
 pre.logo {{ background:none; border:0; padding:0; margin:0 0 0.375rem; overflow:visible;
-       line-height:1; font-size:clamp(0.3125rem, calc((100vw - 2.75rem) / 38), 0.9375rem); }}
+       line-height:1; font-size:clamp(5px, calc((100vw - 2.75rem) / 38), 0.9375rem); }}
 pre.logo i {{ font-style:normal; display:block; }}
 pre.logo i:nth-child(1) {{ color:#e2d4ff; }}
 pre.logo i:nth-child(2) {{ color:#b48ef0; }}
@@ -1440,6 +1572,82 @@ article .tip a:focus-visible::after {{ outline:3px solid #ffd35c;
    them. */
 article ol, article ul {{ margin:0 0 0.875rem; padding-left:1.75rem; }}
 article ol li, article ul li {{ margin:0 0 0.375rem; }}
+/* --------------------------------------------------------------------
+   Cards, which exist for /kids and nowhere else so far.
+
+   The problem they solve is not length, it is that the retro terminal
+   look signals nothing to a ten year old. Everywhere else on this site it
+   is doing real work, because the audience recognises it; on that one page
+   it is an in-joke that asks a reader to decode an unfamiliar visual
+   language before they have been given a reason to care. Short boxes with
+   one idea and one payoff each, readable in any order.
+
+   Blocky rather than soft: square corners and a 3px border instead of the
+   rounded 1px the rest of the site uses. That reads as games rather than
+   as documents, which is the frame this reader already owns, and it costs
+   nothing and no image weight. It is the reason the borders here stay in
+   px while everything else is in rem: a chunky border is chunky at any
+   size, the same argument as a hairline.
+
+   auto-fit with minmax gives three columns at 1920, two at 1366 and one on
+   a phone with **no order: tricks**, so source order is reading order for
+   a screen reader and for anybody tabbing. min() inside the minmax is not
+   decoration: a bare minmax(21rem, 1fr) lays out a 21rem track in a 353px
+   phone column and overflows the page sideways. It also means text zoomed
+   to 200% simply drops to fewer columns, because the track is in rem.
+   -------------------------------------------------------------------- */
+article .cards {{ display:grid; gap:1rem; margin:1.5rem 0 1.75rem;
+        grid-template-columns:repeat(auto-fit, minmax(min(21rem, 100%), 1fr)); }}
+article .card {{ background:#12121a; border:3px solid #5c5c70;
+        padding:1.125rem 1.25rem 1.25rem; }}
+article .card h2 {{ margin:0 0 0.5rem; color:var(--struct); font-size:1rem;
+        letter-spacing:0.03125rem; }}
+article .card p, article .card ul, article .card ol {{ margin:0 0 0.75rem; }}
+article .card ul, article .card ol {{ padding-left:1.375rem; }}
+article .card > :last-child {{ margin-bottom:0; }}
+/* Pixel art, kept pixelated: a browser smoothing blocky art is the one
+   thing that would make it look like a mistake. Nothing here reserves a
+   gap for a picture that does not exist, because pix_html renders nothing
+   at all until the file is there; aspect-ratio only stops a picture that
+   IS there from shoving the text down as it loads.
+
+   One ratio for every slot, 4:1, including the hero. Two ratios would
+   mean Rob drawing two shapes and object-fit cropping whichever one is in
+   the wrong place, and a banner cropped from 4:1 to 2:1 loses the sides of
+   the picture on exactly the screen with least room to spare. 4:1 is
+   110px tall in a three column card, 162px in a two column one and 88px on
+   a phone, which is a decorative strip on top of a card rather than a
+   poster competing with the words under it. */
+article .card img.pix {{ display:block; height:auto; aspect-ratio:4 / 1;
+        object-fit:cover; image-rendering:pixelated;
+        border-bottom:3px solid #5c5c70;
+        margin:-1.125rem -1.25rem 0.875rem; width:calc(100% + 2.5rem); }}
+/* The hero: one full width card in the warm colours the invitation box on
+   /whofor uses, so the page somebody lands on opens in the voice they
+   clicked. Square and chunky like the rest of them. */
+article .cards.hero {{ grid-template-columns:1fr; }}
+article .cards.hero .card {{ background:#2e1c05; border-color:#d98f24;
+        color:#f2ddb8; }}
+article .cards.hero .card h2 {{ color:#ffd35c; font-size:1.125rem; }}
+article .cards.hero .card a {{ color:#ffab52; }}
+article .cards.hero .card b {{ color:#ffd35c; }}
+article .cards.hero .card img.pix {{ border-color:#d98f24; }}
+/* Tap to open, with no script. "What is in this one" is most of the
+   appeal at this age, and <details> is real interactivity for nothing.
+   The marker is +/- rather than the browser triangle so it matches the
+   ASCII the rest of the project is built from. */
+article .card details {{ border-top:3px solid #5c5c70; margin-top:0.75rem;
+        padding-top:0.5rem; }}
+article .cards.hero .card details {{ border-top-color:#d98f24; }}
+article .card summary {{ cursor:pointer; color:var(--dial); list-style:none;
+        padding:0.375rem 0; }}
+article .cards.hero .card summary {{ color:#ffab52; }}
+article .card summary::-webkit-details-marker {{ display:none; }}
+article .card summary::before {{ content:"[+] "; }}
+article .card details[open] summary::before {{ content:"[-] "; }}
+article .card summary:focus-visible {{ outline:2px solid var(--dial);
+        outline-offset:2px; }}
+article .cards.hero .card summary:focus-visible {{ outline-color:#ffd35c; }}
 article .freedom {{ background:#1d1a10; border:1px solid #4a411f;
         border-radius:0.5rem; padding:0.875rem 1.25rem 0.25rem; margin:1.125rem 0 1.125rem 1.875rem;
         max-width:66ch; }}
@@ -2114,7 +2322,7 @@ ANIM = """
    The divisor: 61 characters at 0.55em each is 33.6em, so (100vw - 44px)
    over 37 leaves a margin and reaches the 14px cap at about 560px wide. */
 .scene { position:relative; margin:1.125rem 0 1.375rem; overflow:hidden;
-         font-size:clamp(0.375rem, calc((100vw - 2.75rem) / 37), 0.875rem);
+         font-size:clamp(6px, calc((100vw - 2.75rem) / 37), 0.875rem);
          height:7.9em; }
 .scene pre { position:absolute; left:0; top:0; margin:0; opacity:0;
              font-family:inherit; font-size:inherit; line-height:1.5;
@@ -2273,7 +2481,9 @@ system belonged to somebody you could name.</p>
 <p>A telnet BBS that runs on a bare ESP32 and grows into an IoT terminal server
 through plugins. Nodes, handles, a user list, a chat room in the style of DDial and
 Gtalk, mail between callers, file areas on an SD card, a caller log, a sysop who can
-page you. Message bases are being built now; doors come after them.</p>
+page you. Forums are being built now: topic areas a sysop sets up, with
+conversations inside each one, read at the same prompt as everything
+else; doors come after them.</p>
 
 <p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
 server farm, not a feature that can be deprecated out from under you. A chip you own,
@@ -2620,8 +2830,13 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/favicon.svg":
             self.reply(200, FAVICON, "image/svg+xml",
                        {"Cache-Control": "public, max-age=86400"})
-        elif path.startswith("/static/"):
-            got = static_file(path[len("/static/"):])
+        elif path.startswith("/static/") or path.startswith("/pix/"):
+            # /pix/ is the card art on /kids. Same name check, same types,
+            # a different folder: see PIX_DIR for why it is not in static/.
+            if path.startswith("/pix/"):
+                got = static_file(path[len("/pix/"):], PIX_DIR)
+            else:
+                got = static_file(path[len("/static/"):])
             if got is None:
                 self.reply(404, "no such file\n", "text/plain; charset=utf-8")
             else:

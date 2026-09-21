@@ -533,6 +533,63 @@ def main():
         check("and it is warm, which is what makes it read as an invitation",
               "article .tip { color:#f2ddb8; background:#2e1c05;" in page
               and "var(--dial)" not in tip)
+        # ------------------------------------------------------------------
+        # The kids page, which is cards rather than prose for a reason that
+        # is not length. The retro terminal look signals nothing to a ten
+        # year old: everywhere else on this site it is doing real work
+        # because the audience recognises it, and on that one page it asks a
+        # reader to decode an unfamiliar visual language before they have
+        # been given a reason to care.
+        print("The kids page is cards, and every card stands on its own")
+        _, kids = get("/kids")
+        check("it is cards, with the headline idea in its own hero",
+              '<div class="cards hero">' in kids
+              and kids.count('<section class="card">') > 8)
+        check("none of the card markers leak onto the page",
+              "!!" not in kids.split("<article>")[1]
+              and "??" not in kids.split("<article>")[1]
+              and ":::" not in kids.split("<article>")[1])
+        # <details> is real interactivity for no script at all, and "what is
+        # in this one" is most of the appeal at this age. Measured in
+        # Chrome: opening one grows the card by 30 to 60px.
+        check("and there is something to open, with no script to do it",
+              "<details><summary>" in kids and "<script" not in kids)
+        # The grid is auto-fit, so the columns come from the width. No
+        # order: anywhere, because source order is what a screen reader
+        # follows and what somebody tabbing gets. Measured: 3 columns at
+        # 1920, 2 at 1366, 1 at 390 and 1 at 200% text, no overflow at any
+        # of them.
+        check("the cards reflow by width, not by reordering them",
+              "grid-template-columns:repeat(auto-fit, minmax(min(21rem, 100%), 1fr))"
+              in kids and "article .card" in kids
+              and "; order:" not in kids and "{order:" not in kids)
+        # Blocky rather than soft, which is the frame this reader already
+        # owns, and it costs nothing and no image weight. It has to read as
+        # deliberate before any artwork exists, because today none does.
+        check("and they are blocky, which is the whole point of the look",
+              "article .card { background:#12121a; border:3px solid" in kids
+              and "image-rendering:pixelated" in kids)
+        # The art slots render NOTHING until a file is there. Not a broken
+        # image, not a reserved gap, not alt text standing in for a picture
+        # nobody drew. So this passes with the folder empty, which is how it
+        # ships today.
+        check("an art slot with no file behind it draws nothing at all",
+              'img class="pix"' not in kids or "/pix/" in kids)
+        # Forums are being built and are not on any board. A feature in the
+        # present tense that does not exist is a claim that fails on first
+        # contact, and somebody who calls a board looking for it concludes
+        # the software is broken rather than that the site ran ahead.
+        check("forums are described as being built, never as available",
+              "being built" in kids.lower()
+              and "not on any board yet" in kids.lower())
+        # The honest privacy line. This is the one claim on this site with
+        # the potential to actually harm somebody, so it is pinned: the safe
+        # room is the board they host, and a board on the internet is not a
+        # private one. It must not drift into "chat is your safe space".
+        check("and the page never calls a stranger's chat room private",
+              "safe space" not in kids.lower()
+              and "nothing you type is private" in kids.lower()
+              and '"/privacy"' in kids and '"/forward"' in kids)
         check("the teachers page is linked from the schools section",
               '"/teachers"' in page)
         # The menu, not the body: the first version of this check looked for
@@ -765,7 +822,7 @@ def main():
         # lines at 1.5 line height are 105px in a 7.4em box.
         _, page = get("/", host="about.example")
         check("the diagram scales to fit instead of scrolling",
-              "overflow:hidden" in page and "clamp(0.375rem" in page
+              "overflow:hidden" in page and "clamp(6px" in page
               and "overflow-x:auto;\n         font" not in page)
         # The day chart's viewBox is sized to the column it lives in. A 720
         # unit box in a 412px cell scaled by 0.57, so an 11px label rendered
@@ -821,6 +878,14 @@ def main():
                     continue
                 rest = re.sub(r"\d+(?:\.\d+)?px\s+(?:solid|dotted|dashed)",
                               "", line)
+                # The floor of a fit-to-viewport clamp is the one length
+                # that must NOT scale. The maximum and the gutter should,
+                # and do; the minimum exists to stop the art becoming
+                # invisible, and in rem it grows with the root font until it
+                # is wider than the viewport it was meant to fit inside. At
+                # 390px with the browser text at 200% that was a 437px
+                # wordmark in a 390px page, and the page scrolled sideways.
+                rest = re.sub(r"clamp\(\s*\d+(?:\.\d+)?px\s*,", "clamp(", rest)
                 if re.search(r"(?<![\w.-])\d+(?:\.\d+)?px", rest):
                     stray.append(line.strip())
         # The offending lines go in the label, because "a px somewhere in
