@@ -81,7 +81,7 @@ The three domains are positional, and each gets its own face:
 | second | **about** | what this is and where it came from |
 | third | **data** | the API and what is in it |
 
-Give it one domain and that domain serves everything. To try it without TLS or domains at all, run `./deploy/setup.sh` with no arguments and it serves plain HTTP on port 80.
+Give it one domain and that domain serves the board list, with the other two faces at `/about` and `/data`. To try it without TLS or domains at all, run `./deploy/setup.sh` with no arguments and it serves plain HTTP on port 80.
 
 Certificates are handled by Caddy: it obtains them on first start and renews them in the background. There is no certbot to install and no renewal cron to add, and adding one would fight it.
 

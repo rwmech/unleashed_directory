@@ -21,6 +21,13 @@
 # License:     GNU General Public License v2 or later
 # SPDX-License-Identifier: GPL-2.0-or-later
 # ===========================================================================
+#
+# THIS IS A REFERENCE COPY. deploy/setup.sh writes the live one at
+# /etc/caddy/Caddyfile from the domains you hand it, and that is the
+# source of truth. This file is here for anybody configuring a web
+# server by hand, on a machine setup.sh will not run on. Keep the two
+# in step: this one used to redirect .net and .org at .com, which is
+# exactly the mistake the block below now warns about.
 
 # --- plain HTTP: the heartbeat endpoint, and a push upstairs for people ----
 http://unleashedbbs.com, http://www.unleashedbbs.com,
@@ -38,18 +45,17 @@ http://unleashedbbs.org, http://www.unleashedbbs.org {
 	}
 }
 
-# --- the site itself --------------------------------------------------------
-unleashedbbs.com, www.unleashedbbs.com {
+# --- the site itself: every domain is served, not redirected -----------------
+# The server picks which of the three faces to show from the Host header, so a
+# redirect here would collapse all three into the board list and take the
+# manifesto and the data page off the air with nothing to explain why.
+unleashedbbs.com, www.unleashedbbs.com,
+unleashedbbs.net, www.unleashedbbs.net,
+unleashedbbs.org, www.unleashedbbs.org {
 	encode gzip
 	reverse_proxy 127.0.0.1:8080
 	log {
 		output file /var/log/caddy/directory.log
 		format console
 	}
-}
-
-# --- the other two names point at the first ---------------------------------
-unleashedbbs.net, www.unleashedbbs.net,
-unleashedbbs.org, www.unleashedbbs.org {
-	redir https://unleashedbbs.com{uri} permanent
 }

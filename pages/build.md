@@ -17,7 +17,7 @@ dev board in a drawer, you already have most of it.
 - **Wi-Fi**, 2.4 GHz. The board scans every channel and joins the strongest
   access point with your SSID, so a mesh needs no special handling.
 - **Power.** It runs from the USB port you flashed it with, a phone charger, or
-  3V3 on a bench supply. A few tens of milliamps idling with six callers on,
+  3V3 on a bench supply. A few tens of milliamps idling with ten callers on,
   with peaks when the radio transmits, so anything that can deliver 500 mA is
   comfortable.
 

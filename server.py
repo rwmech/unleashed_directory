@@ -72,10 +72,15 @@ BIND_HOST     = os.environ.get("DIRECTORY_HOST", "127.0.0.1")
 BIND_PORT     = int(os.environ.get("DIRECTORY_PORT", "8080"))
 SITE_NAME     = os.environ.get("DIRECTORY_NAME", "µnleashed BBS directory")
 SITE_URL      = os.environ.get("DIRECTORY_URL", "https://unleashedbbs.com")
+# What a paste of the link says about itself, in a forum, a chat or a search
+# result. A directory spreads by somebody pasting it somewhere, and until
+# now that paste produced a bare link with no title card at all.
+SITE_DESC     = ("Bulletin board systems that are up right now. Dial one with "
+                 "any telnet client. No account, no tracking, no web.")
 
 # One server, three faces, chosen by the Host header. A deployment with a
-# single domain gets all three under paths instead, so none of this is
-# required to run your own.
+# single domain serves the other two under /about and /data, so none of this
+# is required to run your own.
 LIST_DOMAIN   = os.environ.get("DIRECTORY_LIST_DOMAIN", "")   # the board list
 ABOUT_DOMAIN  = os.environ.get("DIRECTORY_ABOUT_DOMAIN", "")  # what this is, and why
 DATA_DOMAIN   = os.environ.get("DIRECTORY_DATA_DOMAIN", "")   # the machine-readable side
@@ -197,34 +202,57 @@ def other_sites(role):
 def site_url(target, role, path="/"):
     """A link to one of the three faces: absolute only when it crosses a
     domain, so a single-host deployment is never sent to a name that is not
-    configured."""
+    configured. With no domain for that face, it is served under its own
+    path on this one, which is what /about and /data exist for."""
     host = {"list": LIST_DOMAIN, "about": ABOUT_DOMAIN, "data": DATA_DOMAIN}.get(target, "")
-    if target == role or not host:
+    if target == role:
         return path
+    if not host:
+        return {"list": "/", "about": "/about", "data": "/data"}.get(target, path)
     return f"https://{host}{path}"
 
 
 # What is in the menu, in the order a newcomer needs it: what is up, what
-# this is, how to have one, how to open it up, how to be listed, the data.
-NAV = (("list",  "/",        "Boards"),
-       ("about", "/",        "What this is"),
-       ("list",  "/build",   "Build one"),
+# this is, how to have one, what to call one with, how to open yours up,
+# how to be listed, the data.
+NAV = (("list",  "/",          "Boards"),
+       ("about", "/",          "What this is"),
+       ("list",  "/build",     "Build one"),
        ("list",  "/terminals", "Terminals"),
-       ("list",  "/forward", "Go public"),
-       ("list",  "/how",     "Get listed"),
-       ("data",  "/",        "Data"))
+       ("list",  "/forward",   "Go public"),
+       ("list",  "/how",       "Get listed"),
+       ("data",  "/",          "Data"))
+
+# A page that is not in the menu still has a place in it. Every one of these
+# is a child of a section that is, so the section lights up rather than
+# nothing. Without it, six pages said nothing about where the reader was and
+# two of them said "Boards", which is worse: a nav built entirely around
+# reverse-video "you are here" was actively lying on them.
+NAV_SECTION = {
+    "/dialing":         "/terminals",
+    "/sdcard":          "/build",
+    "/forward-netgear": "/forward",
+    "/forward-tplink":  "/forward",
+    "/forward-asus":    "/forward",
+    "/forward-xfinity": "/forward",
+    "/forward-mesh":    "/forward",
+}
 
 
 def nav_html(role, here=""):
+    here = NAV_SECTION.get(here, here)
     out = []
     for target, path, label in NAV:
-        current = (target == role and path == here) or \
-                  (here in ("", "/") and path == "/" and target == role)
+        # Matched on the link this deployment would actually serve, not on
+        # (face, path): with one domain the about face lives at /about, so
+        # comparing the NAV entry's own path would never match it. There is
+        # no fallback to the index any more. An unmarked menu is honest; a
+        # wrongly marked one is not.
+        href = site_url(target, role, path)
         # Built by concatenation rather than an f-string: a backslash is not
         # allowed inside an f-string expression before Python 3.12, and the
         # server has to run on whatever the droplet ships.
-        cls = ' class="here"' if current else ""
-        href = site_url(target, role, path)
+        cls = ' class="here"' if href == here else ""
         out.append('<a' + cls + ' href="' + href + '">' + label + '</a>')
     return "<nav>" + "".join(out) + "</nav>"
 
@@ -570,18 +598,39 @@ def md_table(rows):
     return '<div class="tablewrap"><table><tr>' + head + "</tr>" + body + "</table></div>"
 
 
+def md_meta(text):
+    """A page's own title and description, out of its Markdown.
+
+    Every page file already carries its title in its first "# " line and
+    used to throw it away: seven of twelve pages shared one browser tab
+    title, so four router pages open in four tabs were four identical
+    unreadable tabs. Page name first and site name second, because a tab
+    strip truncates from the right.
+    """
+    title, desc = SITE_NAME, SITE_DESC
+    head = re.search(r"^# (.+)$", text, re.M)
+    if head:
+        title = f"{head.group(1).strip()} - {SITE_NAME}"
+        # The first ordinary line after the heading, which on every page
+        # here is the sentence that says what the page is for.
+        for line in text[head.end():].splitlines():
+            line = line.strip()
+            if line and not line.startswith(("#", ">", "-", "|", "`", "*")):
+                desc = re.sub(r"[*`]|\[|\]\([^)]*\)", "", line)[:180]
+                break
+    return title, desc
+
+
 def md_page(name, role="list"):
     """One of the pages/ files, as a whole page. None when there is no such file."""
     f = PAGES_DIR / (name + ".md")
     if not f.is_file():
         return None
-    body = "<article>" + md_render(f.read_text(encoding="utf-8")) + "</article>"
-    links = other_sites(role)
-    footer = ((links + "<br><br>") if links else "") + (
-             '<a href="/">boards that are up</a> &middot; '
-             '<a href="/how">how to get listed</a> &middot; '
-             '<a href="/rules">house rules</a>')
-    return PAGE.format(refresh="", title=html.escape(SITE_NAME),
+    text = f.read_text(encoding="utf-8")
+    title, desc = md_meta(text)
+    body = "<article>" + md_render(text) + "</article>"
+    return PAGE.format(refresh="", title=html.escape(title),
+                       desc=html.escape(desc, quote=True),
                        body=head_html(role, "/" + name) + body,
                        footer=foot_html(role))
 
@@ -836,6 +885,11 @@ PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<meta name="description" content="{desc}">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{desc}">
+<meta property="og:type" content="website">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 {refresh}<link rel="alternate" type="application/rss+xml" title="New boards" href="/feed.xml">
 <style>
 :root {{ color-scheme: dark;
@@ -1171,6 +1225,25 @@ def logo_html():
             + "</pre>")
 
 
+# The micro sign out of the wordmark, at 12x12, which is the one glyph that
+# carries the whole identity at favicon size. Traced off LOGO_ROWS rather
+# than set in a font: at 16px a font falls back to whatever the renderer has
+# and the stroke weight is a lottery. Three rectangles, and the left stem
+# carries on below the baseline because that descender is the point of using
+# a lowercase letter.
+#
+# Served from its own route rather than from static/, because gallery_html()
+# shows every image file in static/ and a favicon does not belong in the
+# manifesto's photo gallery.
+FAVICON = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" '
+           'shape-rendering="crispEdges">'
+           '<rect width="12" height="12" fill="#0b0b0f"/>'
+           '<rect x="3" y="2" width="2" height="10" fill="#b48ef0"/>'
+           '<rect x="7" y="2" width="2" height="8" fill="#b48ef0"/>'
+           '<rect x="5" y="9" width="2" height="1" fill="#b48ef0"/>'
+           "</svg>")
+
+
 def human_ago(seconds):
     if seconds < 90:
         return "just now"
@@ -1375,7 +1448,11 @@ def index_page():
             "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC").fetchall()
     live = [r for r in rows if r["state"] == "online"]
     on = sum(r["busy"] or 0 for r in live)
-    who = (f" &middot; {on} caller{'' if on == 1 else 's'} on"
+    # --live, the colour that means "up" everywhere else on the page. This
+    # figure is the product and it used to be set in the smallest, faintest
+    # type above the fold.
+    who = (f" &middot; <span class='count'>{on} caller"
+           f"{'' if on == 1 else 's'} on</span>"
            if on else " &middot; nobody on right now")
     with db() as con:
         charts = {}
@@ -1396,14 +1473,20 @@ def index_page():
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
     body = head + body
+    # Five clauses and sixty words with no break, under a table that has just
+    # used six column headings, and it is the only place that says what
+    # "Activity" and "Up for" mean. Three lines, one idea each.
     footer = foot_html("list",
         "Activity is the last 24 hours: how many calls, and how long callers "
-        "were connected in total. Caller counts and activity are reported by "
-        "the boards themselves, and are only as fresh as each board's last "
-        "heartbeat: the small figure next to the state is how old that reading "
-        'is. "Up for" is measured here and cannot be fudged.')
-    return PAGE.format(title=html.escape(SITE_NAME), body=body, footer=footer,
-                       refresh=LIST_REFRESH)
+        "were connected in total.<br>"
+        "Caller counts and activity are reported by the boards themselves. "
+        "The small figure next to the state is how old that reading is.<br>"
+        '"Up for" is measured here and cannot be fudged.')
+    desc = (f"{len(rows)} bulletin board{'' if len(rows) == 1 else 's'} listed, "
+            f"{len(live)} up right now, {on} caller{'' if on == 1 else 's'} on. "
+            "Dial one with any telnet client.")
+    return PAGE.format(title=html.escape(SITE_NAME), desc=html.escape(desc, quote=True),
+                       body=body, footer=footer, refresh=LIST_REFRESH)
 
 
 def rss_date(when):
@@ -1504,8 +1587,15 @@ using this one. That is the intended outcome, not a grudging permission.</p>
 </article>"""
 
 
+# <h1> and the lead sit outside the article, matching data_page(). Everything
+# below them is inside one, because md_page() wraps its output in an article
+# and these two constants did not: /how's one <h2> got the browser default,
+# large and bold, instead of the site's small cyan heading, and neither page
+# picked up the article paragraph margins or the 1.62 line height. Two pages
+# in the menu and the footer looked like they came from a different site.
 RULES = """<h1>House rules</h1>
 <p class="lead">This is a list of boards. It does not need many rules.</p>
+<article>
 <ul>
 <li><b>No hate.</b> A board whose name or description attacks people for who they are does not get listed here.</li>
 <li><b>Be honest about what you are.</b> The description should describe the board.</li>
@@ -1515,10 +1605,17 @@ RULES = """<h1>House rules</h1>
 <p>These rules bind this directory, not you. The protocol is published, the server is
 free software, and anyone can run a directory with different rules or none at all.
 Taking a board off this list does not take it off the internet, and it was never
-meant to.</p>"""
+meant to.</p>
+</article>"""
 
-HOW = """<h1>How to get listed</h1>
+# Raw, because a backslash at the end of a line inside an ordinary triple
+# quoted string is a Python line continuation: it and the newline after it
+# were eaten, so the curl example on the page was served as one long line
+# with the continuations missing and the following lines still indented as
+# if they were there. There are no other escapes in here.
+HOW = r"""<h1>How to get listed</h1>
 <p class="lead">Your board announces itself. You do not fill in a form.</p>
+<article>
 <pre>[plugin:announce]
 enabled     = yes
 name        = The Rusty Modem
@@ -1564,7 +1661,8 @@ is exactly what a spammer will not do and exactly what a real board does anyway.
 
 <p>The full protocol, including every field and what the directory does with it,
 is in <a href="https://github.com/rwmech/unleashed_directory">the server
-repository</a>. It is one Python file and you are welcome to run your own.</p>"""
+repository</a>. It is one Python file and you are welcome to run your own.</p>
+</article>"""
 
 
 ANIM = """
@@ -1643,7 +1741,11 @@ ANIM = """
 </div>"""
 
 
-ABOUT = """<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
+# The h1 is not decoration. This is the page the whole argument lives on and
+# it used to start at h2, so it had no document outline, no heading for a
+# screen reader to land on, and nothing on screen saying what it was called.
+ABOUT = """<h1>What this is</h1>
+<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
 
 <p class="byline">Written and built by <b>QuantumRob</b>, who has been doing this
 since the 4381 was the computer in the room. The argument below is his; the
@@ -1695,10 +1797,10 @@ and Wi-Fi. It costs a few dollars, draws a few tens of milliamps, and runs from 
 phone charger.</p>
 
 <p>CBBS answered one caller at a time on 64 kilobytes. This has eight times that
-memory and answers six at once, with a seventh line for the sysop. There is no
-operating system underneath it worth the name, no web stack, no database, no
-container: the whole board is one program that fits in a megabyte and never
-allocates memory while a caller is typing.</p>
+memory and answers ten at once, with a hidden eleventh line the sysop comes in
+on. There is no operating system underneath it worth the name, no web stack, no
+database, no container: the whole board is one program that fits in about a
+megabyte and never allocates memory while a caller is typing.</p>
 
 <p>That is the argument in one object. A community does not need a data centre.
 It needs a machine somebody owns, on a connection somebody pays for, run by a
@@ -1846,10 +1948,11 @@ asking.</p>
 
 <div class="freedom">
 <h4>No account, no email address, no phone number</h4>
-<p>A caller types a handle and is in. A guest does not even need that. Nothing
-is verified because there is nothing to verify against, and no identity is
-being assembled anywhere. Being unknown to a system is the normal condition of
-being a person, and it should not require effort.</p>
+<p>A caller types a handle and picks a password, and that is the whole of
+signing up. A guest types a handle and nothing else, gets fifteen minutes, and
+leaves nothing behind. Nothing is verified because there is nothing to verify
+against, and no identity is being assembled anywhere. Being unknown to a system
+is the normal condition of being a person, and it should not require effort.</p>
 </div>
 
 <div class="freedom">
@@ -1956,10 +2059,26 @@ the arguing was two-sided. Credit where it is due.</p>
 </article>"""
 
 
-def simple_page(title, body, role="list", here=""):
+ABOUT_DESC = ("A bulletin board is a machine that answers a phone number. "
+              "Why that still matters, and what it takes to run one: a "
+              "telnet BBS on a five dollar microcontroller.")
+DATA_DESC  = ("The directory, machine readable. No key, no signup, no rate "
+              "limit worth mentioning. It is a list of hobby BBSes.")
+
+
+def about_page(role, here):
+    """The manifesto. The gallery is whatever is in static/ right now, so it
+    goes in at request time rather than being baked into the constant."""
+    return simple_page(f"What this is - {SITE_NAME}",
+                       ABOUT.replace("@GALLERY@", gallery_html()),
+                       role, here, ABOUT_DESC)
+
+
+def simple_page(title, body, role="list", here="", desc=SITE_DESC):
     """Any page that is a block of prose. The header and footer are added
     here and nowhere else, so no page carries its own copy of either."""
     return PAGE.format(refresh="", title=html.escape(title),
+                       desc=html.escape(desc, quote=True),
                        body=head_html(role, here) + body,
                        footer=foot_html(role))
 
@@ -1993,15 +2112,35 @@ class Handler(BaseHTTPRequestHandler):
         role = role_for(self.headers.get("Host", ""))
         if path == "/":
             if role == "about":
-                # The gallery is whatever is in static/ right now, so it is put in
-                # at request time rather than baked into the constant.
-                self.reply(200, simple_page(
-                    "unleashed", ABOUT.replace("@GALLERY@", gallery_html()), "about"))
+                self.reply(200, about_page("about", "/"))
             elif role == "data":
                 self.reply(200, cached("data", PAGE_CACHE,
-                                       lambda: simple_page("Data", data_page(), "data")))
+                                       lambda: simple_page(f"Data - {SITE_NAME}",
+                                                           data_page(), "data",
+                                                           "/", DATA_DESC)))
             else:
                 self.reply(200, cached("index", PAGE_CACHE, index_page))
+        # The other two faces, under their own paths, so a deployment with
+        # one domain has all three. There were no path routes at all: with
+        # only DIRECTORY_LIST_DOMAIN set, /about and /data returned 404, two
+        # of the seven menu items were loops back to the page you were
+        # already on, and the manifesto, which is the whole argument for the
+        # project, could not be read. README.md and INSTALL.md both said
+        # otherwise. PAGE_NAME is ^[a-z0-9][a-z0-9-]{0,39}$ and the generic
+        # page branch runs last, so neither name can be shadowed by a file
+        # in pages/, and neither can shadow /health.
+        elif path == "/about":
+            self.reply(200, about_page(role, "/about"))
+        elif path == "/data":
+            # Keyed on the role: the same path is reachable on any of the
+            # three domains and the nav and the footer differ on each.
+            self.reply(200, cached("datapage:" + role, PAGE_CACHE,
+                                   lambda: simple_page(f"Data - {SITE_NAME}",
+                                                       data_page(), role,
+                                                       "/data", DATA_DESC)))
+        elif path == "/favicon.svg":
+            self.reply(200, FAVICON, "image/svg+xml",
+                       {"Cache-Control": "public, max-age=86400"})
         elif path.startswith("/static/"):
             got = static_file(path[len("/static/"):])
             if got is None:
@@ -2020,10 +2159,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(404, "no such page\n", "text/plain; charset=utf-8")
             else:
                 self.reply(200, page)
+        # role and here, both of which these two were missing. Without here,
+        # nav_html fell into its index fallback and filled BOARDS as the
+        # current page, so a reader on "Get listed" was told they were on
+        # "Boards", with the menu blinking three times to draw the eye to
+        # it. Without role, a reader who arrived on the about domain got the
+        # list face's footer.
         elif path == "/rules":
-            self.reply(200, simple_page("House rules", RULES))
+            self.reply(200, simple_page(f"House rules - {SITE_NAME}", RULES,
+                                        role, "/rules"))
         elif path == "/how":
-            self.reply(200, simple_page("How to get listed", HOW))
+            self.reply(200, simple_page(f"How to get listed - {SITE_NAME}", HOW,
+                                        role, "/how"))
         elif path == "/api/boards.json":
             def build():
                 now = int(time.time())
@@ -2053,7 +2200,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.reply(200, page)
         else:
-            self.reply(404, simple_page("Not here", "<h1>Not here</h1>"))
+            self.reply(404, simple_page(f"Not here - {SITE_NAME}",
+                                        "<h1>Not here</h1>", role))
 
     def do_POST(self):
         path = self.path.split("?", 1)[0]

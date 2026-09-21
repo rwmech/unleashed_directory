@@ -32,8 +32,9 @@ machine covers all of it:
 | **about** | what this is and where it came from, at length |
 | **data** | the API and what is in it |
 
-Give the installer one domain and it serves everything; give it three and each
-gets its own face. Nothing about the split is required to run your own.
+Give the installer three domains and each gets its own face. Give it one and
+that domain serves the board list, with the other two faces under `/about` and
+`/data`. Nothing about the split is required to run your own.
 
 ## What it does
 

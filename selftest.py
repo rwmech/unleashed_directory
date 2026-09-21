@@ -186,6 +186,27 @@ def main():
         check("nor does the data page",
               "Boards that are up right now" not in page)
         check("the data page has its own heading", "<h1>Data</h1>" in page)
+        check("the manifesto has one at all",
+              "<h1>What this is</h1>" in get("/", host="about.example")[1])
+
+        # The faces are also paths, so one domain gets all three. There were
+        # no path routes: with only a list domain configured, /about and
+        # /data were 404, two of seven menu items looped back to the page you
+        # were already on, and the manifesto could not be read at all.
+        # README.md and INSTALL.md both said otherwise.
+        print("The other two faces are reachable by path as well")
+        code, page = get("/about", host="boards.example")
+        check("the manifesto is reachable without its own domain",
+              code == 200 and "A bulletin board is a machine" in page)
+        code, page = get("/data", host="boards.example")
+        check("and so is the data page", code == 200 and "Endpoints" in page)
+
+        print("The manifesto says what the board actually does")
+        _, page = get("/", host="about.example")
+        check("ten callers and a hidden eleventh line, not six and a seventh",
+              "answers ten at once" in page and "answers six at once" not in page)
+        check("a guest types a handle like everybody else",
+              "A guest types a handle and nothing else" in page)
 
         print("The feed")
         code, feed = get("/feed.xml")
@@ -198,8 +219,46 @@ def main():
         print("The rest of the site")
         code, page = get("/rules")
         check("the house rules are there", code == 200 and "No hate" in page)
+        # Both constants used to go to simple_page() bare, with no <article>
+        # wrapper and no "here", so they took the browser's default heading
+        # sizes and told the reader they were on Boards.
+        check("the house rules are styled like every other prose page",
+              "<article>" in page)
+        check("and the menu does not claim they are the board list",
+              '<a class="here" href="/">Boards</a>' not in page)
         code, page = get("/how")
         check("so is how to get listed", code == 200 and "announce" in page)
+        check("get listed is styled like every other prose page",
+              "<article>" in page)
+        check("and the menu knows which page it is on",
+              '<a class="here" href="/how">' in page)
+        # HOW is a raw string now: a backslash at the end of a line in an
+        # ordinary one is a Python line continuation, so the curl example was
+        # served as one long line with its continuations eaten and the
+        # following lines still indented as though they were there.
+        check("the curl example keeps its line continuations",
+              "announce \\\n" in page)
+
+        print("Every page says which page it is")
+        code, page = get("/build")
+        check("a markdown page takes its title from its own first heading",
+              "<title>Build one - " in page)
+        code, page = get("/forward-mesh")
+        check("so the router pages are not four identical tabs",
+              "<title>Port forwarding on eero and Google Nest Wifi - " in page)
+        check("and a page with no menu entry lights its own section",
+              '<a class="here" href="/forward">' in page)
+        code, page = get("/dialing")
+        check("dialing belongs to terminals",
+              '<a class="here" href="/terminals">' in page)
+        code, page = get("/sdcard")
+        check("and the SD card page to build one",
+              '<a class="here" href="/build">' in page)
+        check("a page carries a description and a preview card",
+              'name="description"' in page and 'property="og:title"' in page)
+        code, page = get("/favicon.svg")
+        check("there is an icon, and it is the micro sign",
+              code == 200 and "<svg" in page)
 
         # Pages are files in pages/, routed by name. That lookup runs last
         # on purpose: put it earlier and it swallows real endpoints, which
