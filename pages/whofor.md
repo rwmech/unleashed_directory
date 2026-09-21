@@ -28,12 +28,13 @@ they can read.
   difference quickly once they have both to compare.
 - **The whole thing is legible.** The user list is a text file. The settings
   are a text file. A class can read the source, change a screen, add a
-  command, and flash it in the time it takes to make tea. Nothing is hidden
-  behind an account or an API key.
+  command, and put the changed board back on the air inside one lesson.
+  Nothing is hidden behind an account or an API key.
 - **It costs less than a set of textbooks.** One board serves the class. Old
-  machines in the back of the store cupboard can call it, which is often the
+  machines out of the back of a supply closet can call it, which is often the
   best part of the lesson.
 
+> [!NOTE]
 > A board is a closed room unless somebody opens a port on purpose. Run it on
 > the school network and it is reachable from the school and nowhere else,
 > which for a classroom is usually the right answer. [What opening it up
@@ -61,13 +62,14 @@ between:
 
 - Retro computing and vintage machine groups, who can call it with the
   hardware the board was built to answer.
-- Makerspaces and hackerspaces, for the door code, the tool list, the
-  who-broke-the-laser-cutter thread.
+- Makerspaces and hackerspaces, for the door code, the tool list, and the
+  argument about who broke the laser cutter.
 - Model railway, radio control, astronomy, photography, and any other club
   whose members already own more equipment than sense.
 - Writers' groups swapping drafts through the file area.
 - Games nights, chess ladders, tabletop groups planning the next session.
-- A neighbourhood, a street, an apartment block, a boat club, an allotment.
+- A neighborhood, a street, an apartment building, a boat club, a
+  community garden.
 - Preppers, off-grid and emergency communications groups, who want something
   that works on a local network with no provider involved at all.
 - A conference, a festival, a field day: a board that exists for a weekend and
@@ -102,7 +104,8 @@ it is true now.
 Run a file area for the things you collect. Run a chat room for the people you
 actually want to talk to. Leave mail for each other. Keep a board of your own
 notes that you can reach from anything, anywhere, without a browser and without
-anything measuring what you looked at or how long for.
+a third party in the middle. The only record of who called and for how long is
+the board's own caller log, and the board is yours.
 
 It is on the internet, and it is nothing like the web. No page loads, no
 cookies, no scripts, no account with anybody, no advertising, nothing between
@@ -122,8 +125,10 @@ moderation contractor. Not an appeals process somebody else designed. You.
 - **Nobody can deplatform you.** There is no account to suspend, no host to
   complain to, no payment processor to lean on, no app store to be delisted
   from. The only person who can switch it off is the person holding the plug.
-- **It is peer to peer in the way that matters.** Every board is independent.
-  There is no central server, no company, no network anybody owns. The
+- **It is decentralized in the way that matters.** Every board is
+  independent. There is no central server, no company, no network anybody
+  owns. Boards do not talk to each other today, and that is the honest
+  version: what there is instead of a network is that nobody needs one. The
   directory you are reading this on is optional, the protocol behind it is
   published, and you are welcome to run your own directory instead of using
   it. That is the intended outcome, not a grudging permission.

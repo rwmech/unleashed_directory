@@ -44,8 +44,12 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `###`, `- ` bullets, `1. ` ordered lists, `> ` blockquotes (consecutive
   lines are **one** warning box, not one each), fenced code, pipe tables,
   and inline `**bold**`, `` `code` `` and `[links](/path)`. A bullet or a
-  step wraps by indenting the continuation two spaces. What does not exist,
-  on purpose: nested lists, images, inline HTML, headings below `###`.
+  step wraps by indenting the continuation two spaces. A blockquote whose
+  first line is `[!NOTE]` gets the calm box instead of the amber one:
+  thirteen of the fifteen blockquotes here are genuine warnings, which is
+  why amber is the default, and the other two are reassurances that were
+  saying the opposite of the words inside them. What does not exist, on
+  purpose: nested lists, images, inline HTML, headings below `###`.
   **A form that is not in the dialect does not fail, it renders as a
   paragraph**, which is how 53 numbered steps across the router pages were
   a wall of text for four versions with every word present and in the right

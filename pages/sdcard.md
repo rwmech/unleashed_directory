@@ -1,8 +1,9 @@
 # Adding an SD card
 
-Optional. A board with no card is a complete board: chat, accounts, screens,
-the caller log, a directory listing, the serial bridge. The card is what you
-add when you want message bases, file areas and screens of your own.
+Optional. A board with no card is a complete board: chat, mail, accounts,
+screens, the caller log, a directory listing, the serial bridge. The card is
+what you add when you want file areas and screens of your own. Message bases
+are being built now and will live on it too.
 
 Four wires and a module that costs about two dollars.
 
@@ -86,10 +87,10 @@ type rather than something that retries by itself.
 
 | On the card (FAT32) | On the board (LittleFS) |
 |---|---|
-| Message bases | Accounts and passwords |
-| File areas | The configuration |
-| Your own screens | The caller log |
-| | The stock screens |
+| File areas | Accounts and passwords |
+| Your own screens | The configuration |
+| A copy of the caller log | The caller log |
+| Message bases, once they are built | The stock screens |
 
 The split is deliberate. FAT32 is readable on any laptop, which is the whole
 point of using it: pull the card, plug it into a PC, and your board's files

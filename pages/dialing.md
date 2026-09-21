@@ -16,6 +16,7 @@ whatever was registered before so uninstalling puts it back.
 That is the whole fix for most people. The rest of this page is for when it is
 not.
 
+> [!NOTE]
 > You never have to touch any of this. The address in the Dial column is
 > ordinary text inside the link: select it, copy it, and paste it into your
 > terminal. Nothing below is required to call a board.

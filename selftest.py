@@ -205,6 +205,26 @@ def main():
         _, page = get("/", host="about.example")
         check("ten callers and a hidden eleventh line, not six and a seventh",
               "answers ten at once" in page and "answers six at once" not in page)
+        # Nothing on this site states an unbuilt feature as present fact.
+        # Somebody decides whether to spend an afternoon and twenty dollars on
+        # the strength of these sentences, which makes them the most expensive
+        # kind of wrong there is here. Doors are not started and message bases
+        # are being designed. Both are coming and both are part of the
+        # argument, so they are in the future tense rather than deleted.
+        check("doors are named as coming, not as something the board has",
+              "doors come after" in page and ", doors," not in page)
+        check("and the features it does list are ones that exist",
+              "mail between callers" in page and "file areas on an SD card" in page)
+        for path in ("/sdcard", "/build"):
+            _, page = get(path)
+            check(f"{path} does not promise message bases in the present tense",
+                  "want message bases" not in page
+                  and "gets you message bases" not in page)
+            check(f"{path} says they are still being built",
+                  "being built" in page or "once they are built" in page)
+        # Back to the manifesto: the loop above reassigned page, and the check
+        # after this one reads it.
+        _, page = get("/", host="about.example")
         check("a guest types a handle like everybody else",
               "A guest types a handle and nothing else" in page)
 
@@ -296,8 +316,19 @@ def main():
         check("it says the board is nobody else's to police",
               "king of everything on the board" in page)
         check("and names the things that make that true",
-              "deplatform" in page and "peer to peer" in page
+              "deplatform" in page and "decentralized" in page
               and "off grid" in page)
+        # Boards do not talk to each other. Linking is queued and unbuilt, so
+        # "peer to peer" was the wrong word for what the sentence after it
+        # actually describes, which is that nobody needs a network at all.
+        check("without calling independent boards peer to peer",
+              "peer to peer" not in page)
+        # The caller log records when a call started and how long it ran, and
+        # the board enforces a daily minute limit, so a claim that nothing
+        # measures how long you were on contradicted /firstcall, which names
+        # the log plainly.
+        check("and without claiming nothing records how long you were on",
+              "how long for" not in page and "caller log, and the board is yours" in page)
         check("it ends by telling somebody how to start",
               'href="/build"' in page)
         check("it is in the menu next to the manifesto",
@@ -467,6 +498,29 @@ def main():
         check("and its hour labels are set large enough to read",
               "svg.hours text { fill:var(--dim); font-family:inherit; "
               "font-size:13px; }" in page)
+        # A count of callers is a count. "8.0" is a decimal where there
+        # cannot be one, and the scale had a top but no bottom.
+        check("the caller axis counts in whole callers and starts at zero",
+              ">8</text>" in page and ">4</text>" in page
+              and ">0</text>" in page and ">8.0</text>" not in page)
+        # 133 characters in a 358px column is 692px of sideways dragging,
+        # which nobody does. pre-wrap inserts nothing, so a copy still gives
+        # back the exact original line.
+        _, page = get("/dialing")
+        check("code blocks wrap on a phone rather than being dragged",
+              "article pre:not(.chart) { white-space:pre-wrap;" in page)
+        check("but the ascii diagram is left alone, because wrapping breaks it",
+              ":not(.chart)" in page)
+        # Thirteen of the fifteen blockquotes on this site are real
+        # warnings. The two that are reassurances were sitting in the same
+        # alarm-coloured box, which said the opposite of the words inside.
+        check("a reassurance is a calm box, not an alarm",
+              'class="aside"' in page and "You never have to touch any of this" in
+              page.split('class="aside"')[1][:300])
+        check("and the marker never leaks into the page", "[!NOTE]" not in page)
+        _, page = get("/forward")
+        check("a real warning is still a warning",
+              'class="warn"' in page and 'class="aside"' not in page)
 
         # ------------------------------------------------------------------
         # Coming back after a gap.

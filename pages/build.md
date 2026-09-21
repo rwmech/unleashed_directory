@@ -98,8 +98,9 @@ A directory nobody can replace would contradict the whole point.
 
 ## Adding an SD card
 
-Optional, four wires, about two dollars. It is what gets you message bases,
-file areas and screens of your own; without one the board is still a board.
+Optional, four wires, about two dollars. It is what gets you file areas and
+screens of your own, and it is where message bases will live once they are
+built; without one the board is still a board.
 Pin map and the three things that usually go wrong are on the
 [SD card page](/sdcard).
 

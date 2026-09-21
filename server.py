@@ -502,6 +502,26 @@ def md_inline(s):
     return _MD_LINK.sub(link, s)
 
 
+def md_callout(quote):
+    """A run of "> " lines, as one box rather than one box per line.
+
+    Amber by default, because thirteen of the fifteen blockquotes on this
+    site are genuine warnings and the style exists to interrupt. The other
+    two are reassurances, and an alarm-coloured box around "you never have
+    to touch any of this" says the opposite of the words inside it. A first
+    line of [!NOTE] picks the calm version, which is GitHub's marker rather
+    than an invention, and is the only addition to the dialect here.
+    """
+    lines = list(quote)
+    kind = "warn"
+    if lines and lines[0].strip().startswith("[!NOTE]"):
+        kind = "aside"
+        lines[0] = lines[0].strip()[len("[!NOTE]"):].lstrip()
+        if not lines[0]:
+            lines.pop(0)
+    return f'<p class="{kind}">' + md_inline(" ".join(lines)) + "</p>"
+
+
 def md_row(line):
     """One table row, as cells, or None. The separator row is not a row."""
     s = line.strip()
@@ -554,7 +574,7 @@ def md_render(text):
                                             for s in steps) + "</ol>")
                 steps.clear()
             if quote:
-                out.append('<p class="warn">' + md_inline(" ".join(quote)) + "</p>")
+                out.append(md_callout(quote))
                 quote.clear()
 
         if line.startswith("```"):
@@ -601,7 +621,7 @@ def md_render(text):
     if steps:
         out.append("<ol>" + "".join(f"<li>{md_inline(s)}</li>" for s in steps) + "</ol>")
     if quote:
-        out.append('<p class="warn">' + md_inline(" ".join(quote)) + "</p>")
+        out.append(md_callout(quote))
     return "".join(out)
 
 
@@ -1117,13 +1137,27 @@ article h3 {{ color:var(--dim); font-size:13px; margin:20px 0 4px; font-weight:n
    element, and article .warn has never been touched since it was written. */
 article .warn {{ color:#f0c674; background:#241d10; border-left:3px solid #8a6d39;
         padding:10px 16px; margin:18px 0 18px 30px; max-width:78ch; }}
+/* The calm half of the same idea. Same box, no alarm: a reassurance in the
+   warning colour says the opposite of the words inside it. Neutral rather
+   than another colour, because the palette already spends every colour it
+   has on one meaning each and a note is not a new meaning. */
+article .aside {{ color:var(--ink); background:#12121a;
+        border-left:3px solid #2c2c38;
+        padding:10px 16px; margin:18px 0 18px 30px; max-width:78ch; }}
 /* Same breakpoint as .gallery.one, and after the rule it overrides rather
    than before it: both selectors are (0,1,1), so source order decides and
    an earlier media query would simply have lost. 30px out of a 343px phone
    column is a real bite, and the border and the background carry a callout
    on their own at that width. */
 @media (max-width: 620px) {{
-  article .warn {{ margin-left:0; }}
+  article .warn, article .aside {{ margin-left:0; }}
+  /* A 133 character command in a 358px column is 692px of dragging, which
+     nobody does. It wraps on a phone instead. pre-wrap inserts nothing, so
+     a copy still yields the exact original line, and the alternative is a
+     command somebody cannot read at all. .chart is excluded because it is
+     an ASCII diagram and wrapping would destroy it; it scrolls inside its
+     own box, the way the markdown tables do. */
+  article pre:not(.chart) {{ white-space:pre-wrap; overflow-wrap:anywhere; }}
 }}
 /* The ordered lists md_render now emits, spaced like the bullets beside
    them. */
@@ -1348,14 +1382,21 @@ def day_chart_svg(hours, firm):
         parts.append(f'<line class="tick" x1="{x:.1f}" y1="{pad:.1f}" '
                      f'x2="{x:.1f}" y2="{base:.1f}"/>')
 
-    # Two guide lines and their labels: enough to read a value off, not so
-    # many that the shape disappears behind a grid.
+    # Two guide lines and their labels, plus the zero at the foot so the
+    # scale has a bottom as well as a top. A count of callers is a count:
+    # "8.0" is a decimal where there cannot be one, so a whole number prints
+    # whole and only a fraction gets a decimal place.
+    def ylabel(v):
+        return f"{v:.0f}" if abs(v - round(v)) < 0.05 else f"{v:.1f}"
+
     for frac in (1.0, 0.5):
         y = pad + plot_h * (1.0 - frac)
         parts.append(f'<line class="grid" x1="{left:.1f}" y1="{y:.1f}" '
                      f'x2="{W - pad:.1f}" y2="{y:.1f}"/>')
         parts.append(f'<text class="ylab" x="{left - 6:.1f}" y="{y + 5:.1f}" '
-                     f'text-anchor="end">{top * frac:.1f}</text>')
+                     f'text-anchor="end">{ylabel(top * frac)}</text>')
+    parts.append(f'<text class="ylab" x="{left - 6:.1f}" y="{base + 5:.1f}" '
+                 f'text-anchor="end">0</text>')
 
     peak = hours.index(top)
     for h in range(24):
@@ -1901,7 +1942,8 @@ system belonged to somebody you could name.</p>
 
 <p>A telnet BBS that runs on a bare ESP32 and grows into an IoT terminal server
 through plugins. Nodes, handles, a user list, a chat room in the style of DDial and
-Gtalk, messages, doors, a caller log, a sysop who can page you.</p>
+Gtalk, mail between callers, file areas on an SD card, a caller log, a sysop who can
+page you. Message bases are being built now; doors come after them.</p>
 
 <p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
 server farm, not a feature that can be deprecated out from under you. A chip you own,
