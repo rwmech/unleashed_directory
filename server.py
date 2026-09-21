@@ -2028,6 +2028,39 @@ article .cards.hero .card summary:focus-visible {{ outline-color:#ffd35c; }}
 article .freedom {{ background:#1d1a10; border:1px solid #4a411f;
         border-radius:0.5rem; padding:0.875rem 1.25rem 0.25rem; margin:1.125rem 0 1.125rem 1.875rem;
         max-width:66ch; }}
+/* --------------------------------------------------------------------
+   Freedoms gained, in two columns wherever there is width for two.
+
+   The boxes are about 60 characters wide in a 130 character column, so
+   one to a row left half the page black and made a list of twelve short
+   claims four screens long. Twelve boxes in two columns is six rows and
+   reads as one block, which is what it is: a position, not an index.
+
+   Grid and not multi-column. `column-count` would let a box break across
+   the boundary, and each of these is one claim that has to stay whole;
+   it also fills the first column before the second, so the reading order
+   would depend on how tall the boxes happened to be. Grid is row major,
+   so the order down the source is the order across the page, and
+   somebody listening to it gets the same list in the same order as
+   somebody looking at it. Nothing here uses `order:`, deliberately.
+
+   minmax(0, 1fr) and not 1fr: a grid track's default minimum is its
+   content, so one long unbroken string in one box would widen its track
+   and narrow the other.
+
+   The wrapper takes the indent and the gap takes the spacing, so two
+   boxes in a row start at the same height whatever length their text is.
+   The row gap is the 1.125rem the collapsed margins used to give, so the
+   single column below the breakpoint is spaced exactly as it was.
+   -------------------------------------------------------------------- */
+article .freedoms {{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
+        gap:1.125rem 1.5rem; margin:1.125rem 0 1.125rem 1.875rem; }}
+article .freedoms .freedom {{ margin:0; }}
+/* The site's one breakpoint. Two columns on a phone is two gutters and
+   about fifteen characters a line, which is not a layout. */
+@media (max-width: 900px) {{
+  article .freedoms {{ grid-template-columns:1fr; }}
+}}
 article .freedom h4 {{ color:#e8c65c; font-size:0.8125rem; font-weight:normal;
         letter-spacing:0.0625rem; text-transform:uppercase; margin:0 0 0.375rem; }}
 article .freedom p {{ color:#cfc7ae; margin:0 0 0.75rem; }}
@@ -2910,11 +2943,11 @@ on a port you chose, running software you can read all of in an afternoon and ch
 when you disagree with it. Leave it in a drawer for a year, plug it back in, and it
 still works, because there is nothing at the other end that has to still exist.</p>
 
-<p>The user list is a text file. The settings are a text file. A message goes from one
-caller to another through a chip on your shelf and is gone the moment it is read.
-There is no account to create, nothing to subscribe to, and no vendor who can change
-the deal. It is GPL, so nobody can take it away from you later, including the person
-who wrote it.</p>
+<p>The user list is a text file. The settings are a text file. Mail goes from one caller
+to another through a chip on your shelf, and the caller it was sent to decides whether
+to keep it. There is no account to create, nothing to subscribe to, and no vendor who
+can change the deal. It is GPL, so nobody can take it away from you later, including
+the person who wrote it.</p>
 
 <h2>Privacy forward, and what that actually means</h2>
 
@@ -2924,9 +2957,9 @@ of the privacy argument, and everything else follows from it.</p>
 
 <p><b>There is no third party in the middle.</b> Not a company, not a platform, not an
 advertiser, not a model being trained. A message goes from one caller to another through
-a chip on somebody's shelf and it is gone when it is read. Nobody is standing between
-those two people taking a copy, because there is nowhere for a copy to go and nobody
-whose business it would be.</p>
+a chip on somebody's shelf and stays there until one of them deletes it. Nobody is
+standing between those two people taking a copy, because there is nowhere for a copy to
+go and nobody whose business it would be.</p>
 
 <p>Here is the difference, drawn out.</p>
 
@@ -2972,79 +3005,118 @@ collected cannot be handed over.</p>
 
 <h2>Freedoms gained</h2>
 
-<p>Every one of these is something you cannot have on a platform, at any price,
-because the platform's business depends on you not having it.</p>
+<p>None of this is granted to you. It is what is left when there is nobody in the
+middle: no company, no platform, no landlord. Every item below is something you
+cannot have on a service at any price, because the service's business depends on
+you not having it.</p>
+
+<div class="freedoms">
 
 <div class="freedom">
-<h4>Nobody is watching, and everything is public anyway</h4>
-<p>There is no analytics, no telemetry, no model being trained, and nobody
-between you and the person you are talking to. It works like radio rather than
-like a service: what is said in the room is heard by whoever is in the room,
-and nothing is recorded anywhere you cannot reach. Hold a meeting about
-something sensitive and the only people who know it happened are the people who
-were there.</p>
+<h4>Nobody has to say yes</h4>
+<p>No application, no review, no waiting list, no API key, no app store, no terms
+you agree to by scrolling past them. You buy a chip that costs a few dollars, you
+flash it, and it is running. There is no step in that sequence where somebody else
+decides whether you are allowed, because there is nobody else in it.</p>
 </div>
 
 <div class="freedom">
-<h4>You define the terms, and the theme, and the rules</h4>
-<p>No terms of service written by somebody else's lawyers. No content policy
-that changes next quarter. No appeals process you did not design. You decide
-what the board is called, what it is for, who is welcome, what is allowed and
-what is not. If somebody disagrees strongly enough, the correct answer has
-always been that they can run their own, and here they actually can.</p>
+<h4>It works with no internet at all</h4>
+<p>A board needs no cloud, no domain and no hosting company. Stand it up on an
+office network, a phone hotspot, a mesh, or a switch in a room with no uplink,
+and anybody on that network calls it exactly as they would over the wire. A
+school, a hackerspace, a campsite, a festival, a boat, a basement. When the line
+to the outside world goes down, or was never there, it is the same board.</p>
+</div>
+
+<div class="freedom">
+<h4>It fits in a pocket and runs off a battery</h4>
+<p>The whole system is a chip the size of a postage stamp and a USB cable, drawing
+a few tens of milliamps. A phone charger runs it, and so does a power bank or a
+car socket. You can carry a community in a coat pocket and stand it up wherever
+you are, which is not something anybody says about a server.</p>
+</div>
+
+<div class="freedom">
+<h4>It does not announce itself as anything</h4>
+<p>No rack, no fan noise, no sign on the door, nothing to explain to anybody. A
+board is a small circuit board on a shelf, indistinguishable from the other things
+somebody has left plugged in. That is discretion of the object and not of the
+wire: telnet is plain text, anybody on the path between a caller and the board can
+read it, and the <a href="/privacy">privacy page</a> goes through what that does
+and does not mean. What hides in plain sight is the machine.</p>
 </div>
 
 <div class="freedom">
 <h4>Nobody can deplatform you</h4>
-<p>There is no account to suspend, no host to complain to, no payment processor
-to lean on, no app store to delist you from. The board is a chip you own on a
-connection you pay for. The only person who can switch it off is you, and the
-only thing that can take it down is the electricity bill.</p>
+<p>No account to suspend, no host to complain to, no payment processor to lean on,
+no app store to delist you from, no head office to write to about you. The board
+is a chip you own on a connection you pay for. The only person who can switch it
+off is you, and the only thing that can take it down is the electricity bill.</p>
 </div>
 
 <div class="freedom">
-<h4>What you say stops existing when you say it should</h4>
-<p>A message goes from one caller to another through a chip on your shelf and is
-gone once it has been read. Delete the user list and it is deleted. Wipe the
-flash and there is no backup in a data centre, no retention policy, no
-"deactivated but retained for legitimate business purposes". Forgetting is the
-default, which is how conversation worked for the whole of human history until
-about twenty years ago.</p>
+<h4>You write the rules, and you are the appeal</h4>
+<p>No terms of service drafted by somebody else's lawyers, no content policy that
+changes next quarter, no decision handed down by a department you cannot reach.
+You decide what the board is called, what it is for, who is welcome and what is
+allowed. The old answer to anybody who disagreed was that they could go and run
+their own, and here that is not a brush-off. It is an afternoon and a USB
+cable.</p>
+</div>
+
+<div class="freedom">
+<h4>Nobody is mining it</h4>
+<p>No analytics, no telemetry, no engagement metric, no recommendation engine, no
+advertiser, no model being trained on what you said. Nothing ranks the
+conversation, because nothing is reading it. It works like radio rather than like
+a service: what is said in the room is heard by whoever is in the room, and
+nothing is filed away somewhere you cannot reach.</p>
+</div>
+
+<div class="freedom">
+<h4>No account, no email address, no phone number</h4>
+<p>A caller types a handle and picks a password, and that is the whole of signing
+up. A guest types a handle and nothing else, gets fifteen minutes, and leaves
+nothing behind. Nothing is verified because there is nothing to verify against,
+and no identity is being assembled anywhere. Being unknown to a system is the
+ordinary condition of being a person, and it should not take effort.</p>
+</div>
+
+<div class="freedom">
+<h4>What you keep is what you chose to keep</h4>
+<p>Mail sits on the chip until the caller it was sent to reads it and says whether
+to keep it, reply to it or delete it, and it expires on its own after a fortnight
+either way. There is no copy in a data centre, no backup nobody mentioned, no
+"deactivated but retained for legitimate business purposes". Wipe the flash and it
+is gone. Forgetting is the default, which is how conversation worked for the whole
+of human history until about twenty years ago.</p>
 </div>
 
 <div class="freedom">
 <h4>You can read every line of it, and change any of them</h4>
 <p>It is free software under the GPL. Not source-available, not "open" with a
-licence that revokes itself if you compete: actually free. Read it, change it,
-run the changed version, give it to somebody else. If this project goes in a
-direction you hate, take the last version you liked and carry on without
-asking.</p>
-</div>
-
-<div class="freedom">
-<h4>No account, no email address, no phone number</h4>
-<p>A caller types a handle and picks a password, and that is the whole of
-signing up. A guest types a handle and nothing else, gets fifteen minutes, and
-leaves nothing behind. Nothing is verified because there is nothing to verify
-against, and no identity is being assembled anywhere. Being unknown to a system
-is the normal condition of being a person, and it should not require effort.</p>
+licence that revokes itself if you compete: free. Read it, change it, run the
+changed version, give it to somebody else. If this project goes somewhere you
+hate, take the last version you liked and carry on without asking.</p>
 </div>
 
 <div class="freedom">
 <h4>It keeps working when nothing else does</h4>
-<p>No certificate to renew, no API to be deprecated, no subscription to lapse,
-no company to be acquired and shut down. Leave the board in a drawer for a
-year, plug it in, and it answers, because there is nothing at the other end
-that has to still exist. Software that outlives the company that made it used
-to be ordinary.</p>
+<p>No certificate to renew, no API to be deprecated, no subscription to lapse, no
+company to be acquired and shut down. Leave the board in a drawer for a year, plug
+it in, and it answers, because there is nothing at the other end that has to still
+exist. Software that outlives the company that made it used to be ordinary.</p>
 </div>
 
 <div class="freedom">
 <h4>You can be found, or not, entirely as you choose</h4>
 <p>List the board in a directory and strangers can call it. Leave it off and it
-exists only for people you tell. Take it off the internet and it serves your own
-house. Nobody makes that decision but you, and no algorithm decides how visible
-you are once you have made it.</p>
+exists only for the people you tell. Take it off the internet and it serves your
+own house. Nobody makes that decision but you, and nothing decides how visible you
+are once you have made it.</p>
+</div>
+
 </div>
 
 <h2>The power is in your hands, literally</h2>

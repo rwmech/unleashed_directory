@@ -436,6 +436,53 @@ def main():
               "Open communication over the internet is radio" in page
               and "Somebody has to be trying" in page)
 
+        # ------------------------------------------------------------------
+        # Freedoms gained. Two columns, and the one claim in it that could
+        # do harm if it drifted.
+        #
+        # The section is the project's position rather than its feature
+        # list, and it reaches for words like discreet and hidden. Those are
+        # true of the object and false of the wire: the privacy page spends
+        # a screen saying anybody on the path can read plain telnet, and a
+        # box here implying otherwise would contradict it in the one place
+        # somebody is being talked into trusting the thing. So the honest
+        # sentence is pinned present, and the dishonest ones are pinned
+        # absent by name.
+        print("Freedoms gained")
+        # Prose wraps in the source, so a sentence that reads as one line on
+        # the page is two in the file. These checks are about the words, not
+        # about where somebody happened to press return.
+        flat = " ".join(page.split())
+        check("the freedom boxes are wrapped so they can be laid out",
+              '<div class="freedoms">' in page
+              and page.count('<div class="freedom">') == 12)
+        check("the discreet claim is about the object, and says so",
+              "discretion of the object and not of the wire" in flat
+              and "telnet is plain text" in flat
+              and 'the <a href="/privacy">privacy page</a>' in flat)
+        # Not a style opinion. Each of these would tell a reader the wire
+        # hides them, which is the one thing this section must never say.
+        for wrong in ("undetectable", "untraceable", "invisible on the network",
+                      "nobody can see", "nobody can read", "cannot be traced",
+                      "impossible to intercept", "off the radar"):
+            check("and nothing in the manifesto claims %r" % wrong,
+                  wrong not in page.lower())
+        # Rob's "use it anywhere" is the no-uplink claim, it is true, and it
+        # is the reason the section is shaped the way it is.
+        check("it makes the claim that is actually true: no internet needed",
+              "It works with no internet at all" in flat
+              and "a switch in a room with no uplink" in flat)
+        # Mail stopped being deleted on sight in 0.17.12: reading it offers
+        # reply, save or delete and touches nothing until a key answers. The
+        # manifesto said mail was "gone the moment it is read" in three
+        # places, which was true of an older board and is now a promise the
+        # software does not keep.
+        check("and describes mail the way the board actually handles it",
+              "gone the moment it is read" not in flat
+              and "gone once it has been read" not in flat
+              and "gone when it is read" not in flat
+              and "reply to it or delete it" in flat)
+
         # /dialing fixes the exact problem a first-time visitor hits, and
         # used to be reachable from one sentence at the bottom of /terminals
         # and a title= attribute, which is invisible on every touch device.
@@ -815,6 +862,26 @@ def main():
         check("but the callout, the pull quote and the freedom boxes do not",
               "max-width:78ch" in page and "max-width:70ch" in page
               and "max-width:66ch" in page)
+        # Two columns for the freedoms, one below the site's breakpoint.
+        # Measured in headless Chrome through exactly sized iframes, because
+        # a grid that has not been rendered is a string in a stylesheet: at
+        # 1920 two tracks of 682.3px and 61 characters to a line, at 1366 two
+        # of 625.8px and 55 characters, at 390 one track of 318.7px and 30
+        # characters, which is what every other box on the site gets there.
+        # No horizontal overflow at any of the three.
+        check("the freedoms are two columns where there is width for two",
+              "article .freedoms { display:grid; "
+              "grid-template-columns:repeat(2, minmax(0, 1fr));" in page)
+        check("and one column below the breakpoint",
+              "@media (max-width: 900px) {\n  article .freedoms "
+              "{ grid-template-columns:1fr; }" in page)
+        # Row major and nothing reordered, so the order down the source is
+        # the order across the page. A screen reader follows the source, and
+        # these are twelve related claims: a list read in a different order
+        # to the one on the screen is a different list.
+        check("and nothing reorders them away from their source order",
+              "order:" not in page[page.index("article .freedoms {"):
+                                   page.index("article .freedoms {") + 400])
         # The animated diagram scales rather than scrolling. overflow-x:auto
         # stopped the page sliding sideways and put a scrollbar on the
         # diagram instead, and it was a vertical one: when one axis is not
