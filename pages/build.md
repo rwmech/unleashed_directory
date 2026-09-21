@@ -22,9 +22,9 @@ dev board in a drawer, you already have most of it.
 - **Wi-Fi**, 2.4 GHz. The board scans every channel and joins the strongest
   access point with your SSID, so a mesh needs no special handling.
 - **Power.** It runs from the USB port you flashed it with, a phone charger, or
-  3V3 on a bench supply. A few tens of milliamps idling with ten callers on,
-  with peaks when the radio transmits, so anything that can deliver 500 mA is
-  comfortable.
+  3V3 on a bench supply. It draws a few tens of milliamps idling, a little more
+  with ten callers on, and peaks when the radio transmits, so anything that can
+  deliver 500 mA is comfortable.
 
 ## Getting it running
 
@@ -43,7 +43,7 @@ The console tells you the address it came up on:
 online 192.168.0.109  dial in: telnet 192.168.0.109 6400
 ```
 
-The activity LED holds on for a second once the board is actually listening, so
+The activity LED holds on for a second once the board is listening, so
 you know it is ready without dialling in to find out.
 
 On a normal home network the board also answers to `unleashed.local`, which is
@@ -85,8 +85,9 @@ honest list of the things that will stop it working.
 ## Listing it here
 
 Turn on the `announce` plugin and the board sends a small heartbeat every ten
-minutes saying it exists. Nothing about any caller is ever in it: the board's
-name, who runs it, how to reach it, and how many lines are busy.
+minutes saying it exists. Nothing about any caller is ever in it. What it
+carries is the board's name, who runs it, how to reach it, and how many lines
+are busy.
 
 ```
 CONFIG announce
@@ -104,10 +105,9 @@ A directory nobody can replace would contradict the whole point.
 ## Adding an SD card
 
 Optional, four wires, about two dollars. It is what gets you file areas and
-screens of your own, and it is where message bases will live once they are
-built; without one the board is still a board.
-Pin map and the three things that usually go wrong are on the
-[SD card page](/sdcard).
+screens of your own, and it is where forums will live once they are built.
+Without one the board is still a board. The pin map and the three things that
+usually go wrong are on the [SD card page](/sdcard).
 
 ## The source
 

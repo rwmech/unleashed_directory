@@ -2,12 +2,12 @@
 
 > [!TIP]
 > **Under 18? This is the good bit.** There is a page written for
-> you: what a bulletin board actually is, why building one is a weekend well
+> you: what a bulletin board is, why building one is a weekend well
 > spent, and how to do it with a grown-up at home.
 > [It starts here](/kids).
 
-Everyone. That is not a dodge, it is the answer: a board is a room, and the
-only thing you need in order to run one is to want a room.
+Everyone. That is not a dodge, it is the answer: a board is a room, and all you
+need to run one is to want a room.
 
 What follows is who is already well served by that, and why. If you are not on
 the list, the list is not the point. The point is that a chip the size of a
@@ -30,8 +30,8 @@ they can read.
   is designed to keep anybody there. There is no feed, no recommendation, no
   notification engineered to pull somebody back, no score. People talk to each
   other and then they log off. That is a different relationship with a
-  computer than the one social media teaches, and children notice the
-  difference quickly once they have both to compare.
+  computer than the one social media teaches, and children notice quickly
+  once they have both to compare.
 - **The whole thing is legible.** The user list is a text file. The settings
   are a text file. A class can read the source, change a screen, add a
   command, and put the changed board back on the air inside one lesson.
@@ -44,10 +44,10 @@ they can read.
 > A board is a closed room unless somebody opens a port on purpose. Run it on
 > the school network and it is reachable from the school and nowhere else,
 > which for a classroom is usually the right answer. [What opening it up
-> actually means](/forward).
+> means](/forward).
 
 **Teaching with it?** There is a page for that: five lesson plans with
-durations and equipment lists, what each session actually teaches, what a set
+durations and equipment lists, what each session teaches, what a set
 of boards costs, and a straight answer about school networks and port
 forwarding. It treats designing and printing an enclosure as a real part of
 the project, because for a lot of classrooms that is the hook.
@@ -81,7 +81,7 @@ between:
   whose members already own more equipment than sense.
 - Writers' groups swapping drafts through the file area.
 - Games nights, chess ladders, tabletop groups planning the next session.
-- A neighborhood, a street, an apartment building, a boat club, a
+- A neighbourhood, a street, an apartment building, a boat club, a
   community garden.
 - Preppers, off-grid and emergency communications groups, who want something
   that works on a local network with no provider involved at all.
@@ -93,8 +93,8 @@ between:
 A chat room and a place to leave a message, running on hardware you own, with
 no seats to buy and nobody's terms of service to agree to.
 
-It works on essentially anything with a terminal, which in an office means
-every machine there is: a laptop, a workstation, a server you already ssh into,
+It works on anything with a terminal, which in an office means every machine
+there is: a laptop, a workstation, a server you already ssh into,
 the ancient thing in the corner that runs the one piece of software nobody will
 replace. There is no client to install and no rollout. Anyone who can type
 `telnet` can join.
@@ -122,7 +122,7 @@ the board's own caller log, and the board is yours.
 
 It is on the internet, and it is nothing like the web. No page loads, no
 cookies, no scripts, no account with anybody, no advertising, nothing between
-you and the machine. Just a socket and some characters.
+you and the machine. A socket and some characters.
 
 ## You are the king of everything on the board
 
@@ -143,12 +143,12 @@ moderation contractor. Not an appeals process somebody else designed. You.
   owns. Boards do not talk to each other today, and that is the honest
   version: what there is instead of a network is that nobody needs one. The
   directory you are reading this on is optional, the protocol behind it is
-  published, and you are welcome to run your own directory instead of using
-  it. That is the intended outcome, not a grudging permission.
+  published, and you are welcome to run your own. That is the
+  intended outcome, not a grudging permission.
 - **It can be almost off grid.** A board needs power and a network. It does not
   need the internet: on a local network it serves a building, a site, a club
   room or a house, and it carries on doing that when the line goes down. Solar,
-  a battery and a wifi access point is a working board in a place with no
+  a battery and a Wi-Fi access point make a working board in a place with no
   service at all.
 - **It outlives the people who made it.** No certificate to renew, no API to be
   deprecated, no subscription to lapse, no company to be acquired and shut
@@ -158,11 +158,11 @@ moderation contractor. Not an appeals process somebody else designed. You.
 ## So set one up
 
 The barrier used to be a second phone line. Now it is an ESP32 dev board and a
-USB cable, and if you want file areas, a micro SD card. That is the list. There
+USB cable, plus a micro SD card if you want file areas. That is the list. There
 is no hosting bill, no domain required, no provider to ask, and no account with
 anybody.
 
-You flash it, you give it your wifi, and it answers. Forward one port and
+You flash it, you give it your Wi-Fi, and it answers. Forward one port and
 strangers can call it from anywhere in the world. Leave that port closed and it
 serves your house, your club room or your classroom and nothing else. Both are
 a real board and you can change your mind either way in a minute.

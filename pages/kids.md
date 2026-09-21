@@ -58,13 +58,13 @@ That is normal and it is fixable. [This page explains it](/dialing).
 
 An afternoon. Most of that is deciding what to call it.
 
-## Who can actually get in
+## Who can get in
 
 !! doors.png | A pixel drawing of two doors, one closed and one open
 
 This is the part to decide on purpose, because the two options are different.
 
-**Only your house.** The board sits on your home wifi and nobody outside can
+**Only your house.** The board sits on your home Wi-Fi and nobody outside can
 reach it. Your family, and friends who come round. This is a complete board
 and most people should stop here.
 
@@ -76,7 +76,7 @@ belongs to the adult**, not to you.
 A board that never leaves your house is finished work. It is not practice
 for a real one.
 
-[What that setting actually does](/forward).
+[What that setting does](/forward).
 
 ## Nothing you type is private
 
@@ -131,15 +131,15 @@ Stop typing and tell an adult. You will not be in trouble.
 Running your own board and calling somebody else's are two different things.
 
 Your own board is your room and you know everybody in it. Other boards have
-people on them you have never met. That is genuinely fun and it is most of
-what a BBS ever was, but it is not a private room, so do that part with an
+people on them you have never met. That is genuinely fun, and it is most of
+what a BBS ever was. It is not a private room, though, so do that part with an
 adult until you are used to it.
 
 ## Build it with a grown-up
 
 !! grownup.png | A pixel drawing of two people building something together
 
-Not because you need permission. Because of how it actually gets done.
+Not because you need permission. Because of how it gets done.
 
 - It runs on hardware in their house, on their internet.
 - Anything that opens a door to the internet is their call.
@@ -164,11 +164,11 @@ makes it a good school project, because you can explain every part yourself.
 
 ## Being built now: forums
 
-!! forums.png | A pixel drawing of stacked message boards
+!! forums.png | A pixel drawing of stacked forum topics
 
 Right now a board does chat, mail between people, and files.
 
-Forums are being built at the moment. They will be topic areas that the sysop
+Forums are being built. They will be topic areas that the sysop
 sets up, with conversations inside each one, read at the same prompt as
 everything else. They are not on any board yet.
 

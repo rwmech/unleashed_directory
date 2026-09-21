@@ -7,7 +7,7 @@ Nighthawk and R-series, through the web interface at routerlogin.net.
 
 ## Log in
 
-1. Connect a computer to the router, wired or wifi.
+1. Connect a computer to the router, wired or Wi-Fi.
 2. Go to `www.routerlogin.net`, or `routerlogin.com`, or the router's address,
    usually `192.168.1.1` or `192.168.0.1`.
 3. User name `admin`. The password is the one set during first-time setup, not
@@ -16,7 +16,7 @@ Nighthawk and R-series, through the web interface at routerlogin.net.
 Forgotten the password? Click **CANCEL** at the prompt to reach Router Password
 Recovery, which needs the serial number and your security answers, and only
 works if recovery was enabled beforehand. Otherwise hold **Reset** for about 15
-seconds, which erases every setting including your wifi name and password.
+seconds, which erases every setting including your Wi-Fi name and password.
 
 The router's own address is shown under **ADVANCED**, in **Router Information**.
 
@@ -60,7 +60,7 @@ rules above broad ones.
 
 ## The Nighthawk app
 
-NETGEAR's description of the app covers parental controls, Armor, guest wifi
+NETGEAR's description of the app covers parental controls, Armor, guest Wi-Fi
 and general settings. It does not document port forwarding, and there is no
 NETGEAR article describing it there. Treat this as a job for the web interface.
 
@@ -85,7 +85,7 @@ Triggering, use that.
   make external scanners report a working port as closed.
 - **A changing address.** Unless you pay for a static one, your public address
   moves. Use dynamic DNS, or let the directory listing track it for you.
-- **The board itself.** Check it is actually answering on your own network first.
+- **The board itself.** Check it is answering on your own network first.
 
 ## Sources
 

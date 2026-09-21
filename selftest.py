@@ -689,6 +689,44 @@ def main():
               and "FAT32" in page and "CP437" in page)
         check("and it is straight about school networks",
               "will not be able to forward a port" in page)
+        # A board answers ten callers. The page used to say one board serves a
+        # whole class, which is wrong for any class over ten and fails in
+        # front of one, in session 1, where everybody connects at once. The
+        # figure is BBS_MAX_NODES in the firmware and is not a config key.
+        check("and honest about how many callers fit on one board",
+              "answers ten callers at once" in " ".join(page.split())
+              and "serves a whole class" not in page)
+
+        # ------------------------------------------------------------------
+        # The project's own vocabulary, used the same way on every page. Two
+        # words have moved and one is a trademark the site had spelled four
+        # ways.
+        print("The site says the same thing in the same words")
+        every = {}
+        for path in ("/", "/about", "/data", "/rules", "/how", "/build",
+                     "/install", "/sdcard", "/terminals", "/dialing",
+                     "/firstcall", "/privacy", "/whofor", "/kids",
+                     "/teachers", "/forward", "/forward-netgear",
+                     "/forward-tplink", "/forward-asus", "/forward-xfinity",
+                     "/forward-mesh"):
+            every[path] = get(path)[1]
+        # Forums, not message bases. The feature is the same one; the name
+        # changed, and a reader meeting both words assumes they are two
+        # things and goes looking for the one that does not exist.
+        hits = [p for p, h in every.items() if "message base" in h.lower()]
+        if hits:
+            print("     message bases still named on:", ", ".join(hits))
+        check("forums are called forums, never message bases", not hits)
+        # Wi-Fi is the Alliance's own spelling and the one this site uses in
+        # prose. "Wifi" and "WiFi" survive only as product names and as
+        # labels a reader will see on their own screen: Google Wifi, Nest
+        # Wifi, and Xfinity's WiFi menu. A bare lowercase one is ours, and
+        # the site had four spellings of it.
+        hits = [p for p, h in every.items()
+                if re.search(r"(?<![\w-])wifi\b", re.sub(r"<[^>]+>", " ", h))]
+        if hits:
+            print("     lowercase wifi on:", ", ".join(hits))
+        check("and Wi-Fi is spelled one way in prose", not hits)
 
         # Rob's callsign is not on the site. The examples use a plain
         # illustrative handle instead.

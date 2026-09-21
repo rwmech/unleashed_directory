@@ -4,7 +4,7 @@ Every board on the list shows its address as a `telnet://` link. Whether
 clicking it does anything depends on what your computer has registered for
 that scheme, and on a normal Windows machine the answer is usually nothing.
 
-Here is why, and the fix, in the order most people should try them.
+Here is why, and the fixes, in the order to try them.
 
 ## The short version
 
@@ -37,7 +37,7 @@ nothing.
 
 Tera Term's installer has offered to take the telnet association since version
 4.59, so it is very often the thing that grabbed it. It is also, on a machine
-checked for this page, not actually the thing the browser runs.
+checked for this page, not the thing the browser runs.
 
 Tera Term 5 does not replace the standard `open` verb. It adds a verb of its
 own, named `Open with Tera Term`, and points the `shell` key's default at that.
@@ -109,7 +109,7 @@ path if you prefer it. Set the character set to CP437 or the art will be wrong.
 
 Apple removed the `telnet` command in High Sierra and nothing Apple ships
 claims the scheme now. Note that Apple never published a release note saying
-so; the evidence is simply that the binary is gone.
+so; the evidence is that the binary is gone.
 
 An application claims a scheme in its `Info.plist`. To choose between
 claimants, the supported tool is `duti`:

@@ -11,7 +11,7 @@ tells you how.
 > what a port is, stop and read until you do. If the network belongs to your
 > employer, your landlord, your university or your parents, ask them first.
 
-## What you are actually doing
+## What you are doing
 
 Your router blocks unsolicited traffic from the internet by default. That
 default is the single largest thing protecting the devices in your house:
@@ -56,7 +56,7 @@ failures, and the second one cannot be fixed by any setting at all.
   usually an ISP box. The forward has to exist on the outermost device, or
   the ISP box has to be put in bridge mode.
 - **CGNAT.** If your WAN address falls in `100.64.0.0` to `100.127.255.255`,
-  or simply does not match what an external "what is my IP" service reports,
+  or does not match what an external "what is my IP" service reports,
   your ISP is sharing one public address among many customers. No router
   setting will ever make an inbound port work. Common on mobile and some
   fibre plans. Your options are asking the ISP for a public address, IPv6, or
@@ -82,10 +82,11 @@ than an honest gap.
 ## A safer way to try it first
 
 You do not have to open anything to run a board. On your own network it works
-immediately, and callers on the same wifi can dial it by address or by
-`unleashed.local` with [any terminal program](/terminals). If you want people outside to reach it without opening a
-port, a VPN into your own network, or a tunnel from a machine you rent, both
-work and neither puts your address on a scanner's list.
+immediately, and callers on the same Wi-Fi can dial it by address or by
+`unleashed.local` with [any terminal program](/terminals). To let people
+outside reach it without opening a port, use a VPN into your own network or a
+tunnel from a machine you rent. Both work, and neither puts your address on a
+scanner's list.
 
 Forward the port when you have decided you want a public board, not to find
 out whether the software works.

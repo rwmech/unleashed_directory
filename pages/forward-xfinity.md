@@ -54,8 +54,9 @@ be edited, only deleted and recreated. Turn randomisation off for the board.
 
 Put the gateway in Bridge Mode: Admin Tool at `http://10.0.0.1` >
 **Gateway > At a Glance > Enable** next to Bridge Mode. Routing stops and the
-modem function stays. You lose the gateway's wifi, xFi network management, wifi
-extenders and Xfinity CyberSecure, and only one device may connect by Ethernet.
+modem function stays. You lose the gateway's Wi-Fi, xFi network management,
+Wi-Fi extenders and Xfinity CyberSecure, and only one device may connect by
+Ethernet.
 Your own router then does the forwarding.
 
 ## When it does not work

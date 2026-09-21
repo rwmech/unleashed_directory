@@ -12,7 +12,7 @@ Wi-Fi network it should join. Five minutes, most of it waiting.
 
 ## Before you start
 
-> **Chrome or Edge, on a desktop or laptop**, is the path that just works.
+> **Chrome or Edge, on a desktop or laptop**, is the path that works.
 > Firefox can do it from version 151, released in May 2026, but it asks your
 > permission twice and the first prompt is a confusing one, so it is the harder
 > road rather than a broken one. **Safari cannot do this at all**, and neither
@@ -124,7 +124,7 @@ GPL v2 or later. Anything this page installs, you can build yourself and check.
 ## After it boots
 
 The board comes up, joins your network and starts listening on port 6400. The
-activity LED holds on for a second once it is really ready.
+activity LED holds on for a second once the board is listening.
 
 [Call it with any telnet client](/terminals). It works out what it is talking
 to on connect, so SyncTERM, PuTTY, a Commodore 64 through a TeensyROM and a

@@ -45,8 +45,10 @@ trust.
 - **Optional, for the enclosure:** a 3D printer, or a print service, and a
   browser for TinkerCAD.
 
-One board serves a whole class of callers at once, so you do not need one per
-student. A single board plus everybody's laptops is a complete first lesson.
+A board answers ten callers at once, so you do not need one per student. For a
+class of thirty that means working in pairs or in threes, or running two or
+three boards and letting them compare. One board plus everybody's laptops is
+still a complete first lesson.
 
 ## If your class is on Chromebooks
 
@@ -88,7 +90,9 @@ and it is the one students ask to stay behind for.
 ### Session 1: Call a board
 
 **50 minutes. Needs:** one board already running on the classroom network,
-which you set up beforehand, and a terminal program on each machine.
+which you set up beforehand, and a terminal program on each machine. Ten
+callers fit on a board at once, so pair the class up or put a second board on
+the network.
 
 Students connect to an address and a port, choose a handle, and end up in the
 chat room together. Give them ten minutes to work out that they are all typing
@@ -108,7 +112,7 @@ than as a definition.
 instructions from [the build page](/build).
 
 Each group builds the firmware and flashes it, gives the board the classroom
-wifi, and watches the console print the address it came up on. Then they call
+Wi-Fi, and watches the console print the address it came up on. Then they call
 their own board from the machine next to them.
 
 The moment a group calls their own board for the first time is the lesson. Do
@@ -179,8 +183,8 @@ school, which is not what the unit is about.
 
 If a student wants a board reachable from the internet, that is a project for
 home, with a parent, and it is a decision for the adult who owns that
-connection. [The page about what opening a port actually does](/forward) is
-written for exactly that conversation.
+connection. [What opening a port does](/forward) is written for exactly that
+conversation.
 
 ## Things to say out loud
 

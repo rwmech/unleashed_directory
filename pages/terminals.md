@@ -42,7 +42,7 @@ default and it renders ANSI poorly. Use something else.
 
 > Whatever you use, remember what you are using it for. Telnet carries every
 > keystroke in the clear, including your password. Never reuse a password on a
-> telnet board. [What that actually risks](/privacy).
+> telnet board. [What that risks](/privacy).
 
 ## Chromebooks
 
@@ -110,7 +110,7 @@ anything depends on which program your computer has registered for
 that](/dialing).
 
 The address is ordinary text inside the link, on purpose, so selecting it and
-pasting it into a terminal always works no matter what your machine does.
+pasting it into a terminal always works, whatever your machine does.
 
 ## Calling from something older
 

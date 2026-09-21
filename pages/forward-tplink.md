@@ -15,7 +15,7 @@ Router, Android calls it Gateway.
 Older models ship with `admin` / `admin`. Newer ones have no default and make
 you create a password at setup. There is no recovery on most models: either use
 Password Recovery if you set it up, or hold **Reset** for about 10 seconds with
-the router powered on, which wipes wifi settings, internet settings and any
+the router powered on, which wipes Wi-Fi settings, internet settings and any
 forwarding rules you already had.
 
 ## Give the board a fixed address
@@ -84,7 +84,7 @@ rules.
 ## Sources
 
 - [Port forwarding, three interface generations](https://www.tp-link.com/us/support/faq/1379/)
-- [Virtual Servers on wifi routers](https://www.tp-link.com/us/support/faq/1106/)
+- [Virtual Servers on Wi-Fi routers](https://www.tp-link.com/us/support/faq/1106/)
 - [Archer A7/C7 user guide, NAT forwarding](https://www.tp-link.com/us/user-guides/archer-a7&c7_v5/chapter-13-nat-forwarding)
 - [Deco port forwarding](https://www.tp-link.com/us/support/faq/1797/)
 - [Private WAN address, CGNAT, firewall](https://www.tp-link.com/us/support/faq/785/)

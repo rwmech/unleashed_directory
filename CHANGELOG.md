@@ -14,6 +14,24 @@
 
 # Changelog
 
+## 0.12.2, 2026-09-21
+
+A copy pass over all twenty-one pages. Words only: no layout, no CSS, nothing
+restructured. Three things came out of it that are not tidying.
+
+- **The teachers page told a teacher one board serves a whole class.** It does not: a board answers ten callers, `BBS_MAX_NODES` in the firmware, and it is not a config key. Session 1 is thirty students all connecting at once, so the page would have failed in front of a class, on the first exercise, with no way to recover in the room. It now says ten, and says what to do about it: pairs, threes, or a second board. Pinned by a check.
+- **Forums, not message bases.** `/build` and `/sdcard` still used the old name for the same unbuilt feature while `/kids` and `/about` used the new one, so a reader meeting both words assumes they are two things and goes looking for the one that does not exist. A check now walks every page and fails on "message base" anywhere.
+- **Wi-Fi was spelled four ways**, 9 Wi-Fi, 17 wifi, 14 Wifi and 4 WiFi. It is Wi-Fi in prose everywhere now. `Google Wifi`, `Nest Wifi`, `Nest Wifi Pro` and Xfinity's `WiFi` menu stay exactly as they are, because those are product names and labels a reader will see on their own screen, and a check that flagged them would be a check telling us to make the instructions wrong. So the check matches a bare lowercase `wifi` only.
+- The manifesto: "What was lost was not the modem noise" in place of "The thing that was lost was"; one sentence in "What this is" cut, because it repeated the drawer sentence in the freedoms box almost word for word; "Privacy forward, and what that means"; the RS-232 sentence split at its first "and".
+- `/whofor`: two sentences tightened, "Just a socket and some characters" is now "A socket and some characters", and a real grammar fix, "Solar, a battery and a wifi access point **is** a working board" was a plural subject on a singular verb. `neighborhood` to `neighbourhood`, the site's only other US spelling being `decentralized`, which a check pins and which is left alone.
+- `/privacy`: three "actually"s gone, including two section headings, and one sentence that said the same thing twice ("none of it happens by itself, none of it is automatic"). The page's register is unchanged: it is not there to reassure anybody.
+- `/build`: "Nothing about any caller is ever in it: the board's name, who runs it..." read as a list of what is **not** sent, which is the opposite of what those four items are. Also a sentence fragment with a dangling modifier in the power bullet, which is the one line somebody sizes a supply from.
+- `/kids`: six small cuts, all of them shortening sentences. Flesch-Kincaid moved from grade 3.7 to **3.6**, against a ceiling of 6.5.
+- `/dialing`: "Here is why, and the fix, in the order most people should try them" had no antecedent for "them".
+- `/terminals`, `/install`, `/forward`, `/forward-asus`, `/forward-netgear`: one filler word each.
+- Verified by rendering all twenty-one pages and checking the prose for leaked Markdown, not by grepping the source. Clean on every page.
+- 3 new checks, 264 in total.
+
 ## 0.12.1, 2026-09-21
 
 - **"Freedoms gained" is two columns, and it is a position rather than a feature list.** Rob asked for both in one sentence, and the second half was the larger job. The boxes are about 60 characters wide in a 130 character column, so one to a row left half the page black and made a short list four screens long.

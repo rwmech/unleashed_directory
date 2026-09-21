@@ -90,11 +90,11 @@ type rather than something that retries by itself.
 | File areas | Accounts and passwords |
 | Your own screens | The configuration |
 | A copy of the caller log | The caller log |
-| Message bases, once they are built | The stock screens |
+| Forums, once they are built | The stock screens |
 
 The split is deliberate. FAT32 is readable on any laptop, which is the whole
 point of using it: pull the card, plug it into a PC, and your board's files
-are just files. The cost is that FAT is not safe against losing power
+are ordinary files. The cost is that FAT is not safe against losing power
 mid-write, so nothing that has to survive lives there. Accounts stay on the
 board's own flash, which is.
 

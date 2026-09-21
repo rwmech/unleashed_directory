@@ -2879,8 +2879,8 @@ chance. If you get to meet the person who built the thing you love, take the ext
 hour.<br><br><span class="sig">&mdash; QuantumRob</span></p>
 
 <p>Thousands of boards followed. Each one was somebody's own idea of what a
-community should look like: a music board, a board for one town, a board that was
-really just its sysop and eleven friends. At the
+community should look like: a music board, a board for one town, a board that was its
+sysop and eleven friends. At the
 <a href="https://en.wikipedia.org/wiki/Bulletin_board_system">peak in the
 mid-1990s</a> an estimated 60,000 were running in the United States alone, and
 <a href="https://en.wikipedia.org/wiki/FidoNet">FidoNet</a> tied tens of thousands
@@ -2925,8 +2925,8 @@ something, ranked, monetised, and deleted at somebody else's discretion. You do 
 own the room, the member list, the history, or the right to keep any of it. You rent
 all of it, and the rent is paid in attention and data.</p>
 
-<p class="pull">The thing that was lost was not the modem noise. It was that the
-system belonged to somebody you could name.</p>
+<p class="pull">What was lost was not the modem noise. It was that the system
+belonged to somebody you could name.</p>
 
 <h2>What this is</h2>
 
@@ -2940,8 +2940,7 @@ else; doors come after them.</p>
 <p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
 server farm, not a feature that can be deprecated out from under you. A chip you own,
 on a port you chose, running software you can read all of in an afternoon and change
-when you disagree with it. Leave it in a drawer for a year, plug it back in, and it
-still works, because there is nothing at the other end that has to still exist.</p>
+when you disagree with it.</p>
 
 <p>The user list is a text file. The settings are a text file. Mail goes from one caller
 to another through a chip on your shelf, and the caller it was sent to decides whether
@@ -2949,7 +2948,7 @@ to keep it. There is no account to create, nothing to subscribe to, and no vendo
 can change the deal. It is GPL, so nobody can take it away from you later, including
 the person who wrote it.</p>
 
-<h2>Privacy forward, and what that actually means</h2>
+<h2>Privacy forward, and what that means</h2>
 
 <p>Every system you use was built by somebody, and the question worth asking is who it
 was built to serve. A board is built to serve the person who owns it. That is the whole
@@ -3172,9 +3171,9 @@ person whose head it fits in.</p>
 <h2>Serial did not die</h2>
 
 <p><a href="https://en.wikipedia.org/wiki/RS-232">RS-232</a> was standardised by the
-EIA in 1960 and still runs the console and management ports on network equipment,
-industrial controllers and test gear, and its asynchronous framing survives on nearly
-every microcontroller made since as a
+EIA in 1960. It still runs the console and management ports on network equipment,
+industrial controllers and test gear, and its framing survives on nearly every
+microcontroller made since as a
 <a href="https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter">TTL-level
 UART</a>. Sixty-five years on, the way a machine from 1982 talks is still the way you
 talk to the switch in the rack. That is why a
@@ -3203,7 +3202,7 @@ you.<br><br><span class="sig">&mdash; QuantumRob</span></p>
 <h2>You can do this today</h2>
 
 <p>Not as a re-enactment: as a live system with callers on it tonight. Flash a board,
-give it your wifi, forward one port on your router, and you are running a public BBS.
+give it your Wi-Fi, forward one port on your router, and you are running a public BBS.
 No hosting bill, no domain required, no provider to ask permission from, no account
 with anybody. A chip on a shelf and one line in your router.</p>
 

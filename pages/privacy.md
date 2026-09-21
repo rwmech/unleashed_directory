@@ -1,7 +1,7 @@
 # The real risks of open communications
 
-A BBS carries everything in the clear. This page says what that actually means,
-what it does not mean, and what to do about it. It is longer than the one
+A BBS carries everything in the clear. This page says what that means, what it
+does not mean, and what to do about it. It is longer than the one
 paragraph on the front page because the short version leaves people to guess,
 and people guess badly in both directions.
 
@@ -16,12 +16,12 @@ machines this is built for cannot do better: a Commodore 64 has no room for a
 TLS stack and never will. The honest move is to say so rather than to add a
 padlock that means nothing.
 
-## Who can actually see it
+## Who can see it
 
 Not "anybody on the internet". Somebody on the path, running a tool, on purpose.
 In practice that is:
 
-- Anybody on the same wifi as you, if it is open or if they have the key.
+- Anybody on the same Wi-Fi as you, if it is open or if they have the key.
   Coffee shops, hotels, conferences, airports.
 - Whoever runs the network you are on. An employer, a university, a landlord.
 - Your internet provider, and the board's.
@@ -29,8 +29,8 @@ In practice that is:
 
 Being able to listen and listening are different things. Every one of those
 requires a person choosing to point a tool at your traffic. None of it happens
-by itself, none of it is automatic, and none of it is being collected and kept
-by default, which is the part that makes this different from the web.
+by itself, and none of it is collected and kept by default, which is the part
+that makes this different from the web.
 
 ## What it is not
 
@@ -54,7 +54,7 @@ That is the right model for a BBS. It is a public room. Somebody could be
 parked outside with equipment, and for almost everybody that is an edge case
 rather than a plan.
 
-## What to actually do
+## What to do
 
 > Use a password you use nowhere else. This is the one that matters. A password
 > read off the wire is only worth what it unlocks elsewhere, so make that
@@ -64,7 +64,7 @@ rather than a plan.
   is one.
 - Do not type anything into a board that would hurt you if it were read out.
   Card numbers, other passwords, an address you would not give a stranger.
-- On a network you do not trust, assume somebody could be looking. Open wifi is
+- On a network you do not trust, assume somebody could be looking. Open Wi-Fi is
   the realistic case.
 - If a conversation genuinely has to be private, this is the wrong tool. Put
   the board behind a VPN, or keep it on your own network, or use something

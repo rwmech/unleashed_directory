@@ -7,7 +7,7 @@ RT-AX and RT-AC models on ASUSWRT, firmware 3.0.0.4.384.40000 or later.
 
 ## Log in
 
-Connect by Ethernet or wifi, then open `http://router.asus.com` (ASUS also
+Connect by Ethernet or Wi-Fi, then open `http://router.asus.com` (ASUS also
 documents `http://www.asusrouter.com`) or the router's address, commonly
 `192.168.50.1` or `192.168.1.1`. The default is printed on the label.
 
@@ -49,7 +49,7 @@ power light flashes. That erases everything, including your internet settings.
 ASUS notes that Internal Port may be left blank, in which case traffic arrives
 on the same port; that External Port accepts ranges with a colon (`300:500`),
 lists with commas, or both; and that one external port can serve only one
-device, so conflicting rules simply will not run.
+device, so conflicting rules will not run.
 
 Service Name is not documented as mandatory, but some builds refuse to save
 without it and reusing a name can overwrite an existing rule. Fill it in with
