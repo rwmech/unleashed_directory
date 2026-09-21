@@ -1,6 +1,6 @@
 # Build one
 
-A board of your own, on hardware that costs less than a takeaway.
+A board of your own, on hardware that costs less than lunch.
 
 Nothing here is a kit and nothing is soldered to anything. If you have an ESP32
 dev board in a drawer, you already have most of it.

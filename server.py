@@ -213,12 +213,13 @@ def site_url(target, role, path="/"):
 
 
 # What is in the menu, in the order a newcomer needs it: what is up, what
-# this is, how to have one, what to call one with, how to open yours up,
-# how to be listed, the data.
+# this is, what to call one with, what happens when you do, how to have one,
+# how to open yours up, how to be listed, the data.
 NAV = (("list",  "/",          "Boards"),
        ("about", "/",          "What this is"),
-       ("list",  "/build",     "Build one"),
        ("list",  "/terminals", "Terminals"),
+       ("list",  "/firstcall", "First call"),
+       ("list",  "/build",     "Build one"),
        ("list",  "/forward",   "Go public"),
        ("list",  "/how",       "Get listed"),
        ("data",  "/",          "Data"))
@@ -230,6 +231,7 @@ NAV = (("list",  "/",          "Boards"),
 # reverse-video "you are here" was actively lying on them.
 NAV_SECTION = {
     "/dialing":         "/terminals",
+    "/privacy":         "/firstcall",
     "/sdcard":          "/build",
     "/forward-netgear": "/forward",
     "/forward-tplink":  "/forward",
@@ -269,7 +271,14 @@ def foot_html(role, extra=""):
     one page goes in extra, underneath.
     """
     others = other_sites(role)
+    # /dialing is in here because it fixes the exact problem a first-time
+    # visitor hits: they click an address on the front page and nothing
+    # happens. It used to be reachable from one sentence at the bottom of
+    # /terminals and from a title= attribute on every dial link, and a
+    # title is invisible on every touch device and clickable nowhere.
     links = (f'<a href="{site_url("list", role, "/build")}">Build one</a> &middot; '
+             f'<a href="{site_url("list", role, "/terminals")}">Terminals</a> &middot; '
+             f'<a href="{site_url("list", role, "/dialing")}">Dial links</a> &middot; '
              f'<a href="{site_url("list", role, "/forward")}">Go public</a> &middot; '
              f'<a href="{site_url("list", role, "/how")}">Get listed</a> &middot; '
              f'<a href="{site_url("list", role, "/rules")}">House rules</a> &middot; '
@@ -1465,7 +1474,9 @@ def index_page():
             + f"<h1>BBS directory <span>&middot; {len(rows)} listed{who}</span></h1>"
             + '<p class="lead">Boards that are up right now. '
             'Dial one with <a href="/terminals">any telnet client</a>, or click '
-            "an address if you have one installed.</p>")
+            'an address if you have one installed. '
+            '<a href="/dialing">Nothing happened?</a> '
+            '<a href="/firstcall">Never called one before?</a></p>')
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>Sysop</th>"
                 "<th>State</th><th>Activity</th><th>Up for</th></tr>"
@@ -1988,11 +1999,31 @@ list is gone.</p>
 
 <h2>Honest about the limits</h2>
 
-<p>Telnet is plain text, because a Commodore 64 cannot do TLS and pretending otherwise
-would be worse than saying so. This keeps a board off the public internet's record;
-it does not keep it off the wire. If a conversation has to survive somebody watching
-the link, put the board behind a VPN or leave it on the local network. Privacy you can
-explain in one sentence beats privacy you have to take on faith.</p>
+<p><b>Open communication over the internet is radio.</b> You transmit, whoever
+is on the channel hears you, and that is the whole of it. A walkie-talkie, not
+a sealed envelope. Telnet has no encryption, because a Commodore 64 cannot do
+TLS and pretending otherwise would be worse than saying so.</p>
+
+<p><b>Somebody has to be trying.</b> Being able to listen is not the same as
+listening. It takes a packet sniffer or the equivalent, placed somewhere on the
+path between a caller and the board. The board decides who hears what; the wire
+carries it in the clear. If the radio is not switched on and tuned in, nobody
+heard you.</p>
+
+<p><b>The real risk is low and it is not zero, and the comparison is the
+point.</b> These are public conversations. What would you say in a bar, or in a
+coffee house, knowing the next table can hear? Now weigh that against a website
+that records and ranks everything you do by design. A board is the bar. Yes,
+somebody could be parked outside with equipment, and for almost everybody that
+is an edge case. Saying so is more honest than implying it is either safe or
+dangerous.</p>
+
+<p><b>So: say what you would say in public, and use a password you use nowhere
+else.</b> If a conversation has to survive somebody watching the link, put the
+board behind a VPN or leave it on the local network. Privacy you can explain in
+one sentence beats privacy you have to take on faith.</p>
+
+<p><a href="/privacy">Read about the real risks of open communications</a></p>
 
 <h2>Small on purpose</h2>
 

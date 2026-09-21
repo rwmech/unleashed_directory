@@ -16,10 +16,9 @@ whatever was registered before so uninstalling puts it back.
 That is the whole fix for most people. The rest of this page is for when it is
 not.
 
-> Copy and paste always works. Every address on this site is plain selectable
-> text next to the link, on purpose. If you would rather not touch any of this,
-> select the address, paste it into your terminal, and call the board. Nothing
-> below is required.
+> You never have to touch any of this. The address in the Dial column is
+> ordinary text inside the link: select it, copy it, and paste it into your
+> terminal. Nothing below is required to call a board.
 
 ## Why clicking does nothing on Windows
 

@@ -35,7 +35,7 @@ default and it renders ANSI poorly. Use something else.
 
 > Whatever you use, remember what you are using it for. Telnet carries every
 > keystroke in the clear, including your password. Never reuse a password on a
-> telnet board.
+> telnet board. [What that actually risks](/privacy).
 
 ## Clicking an address instead of typing it
 
@@ -44,8 +44,8 @@ anything depends on which program your computer has registered for
 `telnet://`, and the default is often wrong or missing. [How to fix
 that](/dialing).
 
-The address is also plain selectable text on every listing, on purpose, so
-copy and paste always works no matter what your machine does.
+The address is ordinary text inside the link, on purpose, so selecting it and
+pasting it into a terminal always works no matter what your machine does.
 
 ## Calling from something older
 
@@ -106,7 +106,7 @@ the other, so the old machine thinks it is talking to a modem.
 Hardware ones for Commodore and Atari are listed above. On anything with a
 serial port, a Raspberry Pi running `tcpser`, or an ESP32 running
 [Zimodem](https://github.com/bozimmerman/Zimodem), does the same job for a few
-pounds. A real modem and a real phone line also still work, if you have both.
+dollars. A real modem and a real phone line also still work, if you have both.
 
 ## What the board does with all this
 

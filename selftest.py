@@ -260,10 +260,44 @@ def main():
         check("there is an icon, and it is the micro sign",
               code == 200 and "<svg" in page)
 
+        # The site covered finding a board, installing a terminal, building
+        # one and listing one, and said nothing about the thirty seconds
+        # after a stranger connects: a handle prompt, and no idea whether to
+        # register, whether it costs anything, or what a guest is.
+        print("What happens after you connect, and what it risks")
+        code, page = get("/firstcall")
+        check("the first call page exists",
+              code == 200 and "A handle is the name other callers see" in page)
+        check("and says what a guest actually gets",
+              "fifteen minutes" in page)
+        code, page = get("/privacy")
+        check("the privacy page leads with the radio framing, not a shrug",
+              code == 200 and "in the clear" in page and "bar" in page)
+        check("and the manifesto points at it",
+              "/privacy" in get("/", host="about.example")[1])
+        check("so does the terminal page's telnet warning",
+              "/privacy" in get("/terminals")[1])
+        _, page = get("/", host="about.example")
+        check("the limits are explained rather than named",
+              "Open communication over the internet is radio" in page
+              and "Somebody has to be trying" in page)
+
+        # /dialing fixes the exact problem a first-time visitor hits, and
+        # used to be reachable from one sentence at the bottom of /terminals
+        # and a title= attribute, which is invisible on every touch device.
+        _, page = get("/")
+        check("the front page offers a way out when a dial link does nothing",
+              'href="/dialing">Nothing happened?' in page)
+        check("and the footer carries it on every page",
+              '>Dial links</a>' in page)
+        check("the dial link's tooltip no longer reads a URL out as text",
+              "See /dialing" not in page)
+
         # Pages are files in pages/, routed by name. That lookup runs last
         # on purpose: put it earlier and it swallows real endpoints, which
         # is exactly what happened to /health the first time.
         for name in ("build", "forward", "terminals", "dialing", "sdcard",
+                     "firstcall", "privacy",
                      "forward-netgear", "forward-tplink", "forward-asus",
                      "forward-xfinity", "forward-mesh"):
             code, page = get("/" + name)
