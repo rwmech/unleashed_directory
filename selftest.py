@@ -209,6 +209,21 @@ def main():
                      "forward-xfinity", "forward-mesh"):
             code, page = get("/" + name)
             check(f"/{name} renders", code == 200 and "<article>" in page)
+        # A numbered step is a step. md_render only knew "- " bullets, so the
+        # 53 numbered steps across the four router pages all fell through to
+        # the paragraph branch and were joined into a wall of text. Every word
+        # was present and in the right order, which is exactly what a grep
+        # checks and exactly why nothing caught it.
+        code, page = get("/forward-mesh")
+        check("numbered steps are a list, not a run-on paragraph",
+              "<ol>" in page and "<li>Tap <b>Advanced networking</b>.</li>" in page)
+        check("and no step number survives as text", ">1. Open the eero" not in page)
+        code, page = get("/forward-netgear")
+        # Indented sub-bullets are not in the dialect and are staying out: the
+        # five field labels under step 4 are a table now, which is.
+        check("the netgear form is a table, not a mangled sub-list",
+              "<ol>" in page and "Fill the form in" in page
+              and "<td>Service Name</td>" in page)
         code, page = get("/forward")
         check("the forwarding index warns before it instructs",
               'class="warn"' in page and "responsible" in page)

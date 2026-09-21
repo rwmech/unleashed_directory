@@ -14,6 +14,11 @@
 
 # Changelog
 
+## 0.11.0, 2026-09-21
+
+- **Fixed: every numbered step on the router pages was one run-on paragraph.** `md_render` knew `- ` bullets and nothing else, so a line beginning `1. ` fell through to the paragraph branch and consecutive paragraph lines were joined with a space. That is **53 numbered steps across four router pages**, every one of them a wall of text, on the pages somebody reads one step at a time with a router admin page open in the other window. Nothing caught it because the text was all present and in the right order, which is what a grep checks. The dialect has ordered lists now: `/forward-mesh` renders 33 `<li>` across two `<ol>` where it used to render two paragraphs.
+- The NETGEAR page's step 4 was five indented sub-bullets, which the dialect does not have and is not gaining: `md_render` tests `line.startswith("- ")` against the un-lstripped line, so they never matched, and with ordered lists in place they would have been swallowed into step 4's own `<li>` as `Fill in: - Service Name: BBS - ...`. They are a table now, which the dialect does support.
+
 ## 0.10.2, 2026-09-19
 
 - **Fixed: coming back from a reboot was what delisted a board.** A listing that had gone quiet was demoted from `offline` to `pending` on its next heartbeat, and the public page renders `online` and `offline` but not `pending`. So a board was still listed, shown as quiet, the whole time it was switched off, and vanished the moment it reconnected. It then had to serve the three pending hours over again. Found on the live directory: a board unplugged for an hour to have an SD card wired to it came back and was gone, telling its sysop "public in 2h54m".

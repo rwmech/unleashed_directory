@@ -40,13 +40,17 @@ The reservation applies the next time the board asks for a lease, so reboot it.
 1. Go to **ADVANCED > Advanced Setup > Port Forwarding / Port Triggering**.
 2. Leave **Port Forwarding** selected.
 3. Port 6400 has no predefined entry, so click **Add Custom Service**.
-4. Fill in:
-   - **Service Name**: `BBS`
-   - **Service Type**: `TCP`
-   - **External Starting Port**: `6400`, and the ending port field: `6400`
-   - Leave **Use the same port range for Internal port** ticked
-   - **Internal IP address**: the address you reserved
+4. Fill the form in as the table below sets out.
 5. Click **Apply**.
+
+| Field | Value |
+|---|---|
+| Service Name | `BBS` |
+| Service Type | `TCP` |
+| External Starting Port | `6400` |
+| the ending port field | `6400` |
+| Use the same port range for Internal port | leave ticked |
+| Internal IP address | the address you reserved |
 
 NETGEAR's documentation names **External Starting Port** explicitly but not the
 label on the ending field, so that one is described rather than quoted.

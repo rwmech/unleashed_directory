@@ -432,6 +432,12 @@ PAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 _MD_LINK   = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MD_CODE   = re.compile(r"`([^`]+)`")
 _MD_BOLD   = re.compile(r"\*\*([^*]+)\*\*")
+# "1. " at the start of a line. The router pages are 53 numbered steps that
+# somebody follows one at a time with an admin page open in the other window,
+# and without this they all fell through to the paragraph branch and were
+# joined into a wall of text. Nothing caught it because every word was
+# present and in the right order, which is what a grep checks.
+_MD_STEP   = re.compile(r"^\d{1,2}\. ")
 
 
 def md_inline(s):
@@ -466,6 +472,7 @@ def md_render(text):
     """The small subset of Markdown the pages use."""
     out, para, bullets, code = [], [], [], None
     quote = []            # consecutive "> " lines: one warning, not one per line
+    steps = []            # "1. " lines: a numbered list, not a paragraph
     table = None
     for raw in text.splitlines():
         line = raw.rstrip()
@@ -497,6 +504,10 @@ def md_render(text):
                 out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>"
                                             for b in bullets) + "</ul>")
                 bullets.clear()
+            if steps:
+                out.append("<ol>" + "".join(f"<li>{md_inline(s)}</li>"
+                                            for s in steps) + "</ol>")
+                steps.clear()
             if quote:
                 out.append('<p class="warn">' + md_inline(" ".join(quote)) + "</p>")
                 quote.clear()
@@ -518,13 +529,19 @@ def md_render(text):
             flush()
             out.append(f"<h1>{md_inline(line[2:])}</h1>")
         elif line.startswith("- "):
-            if para:
+            if para or steps:
                 flush()
             bullets.append(line[2:])
+        elif _MD_STEP.match(line):
+            if para or bullets:
+                flush()
+            steps.append(_MD_STEP.sub("", line, count=1))
         elif not line:
             flush()
         elif bullets and raw.startswith("  "):
             bullets[-1] += " " + line.strip()      # a wrapped bullet
+        elif steps and raw.startswith("  "):
+            steps[-1] += " " + line.strip()        # a wrapped step
         else:
             para.append(line.strip())
 
@@ -536,6 +553,8 @@ def md_render(text):
         out.append("<p>" + md_inline(" ".join(para)) + "</p>")
     if bullets:
         out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>" for b in bullets) + "</ul>")
+    if steps:
+        out.append("<ol>" + "".join(f"<li>{md_inline(s)}</li>" for s in steps) + "</ol>")
     if quote:
         out.append('<p class="warn">' + md_inline(" ".join(quote)) + "</p>")
     return "".join(out)
