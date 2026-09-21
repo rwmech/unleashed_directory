@@ -36,7 +36,9 @@ http://unleashedbbs.org, http://www.unleashedbbs.org {
 
 	@announce path /announce
 	handle @announce {
-		reverse_proxy 127.0.0.1:8080
+		reverse_proxy 127.0.0.1:8080 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 
 	# A browser that arrives on port 80 gets sent to the secure site.
@@ -53,7 +55,18 @@ unleashedbbs.com, www.unleashedbbs.com,
 unleashedbbs.net, www.unleashedbbs.net,
 unleashedbbs.org, www.unleashedbbs.org {
 	encode gzip
-	reverse_proxy 127.0.0.1:8080
+	reverse_proxy 127.0.0.1:8080 {
+		# The address the caller came from. reverse_proxy appends it to
+		# X-Forwarded-For by itself, and X-Real-IP is set here because Caddy
+		# does not set that one on its own. The directory believes both only
+		# on a connection from a trusted proxy, which is loopback, so a
+		# stranger sending their own X-Forwarded-For is ignored.
+		#
+		# If these ever stop arriving, every board on the list collapses to
+		# one address: one listing published, the rest queued for ever, and
+		# every board told its public address is 127.0.0.1.
+		header_up X-Real-IP {remote_host}
+	}
 	log {
 		output file /var/log/caddy/directory.log
 		format console

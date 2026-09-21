@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -57,10 +58,12 @@ def post(payload):
         return e.code, json.loads(e.read().decode() or "{}"), dict(e.headers)
 
 
-def get(path, host=None):
+def get(path, host=None, headers=None):
     req = urllib.request.Request(f"{BASE}{path}")
     if host:
         req.add_header("Host", host)
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
             return r.status, r.read().decode()
@@ -68,6 +71,15 @@ def get(path, host=None):
         # A 404 is an answer, not a failure. Checking that something is
         # absent is as much a test as checking it is there.
         return e.code, e.read().decode(errors="replace")
+
+
+def seen(path="/health", headers=None):
+    """What the server thinks the caller's address is, off the response."""
+    req = urllib.request.Request(f"{BASE}{path}")
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return r.headers.get("X-Seen-Address")
 
 
 def fk_grade(page):
@@ -127,6 +139,18 @@ def main():
                DIRECTORY_DATA_DOMAIN="data.example")
     server = subprocess.Popen([sys.executable, "server.py"], env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    # Drain it. The server logs one blocking print per request from the
+    # handler thread, so an undrained pipe fills after a few KB and every
+    # thread then blocks inside log_message: the server stays alive and
+    # stops answering, which looks exactly like a wedge under load. This
+    # suite ran for months just under the buffer and started timing out the
+    # moment a few more checks were added. The log is kept so a failure can
+    # be explained afterwards.
+    server_log = []
+    threading.Thread(
+        target=lambda: [server_log.append(line.decode("utf-8", "replace").rstrip())
+                        for line in server.stdout],
+        daemon=True).start()
     try:
         for _ in range(50):                          # wait for it to answer
             try:
@@ -134,6 +158,75 @@ def main():
                 break
             except Exception:
                 time.sleep(0.1)
+
+        # ------------------------------------------------------------------
+        # Where a request came from.
+        #
+        # The server listens on loopback with a reverse proxy in front, so
+        # the socket address is always the proxy's and the caller's real one
+        # is in X-Forwarded-For. Three things key off that address: the
+        # X-Seen-Address a board uses as a rough DDNS, the one-listing-per
+        # address cap, and report dedupe. Believing the header from anybody
+        # makes all three forgeable, and this server used to take the
+        # LEFTMOST entry, which is the end a caller controls completely.
+        #
+        # client_ip is exercised directly as well as over HTTP, because the
+        # untrusted-peer branch cannot be reached from loopback while
+        # loopback is the thing being trusted.
+        print("Where a request came from")
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import server as S
+        loop = S.trusted_nets("127.0.0.1,::1")
+        none_ = []
+        cases = [
+            ("the real caller, not the proxy",
+             ("127.0.0.1", "203.0.113.7", "", loop), "203.0.113.7"),
+            ("a forged entry ahead of the real one is ignored",
+             ("127.0.0.1", "9.9.9.9, 203.0.113.7", "", loop), "203.0.113.7"),
+            ("several forged entries, the rightmost still wins",
+             ("127.0.0.1", "9.9.9.9, 8.8.8.8, 203.0.113.7", "", loop), "203.0.113.7"),
+            ("a forged chain naming a trusted address is still ignored",
+             ("127.0.0.1", "9.9.9.9, 127.0.0.1, 203.0.113.7", "", loop), "203.0.113.7"),
+            ("our own proxies are stepped over to reach the caller",
+             ("127.0.0.1", "203.0.113.7, 127.0.0.1", "", loop), "203.0.113.7"),
+            ("an untrusted peer's header is not read at all",
+             ("203.0.113.9", "9.9.9.9", "", loop), "203.0.113.9"),
+            ("nor is its X-Real-IP",
+             ("203.0.113.9", "", "9.9.9.9", loop), "203.0.113.9"),
+            ("trusting nobody means the socket address, always",
+             ("127.0.0.1", "203.0.113.7", "", none_), "127.0.0.1"),
+            ("no header falls back to the socket",
+             ("127.0.0.1", "", "", loop), "127.0.0.1"),
+            ("junk in the header falls back rather than erroring",
+             ("127.0.0.1", "not-an-address", "", loop), "127.0.0.1"),
+            ("an entry carrying a port is still an address",
+             ("127.0.0.1", "203.0.113.7:51234", "", loop), "203.0.113.7"),
+            ("a bracketed IPv6 literal with a port",
+             ("127.0.0.1", "[2001:db8::5]:443", "", loop), "2001:db8::5"),
+            ("a bare IPv6 address",
+             ("127.0.0.1", "2001:db8::5", "", loop), "2001:db8::5"),
+            ("a v4-mapped v6 address becomes plain v4",
+             ("127.0.0.1", "::ffff:203.0.113.7", "", loop), "203.0.113.7"),
+            ("X-Real-IP is used when there is no chain",
+             ("127.0.0.1", "", "203.0.113.7", loop), "203.0.113.7"),
+        ]
+        for label, args, want in cases:
+            check(label, S.client_ip(*args) == want)
+        check("an IPv6 caller is grouped by /64, not by address",
+              S.group_of("2001:db8:1:2:3:4:5:6") == "2001:db8:1:2::/64"
+              and S.group_of("2001:db8:1:2::9") == "2001:db8:1:2::/64"
+              and S.group_of("2001:db8:1:3::9") != "2001:db8:1:2::/64")
+        check("and a v4 caller by its own address",
+              S.group_of("203.0.113.7") == "203.0.113.7")
+
+        # Over HTTP now, against the running server, which trusts loopback.
+        check("the forwarded address reaches X-Seen-Address",
+              seen(headers={"X-Forwarded-For": "203.0.113.7"}) == "203.0.113.7")
+        check("and a forged entry in front of it does not",
+              seen(headers={"X-Forwarded-For": "9.9.9.9, 203.0.113.7"})
+              == "203.0.113.7")
+        check("a caller with nothing in front of it is its own address",
+              seen() == "127.0.0.1")
 
         print("A board announces itself")
         board = {"software": "unleashed", "version": "0.13.0",

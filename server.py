@@ -85,6 +85,28 @@ LIST_DOMAIN   = os.environ.get("DIRECTORY_LIST_DOMAIN", "")   # the board list
 ABOUT_DOMAIN  = os.environ.get("DIRECTORY_ABOUT_DOMAIN", "")  # what this is, and why
 DATA_DOMAIN   = os.environ.get("DIRECTORY_DATA_DOMAIN", "")   # the machine-readable side
 
+# Who is allowed to tell us where a request came from.
+#
+# The server listens on loopback and a reverse proxy faces the internet, so
+# the socket address is always the proxy's. The caller's real address is in
+# X-Forwarded-For, and that header is supplied by whoever is talking to us,
+# which means it can only be believed when the connection itself comes from
+# somewhere we trust. Trusting it unconditionally would be worse than not
+# reading it at all: three separate things here key off the address, and
+# every one of them becomes forgeable.
+#
+#   - X-Seen-Address is handed back to a board as a rough DDNS. A board
+#     could make us tell a different board a wrong address.
+#   - One automatic listing per address, per /64 on v6. Claim a fresh
+#     address per heartbeat and the cap is gone.
+#   - Report dedupe counts distinct reporter networks, which is the whole
+#     defence against one person delisting somebody they dislike.
+#
+# Loopback by default because that is how Caddy reaches this. Accepts bare
+# addresses or CIDR, comma separated. Empty means trust nothing, which is
+# the right setting for a server facing the internet directly.
+TRUSTED_PROXIES = os.environ.get("DIRECTORY_TRUSTED_PROXIES", "127.0.0.1,::1")
+
 PENDING_HOURS = float(os.environ.get("DIRECTORY_PENDING_HOURS", "3"))
 # How long a board that has already earned its listing may stay dark and
 # still come straight back on to the page. The pending hours are the spam
@@ -333,6 +355,114 @@ def tidy(value, limit):
     if not isinstance(value, str):
         return ""
     return CLEAN.sub(" ", value).strip()[:limit]
+
+
+def trusted_nets(spec):
+    """The trusted proxy list, as networks. Junk entries are dropped with a
+    complaint rather than silently, because a typo here quietly turns the
+    address handling back into the broken version."""
+    nets = []
+    for part in (spec or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            print(f"ignoring bad DIRECTORY_TRUSTED_PROXIES entry: {part!r}",
+                  flush=True)
+    return nets
+
+
+TRUSTED_NETS = trusted_nets(TRUSTED_PROXIES)
+# Said once, not once per heartbeat. A board announcing from behind a proxy
+# that is not forwarding the caller's address is the exact shape of a bug
+# that is otherwise completely silent: every board looks like it lives at
+# the proxy, one listing gets published and the rest queue for ever, and
+# each one is told its public address is 127.0.0.1.
+_warned_no_forward = False
+
+
+def warn_no_forward(peer):
+    global _warned_no_forward
+    if _warned_no_forward:
+        return
+    _warned_no_forward = True
+    print(f"WARNING: announce from trusted proxy {peer} carried no "
+          "X-Forwarded-For and no X-Real-IP, so every board will look like "
+          "it came from that address. Check the reverse proxy configuration; "
+          "deploy/Caddyfile is the reference.", flush=True)
+
+
+def normal_ip(text):
+    """One address from a header or a socket, canonical, or "".
+
+    Handles the shapes that actually turn up in a forwarding chain: a bare
+    address, one with a port, an IPv6 literal in brackets, and the v4
+    mapped form, which has to become plain v4 or group_of would hand it a
+    /64 and treat one machine as a whole network.
+    """
+    s = (text or "").strip()
+    if not s:
+        return ""
+    if s.startswith("["):                      # [::1] or [::1]:443
+        s = s[1:].split("]", 1)[0]
+    elif s.count(":") == 1:                    # 1.2.3.4:5678, never bare v6
+        s = s.split(":", 1)[0]
+    try:
+        ip = ipaddress.ip_address(s)
+    except ValueError:
+        return ""
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return str(ip)
+
+
+def is_trusted(address, nets=None):
+    ip = normal_ip(address)
+    if not ip:
+        return False
+    ip = ipaddress.ip_address(ip)
+    return any(ip in net for net in (TRUSTED_NETS if nets is None else nets))
+
+
+def client_ip(peer, forwarded="", real_ip="", nets=None):
+    """Who actually made this request.
+
+    The peer is the socket address. When it is not a proxy we trust, that is
+    the answer and the headers are not read at all: anything on the internet
+    can send an X-Forwarded-For, so a header from a stranger is a claim, not
+    evidence.
+
+    When the peer is trusted, walk the chain from the RIGHT. The right hand
+    end is the part our own proxy appended and is the only part it vouches
+    for; the left hand end is whatever the caller sent us and is entirely
+    theirs to choose. Taking the leftmost entry is the classic way to get
+    this wrong, and it is what this server did until now. Trusted proxies
+    are skipped on the way left, so a chain of our own proxies resolves to
+    the caller in front of them.
+
+    Anything malformed stops the walk rather than being stepped over: our
+    proxy appends a valid address, so the only way to meet junk is with
+    nothing but trusted hops to its right, and falling back to the peer is
+    the conservative answer.
+    """
+    peer_ip = normal_ip(peer)
+    if not is_trusted(peer_ip, nets):
+        return peer_ip or normal_ip(peer) or str(peer)
+    for hop in reversed([h for h in (forwarded or "").split(",") if h.strip()]):
+        hop_ip = normal_ip(hop)
+        if not hop_ip:
+            break                              # junk: stop, do not walk past it
+        if is_trusted(hop_ip, nets):
+            continue                           # one of ours, keep going left
+        return hop_ip
+    # Caddy does not set X-Real-IP by itself, so this only fires where the
+    # deployment has been told to. Same rule: trusted peer or nothing.
+    direct = normal_ip(real_ip)
+    if direct:
+        return direct
+    return peer_ip
 
 
 def group_of(address):
@@ -2257,10 +2387,19 @@ class Handler(BaseHTTPRequestHandler):
         print(f"{self.caller()} {fmt % args}", flush=True)
 
     def caller(self):
-        forwarded = self.headers.get("X-Forwarded-For", "")
-        if forwarded:                        # behind Caddy, the real address is here
-            return forwarded.split(",")[0].strip()
-        return self.client_address[0]
+        """The address this request actually came from.
+
+        getattr rather than self.headers, because log_message runs for a
+        request line that never parsed into headers at all, and an
+        AttributeError raised inside the logger is a bad way to find out.
+        """
+        head = getattr(self, "headers", None)
+        peer = self.client_address[0] if self.client_address else ""
+        if head is None:
+            return normal_ip(peer) or str(peer)
+        return client_ip(peer,
+                         head.get("X-Forwarded-For", ""),
+                         head.get("X-Real-IP", ""))
 
     def reply(self, code, body, ctype="text/html; charset=utf-8", extra=None):
         raw = body.encode("utf-8") if isinstance(body, str) else body
@@ -2379,6 +2518,14 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
 
         if path == "/announce":
+            # Only on this endpoint: a local health check is a legitimate
+            # direct request with no forwarded headers, and warning about it
+            # would be noise. A heartbeat is the one place the address has
+            # consequences.
+            peer = self.client_address[0] if self.client_address else ""
+            if (is_trusted(peer) and not self.headers.get("X-Forwarded-For")
+                    and not self.headers.get("X-Real-IP")):
+                warn_no_forward(normal_ip(peer) or peer)
             try:
                 payload = json.loads(raw.decode("utf-8", "replace"))
                 if not isinstance(payload, dict):
@@ -2402,6 +2549,10 @@ def main():
     setup()
     print(f"directory on {BIND_HOST}:{BIND_PORT}, db {DB_PATH}, "
           f"pending {PENDING_HOURS}h, {PER_ADDRESS} per address", flush=True)
+    print("trusting forwarded addresses from: "
+          + (", ".join(str(n) for n in TRUSTED_NETS) if TRUSTED_NETS
+             else "nobody, so every request is attributed to its socket address"),
+          flush=True)
     ThreadingHTTPServer((BIND_HOST, BIND_PORT), Handler).serve_forever()
 
 

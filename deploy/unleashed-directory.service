@@ -30,6 +30,13 @@ Environment=DIRECTORY_PENDING_HOURS=3
 Environment=DIRECTORY_EXPIRE_DAYS=7
 Environment=DIRECTORY_PER_ADDRESS=1
 Environment=DIRECTORY_MIN_SECONDS=30
+# Who may tell the server where a request came from. Caddy reaches it over
+# loopback, so loopback is the whole list. X-Forwarded-For is a header any
+# stranger can send, and it is believed only on a connection from one of
+# these; from anywhere else the socket address is used and the header is
+# not read at all. Widen this only if something else sits in front of
+# Caddy, and name that thing here rather than trusting the header at large.
+Environment=DIRECTORY_TRUSTED_PROXIES=127.0.0.1,::1
 
 # It listens on loopback only and Caddy is the thing facing the internet, so
 # it needs nothing else: no new privileges, no write access beyond its own

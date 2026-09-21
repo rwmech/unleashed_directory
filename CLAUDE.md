@@ -22,6 +22,12 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - **Tests stay on 127.0.0.1.** Never point anything at the live directory.
 - **`python selftest.py` before every commit.** It is the whole test suite,
   it takes seconds, and it needs no network.
+- **Drain any server stdout you capture.** The server logs one blocking
+  `print` per request from the handler thread, so a `subprocess.PIPE`
+  nobody reads fills after a few KB and every thread then blocks inside
+  `log_message`: the server stays alive and stops answering, which reads
+  exactly like a wedge under load. The suite did this for months just under
+  the buffer and started timing out the moment a few checks were added.
 - **CHANGELOG.md is updated in the same commit**, not afterwards.
 - **Never commit** the database, or anything with a token in it.
 
@@ -31,6 +37,24 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   framework, no dependencies, because a directory nobody can afford to run
   is not a directory.
 - Listens on loopback. Caddy faces the internet and holds the certificates.
+- **The socket address is always Caddy's, so the caller's comes from
+  `X-Forwarded-For`, and that header is believed only when the connection
+  is from a trusted proxy.** `DIRECTORY_TRUSTED_PROXIES` is the list,
+  loopback by default, and it lives in the systemd unit. From an untrusted
+  peer the header is not read at all; from a trusted one the **rightmost**
+  entry that is not itself a trusted proxy wins. The rightmost is the part
+  our own proxy appended and the only part it vouches for; the leftmost is
+  whatever the caller typed, and taking it is how this was wrong until
+  0.11.4. Three things key off the address, so getting it wrong is not
+  cosmetic: `X-Seen-Address` (a board's rough DDNS), the one listing per
+  address cap, and report dedupe.
+- **If the forwarded headers ever stop arriving, the directory can publish
+  exactly one board.** Every heartbeat collapses to one `group_key`, so one
+  listing goes public and the rest queue for ever, the fifth distinct board
+  evicts the stalest, and a shared rate limit bucket 429s any two announces
+  inside `DIRECTORY_MIN_SECONDS`. The server prints its trusted list at
+  startup and logs one warning on an announce with no forwarded headers, so
+  this is visible in the journal rather than silent.
 - `role_for(host)` serves three faces from one process by Host header: the
   board list, the argument (the manifesto), and the machine-readable data.
 - Pages are cached and the cache is dropped only when `settle()` actually

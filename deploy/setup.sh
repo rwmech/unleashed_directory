@@ -206,7 +206,9 @@ else
         echo "$HTTP_ALL {"
         echo "	@announce path /announce"
         echo "	handle @announce {"
-        echo "		reverse_proxy 127.0.0.1:8080"
+        echo "		reverse_proxy 127.0.0.1:8080 {"
+        echo "			header_up X-Real-IP {remote_host}"
+        echo "		}"
         echo "	}"
         echo "	handle {"
         echo "		redir https://$MAIN{uri} permanent"
@@ -217,7 +219,12 @@ else
         echo
         echo "$ALL {"
         echo "	encode gzip"
-        echo "	reverse_proxy 127.0.0.1:8080"
+        # Caddy appends X-Forwarded-For by itself; X-Real-IP it does not,
+        # and the directory reads both. Neither is believed unless the
+        # connection came from a trusted proxy, which is loopback.
+        echo "	reverse_proxy 127.0.0.1:8080 {"
+        echo "		header_up X-Real-IP {remote_host}"
+        echo "	}"
         echo "	log {"
         echo "		output file /var/log/caddy/directory.log"
         echo "		format console"
