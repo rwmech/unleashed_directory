@@ -1340,11 +1340,21 @@ article .aside {{ color:var(--ink); background:#12121a;
    old, and it read as a footnote.
 
    So: the full column rather than a measure, a frame on all four sides
-   rather than one, a corner radius, and a marker at the right edge. --dial
-   throughout, which already means "something you can act on" everywhere
-   else here; a link to a page somebody would enjoy does not belong in the
-   colour the router pages use to say a port forward is your
-   responsibility.
+   rather than one, a corner radius, and a marker at the right edge.
+
+   Warm, not the site's cyan. --dial means "something you can act on"
+   everywhere else here, but it is also the site's structural colour, and
+   in it this box read as furniture. Yellow and orange read as "look
+   here". Red is deliberately not in it: red is the grammar of an error
+   box, and this one points a twelve year old at a page written for them,
+   which is the same argument that kept the warning triangle out of it.
+   It shares that range with .warn and is told apart by everything else:
+   .warn is a narrow indented note marked on one edge, this is the full
+   column in a bright frame with a marker in it.
+
+   Measured against the box background rather than judged: lead 11.4:1,
+   body 12.2:1, link and marker 8.7:1, frame 6.1:1. AA wants 4.5 for text
+   and 3 for a boundary.
 
    The marker is "-->" and not a warning triangle. A triangle is the glyph
    for "something is wrong", and this box exists to say "this way in": the
@@ -1359,21 +1369,55 @@ article .aside {{ color:var(--ink); background:#12121a;
    the column, so the marker moves to the bottom right corner and the
    reserve becomes padding-bottom instead, which puts it after the link
    rather than beside it. */
-article .tip {{ color:#cfe6f2; background:#0e1a20;
-        border:1px solid #35566b; border-radius:0.625rem;
+article .tip {{ color:#f2ddb8; background:#2e1c05;
+        border:1px solid #d98f24; border-radius:0.625rem;
         padding:1rem 6rem 1.125rem 1.25rem; margin:1.375rem 0 1.625rem; max-width:none;
         position:relative; }}
 /* The family stays monospace, because that is the site's identity and one
    element in a different face reads as a mistake rather than a choice. The
    lead sentence earns its rank on size, colour and its own line instead. */
-article .tip b:first-child {{ display:block; color:var(--dial);
+article .tip b:first-child {{ display:block; color:#ffd35c;
         font-size:1rem; letter-spacing:0.03125rem; margin:0 0 0.3125rem; }}
-article .tip a {{ color:var(--dial); text-decoration:underline;
+article .tip a {{ color:#ffab52; text-decoration:underline;
         text-underline-offset:0.1875rem; }}
+/* The whole box is the link, and the arrow is part of it.
+
+   Drawing a pointer that does nothing is worse than drawing no pointer:
+   it costs a reader a click to learn it is decoration, and on a phone it
+   is the first thing they tap. Rob found it immediately.
+
+   Not an <a> around the arrow, which would be a 36px target under the
+   44px touch guidance asks for, and a third link in a box with one
+   destination. Not an <a> around the box either, because the box already
+   contains one and anchors do not nest. So: the one real link keeps its
+   text, and an ::after on it stretches to the box's padding box. One
+   anchor, one destination, one accessible name, the entire box live.
+
+   The arrow is pointer-events:none so the hit falls through to that
+   overlay. Without it the arrow is painted last, sits on top, and swallows
+   the click on the one spot this whole change is about.
+
+   The cost, stated rather than hidden: an overlay across the text makes
+   the paragraph awkward to select by dragging. There is no way around
+   that without script. It is three lines of invitation that exist to be
+   clicked, not reference text somebody copies, so it is the right trade
+   here and would not be on a page of commands. */
+article .tip a::after {{ content:""; position:absolute; inset:0;
+        border-radius:0.625rem; }}
 article .tip::after {{ content:"-->"; position:absolute;
         right:1.25rem; top:50%; transform:translateY(-50%);
-        color:var(--dial); font-size:2rem; line-height:1;
-        letter-spacing:-0.1875rem; }}
+        color:#ffab52; font-size:2rem; line-height:1;
+        letter-spacing:-0.1875rem; pointer-events:none; }}
+/* A box that is clickable by mouse only is the same bug in a different
+   costume, so the whole box lights on hover and the keyboard gets a ring
+   around the box rather than around six words of it. The ring goes on the
+   stretched overlay, which already is the box, so this needs no :has()
+   and works wherever ::after does. */
+article .tip:hover {{ background:#3a2408; border-color:#f0a52e; }}
+article .tip:hover::after {{ color:#ffc77e; }}
+article .tip a:focus-visible {{ outline:none; }}
+article .tip a:focus-visible::after {{ outline:3px solid #ffd35c;
+        outline-offset:-3px; }}
 /* Same breakpoint as .gallery.one, and after the rule it overrides rather
    than before it: both selectors are (0,1,1), so source order decides and
    an earlier media query would simply have lost. 30px out of a 343px phone

@@ -499,6 +499,40 @@ def main():
         check("and carries its marker at the right edge",
               'article .tip::after { content:"-->"' in page
               and "position:absolute" in page.split("article .tip::after {")[1][:200])
+        # A pointer that does nothing is worse than no pointer: it costs a
+        # reader a click to learn it is decoration, and on a phone it is the
+        # first thing they tap. The whole box is one link now, via a
+        # stretched ::after on the single anchor the box already had, so
+        # there is still one destination and one accessible name.
+        #
+        # pointer-events on the marker is the load-bearing line and it is
+        # the one somebody would delete as noise. The marker is painted
+        # last, so without it the marker sits on top of the overlay and
+        # swallows the click on the one spot this whole change is about.
+        #
+        # Verified in Chrome rather than inferred: elementFromPoint at the
+        # marker's computed centre resolves to the /kids anchor at 1920,
+        # 1366 and 390, the box is live at 2159 of 2160 sampled points, and
+        # a real click dispatched at that pixel put a GET /kids in the
+        # server log where merely loading the page put none.
+        tipcss = page.split("article .tip a::after {")[1][:200]
+        check("the whole box is the link, not just the six words in it",
+              'content:""' in tipcss and "position:absolute" in tipcss
+              and "inset:0" in tipcss)
+        check("and the marker lets the click through to it",
+              "pointer-events:none"
+              in page.split('article .tip::after { content:"-->"')[1][:260])
+        check("the box answers a mouse and a keyboard, not just a mouse",
+              "article .tip:hover {" in page
+              and "article .tip a:focus-visible::after { outline:" in page)
+        # Warm, and deliberately not red: red is the grammar of an error
+        # box. Rob asked for yellow and orange after seeing it in the site's
+        # cyan, which is the structural colour and made it read as
+        # furniture. Ratios against the box background, measured: lead
+        # 11.4:1, body 12.2:1, link and marker 8.7:1, frame 6.1:1.
+        check("and it is warm, which is what makes it read as an invitation",
+              "article .tip { color:#f2ddb8; background:#2e1c05;" in page
+              and "var(--dial)" not in tip)
         check("the teachers page is linked from the schools section",
               '"/teachers"' in page)
         # The menu, not the body: the first version of this check looked for
