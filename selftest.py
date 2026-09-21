@@ -986,6 +986,181 @@ def main():
         con.commit()
         con.close()
 
+        # ------------------------------------------------------------------
+        # The browser installer.
+        #
+        # Two halves, and the split is deliberate. The state a visitor
+        # actually meets today is "no firmware published", and that is
+        # checked over HTTP against the real server with the repository's
+        # own firmware/ directory, because that is the deployment. The state
+        # with images in it is checked by pointing the module's FIRMWARE_DIR
+        # at a scratch tree: it needs no second server and no second port,
+        # and nothing that looks like a firmware image ever goes near the
+        # repository.
+        print("The installer page, with nothing published")
+        code, inst = get("/install")
+        check("there is an install page", code == 200)
+        check("it says plainly that there is nothing to install yet",
+              "Not ready yet" in inst and "no firmware image" in inst)
+        check("and says why, in its own words rather than as an advisory",
+              "only ever join the network of whoever built it" in inst)
+        check("it offers no button and no element to press",
+              "<esp-web-install-button" not in inst)
+        # The whole point of tying the script to the widget: with nothing
+        # published there is no widget, so there is no third-party code on
+        # the page either. A flag would have had to be remembered.
+        check("and loads no script at all", "<script" not in inst)
+        check("nothing under /firmware/ is served",
+              get("/firmware/0.19.2/manifest.json")[0] == 404
+              and get("/firmware/0.19.2/esp32/firmware.bin")[0] == 404)
+        check("the page is reachable from the build page and the footer",
+              "/install" in get("/build")[1] and '/install">Install</a>' in inst)
+        # A page off the menu still has to say where it is. Without this the
+        # nav marks nothing, or worse marks Boards.
+        check("and the menu marks Build one as the section it belongs to",
+              '<a class="here" href="/build">Build one</a>' in inst)
+
+        print("Every other page is still script-free")
+        scripted = [p for p in ("/", "/about", "/data", "/build", "/whofor",
+                                "/terminals", "/firstcall", "/forward", "/how",
+                                "/rules", "/privacy", "/kids", "/teachers",
+                                "/sdcard", "/dialing")
+                    if "<script" in get(p)[1]]
+        check("nothing else on the site loads any JavaScript"
+              + ("" if not scripted else "  <- " + ", ".join(scripted)),
+              not scripted)
+
+        # ------------------------------------------------------------------
+        print("The manifest is built from what is on disk")
+        import pathlib
+        import shutil
+        fwroot = tempfile.mkdtemp(prefix="dirfw")
+        was_dir = S.FIRMWARE_DIR
+
+        def put(version, chip, names, extra=None):
+            d = os.path.join(fwroot, version, chip)
+            os.makedirs(d, exist_ok=True)
+            for n in names:
+                with open(os.path.join(d, n), "w") as fh:
+                    fh.write("placeholder, not firmware\n")
+            for n, body in (extra or {}).items():
+                with open(os.path.join(fwroot, version, n), "w") as fh:
+                    fh.write(body)
+
+        whole = ["bootloader.bin", "partitions.bin", "firmware.bin", "littlefs.bin"]
+        put("0.19.2", "esp32", whole,
+            {"release.txt": "2026-09-21\nA short note.\n",
+             "THIRD_PARTY_NOTICES.md": "notices\n"})
+        put("0.19.1", "esp32", whole,
+            {"release.txt": "2026-09-01\nOlder.\nimprov: yes\n"})
+        put("0.18.0", "esp32", whole)                  # a third, beyond the cap
+        put("9.9.9", "esp32", whole[:3])               # littlefs.bin missing
+        put("0.19.2", "esp32x9", whole)                # not a chip family we know
+        os.makedirs(os.path.join(fwroot, "NOT-A-RELEASE", "esp32"), exist_ok=True)
+
+        try:
+            S.FIRMWARE_DIR = pathlib.Path(fwroot)
+            rels = S.firmware_releases()
+            check("two releases are offered, newest first",
+                  [r["version"] for r in rels] == ["0.19.2", "0.19.1"])
+            # Not merely unlisted. A version left on disk past the cap must
+            # not be reachable by typing its number either, or "two live"
+            # would be a statement about the page and not about the site.
+            check("a third on disk is not offered and is not reachable",
+                  S.firmware_manifest("0.18.0") is None
+                  and S.firmware_file("0.18.0/esp32/firmware.bin") is None)
+            # The property the whole design exists for: a release cannot be
+            # half-published, because a part is only ever emitted for a file
+            # that was just found on disk.
+            check("a release missing one part is not offered at all",
+                  S.firmware_manifest("9.9.9") is None)
+
+            man = S.firmware_manifest("0.19.2")
+            check("the top level is exactly the keys ESP Web Tools reads",
+                  set(man) == {"name", "version", "new_install_prompt_erase",
+                               "new_install_improv_wait_time", "builds"})
+            check("the person is asked before the chip is erased, not after",
+                  man["new_install_prompt_erase"] is True)
+            check("only the chip families we know about are in it",
+                  [b["chipFamily"] for b in man["builds"]] == ["ESP32"])
+
+            # The offsets, read from the firmware repository's partitions.csv
+            # and its generated sdkconfig rather than from a tutorial. The
+            # bootloader is at 0x1000 because this is an ESP32; an S3 or a C3
+            # would be 0x0, which is why it comes from FLASH_FAMILIES.
+            parts = man["builds"][0]["parts"]
+            check("the parts are the bootloader, the table, the app and the screens",
+                  [p["path"] for p in parts]
+                  == ["esp32/bootloader.bin", "esp32/partitions.bin",
+                      "esp32/firmware.bin", "esp32/littlefs.bin"])
+            check("at the offsets the partition table actually uses",
+                  [p["offset"] for p in parts]
+                  == [0x1000, 0x8000, 0x20000, 0x3C0000])
+            # Their type is `offset: number`, JSON has no hex literal, and a
+            # string would be handed to the flasher unparsed. This is the one
+            # mistake in the schema that would write a board at the wrong
+            # address, so it is pinned as a type and not only as a value.
+            check("and every offset is a number, never a hex string",
+                  all(isinstance(p["offset"], int) for p in parts))
+            check("nothing that is not a version number is mistaken for one",
+                  all(re.match(r"^\d+\.\d+\.\d+$", r["version"]) for r in rels))
+
+            # Improv is a property of the image, so it is read from beside
+            # the image. Absent means off, because a board that cannot answer
+            # makes every install sit for ten seconds and look wedged.
+            check("a release that does not speak Improv switches the wait off",
+                  man["new_install_improv_wait_time"] == 0)
+            check("and one that does gets the ten seconds it needs",
+                  S.firmware_manifest("0.19.1")["new_install_improv_wait_time"] == 10)
+            check("the date and note beside a release are read from it",
+                  rels[0]["date"] == "2026-09-21"
+                  and rels[0]["note"] == "A short note.")
+
+            # Names are checked, not paths, the same way static_file does it.
+            climbs = ["../server.py", "0.19.2/../../server.py",
+                      "0.19.2/esp32/../../../server.py", "0.19.2/esp32/release.txt",
+                      "0.19.2/esp32x9/firmware.bin", "", "manifest.json"]
+            check("no path under /firmware/ climbs out of it",
+                  all(S.firmware_file(c) is None for c in climbs))
+            got = S.firmware_file("0.19.2/esp32/firmware.bin")
+            check("a real part is served as a binary",
+                  got is not None and got[1] == "application/octet-stream")
+            got = S.firmware_file("0.19.2/manifest.json")
+            check("and the manifest as JSON that parses",
+                  got is not None
+                  and json.loads(got[0].decode())["version"] == "0.19.2")
+
+            shown = S.installer_html()
+            check("with an image published the page offers the element",
+                  "<esp-web-install-button" in shown
+                  and 'manifest="/firmware/0.19.2/manifest.json"' in shown)
+            check("with our own button and both refusal messages in its slots",
+                  'slot="activate"' in shown and 'slot="unsupported"' in shown
+                  and 'slot="not-allowed"' in shown)
+            check("the older release is kept and linked, not hidden",
+                  "0.19.1" in shown)
+            check("and the licences of what is being installed are linked",
+                  "THIRD_PARTY_NOTICES.md" in shown)
+        finally:
+            S.FIRMWARE_DIR = was_dir
+            shutil.rmtree(fwroot, ignore_errors=True)
+
+        # A floating tag means the code a visitor runs can change between one
+        # reader and the next. This is the only third-party code on the site,
+        # so it is pinned to an exact version and the suite says so.
+        check("ESP Web Tools is pinned to an exact version",
+              re.search(r"esp-web-tools@\d+\.\d+\.\d+/", S.EWT_SCRIPT) is not None)
+        check("and loaded from the self-contained web bundle",
+              S.EWT_SCRIPT.endswith("/dist/web/install-button.js?module"))
+        # firmware/ ships with no images in it, and that is the release gate:
+        # nothing goes on the site until the credentials come out of the
+        # build. A binary appearing here by accident would be caught here.
+        shipped = [p for p in os.listdir("firmware")
+                   if re.match(r"^\d+\.\d+\.\d+$", p)]
+        check("and no firmware image is committed to this repository"
+              + ("" if not shipped else "  <- " + ", ".join(shipped)),
+              not shipped)
+
         # Last, because it uses up everything one address may hold.
         #
         # This is the bug that put ninety rows on the live directory. A board

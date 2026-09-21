@@ -7,6 +7,12 @@
 #  SPDX-License-Identifier: GPL-2.0-or-later
 # ===========================================================================
 * text=auto eol=lf
+# Firmware images for the browser installer. "text=auto" guesses, and a
+# guess that goes the wrong way on a megabyte of application image rewrites
+# every CRLF inside it and produces a binary that flashes cleanly and does
+# not boot. Nothing about that failure would point back at this file, so the
+# images are declared binary rather than detected as binary.
+*.bin     binary
 *.sh      text eol=lf
 *.py      text eol=lf
 *.service text eol=lf

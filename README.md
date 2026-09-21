@@ -44,6 +44,7 @@ that domain serves the board list, with the other two faces under `/about` and
 - Shows which boards are up, which have gone quiet, and how long each has been running.
 - Tells each board the public address its heartbeat arrived from, which is dynamic DNS as a side effect.
 - Publishes new boards as an RSS feed at `/feed.xml`, so people can follow the list without an account, an email address or anything that knows who is reading.
+- Hosts the browser installer at `/install`, which writes the BBS firmware to an ESP32 over USB from a Chrome or Edge tab, with no toolchain to set up. The images it serves live in [firmware/](firmware/README.md), which is empty today; the page says so rather than offering a download that is not there.
 
 ## What it will not do
 
@@ -72,6 +73,8 @@ Settings come from the environment, so a deployment never edits the code:
 | `DIRECTORY_PER_ADDRESS` | `1` | automatic listings per address, per `/64` on IPv6. The rest queue for a human |
 | `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one address |
 | `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page and feed are reused |
+| `DIRECTORY_FIRMWARE_DIR` | `firmware/` | where the browser installer's firmware images live |
+| `DIRECTORY_FIRMWARE_KEEP` | `2` | how many releases `/install` offers, newest first |
 | `DIRECTORY_LIST_DOMAIN` | | the domain that shows the board list |
 | `DIRECTORY_ABOUT_DOMAIN` | | the domain that shows what this is |
 | `DIRECTORY_DATA_DOMAIN` | | the domain that shows the API |

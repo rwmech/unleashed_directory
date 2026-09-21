@@ -60,9 +60,44 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - Pages are cached and the cache is dropped only when `settle()` actually
   moved something, so the page is never stale but is also not rebuilt for
   every reader.
-- No JavaScript anywhere on the site. The manifesto page makes a point of
-  it, so anything that would add a script needs a better reason than
-  convenience. The ASCII animation is CSS.
+- No JavaScript anywhere on the site, with exactly one exception, and the
+  shape of the exception is the rule. The ASCII animation is CSS, the day
+  chart is an SVG, the board list reloads with a meta refresh.
+  **`/install` loads ESP Web Tools**, pinned at an exact version, from
+  unpkg. A web page cannot reach a serial port without it, which is the
+  kind of reason that clears the bar; convenience is not, and nothing else
+  on the site gets a script without Rob.
+  **The script is emitted only when the page carries `::: installer` *and*
+  `firmware/` actually holds a release.** Both halves, so the script and
+  the widget arrive together or neither does: a page with no button cannot
+  ship third-party code, and a button cannot appear without the code that
+  drives it. That is one condition in `md_page()` rather than a flag
+  somebody has to keep in step, and it means a deployment publishing no
+  images loads nothing from anywhere. `selftest.py` walks every other page
+  and fails on a `<script>` in any of them.
+  It also puts a hole in THIRD_PARTY_NOTICES.md's claim that nothing a
+  visitor loads comes from anywhere but this machine. That file now says
+  so, in the section above the claim rather than in a footnote. If the
+  trade ever stops being worth it, the fix is to serve the bundle from
+  here; it is not done today because a pinned URL is auditable in one line
+  and a vendored copy of somebody else's build output is the thing that
+  file exists to say is not here.
+- **The installer's state is the `firmware/` directory and nothing else.**
+  `server.py` walks it per render and builds the ESP Web Tools manifest
+  from what it finds, so a release cannot be half-published, "nothing
+  available yet" is the absence of files rather than a flag, and cutting a
+  release is copying files in. The offsets come from the firmware repo's
+  `partitions.csv` and its **generated** `sdkconfig.esp32dev`, live in
+  `FLASH_PARTS` and `FLASH_FAMILIES`, and a bootloader offset is per chip
+  family: 0x1000 on the ESP32, 0x0 on the RISC-V parts. `offset` is a
+  decimal JSON number; their type is `offset: number` and a hex string
+  would be handed to the flasher unparsed. Full process in
+  `firmware/README.md`.
+  **Nothing can be published there until Improv Wi-Fi Serial lands on the
+  board**, because Wi-Fi credentials are compiled in from
+  `include/secrets.h` and `data/system.cfg` carries `sysop_password` into
+  the filesystem image. Two separate leaks, one release process step each,
+  and the suite fails if a version directory ever appears in `firmware/`.
 - `pages/*.md` are written in a deliberately small Markdown dialect that
   `md_render()` implements in about sixty lines. What exists: `#`, `##`,
   `###`, `- ` bullets, `1. ` ordered lists, `> ` blockquotes (consecutive
@@ -93,6 +128,14 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   year old. Everywhere else it is doing real work because the audience
   recognises it; on that one page it asked a reader to decode an
   unfamiliar visual language before being given a reason to care.
+  **`::: installer` ... `:::`** is the third block and the only one that is
+  not prose: it renders the flasher widget, or an honest account of why
+  there is nothing to flash. It carries **no content of its own**, and that
+  is the point, because what it should say depends on what is in
+  `firmware/` rather than on what somebody typed into the page. `:::`
+  blocks dispatch through `md_block()`; an unknown name after `:::` still
+  falls through to a paragraph so a typo is visible rather than swallowing
+  the rest of the page.
   **A form that is not in the dialect does not fail, it renders as a
   paragraph**, which is how 53 numbered steps across the router pages were
   a wall of text for four versions with every word present and in the right

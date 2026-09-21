@@ -5,6 +5,11 @@ A board of your own, on hardware that costs less than lunch.
 Nothing here is a kit and nothing is soldered to anything. If you have an ESP32
 dev board in a drawer, you already have most of it.
 
+> [!TIP]
+> **[Put the firmware on from your browser](/install)**, with no toolchain and
+> nothing to install. Chrome or Edge, a USB cable, about five minutes. This
+> page is the longer road, and the one you want once you start changing things.
+
 ## What you need
 
 - **An ESP32 with 4 MB of flash.** The reference board is a bare

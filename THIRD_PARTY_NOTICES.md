@@ -21,6 +21,23 @@ Nothing but its own code. There is no vendored library, no bundled dependency, n
 
 That is a deliberate choice rather than an accident of scale. A directory that anybody can run has to be a directory anybody can read, and a dependency tree is the fastest way to make a small program unauditable.
 
+The exception is `firmware/`, when it has anything in it. Those are compiled images of [µnleashed BBS](https://github.com/rwmech/unleashed_BBS), also GPL v2 or later, and each release directory carries its own `THIRD_PARTY_NOTICES.md` describing the code compiled into it, ESP-IDF and its components among them. That file travels with the binaries rather than pointing at a moving target, and the installer page links it beside each version.
+
+## The one thing loaded from somewhere else
+
+**[ESP Web Tools](https://github.com/esphome/esp-web-tools), Apache License 2.0**, pinned at version `10.4.0` and loaded from `unpkg.com` by `/install`, and by no other page.
+
+It is what makes the browser installer possible: the part that talks to a serial port from a web page. It is the only third-party code anybody loads from this site and the only JavaScript anywhere on it.
+
+Worth being exact about what that costs, because the rest of this file makes a strong claim and this is the thing that qualifies it:
+
+- **`/install` alone.** Every other page stays HTML and one inline stylesheet, and the server will not emit the script tag for any of them.
+- **Only when there is something to install.** With `firmware/` empty the page explains itself instead of offering a button, and no script tag is emitted at all, so a deployment that publishes no images loads no third-party code from anywhere.
+- **An exact version, never a floating tag.** ESP Web Tools' own documentation suggests pinning to the major version, which still means the code a visitor runs can change between one reader and the next. `10.4.0` cannot.
+- **unpkg sees a request** from anybody who opens that page while an image is published. That is a third party learning somebody visited one page, which is the sort of thing the rest of this site refuses to permit, and it is accepted here in exchange for the installer existing at all.
+
+Serving the bundle from this machine would remove the last point, and is the obvious improvement if it starts to matter. It is not done today because a pinned URL is auditable in one line, while a vendored copy of somebody else's build output is the thing this file otherwise exists to say is not here.
+
 ## What it runs on
 
 These are installed by the operating system's package manager. They are not distributed with this software and their licences are their own.
@@ -35,4 +52,6 @@ Caddy is optional. The server speaks plain HTTP on its own and will run behind n
 
 ## What it does not use
 
-No web framework, no ORM, no template engine, no JavaScript, no web fonts, no analytics, no content delivery network, no tracking of any kind. The page is HTML and one inline stylesheet. Nothing a visitor loads comes from anywhere but the machine you installed it on.
+No web framework, no ORM, no template engine, no web fonts, no analytics, no tracking of any kind. A page is HTML and one inline stylesheet.
+
+With one exception, and it is named above rather than buried: `/install` loads ESP Web Tools from a CDN when there is a firmware image to install, because a web page cannot reach a serial port without it. On every other page, and on that one when no image is published, nothing a visitor loads comes from anywhere but the machine you installed this on.

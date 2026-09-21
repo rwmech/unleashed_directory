@@ -134,13 +134,104 @@ BODY_MAX      = 4096
 PAGE_CACHE    = int(os.environ.get("DIRECTORY_PAGE_CACHE", "10"))
 # The board list is a live thing: who is on changes minute to minute, so the
 # page reloads itself rather than going stale in a tab somebody left open.
-# A meta refresh, not a script, because this site ships no JavaScript and a
-# reader should not have to run code to read a list. It is cheap: the page
+# A meta refresh, not a script, because a reader should not have to run code
+# to read a list. /install is the only page here that loads any, and it does
+# so only when there is firmware to install; see EWT_SCRIPT. It is cheap: the page
 # is rendered at most once every PAGE_CACHE seconds however many ask for it.
 LIST_SECONDS  = int(os.environ.get("DIRECTORY_LIST_REFRESH", "60"))
 LIST_REFRESH  = (f'<meta http-equiv="refresh" content="{LIST_SECONDS}">'
                  if LIST_SECONDS > 0 else "")
 _cache = {}
+
+# --------------------------------------------------------------------------
+# Firmware images, for the browser installer on /install.
+#
+# The directory on disk is the whole of the state. server.py walks it and
+# builds the ESP Web Tools manifest from what is actually there, rather than
+# reading a list somebody maintains, and that choice buys three things:
+#
+#   - a release cannot be half-published, because a manifest part is only
+#     ever emitted for a file that was just found on disk;
+#   - "no firmware available yet" is the absence of files rather than a flag
+#     anybody has to remember to flip, so the page cannot lie in either
+#     direction;
+#   - cutting a release is copying files in, which is the whole of it.
+#
+# It is the same argument pix_html() already makes about card art: the page
+# has to be correct today, with the directory empty, and correct again the
+# moment something lands in it.
+#
+# Pointing this outside the checkout is supported on purpose. deploy/update.sh
+# is a git pull, so anything in firmware/ is in the repository and two
+# releases is a few megabytes of it; a deployment that would rather keep them
+# on a larger volume moves this and nothing else changes.
+FIRMWARE_DIR  = pathlib.Path(os.environ.get(
+    "DIRECTORY_FIRMWARE_DIR",
+    str(pathlib.Path(__file__).resolve().parent / "firmware")))
+# How many releases the page offers, newest first. Rob's figure is two. The
+# older ones on disk are simply not listed, so a third left behind by
+# accident cannot appear on the page.
+FIRMWARE_KEEP = int(os.environ.get("DIRECTORY_FIRMWARE_KEEP", "2"))
+
+# A release directory is named for its version and nothing else, which is
+# what lets firmware/README.md sit beside the releases without being mistaken
+# for one.
+FIRMWARE_VER  = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})$")
+FIRMWARE_CHIP = re.compile(r"^[a-z][a-z0-9]{2,11}$")
+
+# ESP Web Tools is pinned to an exact version, never to a floating tag.
+# Their own docs tell you to pin to the major (@10) while the docs page
+# itself loads the unpinned URL; a major tag still means the code a visitor
+# runs can change under us between one reader and the next, and this is the
+# only third-party code anybody loads from this site.
+#
+# The path matters: dist/web/install-button.js is the self-contained web
+# bundle. dist/install-button.js is the NPM entry point and has bare imports
+# a browser cannot resolve. "?module" is unpkg's own flag for the ESM build
+# and is what the project's documentation shows.
+EWT_VERSION = "10.4.0"
+EWT_SCRIPT  = ("https://unpkg.com/esp-web-tools@" + EWT_VERSION
+               + "/dist/web/install-button.js?module")
+
+# The chip families this can serve, keyed by the directory name a release
+# uses. A second family is a directory drop and an entry here, never a
+# rewrite: the reference board is a bare ESP32-WROOM-32E and an ESP32-S3
+# with PSRAM is the documented upgrade path, so the shape has to survive
+# that without being rebuilt around it.
+#
+# The value is the chipFamily string ESP Web Tools matches against the chip
+# it reads out of the board, and that family's bootloader offset. The
+# bootloader offset is NOT universal: 0x1000 on the ESP32 and S2, 0x0 on the
+# RISC-V parts, which is exactly the kind of number a tutorial written for a
+# different board gets wrong.
+FLASH_FAMILIES = {
+    "esp32":   ("ESP32",    0x1000),
+    "esp32s2": ("ESP32-S2", 0x1000),
+    "esp32s3": ("ESP32-S3", 0x0),
+    "esp32c3": ("ESP32-C3", 0x0),
+}
+
+# What gets written, and where. Read out of the firmware repository rather
+# than recalled: CONFIG_BOOTLOADER_OFFSET_IN_FLASH and
+# CONFIG_PARTITION_TABLE_OFFSET in its generated sdkconfig.esp32dev, and the
+# ota_0 and storage rows of its partitions.csv.
+#
+# None means "this family's bootloader offset", from FLASH_FAMILIES above.
+#
+# littlefs.bin is the storage partition, which is the screens. The other two
+# filesystems are deliberately absent: userdata holds the accounts, the live
+# configuration and each plugin's files, and logs holds the caller log. Not
+# writing them is what lets somebody reinstall over a board they already run
+# without losing it, and it is the same split "pio run -t flashall" respects.
+#
+# There is no otadata part. With otadata erased the bootloader falls back to
+# the first OTA slot, which is where the application is written. The day OTA
+# updates land, a board that has already flipped to ota_1 will need that
+# thought about again.
+FLASH_PARTS = (("bootloader.bin", None),
+               ("partitions.bin", 0x8000),
+               ("firmware.bin",   0x20000),
+               ("littlefs.bin",   0x3C0000))
 
 # A board is counted offline when it has missed this many of its own
 # intervals. Three lets a board reboot, or ride out a flaky evening,
@@ -270,6 +361,11 @@ NAV_SECTION = {
     "/kids":            "/whofor",
     "/teachers":        "/whofor",
     "/sdcard":          "/build",
+    # Putting the firmware on a board is a step of building one, so it
+    # lights up the section a reader came from. Not in the menu itself:
+    # nine items is already the edge of what a phone can carry, and this is
+    # reached from /build and from the footer of every page.
+    "/install":         "/build",
     "/forward-netgear": "/forward",
     "/forward-tplink":  "/forward",
     "/forward-asus":    "/forward",
@@ -314,6 +410,7 @@ def foot_html(role, extra=""):
     # /terminals and from a title= attribute on every dial link, and a
     # title is invisible on every touch device and clickable nowhere.
     links = (f'<a href="{site_url("list", role, "/build")}">Build one</a> &middot; '
+             f'<a href="{site_url("list", role, "/install")}">Install</a> &middot; '
              f'<a href="{site_url("list", role, "/terminals")}">Terminals</a> &middot; '
              f'<a href="{site_url("list", role, "/dialing")}">Dial links</a> &middot; '
              f'<a href="{site_url("list", role, "/forward")}">Go public</a> &middot; '
@@ -683,6 +780,18 @@ def md_callout(quote):
 
 
 CARD_BLOCKS = ("cards", "hero")
+# Every ":::" block the dialect knows. "installer" is not a card: it is the
+# one place on this site that renders a widget rather than prose, and it
+# carries no content of its own, because what it should say depends on what
+# is in FIRMWARE_DIR rather than on what somebody typed in the page.
+BLOCK_NAMES = CARD_BLOCKS + ("installer",)
+
+
+def md_block(kind, lines):
+    """A ":::" block, by name. Cards, or the installer."""
+    if kind == "installer":
+        return installer_html()
+    return md_cards(kind, lines)
 
 
 def md_cards(kind, lines):
@@ -775,7 +884,7 @@ def md_render(text):
         # which is the one thing this shape cannot express.
         if card is not None:
             if line.strip() == ":::":
-                out.append(md_cards(card[0], card[1]))
+                out.append(md_block(card[0], card[1]))
                 card = None
             else:
                 card[1].append(line)
@@ -816,7 +925,7 @@ def md_render(text):
                 out.append(md_callout(quote))
                 quote.clear()
 
-        if line.startswith("::: ") and line[4:].strip() in CARD_BLOCKS:
+        if line.startswith("::: ") and line[4:].strip() in BLOCK_NAMES:
             flush()
             card = (line[4:].strip(), [])
             # An unknown name after ":::" deliberately does not match, so it
@@ -859,7 +968,7 @@ def md_render(text):
     if table is not None:                           # a table at the very end
         out.append(md_table(table))
     if card is not None:                            # unterminated ::: block
-        out.append(md_cards(card[0], card[1]))
+        out.append(md_block(card[0], card[1]))
     if code is not None:                            # unterminated fence
         out.append("<pre>" + html.escape("\n".join(code)) + "</pre>")
     if para:
@@ -914,7 +1023,24 @@ def md_page(name, role="list"):
     text = f.read_text(encoding="utf-8")
     title, desc = md_meta(text)
     body = "<article>" + md_render(text) + "</article>"
-    return PAGE.format(refresh="", title=html.escape(title),
+    # The one script on this site, and the only page that can carry it.
+    #
+    # Both halves of that condition matter. The page has to ask for the
+    # installer, and there has to be something for the installer to install:
+    # with FIRMWARE_DIR empty the block renders an explanation rather than
+    # the element, and loading a module to drive an element that is not on
+    # the page would be a script running on a reader's machine for no
+    # reason at all. So the script and the widget arrive together or
+    # neither does, which is a property no separate flag could hold.
+    #
+    # Everything else on this site stays exactly as it was: no other caller
+    # of PAGE passes anything here, and the manifesto's claim to ship no
+    # JavaScript is still true of the manifesto.
+    head = ""
+    if "::: installer" in text and firmware_releases():
+        head = ('<script type="module" src="' + html.escape(EWT_SCRIPT, quote=True)
+                + '"></script>')
+    return PAGE.format(refresh="", head=head, title=html.escape(title),
                        desc=html.escape(desc, quote=True),
                        body=head_html(role, "/" + name) + body,
                        footer=foot_html(role))
@@ -1023,6 +1149,257 @@ def gallery_html():
                      + "</figure>")
     kind = "gallery one" if len(cells) == 1 else "wide gallery"
     return (f'<div class="{kind}">' + "".join(cells) + "</div>")
+
+
+# --------------------------------------------------------------------------
+# The browser installer.
+#
+# Everything below reads FIRMWARE_DIR and nothing else. There is no list of
+# releases in this file and none in the database: what is on disk is what is
+# offered, and what is not on disk cannot be.
+
+
+def firmware_builds(vdir):
+    """The chip families in one release directory that are complete.
+
+    A family is offered only when every part in FLASH_PARTS is present. A
+    missing or misspelled file drops that family out of the manifest
+    entirely, which is the behaviour worth having: a manifest naming a file
+    that is not there fails in the browser, halfway through, on somebody's
+    board, and reads as a broken flasher rather than as a bad upload.
+    """
+    builds = []
+    for chip in sorted(p.name for p in vdir.iterdir() if p.is_dir()):
+        if not FIRMWARE_CHIP.match(chip) or chip not in FLASH_FAMILIES:
+            continue
+        family, boot = FLASH_FAMILIES[chip]
+        parts = []
+        for name, offset in FLASH_PARTS:
+            f = vdir / chip / name
+            if not f.is_file() or f.stat().st_size == 0:
+                parts = None
+                break
+            # Relative to the manifest's own URL, which is what ESP Web
+            # Tools resolves a part against. Keeping them relative means the
+            # binaries are reached on whatever domain the manifest was
+            # fetched from, so this needs no knowledge of the site's name
+            # and no CORS headers anywhere.
+            parts.append({"path": chip + "/" + name,
+                          "offset": boot if offset is None else offset})
+        if parts:
+            builds.append({"chipFamily": family, "parts": parts})
+    return builds
+
+
+def firmware_releases():
+    """Every complete release on disk, newest first, capped at FIRMWARE_KEEP.
+
+    A release is complete when at least one chip family in it is complete.
+    Anything else in the directory, README.md included, is not a version
+    number and is skipped without comment.
+    """
+    if not FIRMWARE_DIR.is_dir():
+        return []
+    found = []
+    try:
+        entries = sorted(FIRMWARE_DIR.iterdir())
+    except OSError:
+        return []
+    for vdir in entries:
+        if not vdir.is_dir():
+            continue
+        m = FIRMWARE_VER.match(vdir.name)
+        if not m:
+            continue
+        builds = firmware_builds(vdir)
+        if not builds:
+            continue
+        date, note, improv = "", "", False
+        meta = vdir / "release.txt"
+        if meta.is_file():
+            lines = meta.read_text(encoding="utf-8", errors="replace").splitlines()
+            for i, raw in enumerate(lines):
+                s = raw.strip()
+                if not s:
+                    continue
+                # "improv: yes" says this image speaks Improv Wi-Fi Serial.
+                # It is a property of the firmware in the directory, not of
+                # the site, which is why it is recorded beside the binaries
+                # and not in a constant here. Absent means no, which is the
+                # safe way round: see firmware_manifest().
+                if s.lower().startswith("improv:"):
+                    improv = s.split(":", 1)[1].strip().lower() in ("yes", "true", "1")
+                elif i == 0 and re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+                    date = s
+                elif not note:
+                    note = s[:160]
+        found.append({"version": vdir.name,
+                      "sort": tuple(int(g) for g in m.groups()),
+                      "date": date, "note": note, "improv": improv,
+                      "notices": (vdir / "THIRD_PARTY_NOTICES.md").is_file(),
+                      "builds": builds})
+    found.sort(key=lambda r: r["sort"], reverse=True)
+    return found[:FIRMWARE_KEEP]
+
+
+def firmware_manifest(version):
+    """The ESP Web Tools manifest for one release, or None.
+
+    The schema is theirs and the spellings are not negotiable: the top level
+    is snake_case and the keys inside a build are camelCase, which is the
+    easiest thing here to get wrong. An offset is a JSON number, decimal,
+    because their type is `offset: number` and JSON has no hex literal; a
+    string would be handed to the flasher unparsed.
+    """
+    for rel in firmware_releases():
+        if rel["version"] != version:
+            continue
+        return {
+            "name": "unleashed BBS",
+            "version": rel["version"],
+            # The user is asked rather than erased by default, and that is
+            # what lets somebody reinstall over a board they already run
+            # without losing their accounts: with this false, every install
+            # is a whole-chip erase. The checkbox ESP Web Tools shows starts
+            # unticked, so this flips the default from erase to keep, and
+            # the page has to say which one a reader wants.
+            "new_install_prompt_erase": True,
+            # Seconds ESP Web Tools waits after an install for the board to
+            # announce itself over Improv Wi-Fi Serial, which is how the
+            # browser then offers to set the Wi-Fi up. Zero disables it.
+            #
+            # Zero unless the release says otherwise, because a board that
+            # does not speak Improv makes every install sit on "wrapping up"
+            # for ten seconds and then carry on, which reads as a hang. The
+            # day the firmware implements it, the release says so and this
+            # becomes the default ten.
+            "new_install_improv_wait_time": 10 if rel["improv"] else 0,
+            "builds": rel["builds"],
+        }
+    return None
+
+
+def installer_html():
+    """The ::: installer block: the button, or an honest account of why not.
+
+    There is deliberately no third state. Either a complete release is on
+    disk and the page offers it, or it is not and the page says so; nothing
+    here can render a button that fetches a file that does not exist.
+    """
+    rels = firmware_releases()
+    if not rels:
+        return (
+            '<div class="installer none">'
+            "<h2>Not ready yet</h2>"
+            "<p>There is no firmware image to install from this page today. "
+            "The installer is finished; the images are not, because the "
+            "board's Wi-Fi details are currently built into the firmware "
+            "rather than set from the browser, and an image built that way "
+            "would only ever join the network of whoever built it.</p>"
+            "<p>That is the piece being worked on. When it is done the "
+            "images appear here and this box becomes a button. Until then, "
+            "a board takes about ten minutes to build yourself and the "
+            '<a href="/build">build page</a> has every step.</p>'
+            "</div>")
+
+    newest = rels[0]
+    out = ['<div class="installer">']
+    out.append('<esp-web-install-button manifest="/firmware/'
+               + html.escape(newest["version"], quote=True)
+               + '/manifest.json">')
+    # Our own button in the activate slot. The element exports three colour
+    # variables and no ::part(), so anything beyond a colour means supplying
+    # the element, and this page is monospace on black rather than a rounded
+    # blue pill.
+    out.append('<button class="go" slot="activate">Install '
+               + html.escape(newest["version"]) + " on my board</button>")
+    # Both fallbacks are given rather than left to the component's defaults,
+    # which name Firefox first and say nothing about what to do next. The
+    # precedence in their code is insecure-context first, so "not-allowed"
+    # is the one a reader sees over plain http and never the other.
+    out.append('<span class="no" slot="unsupported">This browser cannot talk '
+               "to a serial port. Chrome or Edge on a desktop or laptop "
+               "can; there is more about that below.</span>")
+    out.append('<span class="no" slot="not-allowed">This page has to be '
+               "served over https for a browser to allow it near a serial "
+               "port.</span>")
+    out.append("</esp-web-install-button>")
+
+    meta = "Version " + html.escape(newest["version"])
+    if newest["date"]:
+        meta += ", " + html.escape(newest["date"])
+    chips = ", ".join(b["chipFamily"] for b in newest["builds"])
+    meta += ". " + html.escape(chips) + "."
+    out.append('<p class="meta">' + meta + "</p>")
+    if newest["note"]:
+        out.append('<p class="meta">' + html.escape(newest["note"]) + "</p>")
+
+    older = rels[1:]
+    if older:
+        bits = []
+        for rel in older:
+            bits.append('<a href="/firmware/' + html.escape(rel["version"], quote=True)
+                        + '/manifest.json">' + html.escape(rel["version"]) + "</a>")
+        out.append('<p class="meta">Also kept: ' + ", ".join(bits)
+                   + ". Point the installer at one of these only if the "
+                   "newest has a problem on your board.</p>")
+    lic = []
+    for rel in rels:
+        if rel["notices"]:
+            lic.append('<a href="/firmware/' + html.escape(rel["version"], quote=True)
+                       + '/THIRD_PARTY_NOTICES.md">' + html.escape(rel["version"])
+                       + "</a>")
+    if lic:
+        out.append('<p class="meta">What is in the image, and under what '
+                   "terms: " + ", ".join(lic) + ".</p>")
+    out.append("</div>")
+    return "".join(out)
+
+
+def firmware_file(rest):
+    """One file under /firmware/, as (bytes, content type), or None.
+
+    Names are checked rather than paths, the way static_file() does it, and
+    the shapes accepted are the only three the page ever links:
+
+        <version>/manifest.json
+        <version>/THIRD_PARTY_NOTICES.md
+        <version>/<chip>/<one of FLASH_PARTS>
+
+    A binary is served only when its release is one firmware_releases()
+    would offer, so a version left on disk past FIRMWARE_KEEP is not
+    reachable by guessing its number either.
+    """
+    bits = [b for b in rest.split("/") if b]
+    if not bits or not FIRMWARE_VER.match(bits[0]):
+        return None
+    offered = [r["version"] for r in firmware_releases()]
+    if bits[0] not in offered:
+        return None
+    vdir = FIRMWARE_DIR / bits[0]
+
+    if len(bits) == 2 and bits[1] == "manifest.json":
+        man = firmware_manifest(bits[0])
+        if man is None:
+            return None
+        return (json.dumps(man, indent=1).encode("utf-8"),
+                "application/json; charset=utf-8")
+
+    if len(bits) == 2 and bits[1] == "THIRD_PARTY_NOTICES.md":
+        f = vdir / bits[1]
+        if not f.is_file():
+            return None
+        return f.read_bytes(), "text/plain; charset=utf-8"
+
+    if (len(bits) == 3 and FIRMWARE_CHIP.match(bits[1])
+            and bits[1] in FLASH_FAMILIES
+            and bits[2] in [name for name, _ in FLASH_PARTS]):
+        f = vdir / bits[1] / bits[2]
+        if not f.is_file():
+            return None
+        return f.read_bytes(), "application/octet-stream"
+
+    return None
 
 
 def rate_limited(con, address, now):
@@ -1763,7 +2140,49 @@ footer a {{ display:inline-block; padding:0.375rem 0; white-space:nowrap; }}
         color:var(--faint); }}
   .addr a {{ padding:0.5rem 0; }}
 }}
-</style></head><body><main>
+/* --------------------------------------------------------------------
+   The browser installer, and it is the only thing on this site that
+   renders a third party's element.
+
+   Two states, styled as two different things on purpose. With an image
+   available it is a box you act on, in the colours the rest of the site
+   uses for that; with none it is a box that explains itself, in the
+   quieter aside colours, because a grey box nobody can press is honest
+   and a greyed-out button is a puzzle.
+
+   esp-web-install-button exports three colour variables and no ::part(),
+   so a button that belongs on a monospace black page has to be supplied
+   through its "activate" slot rather than themed. The variables are set
+   anyway: they are what the element falls back to if the slot is ever
+   empty, and a sky blue pill would be visible from orbit here.
+   -------------------------------------------------------------------- */
+article .installer {{ background:#12121a; border:1px solid #2c3a44;
+        border-radius:0.5rem; padding:1.125rem 1.25rem; margin:1.5rem 0 1.75rem; }}
+article .installer.none {{ border-color:#3a3a46; }}
+article .installer h2 {{ margin:0 0 0.5rem; color:var(--struct);
+        font-size:1rem; }}
+article .installer p {{ margin:0 0 0.75rem; }}
+article .installer > :last-child {{ margin-bottom:0; }}
+article .installer .meta {{ color:var(--dim); font-size:0.8125rem;
+        margin:0.625rem 0 0; }}
+esp-web-install-button {{ --esp-tools-button-color:#102630;
+        --esp-tools-button-text-color:var(--dial);
+        --esp-tools-button-border-radius:0.375rem;
+        display:block; margin:0 0 0.25rem; }}
+article .installer button.go {{ font:inherit; font-size:0.9375rem;
+        color:#04212c; background:var(--dial); border:1px solid #9fdfff;
+        border-radius:0.375rem; padding:0.6875rem 1.25rem; cursor:pointer;
+        text-align:left; }}
+article .installer button.go:hover {{ background:#a7e2ff; }}
+article .installer button.go:focus-visible {{ outline:3px solid #ffd35c;
+        outline-offset:2px; }}
+/* The two fallbacks the element shows instead of the button. Amber, the
+   same as every other warning here, because that is exactly what they
+   are: the reason nothing is going to happen on this browser. */
+article .installer .no {{ display:block; color:#f0c674; background:#241d10;
+        border-left:3px solid #8a6d39; padding:0.625rem 0.875rem;
+        border-radius:0.25rem; }}
+</style>{head}</head><body><main>
 {body}
 <footer>{footer}</footer>
 </main></body></html>"""
@@ -2119,7 +2538,7 @@ def index_page():
             f"{len(live)} up right now, {on} caller{'' if on == 1 else 's'} on. "
             "Dial one with any telnet client.")
     return PAGE.format(title=html.escape(SITE_NAME), desc=html.escape(desc, quote=True),
-                       body=body, footer=footer, refresh=LIST_REFRESH)
+                       body=body, footer=footer, refresh=LIST_REFRESH, head="")
 
 
 def rss_date(when):
@@ -2757,7 +3176,7 @@ def about_page(role, here):
 def simple_page(title, body, role="list", here="", desc=SITE_DESC):
     """Any page that is a block of prose. The header and footer are added
     here and nowhere else, so no page carries its own copy of either."""
-    return PAGE.format(refresh="", title=html.escape(title),
+    return PAGE.format(refresh="", head="", title=html.escape(title),
                        desc=html.escape(desc, quote=True),
                        body=head_html(role, here) + body,
                        footer=foot_html(role))
@@ -2845,6 +3264,28 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(blob)))
                 self.send_header("Cache-Control", "public, max-age=3600")
+                self.end_headers()
+                self.wfile.write(blob)
+        # The firmware images and the manifests that describe them, for the
+        # installer on /install. Ahead of the generic page branch for the
+        # same reason every other real endpoint is: a pages/ file must not
+        # be able to shadow it. Nothing is cached here; a manifest is a few
+        # hundred bytes built from a directory listing, and a binary is
+        # fetched once per install rather than once per reader.
+        elif path.startswith("/firmware/"):
+            got = firmware_file(path[len("/firmware/"):])
+            if got is None:
+                self.reply(404, "no such firmware file\n",
+                           "text/plain; charset=utf-8")
+            else:
+                blob, ctype = got
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(blob)))
+                # An image is immutable: a version's bytes never change,
+                # because a change is a new version. The manifest names the
+                # version it belongs to and is just as fixed.
+                self.send_header("Cache-Control", "public, max-age=86400")
                 self.end_headers()
                 self.wfile.write(blob)
         elif path == "/build":
