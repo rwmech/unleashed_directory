@@ -11,18 +11,25 @@ transfers, keeps a dialling directory, and understands `telnet://` links so
 clicking an address on this site actually works. If you install one thing,
 install this.
 
-On a phone, **[NetRunner](https://www.mysticbbs.com/downloads.html)** on Android
-and **[MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494)** on
-iOS and macOS both do the job and render ANSI art correctly.
+On a phone,
+**[TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android)**
+on Android and
+**[MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494)** on iOS
+and macOS both do the job and render ANSI art correctly.
+
+A Chromebook is the one machine where none of that installs. It has its own
+section further down, and the short version is that it depends on a setting
+somebody else may own.
 
 ## The rest of the modern options
 
 | Client | Platform | Worth knowing |
 |---|---|---|
 | [SyncTERM](https://syncterm.bbsdev.net/) | Windows, macOS, Linux | The default recommendation. ANSI, CP437, transfers, dialling directory. |
-| [NetRunner](https://www.mysticbbs.com/downloads.html) | Windows, Android | From the Mystic BBS author. Good ANSI. |
+| [NetRunner](https://www.mysticbbs.com/downloads.html) | Windows, Linux | From the Mystic BBS author. Good ANSI. No Mac or Android build. |
 | [mTelnet](https://mt32.bbses.info/) | Windows | Small, fast, built for BBSes. |
 | [MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494) | iOS, macOS | Handles PETSCII as well as ANSI. |
+| [TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android) | Android, ChromeOS with the Play Store | CP437 art, classic fonts, ZMODEM transfers. |
 | [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) | Windows | Everywhere already, but set the character set to CP437 or the art will be wrong. Not built for this. |
 | `telnet` | Linux, macOS, BSD | `telnet unleashed.local 6400`. Fine and plain. On Debian or Ubuntu: `sudo apt -y install inetutils-telnet`. |
 | `nc` | anywhere | `nc host 6400`. Works, negotiates nothing, and looks it. |
@@ -36,6 +43,64 @@ default and it renders ANSI poorly. Use something else.
 > Whatever you use, remember what you are using it for. Telnet carries every
 > keystroke in the clear, including your password. Never reuse a password on a
 > telnet board. [What that actually risks](/privacy).
+
+## Chromebooks
+
+A Chromebook can call a board. Chrome cannot. No web page and no Chrome
+extension is allowed to open the kind of plain network connection telnet
+needs, so every route below goes around the browser rather than through it.
+None of them is difficult, but on a school or work Chromebook at least one of
+them is a setting that belongs to somebody else.
+
+**Find out which kind of Chromebook you have before anything else**, because
+it changes the answer. Select the time at the bottom right, then **Settings**,
+then **About ChromeOS**, then **Developers**. If there is a **Linux
+development environment** row with a **Set up** button, you are fine. If the
+row is missing, or the button refuses, the device is managed and an
+administrator has turned it off. [A few older Chromebooks never had
+it](https://www.chromium.org/chromium-os/chrome-os-systems-supporting-linux/).
+
+### If Linux is available
+
+This is the route that works, and it ends with an ordinary terminal.
+
+1. Select the time at the bottom right, then **Settings**, then **About ChromeOS**, then **Developers**.
+2. Next to **Linux development environment**, select **Set up**, and answer the few questions it asks. Google says setup takes ten minutes or more, and that is about right.
+3. A **Terminal** window opens when it finishes. What you are looking at is Debian.
+4. Install a telnet client: `sudo apt -y install inetutils-telnet`
+5. Call a board: `telnet 192.168.1.50 6400`, with the address and port from the listing.
+
+Use the numeric address rather than a `.local` name. The Linux side looks
+names up for itself and does not always see what ChromeOS can see, so a name
+that works in the browser can fail in the terminal for reasons that have
+nothing to do with the board.
+
+### If Linux is blocked
+
+Then it is a conversation with whoever manages the devices, and it goes better
+if you ask for the setting by name instead of asking for Linux.
+
+- It lives in the Google Admin console, under **Devices > Chrome > Settings**, on the **User & browser settings** page, in the section **Virtual machines (VMs) and developers**.
+- The setting is called **Linux virtual machines (BETA)**. On managed devices it defaults to **Block usage for virtual machines needed to support Linux apps for users**, which is why yours is off.
+- The value to ask for is **Allow usage for virtual machines needed to support Linux apps for users**. It can be set for one group of people rather than for everybody.
+- If people sign in with accounts from outside the organisation's own domain, the matching setting on the **Devices** page, **Linux virtual machines for unaffiliated users (BETA)**, has to be allowed too, or the first one appears to do nothing.
+
+> [!NOTE]
+> Worth saying in that conversation, because it is usually the real question:
+> this starts a sandboxed Debian container. It is not developer mode, it does
+> not unenrol the device, and by Google's own description a bad Linux app can
+> affect other Linux apps and nothing outside them.
+
+### The other ways in, and what each costs
+
+- **An Android app, if the Play Store is switched on.** [TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android) is a BBS terminal that speaks telnet and draws CP437 art properly. On a managed Chromebook the Play Store is its own separate setting, under **Devices > Chrome > Apps & extensions > User app settings**, then **Additional app settings**, then **Android apps on Chrome Devices**, then **Allow users to install Android apps**. On school devices it is frequently off, and it is a bigger thing to ask for than Linux is, because it opens a whole store rather than one program.
+- **A Chrome extension cannot do this**, and that is worth knowing before you spend an afternoon looking for one. Google's own Secure Shell is an SSH client and has never spoken telnet. Nothing else can either: opening a plain connection was a Chrome Apps ability, not an extension one, and user-installed Chrome Apps stopped working on ChromeOS in July 2025.
+- **A terminal that runs in a web page needs a helper in the middle.** A page cannot open a telnet connection, so clients like [fTelnet](https://www.ftelnet.ca/) connect over WebSocket to a proxy and the proxy makes the telnet connection for them. It works. It also means that proxy reads everything in both directions, which on a telnet board is everything, your password included. Running the proxy yourself on your own network is a fair trade. Using somebody else's is a public conversation with one more listener in it.
+
+If none of those is available to you, a Chromebook cannot call a board, and
+there is no trick that gets round it. The machine is doing exactly what it was
+set up to do. Borrow a Windows, Mac or Linux computer for the evening, or ask
+for the Linux setting, which is the smallest of the three requests.
 
 ## Clicking an address instead of typing it
 

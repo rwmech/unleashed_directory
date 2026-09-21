@@ -37,7 +37,9 @@ trust.
 - **A USB cable per group.** Often already in a drawer.
 - **One computer per group** to build and flash from, and a terminal program.
   [The terminals page](/terminals) lists free ones for Windows, macOS, Linux,
-  Android and iOS.
+  Android and iOS. **If your machines are Chromebooks, read the next section
+  before you plan anything**, because a Chromebook needs a setting turned on
+  first and it may not be yours to turn on.
 - **Optional, for file areas:** a micro SD card module, about two dollars, and
   a card of 32 GB or less. Plus six jumper wires.
 - **Optional, for the enclosure:** a 3D printer, or a print service, and a
@@ -45,6 +47,38 @@ trust.
 
 One board serves a whole class of callers at once, so you do not need one per
 student. A single board plus everybody's laptops is a complete first lesson.
+
+## If your class is on Chromebooks
+
+Check this before you plan the first session. It is the one thing that can
+stop session 1 dead, and it is not something you can fix on the day.
+
+Chrome itself cannot call a board. No web page and no Chrome extension is
+allowed to open the kind of plain network connection telnet needs. So a
+Chromebook needs either the **Linux development environment** turned on, or
+the Play Store and an Android terminal app, and on a school Chromebook both of
+those are administrator settings that are usually off.
+
+**Test one machine yourself first.** Select the time at the bottom right, then
+**Settings**, then **About ChromeOS**, then **Developers**. If there is a
+**Linux development environment** row with a **Set up** button, your fleet is
+fine, and [the terminals page](/terminals) has the steps from there.
+
+If the row is missing or the button refuses, ask for it by name. The request
+is small, specific, and can be granted to one group of users rather than to
+the whole school:
+
+- In the Google Admin console, under **Devices > Chrome > Settings**, on the **User & browser settings** page, in the section **Virtual machines (VMs) and developers**.
+- The setting is **Linux virtual machines (BETA)**. The value to ask for is **Allow usage for virtual machines needed to support Linux apps for users**.
+- It starts a sandboxed Debian container. It is not developer mode, it does not unenrol the device, and by Google's own description a bad Linux app can affect other Linux apps and nothing outside them. That is usually the question underneath the question.
+
+If the answer is no, find that out early rather than improvising in front of
+a class. A board on the classroom network is still reachable from any Windows,
+Mac or Linux machine in the room, and one machine on the projector with the
+chat room open is a perfectly good version of session 1 with the class taking
+turns at the keyboard. Sessions 2 and 3 need a computer that can flash a board
+over USB in any case, which is a larger job on a Chromebook than calling one
+is.
 
 ## Five sessions
 
@@ -169,7 +203,8 @@ eleven upwards, covering the same ground in their own terms:
 [Build one](/build) is the full instructions, including flashing and
 configuration. [Adding an SD card](/sdcard) has the pin map and the three
 things that usually go wrong. [Terminal software](/terminals) covers what to
-call a board with, on every platform a classroom is likely to have.
+call a board with, on every platform a classroom is likely to have, including
+Chromebooks and what to ask for when one is locked down.
 
 The firmware and the documentation are free software under the GPL, so a
 school can use all of it, change any of it, and keep the changes.
