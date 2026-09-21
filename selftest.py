@@ -99,7 +99,7 @@ def main():
                  "name": "The Rusty Modem", "owner": "KE9CXN",
                  "description": "A BBS on a chip in a shack", "host": "",
                  "port": 6400, "nodes": 6, "busy": 2, "uptime": 900,
-                 "interval": 10, "minutes24": 300, "token": ""}
+                 "interval": 10, "calls24": 11, "minutes24": 300, "token": ""}
         code, body, head = post(board)
         check("the first announce is accepted", code == 200)
         token = body.get("token", "")
@@ -284,6 +284,38 @@ def main():
               "busiest 20:00-22:00" in page)
         check("the chart expands without any javascript",
               "<details" in page and "<script" not in page)
+        check("and says it is a control before you have clicked it",
+              '(click for the day)' in page and '(click to close)' in page)
+
+        # ------------------------------------------------------------------
+        # Layout. These pin the rules, which is not the same as proving the
+        # page looks right: a CSS assertion only says the string was
+        # delivered. The rendering was measured in headless Chrome at 390,
+        # 1366 and 1920, and the numbers are in the changelog. What these
+        # catch is the failure that has actually happened here, which is a
+        # stylesheet edit being dropped by a later rewrite and shipping
+        # unstyled with every grep still passing.
+        print("The layout rules reach the page")
+        _, page = get("/", host="boards.example")
+        check("the board list stops being a table on a phone",
+              "@media (max-width: 900px)" in page
+              and "main > table, main > table > tbody" in page)
+        check("and has a column budget on a screen",
+              "@media (min-width: 901px)" in page
+              and "table-layout:fixed" in page)
+        check("the cells carry their own labels, not the column order",
+              "data-label='State'" in page and "data-label='Dial'" in page)
+        check("activity is two deliberate lines, not one that wraps anywhere",
+              "calls<br>" in page and "connected</td>" in page)
+        check("the page title outranks the text under it",
+              "h1 {{ color:var(--ink); font-size:20px" .replace("{{", "{") in page)
+        check("nothing that is words is left below --dim",
+              "footer {{ margin-top:28px; color:var(--dim)".replace("{{", "{") in page)
+        _, page = get("/sdcard")
+        check("a callout is indented from the body text, not flush with it",
+              "margin:18px 0 18px 30px" in page)
+        check("prose has a reading measure",
+              "main p, main li, main dd { max-width:78ch; }" in page)
 
         # ------------------------------------------------------------------
         # Coming back after a gap.

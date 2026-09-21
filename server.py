@@ -871,8 +871,12 @@ pre.logo i:nth-child(6) {{ color:#3f6cab; }}
 nav {{ margin:10px 0 24px; padding:10px 0; display:flex; flex-wrap:wrap;
         gap:6px 4px; border-top:1px solid var(--rule);
         border-bottom:1px solid var(--rule); }}
+/* 12px of text plus 22px of padding is a 34px tap target, 40 with the row
+   gap. Nothing on this site used to be one: the menu was 26px and the dial
+   link, which is the primary action of the whole directory, was 21px with
+   no padding at all. */
 nav a {{ color:var(--dim); text-decoration:none; font-size:12px;
-        letter-spacing:1px; text-transform:uppercase; padding:4px 12px;
+        letter-spacing:1px; text-transform:uppercase; padding:11px 12px;
         white-space:nowrap; }}
 nav a:hover, nav a:focus {{ background:var(--ink); color:var(--bg); }}
 nav a.here {{ background:var(--name); color:var(--bg);
@@ -886,23 +890,45 @@ nav a.here {{ background:var(--name); color:var(--bg);
 @media (prefers-reduced-motion: reduce) {{
   nav a.here {{ animation:none; }}
 }}
-h1 {{ color:var(--ink); font-size:13px; font-weight:normal; letter-spacing:3px;
-     margin:0 0 4px; text-transform:uppercase; }}
-h1 span {{ color:var(--faint); letter-spacing:0; text-transform:none; }}
+/* The page title outranks the text under it. It used not to: h1 was 13px
+   against a 15px article h2, so a section heading four screens down
+   outranked the page's own name, and on the board list the live figures
+   were the smallest and faintest thing above the fold. 20px is the least
+   that visibly beats the h2 without competing with the wordmark. */
+h1 {{ color:var(--ink); font-size:20px; font-weight:normal; letter-spacing:2px;
+     margin:0 0 6px; text-transform:uppercase; }}
+h1 span {{ color:var(--dim); font-size:13px; letter-spacing:0;
+     text-transform:none; }}
+h1 .count {{ color:var(--live); }}
 p.lead {{ color:var(--dim); margin:0 0 20px; }}
 a {{ color:var(--dial); }}
-table {{ border-collapse:collapse; width:100%; }}
+table {{ border-collapse:collapse; }}
+/* Full width is right for the board list, which is the product, and wrong
+   for every table inside an article: the two column "Right now" table on the
+   data page put the word "offline" 705px away from the digit that answers
+   it. The board list gets the width; an article table takes what it needs. */
+main > table {{ width:100%; }}
+article table, article .tablewrap table {{ width:auto; min-width:0; }}
+/* Room between a label and its value, but only where there is room to
+   give: 3ch in place of 8px is about 17px a cell, which on a phone is what
+   tips a table that fitted its wrapper into one that scrolls inside it. */
+@media (min-width: 621px) {{
+  article table th, article table td {{ padding-right:3ch; }}
+}}
 th {{ text-align:left; color:var(--struct); border-bottom:1px solid var(--rule); padding:6px 8px; font-weight:normal; }}
 td {{ padding:6px 8px; border-bottom:1px solid #161616; vertical-align:top; }}
 tr:hover td {{ background:#111; }}
 .name {{ color:var(--name); }}
-.addr a {{ color:var(--dial); text-decoration:none; border-bottom:1px dotted #35566b; }}
+/* overflow-wrap, so a 44 character hostname breaks inside its own column
+   instead of dictating the geometry of the whole table. */
+.addr a {{ color:var(--dial); text-decoration:none; border-bottom:1px dotted #35566b;
+        display:inline-block; padding:6px 0; overflow-wrap:anywhere; }}
 .addr a:hover {{ border-bottom-style:solid; }}
 .desc {{ color:var(--dim); }}
 /* What a board runs, said quietly next to its name. Every board is
    welcome here, and a directory that only ever shows one name does not
    look like it means that. */
-.soft {{ color:var(--faint); font-size:11px; margin-left:8px;
+.soft {{ color:var(--dim); font-size:12px; margin-left:8px;
         border:1px solid var(--rule); border-radius:3px; padding:1px 5px; }}
 .act {{ color:var(--busy); }}
 .owner {{ color:var(--warm); }}
@@ -910,15 +936,27 @@ tr:hover td {{ background:#111; }}
 .idle {{ color:var(--dim); }}
 .off {{ color:var(--faint); }}
 .muted {{ color:var(--faint); }}
-.fresh {{ color:var(--faint); font-size:11px; }}
+/* Nothing that is words goes below --dim. --faint is 3.7:1 against the page
+   and fails AA; it is kept for rules, hairlines and the field labels on the
+   phone layout, where it is doing structural work rather than carrying
+   text. The 11px sizes went with it: 11px at 3.7:1 is not a size and a
+   contrast anybody reads, it is one that says "ignore this", and how old a
+   reading is happens to be the thing the footer insists matters. */
+.fresh {{ color:var(--dim); font-size:12px; }}
 details.chart {{ margin-top:3px; }}
 details.chart summary {{ list-style:none; cursor:pointer; }}
 details.chart summary::-webkit-details-marker {{ display:none; }}
+details.chart summary:focus-visible {{ outline:2px solid var(--dial);
+        outline-offset:2px; }}
 svg.spark {{ width:124px; height:18px; vertical-align:-3px; }}
 svg.spark .b {{ fill:var(--busy); opacity:0.7; }}
 svg.spark .b.peak {{ opacity:1; }}
 svg.spark .base {{ stroke:#2c2c38; stroke-width:1; }}
-.when {{ color:var(--faint); font-size:11px; margin-left:8px; }}
+.when {{ color:var(--dim); font-size:12px; margin-left:8px; }}
+/* The sparkline is an SVG inside a summary with list-style:none, so there is
+   no disclosure triangle and nothing that reads as clickable. It used to
+   admit it was a control only once you had already found it. */
+details.chart summary .when::after {{ content:" (click for the day)"; }}
 details.chart[open] summary .when::after {{ content:" (click to close)"; }}
 svg.hours {{ display:block; width:100%; max-width:720px; height:auto;
         background:#0d0d12; border:1px solid var(--rule); margin:8px 0 4px; }}
@@ -926,16 +964,29 @@ svg.hours .bar {{ fill:var(--busy); opacity:0.75; }}
 svg.hours .bar.peak {{ opacity:1; }}
 svg.hours .grid {{ stroke:#20202a; stroke-width:1; }}
 svg.hours .axis {{ stroke:#2c2c38; stroke-width:1; }}
-svg.hours text {{ fill:var(--faint); font-family:inherit; font-size:11px; }}
-details.chart .note {{ color:var(--faint); font-size:11px; }}
+svg.hours text {{ fill:var(--dim); font-family:inherit; font-size:11px; }}
+details.chart .note {{ color:var(--dim); font-size:12px; }}
 .pending {{ color:var(--warm); }}
 .none {{ color:var(--faint); padding:24px 8px; }}
-footer {{ margin-top:28px; color:#555; border-top:1px solid var(--rule); padding-top:12px; }}
+footer {{ margin-top:28px; color:var(--dim); border-top:1px solid var(--rule);
+        padding-top:12px; line-height:1.7; }}
 article {{ max-width:none; }}
-/* Full width, so a floated picture has text on both sides of it rather
-   than a column that stops before it starts. Line height carries the
-   longer measure. */
-article p, article li, article dd {{ max-width:none; line-height:1.62; }}
+/* A reading measure, at last. Every paragraph on the site ran to 140
+   characters, because one page has a floated photograph and the whole site
+   was given full width to suit it. The float is 367px in a 1080px column
+   and a 78ch paragraph is 600px, so 600 + 367 + 30px of margin still fits:
+   the float keeps its text beside it and everything else stops being a
+   140 character line.
+
+   main, not article: the lead and the byline on the manifesto sit outside
+   the article element, so an article-scoped rule misses exactly the two
+   paragraphs at the top of the page it matters most on. */
+article p, article li, article dd {{ line-height:1.62; }}
+main p, main li, main dd {{ max-width:78ch; }}
+/* Code slightly wider than prose, which is the right relationship. It had
+   no measure at all, so a six line shell snippet sat in a 140 character
+   box next to 78 character text. */
+article pre {{ max-width:92ch; }}
 /* Anything drawn rather than written gets the whole width: diagrams and
    charts are not prose and should not be squeezed into its measure. */
 article figure, article .wide {{ max-width:none; margin:20px 0; }}
@@ -950,25 +1001,58 @@ article figure, article .wide {{ max-width:none; margin:20px 0; }}
 .gallery.one {{ display:block; float:right; width:min(34%, 380px);
         margin:6px 0 18px 30px; }}
 .gallery figure {{ margin:0; }}
-.gallery img {{ width:100%; height:auto; display:block; border:1px solid var(--rule); }}
+/* The box is reserved before the file arrives. Nothing declared a shape, so
+   a lazily loaded photograph pushed the paragraphs beside it down when it
+   landed. */
+.gallery img {{ width:100%; height:auto; display:block; aspect-ratio:4 / 3;
+        border:1px solid var(--rule); }}
 .gallery.one img {{ max-height:420px; object-fit:cover; }}
 /* A float on a phone is just a very narrow column of text beside a picture,
    so below that width it goes back to being a block. */
 @media (max-width: 620px) {{
   .gallery.one {{ float:none; width:100%; margin:18px 0; }}
 }}
-.gallery figcaption {{ color:var(--faint); font-size:12px; margin-top:6px; }}
+.gallery figcaption {{ color:var(--dim); font-size:12px; margin-top:6px; }}
 .tablewrap {{ overflow-x:auto; margin:16px 0; }}
 article table td {{ vertical-align:top; }}
 article table td:first-child {{ color:var(--ink); white-space:nowrap; }}
-.gallery .credit {{ display:block; color:#55555f; font-size:11px; margin-top:3px; }}
+/* A label column that will not wrap is right where there is width to spare
+   and wrong on a phone, where it is what turns a table that fitted into one
+   that has to be dragged sideways. Wrapping beats scrolling at 390. */
+@media (max-width: 620px) {{
+  article table td:first-child {{ white-space:normal; }}
+}}
+.gallery .credit {{ display:block; color:var(--dim); font-size:12px; margin-top:3px; }}
 article h2 {{ color:var(--struct); font-size:15px; margin:28px 0 6px; font-weight:normal; }}
-article h3 {{ color:var(--ink); font-size:13px; margin:20px 0 4px; font-weight:normal;
+/* Below the h2, not level with the h1. It used to be the same size, the
+   same colour and the same uppercase treatment as the page title, so a
+   section four screens down was indistinguishable from the page's name. */
+article h3 {{ color:var(--dim); font-size:13px; margin:20px 0 4px; font-weight:normal;
         letter-spacing:1px; text-transform:uppercase; }}
 /* A warning that is styled like everything else is a warning nobody
-   reads. This one is meant to interrupt. */
+   reads. This one is meant to interrupt.
+
+   It also has to be a box rather than a paragraph that shifted slightly.
+   "margin:14px 0" is a shorthand, so it set margin-left to 0 explicitly and
+   the left border landed flush with every paragraph on the page. 30px is
+   the indent .freedom already uses, and the measure drops to 70ch so the
+   box still ends before the body text does once it starts 30px later. The
+   earlier attempt at this moved article .pull, which is a different
+   element, and article .warn has never been touched since it was written. */
 article .warn {{ color:#f0c674; background:#241d10; border-left:3px solid #8a6d39;
-        padding:10px 14px; margin:14px 0; max-width:78ch; }}
+        padding:10px 16px; margin:18px 0 18px 30px; max-width:70ch; }}
+/* Same breakpoint as .gallery.one, and after the rule it overrides rather
+   than before it: both selectors are (0,1,1), so source order decides and
+   an earlier media query would simply have lost. 30px out of a 343px phone
+   column is a real bite, and the border and the background carry a callout
+   on their own at that width. */
+@media (max-width: 620px) {{
+  article .warn {{ margin-left:0; }}
+}}
+/* The ordered lists md_render now emits, spaced like the bullets beside
+   them. */
+article ol, article ul {{ margin:0 0 14px; padding-left:28px; }}
+article ol li, article ul li {{ margin:0 0 6px; }}
 article .freedom {{ background:#1d1a10; border:1px solid #4a411f;
         border-radius:8px; padding:14px 20px 4px; margin:18px 0 18px 30px;
         max-width:66ch; }}
@@ -987,6 +1071,69 @@ article .pull .sig {{ color:var(--faint); }}
 pre {{ background:#111; border:1px solid var(--rule); padding:12px; overflow-x:auto; color:#9fb; }}
 code {{ color:var(--live); }}
 dl {{ margin:0 0 14px; }} dt {{ color:var(--warm); margin-top:10px; }} dd {{ margin:2px 0 0 16px; }}
+/* A link is one object. At 390 the footer broke inside a link, so "House
+   rules" rendered as "House" on one line and "rules" on the next, which
+   looks like a rendering fault whether or not it is one. The run wraps
+   between links now, never inside one. */
+footer a {{ display:inline-block; padding:6px 0; white-space:nowrap; }}
+/* --------------------------------------------------------------------
+   The board list, which is the product, at two widths.
+
+   Above 900px it is a table with a column budget. table-layout was left at
+   auto, so every column was negotiated from whatever text eight arbitrary
+   boards happened to carry: State got 10 characters to hold a 14 character
+   figure, so "quiet, 7" ended up on one line and "h ago" on the next, and
+   a figure split across a line break is not a figure, it is two numbers.
+   Five columns have a known shape in characters and are fixed at it; the
+   Board column absorbs whatever is left. 17ch for State is measured, not
+   chosen: "quiet, 7 h ago" and "11 of 16 on 1m" are both 14 characters and
+   both wrap at 13.
+   -------------------------------------------------------------------- */
+@media (min-width: 901px) {{
+  main > table {{ table-layout:fixed; }}
+  main > table th:nth-child(1), main > table td:nth-child(1) {{ width:auto; }}
+  main > table th:nth-child(2), main > table td:nth-child(2) {{ width:24ch; }}
+  main > table th:nth-child(3), main > table td:nth-child(3) {{ width:14ch; }}
+  main > table th:nth-child(4), main > table td:nth-child(4) {{ width:17ch;
+        white-space:nowrap; }}
+  main > table th:nth-child(5), main > table td:nth-child(5) {{ width:19ch; }}
+  main > table th:nth-child(6), main > table td:nth-child(6) {{ width:8ch;
+        white-space:nowrap; }}
+}}
+/* Below 900px the table stops being a table and becomes a list of boards,
+   one column per row, with the state pinned top right where somebody
+   scanning looks for it.
+
+   This is the fix that matters most on the whole site. Six columns have a
+   minimum content width of 627px, and a phone gives them 358, so the page
+   scrolled sideways by 253px and State, Activity and Up-for were off the
+   screen: the one question a directory exists to answer, is this board up
+   and is anybody on it, was the part you could not see. 900 rather than 700
+   because the fixed columns above add up to 82 characters, and under about
+   900px the Board column is squeezed below 21. */
+@media (max-width: 900px) {{
+  main > table, main > table > tbody {{ display:block; }}
+  main > table tr {{ display:flex; flex-direction:column; position:relative;
+        padding:14px 0 16px; border-bottom:1px solid var(--rule); }}
+  main > table tr:first-child {{ display:none; }}          /* the header row */
+  main > table td {{ display:block; border:0; padding:1px 0; width:auto; }}
+  main > table td:nth-child(1) {{ order:1; padding-right:16ch; }}   /* board  */
+  main > table td:nth-child(4) {{ order:2; position:absolute; right:0;
+        top:14px; width:15ch; text-align:right; }}
+  main > table td:nth-child(2) {{ order:3; margin-top:6px; }}       /* dial   */
+  main > table td:nth-child(3) {{ order:4; }}                       /* sysop  */
+  main > table td:nth-child(5) {{ order:5; }}                       /* 24h    */
+  main > table td:nth-child(6) {{ order:6; }}                       /* up for */
+  main > table td:nth-child(3),
+  main > table td:nth-child(5),
+  main > table td:nth-child(6) {{ font-size:12px; }}
+  /* The labels the header row used to carry. data-label rather than a
+     literal, so they are not tied to column order. --faint is allowed here:
+     this is structure, not text somebody reads for its content. */
+  main > table td[data-label]:not(:nth-child(1)):not(:nth-child(4))::before {{
+        content:attr(data-label) " "; color:var(--faint); }}
+  .addr a {{ padding:8px 0; }}
+}}
 </style></head><body><main>
 {body}
 <footer>{footer}</footer>
@@ -1162,36 +1309,48 @@ def board_rows(rows, now, charts=None):
         fresh = (f"<span class='fresh'>{human_short(seen)}</span>"
                  if state == "online" else "")
 
+        # Two deliberate lines rather than one that wraps wherever it lands.
+        # "233 calls" is 9 characters and "67h 01m connected" is 17, so the
+        # column holds both, and "67h" never ends up on a different line
+        # from "01m". A figure split across a line break is two numbers.
         if r["minutes24"] is not None:
             mins = int(r["minutes24"])
             spent = f"{mins // 60}h {mins % 60:02d}m" if mins >= 60 else f"{mins}m"
             if r["calls24"] is not None:
-                activity = f"{r['calls24']} calls, {spent} connected"
+                activity = (f"{r['calls24']} calls", f"{spent} connected")
             else:
-                activity = f"{spent} connected"
+                activity = (f"{spent} connected",)
         elif r["calls24"] is not None:
-            activity = f"{r['calls24']} calls"
+            activity = (f"{r['calls24']} calls",)
         else:
-            activity = ""
-        dial = html.escape(f"telnet://{where}:{r['port']}", quote=True)
+            activity = ()
+        act_html = "<br>".join(html.escape(part) for part in activity)
+
+        # An IPv6 literal needs brackets or its own colons run into the port.
+        # No listed board hits this today, and pages/dialing.md already
+        # brackets correctly in the PowerShell handler it documents, so the
+        # site was explaining a URL shape it did not emit.
+        target = f"[{where}]" if ":" in where else where
+        dial = html.escape(f"telnet://{target}:{r['port']}", quote=True)
         out.append(
             "<tr>"
-            f"<td class='name'>{html.escape(r['name'])}"
+            f"<td class='name' data-label='Board'>{html.escape(r['name'])}"
             + (f"<span class='soft'>{html.escape(r['software'])}</span>"
                if r["software"] else "")
             + "<br>"
             + f"<span class='desc'>{html.escape(r['description'])}</span>"
             + ((charts or {}).get(r["id"]) or "")
             + "</td>"
-            f"<td class='addr'><a href='{dial}' title='Opens your terminal "
-            f"program if one is registered for telnet:// links. See /dialing "
-            f"if nothing happens.'>"
+            f"<td class='addr' data-label='Dial'><a href='{dial}' "
+            f"title='Opens your terminal program, if one is registered for "
+            f"telnet:// links.'>"
             f"{html.escape(where)} {r['port']}</a></td>"
-            f"<td class='owner'>{html.escape(r['owner'])}</td>"
-            f"<td class='{klass}'>{html.escape(label)} {fresh}</td>"
-            + (f"<td class='act'>{html.escape(activity)}</td>"
-               if activity else "<td class='muted'>not shared</td>")
-            + f"<td class='desc'>{human_streak(now - r['streak_start'])}</td>"
+            f"<td class='owner' data-label='sysop'>{html.escape(r['owner'])}</td>"
+            f"<td class='{klass}' data-label='State'>{html.escape(label)} {fresh}</td>"
+            + (f"<td class='act' data-label='24h'>{act_html}</td>"
+               if activity else "<td class='muted' data-label='24h'>not shared</td>")
+            + "<td class='desc' data-label='up for'>"
+            + human_streak(now - r["streak_start"]) + "</td>"
             + "</tr>")
     return "".join(out)
 
@@ -1410,7 +1569,14 @@ repository</a>. It is one Python file and you are welcome to run your own.</p>""
 
 ANIM = """
 <style>
-.scene { position:relative; height:7.4em; margin:18px 0 22px; }
+/* overflow-x here, not on the page. The art is 61 characters, so 470px, and
+   a phone column is 358: .scene pre is position:absolute and unsets the
+   global pre rule's background and border but not its overflow-x, and an
+   absolutely positioned box with no width shrink-wraps to its content. The
+   whole about page, header and footer included, scrolled sideways by 96px.
+   .scene is already position:relative, so it contains the absolute children
+   and the diagram now scrolls inside its own box. */
+.scene { position:relative; height:7.4em; margin:18px 0 22px; overflow-x:auto; }
 .scene pre { position:absolute; left:0; top:0; margin:0; opacity:0;
              color:#6ee36e; background:none; border:0; padding:0;
              animation: flip 3.2s steps(1,end) infinite; }
