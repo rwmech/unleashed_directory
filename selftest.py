@@ -20,8 +20,10 @@ SPDX-License-Identifier: GPL-2.0-or-later
 ===========================================================================
 """
 
+import html
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -66,6 +68,45 @@ def get(path, host=None):
         # A 404 is an answer, not a failure. Checking that something is
         # absent is as much a test as checking it is there.
         return e.code, e.read().decode(errors="replace")
+
+
+def fk_grade(page):
+    """Flesch-Kincaid grade level of a rendered page's prose.
+
+    Measured on what a reader sees rather than on the Markdown. Headings,
+    code and tables are dropped, because a heading has no full stop and
+    would fold into the sentence after it, which flatters the score. A list
+    item counts as a sentence, which is what it reads as.
+
+    Syllables come from the usual vowel-group heuristic. It is an estimate,
+    and it is the same estimate every implementation of this formula uses,
+    so the number is comparable with anybody else's.
+    """
+    body = page.split("<article>")[1].split("</article>")[0]
+    for pat in (r"<h[1-6][^>]*>.*?</h[1-6]>", r"<pre.*?</pre>", r"<table.*?</table>"):
+        body = re.sub(pat, " ", body, flags=re.S)
+    body = re.sub(r"</(li|p)>", ". ", body)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", body))
+    text = re.sub(r"\s+", " ", text).strip()
+
+    def syllables(word):
+        w = re.sub(r"[^a-z]", "", word.lower())
+        n, prev = 0, False
+        for ch in w:
+            v = ch in "aeiouy"
+            if v and not prev:
+                n += 1
+            prev = v
+        if w.endswith("e") and not w.endswith(("le", "ee", "ye")) and n > 1:
+            n -= 1
+        return max(1, n) if w else 0
+
+    sentences = [s for s in re.split(r"[.!?]+", text) if s.strip()]
+    words = re.findall(r"[A-Za-z0-9']+", text)
+    if not sentences or not words:
+        return None
+    syl = sum(syllables(w) for w in words)
+    return 0.39 * (len(words) / len(sentences)) + 11.8 * (syl / len(words)) - 15.59
 
 
 def main():
@@ -337,6 +378,72 @@ def main():
         check("and the manifesto points at it",
               'href="/whofor"' in page)
 
+        # ------------------------------------------------------------------
+        # The two pages hanging off /whofor. Neither is in the menu: nine
+        # items is already at the edge of what a phone header can carry, and
+        # neither is what a general visitor is hunting for. Off the menu is
+        # not the same as buried, so these check they are prominent where
+        # they belong instead.
+        print("The pages for children and for teachers")
+        _, page = get("/whofor")
+        head = page.split("<article>")[1][:900]
+        check("the invitation for children is the first thing on the page",
+              'class="tip"' in head and '"/kids"' in head)
+        check("and it is an invitation, not a warning",
+              'class="warn"' not in head and "\U0001f4be" in head)
+        check("the teachers page is linked from the schools section",
+              '"/teachers"' in page)
+        # The menu, not the body: the first version of this check looked for
+        # the link text anywhere on the page and tripped over the perfectly
+        # good link to /teachers in the schools section.
+        nav = page.split("<nav>")[1].split("</nav>")[0]
+        check("neither is in the menu",
+              "/kids" not in nav and "/teachers" not in nav)
+        for path in ("/kids", "/teachers"):
+            _, p2 = get(path)
+            check(f"{path} lights the section it belongs to",
+                  '<a class="here" href="/whofor">' in p2)
+            check(f"{path} does not reintroduce unbuilt features",
+                  "message base" not in p2.lower()
+                  and "doors" not in p2.split("<article>")[1].lower())
+
+        _, page = get("/kids")
+        check("the children's page never asks for anything",
+              "<form" not in page and "<input" not in page
+              and "email" not in page.split("<article>")[1].lower())
+        check("it says plainly that nothing typed is private",
+              "Nothing you type is private" in page
+              and "plain text" in page)
+        check("it names what never to type into a board",
+              "Your real name" in page and "Your school" in page
+              and "Your phone number" in page)
+        check("it says the adult decides about the internet, not the child",
+              "That decision belongs to the adult" in page)
+        check("and that a board that never goes online is finished work",
+              "It is not practice for" in page)
+        check("it does not promise the board is safe",
+              " is safe" not in page.split("<article>")[1])
+        # Measured, not asserted. Flesch-Kincaid on the rendered prose: the
+        # brief was a sixth grade reading level, and the point of keeping the
+        # check is that an edit six months from now cannot quietly push it to
+        # eleventh without anybody noticing.
+        grade = fk_grade(page)
+        check(f"it reads at grade {grade:.1f}, at or below sixth",
+              grade is not None and grade <= 6.5)
+
+        _, page = get("/teachers")
+        check("the lesson plans say how long they take",
+              page.count("50 minutes") >= 3 or page.count("minutes") >= 5)
+        check("and what each one needs",
+              page.count("Needs:") >= 5)
+        check("the making is treated as part of the project",
+              "TinkerCAD" in page and "enclosure" in page.lower())
+        check("it names what it teaches, concretely",
+              "Client and server" in page and "port 6400" in page
+              and "FAT32" in page and "CP437" in page)
+        check("and it is straight about school networks",
+              "will not be able to forward a port" in page)
+
         # Rob's callsign is not on the site. The examples use a plain
         # illustrative handle instead.
         for path, host in (("/how", None), ("/", "boards.example")):
@@ -355,7 +462,7 @@ def main():
         # on purpose: put it earlier and it swallows real endpoints, which
         # is exactly what happened to /health the first time.
         for name in ("build", "forward", "terminals", "dialing", "sdcard",
-                     "firstcall", "privacy", "whofor",
+                     "firstcall", "privacy", "whofor", "kids", "teachers",
                      "forward-netgear", "forward-tplink", "forward-asus",
                      "forward-xfinity", "forward-mesh"):
             code, page = get("/" + name)

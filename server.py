@@ -240,6 +240,13 @@ NAV = (("list",  "/",          "Boards"),
 NAV_SECTION = {
     "/dialing":         "/terminals",
     "/privacy":         "/firstcall",
+    # Deliberately not in the menu. Both are reached from the page they
+    # belong to: a nine item menu is already at the edge of what a phone can
+    # carry, and neither is something a general visitor is hunting for.
+    # Being off the menu is not the same as being buried, and they are the
+    # first and the most prominent links on /whofor.
+    "/kids":            "/whofor",
+    "/teachers":        "/whofor",
     "/sdcard":          "/build",
     "/forward-netgear": "/forward",
     "/forward-tplink":  "/forward",
@@ -502,23 +509,34 @@ def md_inline(s):
     return _MD_LINK.sub(link, s)
 
 
+# The markers are GitHub's rather than invented ones, so a page written
+# somewhere else arrives with the right shape. The colours are this site's:
+# [!TIP] is --dial, which the palette already spends on "things you can act
+# on", and not GitHub's green, because green here means a board is up and
+# means nothing else.
+_MD_CALLOUTS = (("[!NOTE]", "aside"), ("[!TIP]", "tip"))
+
+
 def md_callout(quote):
     """A run of "> " lines, as one box rather than one box per line.
 
     Amber by default, because thirteen of the fifteen blockquotes on this
     site are genuine warnings and the style exists to interrupt. The other
     two are reassurances, and an alarm-coloured box around "you never have
-    to touch any of this" says the opposite of the words inside it. A first
-    line of [!NOTE] picks the calm version, which is GitHub's marker rather
-    than an invention, and is the only addition to the dialect here.
+    to touch any of this" says the opposite of the words inside it. [!NOTE]
+    is the calm version of the same box and [!TIP] is the inviting one,
+    which is what a link to a page somebody would actually enjoy needs: an
+    invitation in the warning colour is a warning.
     """
     lines = list(quote)
     kind = "warn"
-    if lines and lines[0].strip().startswith("[!NOTE]"):
-        kind = "aside"
-        lines[0] = lines[0].strip()[len("[!NOTE]"):].lstrip()
-        if not lines[0]:
-            lines.pop(0)
+    for marker, cls in _MD_CALLOUTS:
+        if lines and lines[0].strip().startswith(marker):
+            kind = cls
+            lines[0] = lines[0].strip()[len(marker):].lstrip()
+            if not lines[0]:
+                lines.pop(0)
+            break
     return f'<p class="{kind}">' + md_inline(" ".join(lines)) + "</p>"
 
 
@@ -1144,13 +1162,21 @@ article .warn {{ color:#f0c674; background:#241d10; border-left:3px solid #8a6d3
 article .aside {{ color:var(--ink); background:#12121a;
         border-left:3px solid #2c2c38;
         padding:10px 16px; margin:18px 0 18px 30px; max-width:78ch; }}
+/* The inviting one. Same box, --dial, which already means "something you
+   can act on" everywhere else here. A link to a page somebody would enjoy
+   does not belong in the colour the router pages use to say a port forward
+   is your responsibility. */
+article .tip {{ color:#cfe6f2; background:#0e1a20;
+        border-left:3px solid #35566b;
+        padding:10px 16px; margin:18px 0 18px 30px; max-width:78ch; }}
+article .tip a {{ color:var(--dial); }}
 /* Same breakpoint as .gallery.one, and after the rule it overrides rather
    than before it: both selectors are (0,1,1), so source order decides and
    an earlier media query would simply have lost. 30px out of a 343px phone
    column is a real bite, and the border and the background carry a callout
    on their own at that width. */
 @media (max-width: 620px) {{
-  article .warn, article .aside {{ margin-left:0; }}
+  article .warn, article .aside, article .tip {{ margin-left:0; }}
   /* A 133 character command in a 358px column is 692px of dragging, which
      nobody does. It wraps on a phone instead. pre-wrap inserts nothing, so
      a copy still yields the exact original line, and the alternative is a

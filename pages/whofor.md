@@ -1,5 +1,11 @@
 # Who it's for
 
+> [!TIP]
+> 💾 **Under 18? This is the good bit.** There is a page written for
+> you: what a bulletin board actually is, why building one is a weekend well
+> spent, and how to do it with a grown-up at home.
+> [It starts here](/kids).
+
 Everyone. That is not a dodge, it is the answer: a board is a room, and the
 only thing you need in order to run one is to want a room.
 
@@ -39,6 +45,13 @@ they can read.
 > the school network and it is reachable from the school and nowhere else,
 > which for a classroom is usually the right answer. [What opening it up
 > actually means](/forward).
+
+**Teaching with it?** There is a page for that: five lesson plans with
+durations and equipment lists, what each session actually teaches, what a set
+of boards costs, and a straight answer about school networks and port
+forwarding. It treats designing and printing an enclosure as a real part of
+the project, because for a lot of classrooms that is the hook.
+[For teachers](/teachers).
 
 ## Clubs and groups
 
