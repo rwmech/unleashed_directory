@@ -39,6 +39,30 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - No JavaScript anywhere on the site. The manifesto page makes a point of
   it, so anything that would add a script needs a better reason than
   convenience. The ASCII animation is CSS.
+- `pages/*.md` are written in a deliberately small Markdown dialect that
+  `md_render()` implements in about sixty lines. What exists: `#`, `##`,
+  `###`, `- ` bullets, `1. ` ordered lists, `> ` blockquotes (consecutive
+  lines are **one** warning box, not one each), fenced code, pipe tables,
+  and inline `**bold**`, `` `code` `` and `[links](/path)`. A bullet or a
+  step wraps by indenting the continuation two spaces. What does not exist,
+  on purpose: nested lists, images, inline HTML, headings below `###`.
+  **A form that is not in the dialect does not fail, it renders as a
+  paragraph**, which is how 53 numbered steps across the router pages were
+  a wall of text for four versions with every word present and in the right
+  order. If a page needs a shape the dialect does not have, use a table or
+  add the shape; do not indent and hope.
+- **The stylesheet lives inside the `PAGE` constant, which is consumed with
+  `.format()`, so every literal `{` and `}` in the CSS is doubled.** A
+  single un-doubled brace raises `KeyError` at the first page render rather
+  than at import, so the server starts fine and then 500s on the first
+  request. After any CSS edit, curl `/health` **and** `/`, because `/health`
+  never touches `PAGE`.
+- **A CSS or copy change is not verified until the rendered page has been
+  looked at.** grep on the HTML proves a string is present, not that a rule
+  applied, an element is positioned or a menu is readable. Two of the worst
+  bugs found here were invisible to grep: the menu shipping with no
+  stylesheet at all, and the board list being 627px wide in a 358px phone
+  column with the State column off the screen.
 
 ## Anti-spam, and why it is shaped this way
 
