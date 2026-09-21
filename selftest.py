@@ -482,8 +482,23 @@ def main():
         head = page.split("<article>")[1][:900]
         check("the invitation for children is the first thing on the page",
               'class="tip"' in head and '"/kids"' in head)
+        # Not a warning, and not a footnote either. It is the full width box
+        # with the marker at its right edge, which is the whole point of it:
+        # the one link on this site written for a twelve year old used to be
+        # a 78ch note indented 30px and it read as an aside.
+        #
+        # The marker is checked for what it is not as much as for what it
+        # is. A warning triangle on the friendliest box on the site would
+        # say "be careful here" at the exact moment it means "this way in".
         check("and it is an invitation, not a warning",
-              'class="warn"' not in head and "\U0001f4be" in head)
+              'class="warn"' not in head and "⚠" not in page)
+        tip = page.split("article .tip {")[1][:300]
+        check("the invitation is the full width of the column, not an aside",
+              "max-width:none" in tip and "border-radius:" in tip
+              and "margin-left" not in tip)
+        check("and carries its marker at the right edge",
+              'article .tip::after { content:"-->"' in page
+              and "position:absolute" in page.split("article .tip::after {")[1][:200])
         check("the teachers page is linked from the schools section",
               '"/teachers"' in page)
         # The menu, not the body: the first version of this check looked for
@@ -657,14 +672,43 @@ def main():
         check("the cells carry their own labels, not the column order",
               "data-label='State'" in page and "data-label='Dial'" in page)
         check("activity is two deliberate lines, not one that wraps anywhere",
-              "calls<br>" in page and "connected</td>" in page)
+              "calls<br>" in page and "connected</span>" in page)
+        # Three columns, not six. Six of them wrapped once the type grew, and
+        # four of those columns were one short value each. What has to
+        # survive is the one thing a table is for: State is the first line
+        # of its own cell and cells are top aligned, so it still runs
+        # straight down the page for somebody scanning for a board with
+        # callers on it. Measured in Chrome at 1920 and 1366: all four state
+        # lines start at the same x and each is one line.
+        check("the board list is three columns, not six",
+              "<th>Board</th><th>Dial</th><th>State</th></tr>" in page
+              and "<th>Sysop</th>" not in page)
+        check("and a stacked value says what it is rather than relying on "
+              "its position",
+              "<span class='lbl'>sysop</span>" in page
+              and "<span class='lbl'>up for</span>" in page)
+        check("the state is the first line of its cell, and the loud one",
+              "<td class='status' data-label='State'><span class='state "
+              in page
+              and ".status > .act, .status > .muted, .status > .upfor"
+              in page)
+        # Direct children. ".status span" also matched the spans nested
+        # inside, which put the freshness figure on its own line and split
+        # every label from its value. It renders wrong and greps right.
+        check("and the stacked lines are direct children only",
+              ".status > span, .name > .owner { display:block; }" in page
+              and ".status span," not in page)
         check("the page title outranks the text under it",
-              "h1 {{ color:var(--ink); font-size:20px" .replace("{{", "{") in page)
+              "h1 {{ color:var(--ink); font-size:1.25rem".replace("{{", "{")
+              in page
+              and "article h2 {{ color:var(--struct); font-size:0.9375rem"
+                  .replace("{{", "{") in page)
         check("nothing that is words is left below --dim",
-              "footer {{ margin-top:28px; color:var(--dim)".replace("{{", "{") in page)
+              "footer {{ margin-top:1.75rem; color:var(--dim)"
+              .replace("{{", "{") in page)
         _, page = get("/sdcard")
         check("a callout is indented from the body text, not flush with it",
-              "margin:18px 0 18px 30px" in page)
+              "margin:1.125rem 0 1.125rem 1.875rem" in page)
         # Prose runs the full width of the column on a desktop. This was
         # briefly capped at 78ch on typographic grounds and Rob reversed it
         # after comparing the two, so the check is that the cap is GONE, not
@@ -687,7 +731,7 @@ def main():
         # lines at 1.5 line height are 105px in a 7.4em box.
         _, page = get("/", host="about.example")
         check("the diagram scales to fit instead of scrolling",
-              "overflow:hidden" in page and "clamp(6px" in page
+              "overflow:hidden" in page and "clamp(0.375rem" in page
               and "overflow-x:auto;\n         font" not in page)
         # The day chart's viewBox is sized to the column it lives in. A 720
         # unit box in a 412px cell scaled by 0.57, so an 11px label rendered
@@ -698,6 +742,58 @@ def main():
         check("and its hour labels are set large enough to read",
               "svg.hours text { fill:var(--dim); font-family:inherit; "
               "font-size:13px; }" in page)
+
+        # ------------------------------------------------------------------
+        # The sitewide scale. Rob set his browser to 133% and said the board
+        # list looked right at that size, so the site is drawn at 133% and
+        # the whole page scales, not only the type. Raising the type alone
+        # would have grown the words inside a column that did not move and
+        # cost a quarter of the characters per line, which is a different
+        # change and a worse one.
+        #
+        # That only holds while every length carrying layout is in rem. One
+        # padding added later in px is a piece of the page that stops
+        # scaling, and it is invisible until somebody looks at the render.
+        # So: find every px left in the stylesheet and insist each one is a
+        # border, an outline or text inside an SVG viewBox.
+        #
+        # Verified in headless Chrome rather than trusted: the old page at a
+        # 1444px viewport times 1.33 and the new page at 1920 agree to the
+        # decimal on body type (18.62px), column width (1436.4px) and
+        # characters per line (140).
+        print("The page is drawn at 133%, and all of it scales")
+        # Its own name, not "page": the manifesto is the one page carrying
+        # both stylesheets, and the checks after this one are still reading
+        # the board list. Reusing "page" here quietly moved them onto a page
+        # that has no day chart on it at all.
+        _, css_page = get("/", host="about.example")
+        check("the scale is one number at the root",
+              ":root { color-scheme: dark; font-size:133%;" in css_page
+              and "@media (max-width: 900px) { :root { font-size:115%; } }"
+                  in css_page)
+        stray = []
+        for block in re.findall(r"<style>(.*?)</style>", css_page, re.S):
+            block = re.sub(r"/\*.*?\*/", "", block, flags=re.S)
+            for line in block.split("\n"):
+                if "px" not in line:
+                    continue
+                # A media query condition is a viewport width and belongs in
+                # px. Borders and rules stay in px too, because a hairline is
+                # a hairline at any size, and svg.hours text is in viewBox
+                # units, which scale with the chart already.
+                if (line.lstrip().startswith("@media")
+                        or "svg.hours text" in line
+                        or "outline-offset" in line):
+                    continue
+                rest = re.sub(r"\d+(?:\.\d+)?px\s+(?:solid|dotted|dashed)",
+                              "", line)
+                if re.search(r"(?<![\w.-])\d+(?:\.\d+)?px", rest):
+                    stray.append(line.strip())
+        # The offending lines go in the label, because "a px somewhere in
+        # 400 lines of CSS" is not a finding anybody can act on.
+        check("and nothing that carries layout is left in px"
+              + ("" if not stray else "  <- " + " | ".join(stray[:3])),
+              not stray)
         # A count of callers is a count. "8.0" is a decimal where there
         # cannot be one, and the scale had a top but no bottom.
         check("the caller axis counts in whole callers and starts at zero",

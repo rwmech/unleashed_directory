@@ -1,7 +1,7 @@
 # Who it's for
 
 > [!TIP]
-> 💾 **Under 18? This is the good bit.** There is a page written for
+> **Under 18? This is the good bit.** There is a page written for
 > you: what a bulletin board actually is, why building one is a weekend well
 > spent, and how to do it with a grown-up at home.
 > [It starts here](/kids).

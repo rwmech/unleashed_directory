@@ -75,8 +75,11 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   the warning colour says the opposite of the words inside it. The markers
   are GitHub's, the colours are this site's, and `[!TIP]` is `--dial`
   rather than GitHub's green because green here means a board is up and
-  means nothing else. What does not exist, on purpose: nested lists,
-  images, inline HTML, headings below `###`.
+  means nothing else. **`[!TIP]` is not a small note in a friendly colour**:
+  it is the full width invitation box with the `-->` marker at its right
+  edge, and it is loud on purpose. A quiet remark that is not a warning is
+  `[!NOTE]`. What does not exist, on purpose: nested lists, images, inline
+  HTML, headings below `###`.
   **A form that is not in the dialect does not fail, it renders as a
   paragraph**, which is how 53 numbered steps across the router pages were
   a wall of text for four versions with every word present and in the right
@@ -90,10 +93,23 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   never touches `PAGE`.
 - **A CSS or copy change is not verified until the rendered page has been
   looked at.** grep on the HTML proves a string is present, not that a rule
-  applied, an element is positioned or a menu is readable. Two of the worst
-  bugs found here were invisible to grep: the menu shipping with no
-  stylesheet at all, and the board list being 627px wide in a 358px phone
-  column with the State column off the screen.
+  applied, an element is positioned or a menu is readable. Three of the
+  worst bugs found here were invisible to grep: the menu shipping with no
+  stylesheet at all, the board list being 627px wide in a 358px phone
+  column with the State column off the screen, and `.status span` matching
+  its own nested spans so every label was split from its value.
+- **The site is drawn in `rem` off one number, `:root { font-size:133% }`,
+  and nothing that carries layout may be in px.** Borders and rules stay in
+  px, because a hairline is a hairline at any size, and so does text inside
+  an SVG viewBox, which scales with the chart. One `padding:12px` added
+  later is a piece of the page that quietly stops scaling; `selftest.py`
+  walks both stylesheets and fails on any other px.
+  How to check a scale change, and it is the only check that answers the
+  question: render the old page at `viewport / 1.33` and multiply every
+  length by 1.33, then render the new page at the full viewport. They
+  should agree to the decimal. Headless Chrome will not open a window
+  narrower than about 500px, so a 390 measurement has to go through an
+  exactly sized iframe or it is silently a 504 measurement.
 
 ## Anti-spam, and why it is shaped this way
 
