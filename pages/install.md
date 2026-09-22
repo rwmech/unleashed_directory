@@ -1,7 +1,8 @@
 # Put the BBS on your board
 
 Plug an ESP32 into your computer, click a button on this page, and it becomes a
-bulletin board. No toolchain, no compiler, no account, nothing to install.
+bulletin board. No toolchain, no compiler, no account, nothing to install. That
+is what this page is for, and the box below says whether it can do it yet.
 
 This works because Chrome can talk to a serial port. The page reads the chip on
 the other end of the cable, writes the firmware to it, and then asks you which
@@ -15,17 +16,19 @@ Wi-Fi network it should join. Five minutes, most of it waiting.
 > **Chrome or Edge, on a desktop or laptop**, is the path that works.
 > Firefox can do it from version 151, released in May 2026, but it asks your
 > permission twice and the first prompt is a confusing one, so it is the harder
-> road rather than a broken one. **Safari cannot do this at all**, and neither
-> can anything on an iPhone or an iPad: every browser on iOS is Safari
-> underneath whatever name is on the icon. On a Mac, use Chrome or Edge.
+> road rather than a broken one. **Safari cannot do this at all**, and as of
+> September 2026 neither can any browser on an iPhone or an iPad. On a Mac,
+> use Chrome or Edge.
 
 The part that does the work is Web Serial, a browser feature rather than
 anything this site installs. If the button below says your browser cannot do
 it, your browser is the thing to change; nothing else on this page will help.
 
 - **An ESP32 with 4 MB of flash.** The reference board is a bare
-  ESP32-WROOM-32E. Any dev board with that module and a USB socket works, and
-  those are the ones sold as "ESP32 DevKit" for the price of a sandwich.
+  ESP32-WROOM-32E. Any dev board with that module and a USB socket works, for
+  the price of a sandwich. A board with letters after the name, such as
+  ESP32-C3 or ESP32-S2, is a different chip: [the build page](/build) has a
+  table of which ones can run a board.
 - **A USB cable that carries data.** This is the single most common reason
   the board never appears. Cables sold with phone chargers and battery packs
   are very often power-only: they have the plugs, they light the board up, and
@@ -62,10 +65,15 @@ follows on the command line.
 > currently holds something you care about, copy it off first.
 
 The one case that breaks the second rule is a release that moves a partition.
-That has happened once and will be said plainly in the release notes when it
-happens again: those need the full erase, and they take the accounts with them.
+That has happened twice, at versions 0.14 and 0.17, and will be said plainly in
+the release notes when it happens again: those need the full erase, and they
+take the accounts with them.
 
 ## Wi-Fi
+
+This part describes the installer as it will work once it has images to offer.
+Today's firmware still has the network built in when it is compiled, which is
+the piece of work the box above is waiting on.
 
 The board has no screen and no keyboard, so it is told which network to join
 over the same cable you just flashed it with. Once the firmware is on and the

@@ -36,7 +36,8 @@ they can read.
   are a text file. A class can read the source, change a screen, add a
   command, and put the changed board back on the air inside one lesson.
   Nothing is hidden behind an account or an API key.
-- **It costs less than a set of textbooks.** One board serves the class. Old
+- **It costs less than a set of textbooks.** One board takes ten callers at
+  once, so a class works in pairs or threes, or runs a second board. Old
   machines out of the back of a supply closet can call it, which is often the
   best part of the lesson.
 
@@ -96,8 +97,9 @@ no seats to buy and nobody's terms of service to agree to.
 It works on anything with a terminal, which in an office means every machine
 there is: a laptop, a workstation, a server you already ssh into,
 the ancient thing in the corner that runs the one piece of software nobody will
-replace. There is no client to install and no rollout. Anyone who can type
-`telnet` can join.
+replace. There is no rollout. A telnet client is a small free program, often
+already on the machine, and anybody who can open one can join.
+[Terminals](/terminals) lists them.
 
 - **Group discussion that stays in the building.** Put it on the local network
   and it never touches the internet at all.
@@ -158,7 +160,8 @@ moderation contractor. Not an appeals process somebody else designed. You.
 ## So set one up
 
 The barrier used to be a second phone line. Now it is an ESP32 dev board and a
-USB cable, plus a micro SD card if you want file areas. That is the list. There
+USB cable, plus a micro SD card if you want file areas or forums. That is the
+list. There
 is no hosting bill, no domain required, no provider to ask, and no account with
 anybody.
 

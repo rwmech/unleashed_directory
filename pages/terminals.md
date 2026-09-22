@@ -17,9 +17,10 @@ on Android and
 **[MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494)** on iOS
 and macOS both do the job and render ANSI art correctly.
 
-A Chromebook is the one machine where none of that installs. It has its own
-section further down, and the short version is that it depends on a setting
-somebody else may own.
+A Chromebook is the one machine where none of that installs straight into the
+browser. It can call a board through its Linux environment or an Android app,
+and on a school or work Chromebook both are settings somebody else owns. It has
+its own section further down.
 
 ## The rest of the modern options
 
@@ -30,7 +31,7 @@ somebody else may own.
 | [mTelnet](https://mt32.bbses.info/) | Windows | Small, fast, built for BBSes. |
 | [MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494) | iOS, macOS | Handles PETSCII as well as ANSI. |
 | [TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android) | Android, ChromeOS with the Play Store | CP437 art, classic fonts, ZMODEM transfers. |
-| [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) | Windows | Everywhere already, but set the character set to CP437 or the art will be wrong. Not built for this. |
+| [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) | Windows, Linux | Everywhere already, but set the character set to CP437 or the art will be wrong. Not built for this. |
 | `telnet` | Linux, macOS, BSD | `telnet unleashed.local 6400`. Fine and plain. On Debian or Ubuntu: `sudo apt -y install inetutils-telnet`. |
 | `nc` | anywhere | `nc host 6400`. Works, negotiates nothing, and looks it. |
 
@@ -46,11 +47,12 @@ default and it renders ANSI poorly. Use something else.
 
 ## Chromebooks
 
-A Chromebook can call a board. Chrome cannot. No web page and no Chrome
-extension is allowed to open the kind of plain network connection telnet
-needs, so every route below goes around the browser rather than through it.
-None of them is difficult, but on a school or work Chromebook at least one of
-them is a setting that belongs to somebody else.
+A Chromebook you control can usually call a board. A school or work
+Chromebook usually cannot, until whoever manages it switches something on.
+Chrome on its own never can: no web page and no Chrome extension is allowed to
+open the kind of plain network connection telnet needs, so every route below
+goes around the browser rather than through it. On a managed Chromebook, every
+one of those routes is a setting that belongs to the administrator.
 
 **Find out which kind of Chromebook you have before anything else**, because
 it changes the answer. Select the time at the bottom right, then **Settings**,
@@ -94,7 +96,7 @@ if you ask for the setting by name instead of asking for Linux.
 ### The other ways in, and what each costs
 
 - **An Android app, if the Play Store is switched on.** [TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android) is a BBS terminal that speaks telnet and draws CP437 art properly. On a managed Chromebook the Play Store is its own separate setting, under **Devices > Chrome > Apps & extensions > User app settings**, then **Additional app settings**, then **Android apps on Chrome Devices**, then **Allow users to install Android apps**. On school devices it is frequently off, and it is a bigger thing to ask for than Linux is, because it opens a whole store rather than one program.
-- **A Chrome extension cannot do this**, and that is worth knowing before you spend an afternoon looking for one. Google's own Secure Shell is an SSH client and has never spoken telnet. Nothing else can either: opening a plain connection was a Chrome Apps ability, not an extension one, and user-installed Chrome Apps stopped working on ChromeOS in July 2025.
+- **A Chrome extension cannot do this**, and that is worth knowing before you spend an afternoon looking for one. Google's own Secure Shell is an SSH client and does not speak telnet. Nothing else can either: opening a plain connection was a Chrome Apps ability, not an extension one, and ChromeOS 138, in July 2025, was the last release to support Chrome Apps a user installed themselves. Google's newer route for web apps that need a raw connection, Isolated Web Apps, installs only through an administrator's policy, so it is the administrator's decision like everything else here.
 - **A terminal that runs in a web page needs a helper in the middle.** A page cannot open a telnet connection, so clients like [fTelnet](https://www.ftelnet.ca/) connect over WebSocket to a proxy and the proxy makes the telnet connection for them. It works. It also means that proxy reads everything in both directions, which on a telnet board is everything, your password included. Running the proxy yourself on your own network is a fair trade. Using somebody else's is a public conversation with one more listener in it.
 
 If none of those is available to you, a Chromebook cannot call a board, and
@@ -125,8 +127,10 @@ protocol was common.
 | C64, C128 | [CCGMS](https://github.com/mist64/ccgmsterm), [Novaterm](https://commodore.software/downloads/download/19-novaterm/653-novaterm-9-6c), [DesTerm 128](https://csdb.dk/release/?id=171068) | [TeensyROM](https://github.com/SensoriumEmbedded/TeensyROM), [WiModem232](https://www.cbmstuff.com/index.php?route=product/product&path=66&product_id=113), [Comet64](https://www.commodoreserver.com/ProductView.asp?PID=365065CF529B4C408F7D01C08BA34803), [Zimodem](https://github.com/bozimmerman/Zimodem), or an RS-232 cartridge |
 | VIC-20, PET, Plus/4 | period terminal software | a user-port RS-232 interface to a bridge |
 
-The board speaks PETSCII natively, at 40 or 80 columns, and works out which on
-connect. A C64 gets a C64 screen, not an approximation of one.
+The board speaks PETSCII natively, at 40 or 80 columns. A Commodore does not
+answer the board's probe the way a PC terminal does, so on connect the board
+asks you to press DEL, then whether you are on 40 or 80 columns. A C64 gets a
+C64 screen, not an approximation of one.
 
 ### Atari
 
@@ -176,6 +180,9 @@ dollars. A real modem and a real phone line also still work, if you have both.
 ## What the board does with all this
 
 It works out what it is talking to when you connect: ANSI with CP437 or UTF-8,
-PETSCII at 40 or 80 columns, or plain ASCII, and draws itself accordingly. You
-do not configure anything. A C64 and a modern laptop can be in the same chat
-room and both see something that looks right to them.
+PETSCII at 40 or 80 columns, or plain ASCII, and draws itself accordingly. A
+modern terminal answers the board's probe and is never asked anything. A
+terminal that stays silent is asked to press DEL or BACKSPACE, which tells the
+board whether it is a Commodore or plain ASCII, and a Commodore is then asked
+for 40 or 80 columns. A C64 and a modern laptop can be in the same chat room and
+both see something that looks right to them.

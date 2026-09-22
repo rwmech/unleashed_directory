@@ -7,12 +7,12 @@ RT-AX and RT-AC models on ASUSWRT, firmware 3.0.0.4.384.40000 or later.
 
 ## Log in
 
-Connect by Ethernet or Wi-Fi, then open `http://router.asus.com` (ASUS also
-documents `http://www.asusrouter.com`) or the router's address, commonly
-`192.168.50.1` or `192.168.1.1`. The default is printed on the label.
+Connect by Ethernet or Wi-Fi, then open `http://www.asusrouter.com` or the
+router's address. ASUS's own example is `192.168.50.1`.
 
-Many models default to `admin` / `admin`; others print the defaults on the
-label; a router on first boot makes you create the login instead.
+Some models use `admin` / `admin`; others print the defaults on a label on the
+back or bottom; a router on first boot, or after a reset, makes you create the
+login instead.
 
 If the password is unknown there is no recovery. ASUS says so plainly: the only
 way back in is a factory reset, holding **RESET** for 5 to 10 seconds until the
@@ -73,9 +73,9 @@ It makes no difference which unit the board is associated with.
   passthrough mode, or forward the port on both.
 - **CGNAT.** ASUS names the range explicitly: `100.64.0.0` to
   `100.127.255.255`. No router setting fixes it.
-- **IPv6.** ASUS states port forwarding is IPv4 only and that there are no
-  plans to support IPv6. Inbound IPv6 lives under **Firewall > IPv6 Firewall**
-  with its own rules.
+- **IPv6.** ASUS states port forwarding is not supported for IPv6 and that
+  there are no plans to support it. Inbound IPv6 is the **IPv6 Firewall**,
+  switched on and given its own rules under **Firewall > General**.
 - **Firmware.** Anything before 3.0.0.4.384.40000 uses a different page layout
   and a separate ASUS document. Some older models never got the newer one.
 - **The board itself.** The rule only moves packets. The board has to be
@@ -89,4 +89,5 @@ It makes no difference which unit the board is associated with.
 - [Web interface access and defaults](https://www.asus.com/us/support/faq/1005263/)
 - [Cannot log in, factory reset](https://www.asus.com/support/faq/1044653/)
 - [AiMesh, settings on the router only](https://www.asus.com/support/faq/1035087/)
+- [Lyra app, port forwarding](https://www.asus.com/support/faq/1036277/)
 - [IPv6 Firewall](https://www.asus.com/support/faq/1013638/)

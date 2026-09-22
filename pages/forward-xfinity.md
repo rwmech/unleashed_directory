@@ -1,13 +1,13 @@
 # Port forwarding on an Xfinity gateway
 
-XB6, XB7 and XB8, through the Xfinity app.
+A rented Xfinity gateway, through the Xfinity app.
 
 > This opens a door into your own network and you are responsible for what
 > comes through it. Read [the warnings](/forward) first if you have not.
 
 On a rented Xfinity gateway, port forwarding lives in the mobile app, not in
-the gateway's own web page. Comcast states that customers with xFi Gateways can
-only set up and adjust port forwarding using the Xfinity app.
+the gateway's own web page. Comcast states that customers with Xfinity Gateways
+can only set up and adjust port forwarding using the Xfinity app.
 
 ## Steps in the app
 
@@ -29,13 +29,14 @@ not quoted here.
 
 ## The web route, and the local page
 
-The old xFi web pages no longer carry port forwarding. The current
-documentation describes the app only.
+Comcast's current documentation describes port forwarding in the app and
+nowhere else.
 
-The local admin page at `http://10.0.0.1` still exists but on XB6 and newer it
-is gated behind an app toggle and does not offer port forwarding. To enable it:
-**WiFi > View WiFi equipment > Advanced Settings > Admin Tool online access >
-Allow Admin Tool access > Save**. The username is `admin`.
+The local Admin Tool at `http://10.0.0.1` still exists, but it has to be
+switched on from the app first, and Comcast does not document port forwarding
+in it. To switch it on: **WiFi > View WiFi equipment > Advanced Settings >
+Admin Tool online access > Allow Admin Tool access > Save**. The username is
+`admin`, and the password is the one you create when you switch it on.
 
 ## Reserving an address
 
@@ -63,9 +64,9 @@ Your own router then does the forwarding.
 
 - **Xfinity CyberSecure**, previously Advanced Security. When it sees something
   aimed at a device with port forwarding, DMZ or UPnP ports open, it blocks all
-  traffic from that device's open ports. Use Allow Access on the device, or
-  turn the feature off. This catches people out constantly: the rule is correct
-  and the traffic is still dropped.
+  traffic from that device's open ports. Comcast recommends leaving it on and
+  using Allow Access on the device; turning it off is the other way out. Worth
+  checking first when the rule is correct and the traffic is still dropped.
 - **Double NAT.** Your own router behind a gateway that is still routing gives
   two layers, and the forward has to exist on both. Bridge Mode is the fix.
 - **CGNAT.** If the gateway's WAN address is in `100.64.0.0/10` and does not

@@ -12,11 +12,11 @@ depending on model. Deco uses `192.168.68.1`. If none work, read the default
 gateway from a client: Windows calls it Default Gateway, macOS and iOS call it
 Router, Android calls it Gateway.
 
-Older models ship with `admin` / `admin`. Newer ones have no default and make
-you create a password at setup. There is no recovery on most models: either use
-Password Recovery if you set it up, or hold **Reset** for about 10 seconds with
-the router powered on, which wipes Wi-Fi settings, internet settings and any
-forwarding rules you already had.
+Some models use `admin` / `admin`. Others have no default and make you create a
+password at setup. There is no password lookup: some newer models can recover
+it through a linked TP-Link ID, and otherwise you hold **Reset** for about 10
+seconds with the router powered on, which wipes Wi-Fi settings, internet
+settings, the admin password and any forwarding rules you already had.
 
 ## Give the board a fixed address
 
@@ -47,10 +47,8 @@ over all three when rules overlap. Do not use DMZ.
 
 ## The Tether app
 
-TP-Link's port forwarding documentation covers the web interface only. Tether
-keeps its settings under **Tools**, and some recent models expose forwarding
-there, but there is no official page naming that path. Treat it as
-model-dependent and use the web interface if you cannot find it.
+TP-Link's port forwarding documentation covers the web interface only, and does
+not describe forwarding in the Tether app. Use the web interface.
 
 ## Deco mesh
 
@@ -73,9 +71,8 @@ rules.
 - **The host firewall.** A blocked listener, or a network profile set to
   Public, looks exactly like a broken router rule.
 - **IPv4 only.** Virtual Servers and Port Forwarding are IPv4 NAT features.
-  TP-Link routers ship with the IPv6 firewall on and most home models have no
-  rule editor for it. Not covered by TP-Link's own documentation, so check on
-  your model.
+  What a TP-Link router does with inbound IPv6 is not covered by its
+  forwarding documentation and varies by model, so check yours.
 - **Testing from inside.** Loopback is inconsistent. Test from a phone on
   mobile data.
 - **Firmware.** Field names, and whether the page is called Virtual Servers or

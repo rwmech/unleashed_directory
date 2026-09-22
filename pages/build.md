@@ -6,25 +6,51 @@ Nothing here is a kit and nothing is soldered to anything. If you have an ESP32
 dev board in a drawer, you already have most of it.
 
 > [!TIP]
-> **[Put the firmware on from your browser](/install)**, with no toolchain and
-> nothing to install. Chrome or Edge, a USB cable, about five minutes. This
-> page is the longer road, and the one you want once you start changing things.
+> **[A browser installer is on its way](/install)**: Chrome or Edge, a USB
+> cable, about five minutes, and no toolchain. It is waiting on one piece of
+> firmware work before it has anything to install. This page is the longer
+> road, and the one you want once you start changing things.
 
 ## What you need
 
 - **An ESP32 with 4 MB of flash.** The reference board is a bare
-  ESP32-WROOM-32E: 520 KB of SRAM, 4 MB of flash, no PSRAM, Bluetooth off. Any
-  module with the same flash will do. A dev board with a USB-serial chip needs
-  nothing but the cable.
+  ESP32-WROOM-32E: 520 KB of SRAM, 4 MB of flash, no PSRAM, Bluetooth off. Not
+  every ESP32 can run it, and the table below says which. A dev board with a
+  USB-serial chip needs nothing but the cable.
 - **A USB cable**, and that is the whole bill of materials for a dev board. A
   bare module also wants 3V3, ground, EN pulled up, GPIO0 to ground while you
   flash it, and a USB-serial adapter on the console pins.
 - **Wi-Fi**, 2.4 GHz. The board scans every channel and joins the strongest
   access point with your SSID, so a mesh needs no special handling.
 - **Power.** It runs from the USB port you flashed it with, a phone charger, or
-  3V3 on a bench supply. It draws a few tens of milliamps idling, a little more
-  with ten callers on, and peaks when the radio transmits, so anything that can
-  deliver 500 mA is comfortable.
+  3V3 on a bench supply. It draws about a tenth of an amp while it waits,
+  because the firmware keeps the radio listening rather than letting it doze,
+  and peaks a little under 400 mA for the instant the radio transmits, so anything
+  that can deliver 500 mA is comfortable.
+
+## Which ESP32
+
+Plenty of chips are sold under the ESP32 name, and not all of them can run a
+board. It needs two processor cores and Wi-Fi built into the chip. The BBS runs
+on one core while Wi-Fi and the network run on the other, and that split is
+what stops the radio's work from making callers' lines lag.
+
+| Chip | Runs it? | Why |
+|---|---|---|
+| ESP32-WROOM-32E | **Yes, tested** | The reference board: ten caller lines, a busy line and a hidden sysop line. The only one anybody has run. |
+| ESP32-WROVER | Should work, not yet tested | The same original ESP32 chip, and the same goes for other modules built on it. A WROVER adds PSRAM, a second memory chip on the module, which leaves room for more callers, but nobody has measured how many. |
+| ESP32-S3 | Should work, not yet tested | Two cores and Wi-Fi, with or without PSRAM. There is no ready-made firmware build for it yet. |
+| ESP32-S2 | No | One core. |
+| ESP32-C3 | No | One core. |
+| ESP32-C5 | No | One core, even with dual-band Wi-Fi. |
+| ESP32-C6 | No | One main core. Its second, low-power core cannot run the board. |
+| ESP32-H2 | No | One core, and no Wi-Fi. |
+| ESP32-P4 | No | No Wi-Fi on the chip. It needs a second chip to reach a network. |
+
+The firmware is built for the original ESP32 and does not run on the others as
+it stands. A single-core chip could be made to run it, but the radio and the
+callers would take turns on one core and callers would feel it, and doing that
+properly means rebuilding the core of the BBS rather than changing a setting.
 
 ## Getting it running
 
@@ -54,7 +80,8 @@ the `hostname` setting doing double duty as the DHCP and mDNS name.
 [Any telnet client](/terminals). SyncTERM is the one worth installing if you
 have none. A Commodore 64 with a TeensyROM works too, and so does a VT220 on a
 serial adapter. The board works out what it is talking to on connect: ANSI with
-CP437 or UTF-8, PETSCII at 40 or 80 columns, or plain ASCII, and it draws itself
+CP437 or UTF-8, PETSCII at 40 or 80 columns, or plain ASCII, asking a question
+or two if the terminal does not answer its probe, and it draws itself
 accordingly.
 
 ## Keeping it
@@ -94,8 +121,8 @@ CONFIG announce
 ```
 
 A listing is earned by three hours of sustained heartbeats, not by asking, and
-it disappears when the heartbeats stop. `ANNOUNCE TEST` prints the exact bytes
-that would leave the board and sends nothing, so you can read it before you
+it disappears when the heartbeats stop. `ANNOUNCE TEST` prints the exact
+message the board would send and sends nothing, so you can read it before you
 trust it.
 
 You do not have to use this directory. The protocol is documented, the server
@@ -104,9 +131,8 @@ A directory nobody can replace would contradict the whole point.
 
 ## Adding an SD card
 
-Optional, four wires, about two dollars. It is what gets you file areas and
-screens of your own, and it is where forums will live once they are built.
-Without one the board is still a board. The pin map and the three things that
+Optional, four wires, about two dollars. It is what gets you file areas, forums
+and screens of your own. Without one the board is still a board. The pin map and the three things that
 usually go wrong are on the [SD card page](/sdcard).
 
 ## The source

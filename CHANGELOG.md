@@ -14,6 +14,139 @@
 
 # Changelog
 
+## 0.13.0, 2026-09-22
+
+Rob's standard for this one, verbatim: "Check factuality on every assertion on
+the website. Fix issues, make no mistakes." Every page was read against a
+primary source or against the firmware at 0.21.6, and what was wrong is fixed
+below. Also an author page, and drawings across the site in the hand of the
+connection diagram.
+
+**What was wrong, and what it rested on:**
+
+- **CBBS had 24 kilobytes, not 64.** Christensen and Suess's own article in
+  Byte, November 1978, page 150: "an 8080 processor with 24 K bytes of memory,
+  single floppy disk". The manifesto said 64, and "this has eight times that
+  memory" was built on it. It is more than twenty times. The blizzard stays,
+  because Wikipedia carries it from an early interview, but it "dumped record
+  snow across the Midwest" rather than "shut the city down", which nothing
+  supports: Chicago got 12 to 13 inches.
+- **"A few tens of milliamps", in three places, is the figure for a radio that
+  dozes.** This firmware holds it awake with `WIFI_PS_NONE`, and Espressif's
+  WROOM-32E datasheet (v2.1, table 16) puts receive alone at 112 mA. It is
+  "about a tenth of an amp" now, and `/build` gives the transmit peak, which the
+  same table puts at 379 mA.
+- **Signing up asks for a name and an email address.** Both are `UF_REQUIRED`
+  in `users.cpp`. The freedom box headed "No account, no email address, no
+  phone number" said sign-up was a handle and a password. It is "Nobody checks
+  who you are" now, which is the true and better claim: neither field is
+  verified, because the board cannot send email. `/firstcall` says the same,
+  and its "what a board knows about you" said the sysop was the only person who
+  sees any of it, which `WHOIS` contradicts: other callers see your name and
+  profile.
+- **"A Commodore 64 cannot do TLS" and "never will" are both false.** A stock
+  C64 has finished a TLS 1.3 handshake in 6502 assembly
+  ([JC-000/c64-https](https://github.com/JC-000/c64-https)), in about 36
+  minutes. The manifesto and `/privacy` say that now, which is the stronger
+  argument anyway.
+- **Forums were "being built" in five places after they were built.** They
+  shipped in firmware 0.21: `FORUMS` in COMMANDS.md, `PF_SD` in `forums.cpp`,
+  so a card and a sysop who switches them on. The checks that pinned "being
+  built" now pin the opposite.
+- **Connecting is not always silent.** A terminal that does not answer the
+  probe is asked to press DEL or BACKSPACE, and a Commodore is then asked for 40
+  or 80 columns (`detect.cpp`). Four pages said you configure nothing, and
+  `/terminals` said the board works out 40 or 80 by itself.
+- **`/how`'s config example set a key the board ignores.** The announce plugin
+  stopped reading `name`; the board's name is `board_name` in the core section.
+- **The Chromebook section led with a sentence Rob did not believe, and was
+  right not to.** It leads with who controls the machine now: one you control
+  usually can, a managed one usually cannot without its administrator, Chrome
+  alone never can. Google's own help confirms every setting name on the page.
+  Two details were tightened: ChromeOS 138 was the *last* release to support
+  user-installed Chrome Apps, and Secure Shell "does not" speak telnet rather
+  than "has never", since the present is what its source tree shows. Isolated
+  Web Apps, Chrome's newer route to a raw socket, install only by
+  administrator policy, and the page says so rather than leaving it to be
+  found.
+- **`/sdcard` had four wrong things in it.** GPIO5 is a strapping pin for SDIO
+  slave timing only (Espressif datasheet, section 4), so a card module cannot
+  stop the board booting through it. The third error it quoted, "card would not
+  mount", does not exist in the firmware; the real strings are in the table now.
+  `diskpart` refuses FAT32 above 32 GB, so sending Windows users to it was
+  wrong; Microsoft lifted the limit for the `format` command only, in
+  KB5083631 in April 2026. And "3V3 works on every module worth buying" is not
+  true of the common blue module with an AMS1117 regulator, which is specified
+  for 4.5 to 5.5 V. 3V3 stays the starting point, because it cannot damage
+  either kind.
+- **`/whofor` still said one board serves the class**, the claim 0.12.2 fixed
+  on `/teachers` and missed here. And "there is no client to install" is not
+  true on a Mac or a Windows machine.
+- **`/install`**: a partition move has needed the full erase twice, at 0.14 and
+  0.17, not once; "every browser on iOS is Safari underneath" is not true in
+  the EU and is dropped for the claim that matters, dated; and the Wi-Fi section
+  describes the installer as it will be, so it says so. `/build`'s invitation to
+  the installer no longer says it works today.
+- **The router pages**, against every vendor article they cite. NETGEAR now
+  names the "External Ending Port" field the page said it did not name, reaches
+  password recovery by three wrong logins rather than CANCEL, and moved its
+  reservation article, which now redirects to an error page. TP-Link recovers
+  passwords through a TP-Link ID and does not document Tether's menus. ASUS
+  documents `asusrouter.com`, not `router.asus.com`, and puts the IPv6 firewall
+  under Firewall > General. Google no longer says a reservation is required.
+  Xfinity's article names no gateway models. Every changed claim has its source
+  in the page's list.
+- The smaller ones: "sixty-five years on" from 1960 is sixty-six; the 60,000
+  boards were InfoWorld's 1994 estimate, not a count at the peak; the ESP32
+  "runs at up to" 240 MHz, and this firmware runs it at 160; `/health` answers
+  three bytes, not two; guests leave a line in the caller log.
+
+**A renderer bug, found by checking the links.** A Markdown link target with
+parentheses in it, which every archived Microsoft document has, lost its
+closing parenthesis, so two sources on `/dialing` 404'd with a stray ")" after
+them. One level of balanced parentheses is allowed in a link now.
+
+**`/author`**, from QuantumRob's name in the byline and both signatures.
+Everything on it is Rob's own account, the Psyberchat spelling confirmed by
+him; nothing was added from searching his name, which is common enough that a
+namesake is a real risk. Four photographs are hotlinked from Wikimedia Commons,
+credited with author, licence and file page, requested with no referrer, at
+Wikimedia's standard thumbnail widths, because Wikimedia rejects any other
+width with an error page a browser shows as a broken image. The page says where
+its pictures come from, and THIRD_PARTY_NOTICES.md lists them.
+
+**Drawings, in the hand of the connection diagram.** One per freedom on the
+manifesto, three screens on `/firstcall`, and a skull in a new amber stop box
+on `/how`, which says spam earns a lifetime IP ban and says that it is policy
+applied by hand, because nothing in the software detects spam. The rule that
+makes them safe: every animation is declared inside
+`prefers-reduced-motion: no-preference` and nowhere else, so the drawing as
+written is the resting state and has to say its whole piece standing still.
+Checked by rendering: two frames 1.2 s apart differ by thousands of pixels with
+motion allowed and by none without. A first version declared the icons'
+animations against a class on the wrong element and none of them moved; the
+frame comparison is what showed it.
+
+`::: art` is new in the dialect: a drawing by name, so a Markdown page can
+carry one without the dialect gaining inline HTML.
+
+**Which ESP32, as a table on `/build`** (Rob). Two cores and Wi-Fi on the chip,
+because the BBS loop runs on core 1 while Wi-Fi owns core 0, from
+ESP32_BOARD_CHOICE.md in the firmware repo; each chip's core count and radio
+checked against Espressif's own product pages. The WROOM-32E is the only one
+anybody has run and the table says so; the WROVER and the S3 are "should work,
+not yet tested", with no caller count, because the old estimates came from an
+older session size and were never measured; the S2, C3, C5, C6 and H2 have one
+core (the C6's second core is a low-power one that cannot run the board), and
+the P4 has no Wi-Fi. The C5 is not in the firmware's document and is here
+because its dual-band Wi-Fi is exactly what makes somebody reach for it. It
+replaces "any module with the same flash will do" on `/build` and "any module
+with 4 MB of flash works" on `/teachers`, both of which were true of a 4 MB C3.
+
+38 new checks, 314 in total. The two that matter most were proved to fail
+against the bug they pin: the link check against the old pattern, and the
+animation check against an animation declared outside the block.
+
 ## 0.12.3, 2026-09-22
 
 The manifesto's two diagrams were hand-drawn ASCII in a `<pre>`. They are

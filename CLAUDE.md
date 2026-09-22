@@ -160,6 +160,32 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   off the frame with a negative viewBox origin rather than by moving forty
   coordinates; and remember that one SVG cannot reflow, so anything that
   has to stack on a phone is two SVGs in a grid.
+  **The small drawings (0.13.0) add three rules.** They live in `ART_CSS`,
+  `ICONS`, `FIRSTCALL_ART` and `SKULL`, share the connection diagram's
+  palette and stroke weights, and a Markdown page reaches one with
+  `::: art` then the name on its own line then `:::`; `ART` is the list of
+  names. First, **every animation is declared inside
+  `@media (prefers-reduced-motion: no-preference)` and nowhere else**, so
+  the markup as written is the resting state and each drawing has to make
+  its point standing still. The suite fails if an `animation:` appears
+  outside that block. Second, **no px in `ART_CSS`**: motion is opacity,
+  rotation and skew with `transform-box: fill-box`, dash offsets against a
+  `pathLength`, and translate, whose px are viewBox units and exempt; type
+  sizes are `font-size` attributes on the `<text>`. Third, **a class on the
+  `<svg>` itself is matched as `svg.art.i-name`, not `svg.art .i-name`**. The
+  first version wrote the descendant form, nothing moved, and it looked
+  finished in every still screenshot. Check motion by rendering two frames
+  with `--virtual-time-budget` and diffing them, with and without
+  `--force-prefers-reduced-motion`.
+- **`/author` is the one prose page that loads anything from elsewhere**:
+  four photographs hotlinked from Wikimedia Commons, credited under each,
+  sent with `referrerpolicy="no-referrer"`, and listed in
+  THIRD_PARTY_NOTICES.md. **Wikimedia serves hotlinked thumbnails only at
+  its standard widths** (20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920,
+  3840) and answers any other width with an HTML error page, which a
+  browser shows as a broken image. `_photo()` only builds 500 and 960, and
+  the suite checks every width on the page. There is no CSP on this site;
+  a comment used to say there was.
 - **A CSS or copy change is not verified until the rendered page has been
   looked at.** grep on the HTML proves a string is present, not that a rule
   applied, an element is positioned or a menu is readable. Three of the

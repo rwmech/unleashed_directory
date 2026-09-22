@@ -71,7 +71,7 @@ forward, because there is no address translation to undo.
 - [NETGEAR](/forward-netgear) - Nighthawk and R-series, routerlogin.net
 - [TP-Link](/forward-tplink) - Archer series and Deco mesh
 - [ASUS](/forward-asus) - RT-AX and RT-AC on ASUSWRT
-- [Xfinity / Comcast](/forward-xfinity) - xFi gateways, XB6 through XB8
+- [Xfinity / Comcast](/forward-xfinity) - a rented Xfinity gateway, through the app
 - [eero and Google Nest Wifi](/forward-mesh) - the app-only mesh systems
 
 Menu names move between firmware versions, and vendors rename things without

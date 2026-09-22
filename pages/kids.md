@@ -48,9 +48,10 @@ That is normal and it is fixable. [This page explains it](/dialing).
 !! parts.png | A pixel drawing of a small circuit board and a usb cable
 
 - A small computer called an ESP32. It is about the size of a stick of gum.
+  Not every ESP32 works, so check [the list](/build) before you buy one.
 - A USB cable.
 - A computer to set it up from.
-- A memory card, only if you want to share files.
+- A memory card, only if you want to share files or run forums.
 
 [Build one](/build) has the real steps.
 
@@ -162,15 +163,15 @@ And you can change the program. All of it is written down where anybody can
 read it, so if you do not like how something works, go and fix it. That also
 makes it a good school project, because you can explain every part yourself.
 
-## Being built now: forums
+## The newest part: forums
 
 !! forums.png | A pixel drawing of stacked forum topics
 
-Right now a board does chat, mail between people, and files.
+A board does chat, mail between people, files, and now forums.
 
-Forums are being built. They will be topic areas that the sysop
-sets up, with conversations inside each one, read at the same prompt as
-everything else. They are not on any board yet.
+Forums are topics that the sysop sets up, with conversations inside each one.
+You read them at the same prompt as everything else. They need a memory card,
+and the sysop has to switch them on, so not every board has them yet.
 
 ## Where to go next
 

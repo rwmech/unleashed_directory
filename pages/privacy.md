@@ -12,9 +12,10 @@ password, what you type in the chat room, what you read. Anybody who can see
 the traffic on the path between you and the board can read all of it.
 
 There is no encryption to turn on. The protocol is telnet, from 1969, and the
-machines this is built for cannot do better: a Commodore 64 has no room for a
-TLS stack and never will. The honest move is to say so rather than to add a
-padlock that means nothing.
+machines this is built for cannot do much better: somebody has made a stock
+Commodore 64 finish a modern TLS handshake, and it takes
+[about half an hour](https://github.com/JC-000/c64-https). The honest move is to
+say so rather than to add a padlock that means nothing.
 
 ## Who can see it
 

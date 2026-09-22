@@ -339,23 +339,56 @@ def main():
         _, page = get("/", host="about.example")
         check("ten callers and a hidden eleventh line, not six and a seventh",
               "answers ten at once" in page and "answers six at once" not in page)
-        # Nothing on this site states an unbuilt feature as present fact.
-        # Somebody decides whether to spend an afternoon and twenty dollars on
-        # the strength of these sentences, which makes them the most expensive
-        # kind of wrong there is here. Doors are not started and message bases
-        # are being designed. Both are coming and both are part of the
-        # argument, so they are in the future tense rather than deleted.
+        # Nothing on this site states an unbuilt feature as present fact, and
+        # nothing calls a built one unbuilt. Somebody decides whether to spend
+        # an afternoon and twenty dollars on the strength of these sentences,
+        # which makes them the most expensive kind of wrong there is here.
+        # Doors are not started, so they stay in the future tense.
         check("doors are named as coming, not as something the board has",
-              "doors come after" in page and ", doors," not in page)
+              "doors come after" in page.lower() and ", doors," not in page)
         check("and the features it does list are ones that exist",
               "mail between callers" in page and "file areas on an SD card" in page)
-        for path in ("/sdcard", "/build"):
+        # Forums shipped in firmware 0.21: FORUMS in COMMANDS.md, PF_SD in
+        # forums.cpp, so a card and a sysop who switches them on. The site
+        # said "being built" in five places after they were built, which is
+        # the same mistake as the opposite one, pointed the other way.
+        check("the manifesto lists forums as something the board has",
+              "forums on the same card" in page)
+        for path in ("/sdcard", "/build", "/kids"):
             _, page = get(path)
-            check(f"{path} does not promise message bases in the present tense",
-                  "want message bases" not in page
-                  and "gets you message bases" not in page)
-            check(f"{path} says they are still being built",
-                  "being built" in page or "once they are built" in page)
+            art = page.split("<article>")[1]
+            check(f"{path} does not call the forums unbuilt",
+                  "being built" not in art and "once they are built" not in art
+                  and "not on any board yet" not in art)
+            check(f"{path} says forums need the card",
+                  "forums" in art.lower() and ("card" in art.lower()))
+        # Checked against the sources, 2026-09-22, and each of these was
+        # wrong on the live site. Pinned so that a later copy pass cannot put
+        # the old figure back.
+        _, page = get("/", host="about.example")
+        # Byte, November 1978, p.150, in Christensen and Suess's own words:
+        # "an 8080 processor with 24 K bytes of memory". The page said 64,
+        # and "eight times that memory" was built on it.
+        check("CBBS had 24 KB, in the builders' own words, not 64",
+              "24 kilobytes" in page and "64 kilobytes" not in page
+              and "eight times that" not in page)
+        # The firmware holds the radio awake (WIFI_PS_NONE), and Espressif's
+        # datasheet puts receive alone at 112 mA. "A few tens of milliamps"
+        # was the figure for a radio that dozes, which this one does not.
+        every_page = [page] + [get(p)[1] for p in ("/build", "/whofor")]
+        check("nothing says the board draws a few tens of milliamps",
+              not any("few tens of milliamps" in p for p in every_page))
+        # Sign-up requires a name and an email (UF_REQUIRED in users.cpp).
+        # The freedom box said signing up was a handle and a password.
+        flat_m = " ".join(page.split())
+        check("the manifesto does not say sign-up needs no email address",
+              "no email address" not in flat_m
+              and "none of it is verified" in flat_m)
+        # A stock C64 has been made to finish a TLS 1.3 handshake. It takes
+        # about 36 minutes, which is the honest version of "cannot".
+        check("and no page says a C64 cannot do TLS",
+              "cannot do TLS" not in page
+              and "never will" not in get("/privacy")[1])
         # Back to the manifesto: the loop above reassigned page, and the check
         # after this one reads it.
         _, page = get("/", host="about.example")
@@ -622,13 +655,13 @@ def main():
         # ships today.
         check("an art slot with no file behind it draws nothing at all",
               'img class="pix"' not in kids or "/pix/" in kids)
-        # Forums are being built and are not on any board. A feature in the
-        # present tense that does not exist is a claim that fails on first
-        # contact, and somebody who calls a board looking for it concludes
-        # the software is broken rather than that the site ran ahead.
-        check("forums are described as being built, never as available",
-              "being built" in kids.lower()
-              and "not on any board yet" in kids.lower())
+        # Forums shipped in firmware 0.21, and they need a card and a sysop
+        # who switches them on. The page has to say both halves: present,
+        # and not on every board, because a reader who calls a board without
+        # them should blame the board's setup rather than the software.
+        check("forums are described as present, and as not on every board",
+              "now forums" in kids.lower()
+              and "not every board has them" in kids.lower())
         # The honest privacy line. This is the one claim on this site with
         # the potential to actually harm somebody, so it is pinned: the safe
         # room is the board they host, and a board on the internet is not a
@@ -785,8 +818,27 @@ def main():
               "exFAT" in body and "diskpart" in body and
               body.index("exFAT") < body.index("diskpart") <
               body.index("Use the 3V3 pin"))
-        check("and warns about 5 V before the wiring table",
-              page.index("Not VIN") < page.index("GPIO18"))
+        # The power advice was "3V3 works on every module worth buying", and
+        # the common blue module with an AMS1117 regulator is specified for
+        # 4.5 to 5.5 V: on 3V3 its card can sit near 2.2 V. 3V3 is still the
+        # starting point, because it cannot damage either kind of module.
+        check("and says where to start the power before the wiring table",
+              0 <= page.find("Start on 3V3") < page.index("GPIO18"))
+        check("without claiming 3V3 suits every module",
+              "every module worth buying" not in page and "AMS1117" in page)
+        # Espressif's datasheet: GPIO5 is a strapping pin for SDIO slave
+        # timing only. Boot mode is GPIO0 and GPIO2.
+        check("and without claiming GPIO5 can stop the board booting",
+              "does not stop the board booting" in " ".join(page.split())
+              and "can stop the board booting" not in " ".join(page.split()))
+        # The messages are the firmware's own, from platform_esp32.cpp.
+        check("and quotes the card errors the board actually prints",
+              "card answered then failed" in page
+              and "card would not mount" not in page)
+        # diskpart refuses FAT32 over 32 GB; Microsoft lifted the limit for
+        # the format command in KB5083631, April 2026, and nothing else.
+        check("and does not send Windows users to diskpart for a big card",
+              "use `diskpart`" not in page and "refuses it as well" in page)
         code, page = get("/build")
         check("and build links to it", 'href="/sdcard"' in page)
 
@@ -800,6 +852,14 @@ def main():
               page.index("SyncTERM") < page.index("Registry"))
         check("and warns before any registry editing",
               'class="warn"' in page and "break unrelated associations" in page)
+        # Two of its sources are Microsoft URLs ending "(v=vs.85)" and
+        # "(v=ws.10)". The link pattern stopped at the first ")", so both
+        # hrefs lost their closing parenthesis and 404'd, and the ")" was
+        # printed after the link text. Nobody saw it because every word was
+        # there.
+        check("a link whose URL carries parentheses keeps them",
+              'aa767914(v=vs.85)"' in page and 'cc771275(v=ws.10)"' in page
+              and "</a>)" not in page)
         code, _ = get("/nosuchpage")
         check("an unknown page is not a page", code == 404)
         code, body = get("/health")
@@ -1065,12 +1125,16 @@ def main():
                 # drawing already. That covers the day chart's labels, the
                 # type in the two manifesto diagrams, and the translate that
                 # moves the marker along the wire, which is 164 units of
-                # viewBox and not 164 pixels of page.
+                # viewBox and not 164 pixels of page. translateY is the same
+                # thing on the other axis: the grain falling in the hourglass
+                # and the lens going down the listing among the freedoms'
+                # drawings, a few units of a 56 unit viewBox each.
                 if (line.lstrip().startswith("@media")
                         or "svg.hours text" in line
                         or "svg.wire" in line
                         or "svg.trace" in line
                         or "translateX" in line
+                        or "translateY" in line
                         or "outline-offset" in line):
                     continue
                 rest = re.sub(r"\d+(?:\.\d+)?px\s+(?:solid|dotted|dashed)",
@@ -1225,11 +1289,133 @@ def main():
         scripted = [p for p in ("/", "/about", "/data", "/build", "/whofor",
                                 "/terminals", "/firstcall", "/forward", "/how",
                                 "/rules", "/privacy", "/kids", "/teachers",
-                                "/sdcard", "/dialing")
+                                "/sdcard", "/dialing", "/author")
                     if "<script" in get(p)[1]]
         check("nothing else on the site loads any JavaScript"
               + ("" if not scripted else "  <- " + ", ".join(scripted)),
               not scripted)
+
+        # ------------------------------------------------------------------
+        # QuantumRob's name on the manifesto goes to a page about him. Every
+        # fact on it is his own account; the checks pin the parts that are
+        # easy to break later: the route, the spelling he confirmed, the
+        # photographs and what they need to be allowed on the page at all.
+        print("The author page")
+        code, auth = get("/author")
+        check("there is an author page", code == 200)
+        check("with his name, both handles and the board he ran",
+              "Robert Mech" in auth and "QuantumRob" in auth
+              and "Daytona" in auth and "Psyberchat" in auth)
+        # The suite runs with an about domain configured, so on the list face
+        # the manifesto's menu entry is that domain rather than /about.
+        check("and it belongs to the manifesto in the menu",
+              '<a class="here" href="https://about.example/">What this is</a>' in auth)
+        code, auth_about = get("/author", host="about.example")
+        check("it is reachable on the about face too, where the link is",
+              code == 200 and '<a class="here" href="/">What this is</a>' in auth_about)
+        _, man = get("/", host="about.example")
+        check("the manifesto links his name there, byline and both signatures",
+              man.count('<a class="author" href="/author">QuantumRob</a>') == 3)
+        imgs = re.findall(r"<img [^>]*>", auth)
+        check("it shows four photographs", len(imgs) == 4)
+        # Wikimedia rejects a hotlinked thumbnail at anything but its
+        # standard widths, with an HTML error page the browser shows as a
+        # broken image. So every thumb width has to be one of those.
+        widths = re.findall(r"/(\d+)px-", " ".join(imgs))
+        std = {"20", "40", "60", "120", "250", "330", "500", "960", "1280",
+               "1920", "3840"}
+        check("every hotlinked thumbnail is at a width Wikimedia serves",
+              widths and set(widths) <= std)
+        check("every picture is Wikimedia's, holds its space and says what it is",
+              all("https://upload.wikimedia.org/" in i and ' alt="' in i
+                  and ' width="' in i and ' height="' in i for i in imgs))
+        check("and none of them tells Wikimedia which page asked",
+              all('referrerpolicy="no-referrer"' in i for i in imgs))
+        check("each is credited with its licence and its Commons page",
+              auth.count('class="credit"') == 4
+              and auth.count("commons.wikimedia.org/wiki/File:") == 4
+              and "CC BY 3.0" in auth and "CC0" in auth)
+        check("and the page says where the pictures come from",
+              "load from Wikimedia Commons" in " ".join(auth.split()))
+
+        # ------------------------------------------------------------------
+        # The drawings. Same hand as the connection diagram, and every one
+        # of them stands still for somebody who has asked for less motion.
+        print("The drawings")
+        check("each freedom has its drawing",
+              man.count('<svg class="art icon ') == 12
+              and man.count('<div class="freedom">') == 12)
+        check("and a freedom's drawing is decoration beside its heading",
+              man.count('aria-hidden="true" focusable="false">') >= 12)
+        # The rule that makes the resting state the drawing: no animation
+        # is declared anywhere but inside the no-preference block, so a
+        # reader who asked for less motion is given none at all.
+        art_css = man.split("svg.art { display:block;")[1].split("</style>")[0]
+        moving = art_css.split("@media (prefers-reduced-motion: no-preference) {")
+        check("every drawing's animation is inside the no-preference block",
+              len(moving) == 2 and "animation:" not in moving[0]
+              and moving[1].count("animation:") >= 15)
+        bare = re.sub(r"/\*.*?\*/", "", art_css, flags=re.S)
+        bare = re.sub(r"@media \([^)]*\)", "", bare)
+        bare = re.sub(r"translate[XY]\([^)]*\)", "", bare)
+        bare = re.sub(r"\d+px solid", "", bare)
+        check("and the stylesheet the drawings share carries no layout px",
+              not re.search(r"(?<![\w.-])\d+(?:\.\d+)?px", bare))
+        code, fc = get("/firstcall")
+        check("the first call page has its three screens",
+              '<svg class="art steps"' in fc and 'role="img"' in fc
+              and "Handle:" in fc and "ANSI 80x24" in fc)
+        check("and says a silent terminal is asked a question, not nothing",
+              "press DEL or BACKSPACE" in " ".join(fc.split()))
+
+        # The listing page's warning. Policy, and said to be policy: the
+        # software detects nothing and bans nobody by itself.
+        code, how = get("/how")
+        flat_h = " ".join(how.split())
+        check("get listed warns about spam in a stop box with its skull",
+              '<aside class="stop">' in how and 'class="art skull"' in how
+              and "lifetime IP ban" in flat_h)
+        check("and says it is policy applied by hand, not automatic",
+              "applied by hand" in flat_h and "detects spam by itself" in flat_h
+              and "automatically bans" not in flat_h)
+        # The announce plugin stopped reading "name"; the board's name is
+        # board_name in the core section. The example set a key the board
+        # ignores.
+        check("and its config example sets the name the board actually reads",
+              "board_name  = The Rusty Modem" in how
+              and "name        = The Rusty Modem" not in how)
+
+        # A Chromebook, as it is: one you control usually can, a managed one
+        # usually cannot without its administrator, Chrome alone never can.
+        _, term = get("/terminals")
+        flat_t = " ".join(term.split())
+        check("the Chromebook section leads with who controls it",
+              "A Chromebook you control can usually call a board" in flat_t
+              and "Chrome on its own never can" in flat_t
+              and "A Chromebook can call a board. Chrome cannot." not in flat_t)
+        check("and dates the Chrome Apps change the way Google does",
+              "ChromeOS 138, in July 2025, was the last release" in flat_t)
+        _, data = get("/data", host="data.example")
+        check("the health endpoint is not described as two bytes",
+              "Two bytes" not in data)
+
+        # Which ESP32. The rule is two cores and Wi-Fi on the chip, from
+        # ESP32_BOARD_CHOICE.md, and only the WROOM-32E has been run. The
+        # site used to say any module with 4 MB of flash would do, which is
+        # true of a C3 with 4 MB of flash and it will not run the board.
+        _, build = get("/build")
+        flat_b = " ".join(build.split())
+        check("the build page says which ESP32s run it",
+              "<td>ESP32-WROOM-32E</td><td><b>Yes, tested</b></td>" in build
+              and "<td>ESP32-C3</td><td>No</td>" in build
+              and "<td>ESP32-P4</td><td>No</td>" in build
+              and "Should work, not yet tested" in build)
+        check("and gives no caller count for a part nobody has measured",
+              "nobody has measured how many" in flat_b)
+        check("no page says any 4 MB module will do",
+              "Any module with the same flash will do" not in flat_b
+              and "Any module with 4 MB of flash works" not in
+                  " ".join(get("/teachers")[1].split()))
 
         # ------------------------------------------------------------------
         print("The manifest is built from what is on disk")

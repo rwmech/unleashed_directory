@@ -47,8 +47,8 @@ test your public address from inside the house.
 
 ## Google Nest Wifi and Google Wifi
 
-Google requires a reserved address before you can forward to a device, and says
-so explicitly.
+Reserve the board's address first. A forward points at an address, and Google's
+reservation screen is what stops that address changing under the rule.
 
 ### Reserve the address
 
@@ -75,10 +75,8 @@ one **Network settings**. Both reach **Advanced Networking**.
 
 - The Google Wifi app is read-only now. Changes happen in the Google Home app,
   and migrating is not reversible.
-- Nest Wifi Pro is Google Home only and will not mesh with Nest Wifi or Google
-  Wifi points.
-- The port management screen is the same across Google Wifi, Nest Wifi and Nest
-  Wifi Pro.
+- Nest Wifi Pro is set up in the Google Home app and will not mesh with Nest
+  Wifi or Google Wifi points.
 - UPnP is on by default, so plenty of devices open their own ports without any
   of this. That is worth knowing whether or not you wanted it.
 - Loopback works, so a forwarded service is reachable by public address from
@@ -111,4 +109,6 @@ one **Network settings**. Both reach **Advanced Networking**.
 - [Google, DHCP IP reservation](https://support.google.com/googlehome/answer/6274660)
 - [Google, fix double NAT](https://support.google.com/googlehome/answer/6277579)
 - [Google, migrate to the Home app](https://support.google.com/googlehome/answer/9547597)
+- [Google, Nest Wifi Pro mesh compatibility](https://support.google.com/googlehome/answer/12353201)
+- [Google, UPnP](https://support.google.com/googlehome/answer/6274337)
 - [RFC 6598, shared address space](https://www.rfc-editor.org/rfc/rfc6598)

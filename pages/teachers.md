@@ -32,15 +32,16 @@ trust.
 
 ## What you need
 
-- **One ESP32 dev board per group.** A few dollars each. Any module with 4 MB
-  of flash works.
+- **One ESP32 dev board per group.** A few dollars each. A board built on the
+  ESP32-WROOM-32E is the tested one, and [the build page](/build) says which
+  other ESP32s will and will not run it. Check before you order a class set.
 - **A USB cable per group.** Often already in a drawer.
 - **One computer per group** to build and flash from, and a terminal program.
   [The terminals page](/terminals) lists free ones for Windows, macOS, Linux,
   Android and iOS. **If your machines are Chromebooks, read the next section
   before you plan anything**, because a Chromebook needs a setting turned on
   first and it may not be yours to turn on.
-- **Optional, for file areas:** a micro SD card module, about two dollars, and
+- **Optional, for file areas and forums:** a micro SD card module, about two dollars, and
   a card of 32 GB or less. Plus six jumper wires.
 - **Optional, for the enclosure:** a 3D printer, or a print service, and a
   browser for TinkerCAD.
@@ -99,8 +100,8 @@ chat room together. Give them ten minutes to work out that they are all typing
 into the same machine.
 
 Then take it apart on the whiteboard. What is the address. What is the port.
-Which machine is the server and which are the clients. Why does the board know
-that one of them is on a phone.
+Which machine is the server and which are the clients. How does the board know
+how wide each caller's screen is.
 
 **Extension:** have one group set their terminal to the wrong character set
 and look at the result. Text encoding lands much harder as a broken screen

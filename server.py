@@ -708,7 +708,13 @@ PAGES_DIR = pathlib.Path(__file__).resolve().parent / "pages"
 # climb out of the directory with.
 PAGE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
-_MD_LINK   = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+# The target may carry one level of balanced parentheses, and must not carry
+# a space. Microsoft's archived documentation lives at URLs like
+# ".../aa767914(v=vs.85)", and the old pattern stopped at the first ")": the
+# href lost its closing parenthesis and 404'd, and the ")" it left behind
+# was printed after the link text. Two of the sources on /dialing rendered
+# like that for as long as the page existed.
+_MD_LINK   = re.compile(r"\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)")
 _MD_CODE   = re.compile(r"`([^`]+)`")
 _MD_BOLD   = re.compile(r"\*\*([^*]+)\*\*")
 # Italics, run after bold so a "**x**" is already gone by the time this
@@ -784,14 +790,36 @@ CARD_BLOCKS = ("cards", "hero")
 # one place on this site that renders a widget rather than prose, and it
 # carries no content of its own, because what it should say depends on what
 # is in FIRMWARE_DIR rather than on what somebody typed in the page.
-BLOCK_NAMES = CARD_BLOCKS + ("installer",)
+#
+# "art" is a drawing by name: "::: art" on one line, the name on the next,
+# ":::" to close. The markup lives in ART in this file rather than in the
+# page, because the dialect has no inline HTML on purpose and an SVG typed
+# into a Markdown file would be the first exception to that.
+BLOCK_NAMES = CARD_BLOCKS + ("installer", "art")
 
 
 def md_block(kind, lines):
-    """A ":::" block, by name. Cards, or the installer."""
+    """A ":::" block, by name. Cards, the installer, or a drawing."""
     if kind == "installer":
         return installer_html()
+    if kind == "art":
+        return art_html(lines)
     return md_cards(kind, lines)
+
+
+def art_html(lines):
+    """The drawings an "::: art" block names, one per line.
+
+    A name that is not in ART prints as a paragraph, the same rule an
+    unknown ":::" block follows: a typo should be visible on the page, not
+    a hole where a drawing was meant to be.
+    """
+    out = []
+    for name in (ln.strip() for ln in lines):
+        if not name:
+            continue
+        out.append(ART.get(name) or "<p>" + html.escape("art: " + name) + "</p>")
+    return "".join(out)
 
 
 def md_cards(kind, lines):
@@ -1023,6 +1051,11 @@ def md_page(name, role="list"):
     text = f.read_text(encoding="utf-8")
     title, desc = md_meta(text)
     body = "<article>" + md_render(text) + "</article>"
+    # The drawings' stylesheet goes in once, and only on a page that has a
+    # drawing, the way DIAGRAM_CSS rides with the manifesto rather than
+    # living in PAGE and costing every page on the site.
+    if "::: art" in text:
+        body = ART_CSS + body
     # The one script on this site, and the only page that can carry it.
     #
     # Both halves of that condition matter. The page has to ask for the
@@ -1952,6 +1985,38 @@ article .tip a:focus-visible::after {{ outline:3px solid #ffd35c;
      it; that diagram is an SVG now and the exception went with it. */
   article pre {{ white-space:pre-wrap; overflow-wrap:anywhere; }}
 }}
+/* The stop box: .tip's shape in .warn's colours, with a drawing where the
+   tip has its arrow. Full width, framed on all four sides and rounded,
+   because this one is meant to be read before anything else on the page,
+   and amber because it is a warning. The drawing sits in space held open
+   by padding, the same arrangement as the tip's marker, so text never runs
+   under it; on a phone it moves to the bottom right corner and the
+   reserve becomes padding-bottom.
+
+   It is not a link and nothing in it is clickable, which is the other half
+   of why it is a separate class rather than a colour variant of .tip: the
+   tip's stretched overlay would make the whole warning a target. */
+article .stop {{ display:block; color:#f0c674; background:#241d10;
+        border:1px solid #8a6d39; border-radius:0.625rem;
+        padding:1rem 6.75rem 1.125rem 1.25rem; margin:1.375rem 0 1.625rem;
+        position:relative; }}
+article .stop p {{ margin:0; }}
+article .stop b:first-child {{ display:block; color:#ffd35c; font-size:1rem;
+        letter-spacing:0.03125rem; margin:0 0 0.3125rem; }}
+article .stop svg.skull {{ position:absolute; right:1.25rem; top:50%;
+        transform:translateY(-50%); width:4.25rem; height:4.25rem; }}
+@media (max-width: 900px) {{
+  article .stop {{ padding:0.875rem 1rem 5rem; }}
+  article .stop svg.skull {{ top:auto; bottom:0.625rem; right:1rem;
+        transform:none; width:3.75rem; height:3.75rem; }}
+}}
+/* QuantumRob's name, linked to /author from the byline and both
+   signatures. The byline keeps its warm colour and the signature its
+   quieter one, underlined in both places so the name reads as a link
+   without taking the cyan every other link on the page is in. */
+.byline a.author {{ color:var(--warm); text-underline-offset:0.1875rem; }}
+article .pull .sig a.author {{ color:var(--dim);
+        text-underline-offset:0.1875rem; }}
 /* The ordered lists md_render now emits, spaced like the bullets beside
    them. */
 article ol, article ul {{ margin:0 0 0.875rem; padding-left:1.75rem; }}
@@ -2660,7 +2725,7 @@ a few seconds.</dd>
 <dd>How a board lists itself. One JSON object, about 200 bytes, repeated every few
 minutes. Plain HTTP on purpose: the boards are microcontrollers with no TLS stack.</dd>
 <dt><code>GET /health</code></dt>
-<dd>Two bytes, for uptime checks.</dd>
+<dd>Answers <code>ok</code>, for uptime checks.</dd>
 </dl>
 
 <h2>What is not in it</h2>
@@ -2707,13 +2772,20 @@ meant to.</p>
 # if they were there. There are no other escapes in here.
 HOW = r"""<h1>How to get listed</h1>
 <p class="lead">Your board announces itself. You do not fill in a form.</p>
+@ART_CSS@
 <article>
-<pre>[plugin:announce]
+<pre>board_name  = The Rusty Modem
+
+[plugin:announce]
 enabled     = yes
-name        = The Rusty Modem
 owner       = Sparks
 description = A BBS on a chip in a shack in Illinois
 servers     = http://unleashedbbs.net/announce</pre>
+<p>The name is the board's own setting, <code>board_name</code>, at the top of
+<code>system.cfg</code> above the first section, and the announce plugin sends
+whatever it is. The rest is the plugin's section. On the board itself,
+<code>CONFIG board</code> and <code>CONFIG announce</code> are the same settings
+as forms.</p>
 <p>Any of this directory's names will take a heartbeat, but <code>.net</code> is the
 one meant for machines: <code>.com</code> is the list people read and
 <code>.org</code> is what the project is for.</p>
@@ -2721,6 +2793,12 @@ one meant for machines: <code>.com</code> is the list people read and
 uninterrupted heartbeats, which is what keeps drive-by spam off the page, and
 it disappears when the heartbeats stop. <code>ANNOUNCE</code> on your board
 shows how long is left.</p>
+
+<aside class="stop">@SKULL@<p><b>Spam earns a lifetime IP ban.</b> Use this
+directory to spam and the address it came from is banned from it for good. That
+is this directory's policy rather than something the software does: nothing here
+detects spam by itself. The ban is applied by hand, by the person who runs the
+directory, and it does not expire. It is not worth it.</p></aside>
 <h2>Running something else</h2>
 
 <p>Synchronet, Mystic, WWIV, ENiGMA, Citadel, something you wrote yourself in a
@@ -2769,8 +2847,9 @@ repository</a>. It is one Python file and you are welcome to run your own.</p>
 # which is a flipbook, and the comparison was a 53 column block that
 # scrolled sideways inside its own box.
 #
-# Inline SVG instead. No request, no external file (the CSP blocks an
-# external image anyway), themeable because every fill is a custom
+# Inline SVG instead. No request and no external file (there is no CSP on
+# this site to block one: that used to be claimed here and was never true,
+# which /author's hotlinked photographs depend on), themeable because every fill is a custom
 # property, and it fits any width for free because that is what a viewBox
 # does. Still no JavaScript: the motion is CSS keyframes on an SVG
 # element, where a length in `px` is a user unit inside the viewBox and
@@ -3034,17 +3113,400 @@ TRACE = """
 </div>"""
 
 
+# ----------------------------------------------------------------------
+# The small drawings: one per freedom on the manifesto, the three screens
+# on /firstcall, and the skull on /how.
+#
+# Drawn by the same rules as WIRE above, so they read as one hand: an
+# object is a --dial outline at stroke 1.4 with details at 1, anything
+# alive (a lamp, a caret, data moving) is --live, anything absent or
+# secondary is --faint, and every shape declares its fill. The tile they
+# sit on is the same #0d0d12 panel with a hairline border.
+#
+# An icon's viewBox is 56 units and it is drawn at 4.25rem, which on a
+# desktop is 90px: a scale of 1.6, against the 1.68 the connection diagram
+# is drawn at, so a 1.4 stroke lands at the same weight in both.
+#
+# THE RESTING STATE IS THE DRAWING. Every animation is declared inside
+# prefers-reduced-motion: no-preference and nowhere else, so somebody who
+# has asked for less motion gets no animation at all, and what they see is
+# the markup exactly as written. Each drawing is therefore made to say its
+# whole piece standing still: the gate is up, the lamp is lit, the caret is
+# solid, the calendar reads 365. The motion only adds the verb.
+#
+# No px anywhere in here. Motion is opacity, rotation and skew about the
+# shape's own box (transform-box: fill-box), translation, and dash offsets
+# against a pathLength, and type sizes are attributes on the <text>. The
+# two translate distances are user units inside a viewBox, which is why the
+# suite's px scan exempts translateX and translateY.
+# ----------------------------------------------------------------------
+
+ART_CSS = """
+<style>
+svg.art { display:block; background:#0d0d12; border:1px solid var(--rule); }
+svg.art text { font-family:inherit; fill:var(--dim); }
+svg.art text.ink { fill:var(--ink); }
+svg.art text.live { fill:var(--live); }
+svg.art .o { fill:none; stroke:var(--dial); stroke-width:1.4;
+        stroke-linecap:round; stroke-linejoin:round; }
+svg.art .d { fill:none; stroke:var(--dial); stroke-width:1;
+        stroke-linecap:round; stroke-linejoin:round; opacity:0.6; }
+svg.art .g { fill:var(--bg); stroke:var(--dial); stroke-width:1; }
+svg.art .gb { fill:var(--bg); stroke:var(--dial); stroke-width:1.4;
+        stroke-linejoin:round; }
+svg.art .k { fill:var(--dial); opacity:0.3; }
+svg.art .l { fill:none; stroke:var(--live); stroke-width:1.4;
+        stroke-linecap:round; stroke-linejoin:round; }
+svg.art .lt { fill:none; stroke:var(--live); stroke-width:1.2;
+        stroke-linecap:round; }
+svg.art .lw { fill:none; stroke:var(--live); stroke-width:2.4;
+        stroke-linecap:round; }
+svg.art .ld { fill:none; stroke:var(--live); stroke-width:1.4;
+        stroke-dasharray:2 2.5; opacity:0.5; }
+svg.art .lf { fill:var(--live); }
+svg.art .halo { fill:var(--live); opacity:0.18; }
+svg.art .body { fill:var(--bg); stroke:var(--live); stroke-width:1.4; }
+svg.art .pin { fill:var(--live); opacity:0.55; }
+svg.art .f { fill:none; stroke:var(--faint); stroke-width:1;
+        stroke-linecap:round; stroke-linejoin:round; }
+svg.art .c1 { fill:var(--dial); }
+svg.art .c2 { fill:var(--live); }
+svg.art .c3 { fill:var(--busy); }
+svg.art .c4 { fill:var(--name); }
+/* The calendar's first two readings are hidden at rest, so a still
+   drawing reads 365: a year has passed and the lamp is still lit. */
+svg.art .n1, svg.art .n2 { opacity:0; }
+
+/* One per freedom, top right of its box, the text wrapping round it. On
+   a phone the box is a third the width and a full-size icon squeezes the
+   heading beside it to a dozen characters a line, so it is drawn smaller
+   there, at the site's one breakpoint. */
+article .freedom svg.icon { float:right; width:4.25rem; height:4.25rem;
+        margin:0.125rem 0 0.5rem 1rem; }
+@media (max-width: 900px) {
+  article .freedom svg.icon { width:3.25rem; height:3.25rem;
+        margin:0 0 0.375rem 0.75rem; }
+}
+
+/* The first call, three screens in a row. 354 units wide for the same
+   reason the connection diagram is: a phone column is about 353px, so a
+   phone draws it at 1:1 and the smallest type lands at about 9px. */
+svg.art.steps { width:100%; max-width:34rem; height:auto;
+        margin:1.125rem auto 1.5rem; }
+
+/* The skull is drawn in the warning box's own amber, on its background,
+   so it belongs to the box it sits in rather than to the page. */
+svg.art.skull { background:none; border:0; }
+svg.art .a { fill:none; stroke:#f0c674; stroke-width:1.4;
+        stroke-linecap:round; stroke-linejoin:round; }
+svg.art .af { fill:#241d10; stroke:#f0c674; stroke-width:1.4;
+        stroke-linejoin:round; }
+svg.art .aff { fill:#f0c674; }
+
+@keyframes artpass  { 0% { transform:translateX(-11px); opacity:0; }
+                      15%, 85% { opacity:1; }
+                      100% { transform:translateX(11px); opacity:0; } }
+@keyframes artwest  { 0% { transform:translateX(-3.5px); opacity:0; }
+                      20%, 80% { opacity:1; }
+                      100% { transform:translateX(3.5px); opacity:0; } }
+@keyframes arteast  { 0% { transform:translateX(3.5px); opacity:0; }
+                      20%, 80% { opacity:1; }
+                      100% { transform:translateX(-3.5px); opacity:0; } }
+@keyframes artfeed  { 0% { transform:translateX(-7px); opacity:0; }
+                      15%, 85% { opacity:1; }
+                      100% { transform:translateX(7px); opacity:0; } }
+@keyframes artpulse { 0%, 100% { opacity:0.35; } 50% { opacity:1; } }
+@keyframes artglow  { 0%, 100% { opacity:0.15; } 50% { opacity:1; } }
+@keyframes artwave  { from { transform:skewY(0deg) scaleX(1); }
+                      to   { transform:skewY(-6deg) scaleX(0.93); } }
+@keyframes artwrite { 0% { stroke-dashoffset:10; opacity:1; }
+                      12% { stroke-dashoffset:0; }
+                      80% { stroke-dashoffset:0; opacity:1; }
+                      92%, 100% { stroke-dashoffset:0; opacity:0; } }
+@keyframes artsay   { 0%, 100% { opacity:0.3; } 20%, 50% { opacity:1; } }
+@keyframes artcaret { 0%, 49% { opacity:1; } 50%, 100% { opacity:0; } }
+@keyframes artfall  { 0% { transform:translateY(-3px); opacity:0; }
+                      20%, 80% { opacity:1; }
+                      100% { transform:translateY(5px); opacity:0; } }
+@keyframes artscan  { from { transform:translateY(-9px); }
+                      to   { transform:translateY(9px); } }
+@keyframes artday   { 0% { opacity:0; } 5%, 30% { opacity:1; }
+                      35%, 100% { opacity:0; } }
+@keyframes artring  { 0% { opacity:0; } 10%, 55% { opacity:1; }
+                      70%, 100% { opacity:0; } }
+@keyframes artshow  { 0% { opacity:0; } 8%, 85% { opacity:1; }
+                      95%, 100% { opacity:0; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* nobody has to say yes: the gate is up and things go through it */
+  svg.art.i-gate .go { animation:artpass 3.2s ease-in-out infinite; }
+  /* no internet: traffic on the local links, nothing on the cloud */
+  svg.art.i-net .dw { animation:artwest 1.6s linear infinite; }
+  svg.art.i-net .de { animation:arteast 1.6s linear 0.8s infinite backwards; }
+  /* a battery: charge going down the cable, the lamp answering */
+  svg.art.i-bat .go { animation:artfeed 1.6s linear infinite; }
+  svg.art.i-bat .led { animation:artpulse 1.6s ease-in-out infinite; }
+  /* on a shelf: the one sign of life is a small lamp */
+  svg.art.i-shelf .led { animation:artglow 4s ease-in-out infinite; }
+  /* nobody can deplatform you: your flag, on your chip, still flying */
+  svg.art.i-flag .wave { transform-box:fill-box; transform-origin:0% 50%;
+        animation:artwave 1.8s ease-in-out infinite alternate; }
+  /* you write the rules: line by line, by you */
+  svg.art.i-rules .w { stroke-dasharray:10;
+        animation:artwrite 6.4s ease-out infinite backwards; }
+  svg.art.i-rules .w2 { animation-delay:0.8s; }
+  svg.art.i-rules .w3 { animation-delay:1.6s; }
+  svg.art.i-rules .w4 { animation-delay:2.4s; }
+  /* nobody is mining it: people talk, and the eye stays shut */
+  svg.art.i-eye .b1 { animation:artsay 4s ease-in-out infinite; }
+  svg.art.i-eye .b2 { animation:artsay 4s ease-in-out 2s infinite backwards; }
+  /* nobody checks who you are: a handle and a cursor, nothing else */
+  svg.art .caret { animation:artcaret 1.6s steps(1,end) infinite; }
+  /* what you keep: the sand runs, and the message goes when it runs out */
+  svg.art.i-keep .grain { animation:artfall 1.2s linear infinite; }
+  /* read every line: the lens goes down the listing and back */
+  svg.art.i-code .lens { animation:artscan 3.6s ease-in-out infinite alternate; }
+  /* keeps working: the days go by, the lamp does not go out */
+  svg.art.i-year .n { animation:artday 6s linear infinite backwards; }
+  svg.art.i-year .n2 { animation-delay:2s; }
+  svg.art.i-year .n3 { animation-delay:4s; }
+  /* found or not: it calls out, and then it is quiet */
+  svg.art.i-cast .r { animation:artring 4.8s ease-out infinite backwards; }
+  svg.art.i-cast .r2 { animation-delay:0.35s; }
+  svg.art.i-cast .r3 { animation-delay:0.7s; }
+  /* the first call: it works out what you are, asks, lets you in */
+  svg.art .p1 { animation:artshow 4.8s ease-out infinite backwards; }
+  svg.art .p1b { animation-delay:0.6s; }
+  svg.art .p1c { animation-delay:1.2s; }
+  svg.art .p3b { animation:artshow 4.8s ease-out 1.4s infinite backwards; }
+}
+</style>"""
+
+
+def _icon(name, inner):
+    """One freedom's drawing. aria-hidden, because the heading beside it
+    already says what it means and a screen reader should not be handed
+    twelve descriptions of pictures on the way to twelve sentences."""
+    return (f'<svg class="art icon i-{name}" viewBox="0 0 56 56" '
+            'aria-hidden="true" focusable="false">' + inner + "</svg>")
+
+
+ICONS = {
+    # A barrier with its arm up, and something going through. The short
+    # post on the far side is where the arm would come down, which is what
+    # makes an arm in the air read as a gate that is open.
+    "gate": _icon("gate", """
+  <path class="f" d="M4 47 H52"/>
+  <rect class="d" x="47" y="39" width="4" height="8" rx="1"/>
+  <g class="go"><circle class="halo" cx="31" cy="42" r="4.2"/><circle class="lf" cx="31" cy="42" r="2.2"/></g>
+  <rect class="o" x="8" y="29" width="7" height="18" rx="1.5"/>
+  <g transform="rotate(-60 11.5 30)">
+    <rect class="o" x="11.5" y="28" width="26" height="4" rx="2"/>
+    <path class="d" d="M19 28 V32 M26 28 V32 M33 28 V32"/>
+  </g>
+  <circle class="lf" cx="11.5" cy="30" r="1.6"/>"""),
+    # Two terminals and a board on a local link, and a cloud struck out.
+    "net": _icon("net", """
+  <path class="f" d="M18.5 22 C14 22 14 15.5 18.5 15.5 C19 10.5 25.5 9 28 12.5 C30 8 37 8.5 37.5 14 C42 14 42 22 37.5 22 Z"/>
+  <path class="f" d="M15 7 L42 26"/>
+  <rect class="o" x="3" y="31" width="12" height="10" rx="1.5"/>
+  <rect class="g" x="5" y="33" width="8" height="6" rx="0.8"/>
+  <path class="d" d="M9 41 V43.5 M6 43.5 H12"/>
+  <rect class="o" x="41" y="31" width="12" height="10" rx="1.5"/>
+  <rect class="g" x="43" y="33" width="8" height="6" rx="0.8"/>
+  <path class="d" d="M47 41 V43.5 M44 43.5 H50"/>
+  <path class="ld" d="M15 36 H22 M34 36 H41"/>
+  <rect class="body" x="22" y="31" width="12" height="10" rx="1.5"/>
+  <circle class="lf" cx="28" cy="36" r="1.5"/>
+  <circle class="lf dw" cx="18.5" cy="36" r="1.3"/>
+  <circle class="lf de" cx="37.5" cy="36" r="1.3"/>"""),
+    # A power bank feeding a board down a cable.
+    "battery": _icon("bat", """
+  <rect class="o" x="9" y="15" width="6" height="3" rx="1"/>
+  <rect class="o" x="4" y="18" width="16" height="27" rx="2"/>
+  <rect class="lf" x="7" y="22" width="10" height="5" rx="1" opacity="0.35"/>
+  <rect class="lf" x="7" y="29" width="10" height="5" rx="1"/>
+  <rect class="lf" x="7" y="36" width="10" height="5" rx="1"/>
+  <path class="d" d="M20 31.5 H34"/>
+  <rect class="pin" x="50" y="26" width="3" height="2" rx="0.5"/>
+  <rect class="pin" x="50" y="30.5" width="3" height="2" rx="0.5"/>
+  <rect class="pin" x="50" y="35" width="3" height="2" rx="0.5"/>
+  <rect class="body" x="34" y="23" width="16" height="17" rx="2"/>
+  <circle class="lf led" cx="42" cy="31.5" r="1.8"/>
+  <circle class="lf go" cx="27" cy="31.5" r="1.4"/>"""),
+    # A shelf of books, and a small board among them.
+    "shelf": _icon("shelf", """
+  <path class="o" d="M4 42 H52"/>
+  <path class="d" d="M10 42 V47 M46 42 V47"/>
+  <rect class="o" x="8" y="18" width="5" height="24" rx="0.8"/>
+  <rect class="o" x="14" y="22" width="4" height="20" rx="0.8"/>
+  <rect class="o" x="19" y="15" width="6" height="27" rx="0.8"/>
+  <path class="d" d="M19 20 H25 M19 37 H25"/>
+  <path class="o" d="M26 42 L32.5 20 L36.5 21.2 L30 42 Z"/>
+  <rect class="o" x="38" y="34" width="12" height="8" rx="1"/>
+  <path class="d" d="M40 38 H45"/>
+  <circle class="lf led" cx="47.5" cy="37" r="1.1"/>"""),
+    # A flag planted on a board.
+    "flag": _icon("flag", """
+  <path class="o" d="M22 38 V7"/>
+  <path class="l wave" d="M22 8.5 H43 L38 14.5 L43 20.5 H22"/>
+  <rect class="pin" x="19" y="49" width="2" height="3.5" rx="0.5"/>
+  <rect class="pin" x="25" y="49" width="2" height="3.5" rx="0.5"/>
+  <rect class="pin" x="31" y="49" width="2" height="3.5" rx="0.5"/>
+  <rect class="pin" x="37" y="49" width="2" height="3.5" rx="0.5"/>
+  <rect class="body" x="15" y="38" width="26" height="11" rx="2"/>
+  <circle class="lf" cx="34" cy="43.5" r="1.6"/>"""),
+    # A page being written, and the pencil writing it.
+    "rules": _icon("rules", """
+  <path class="o" d="M10 6 H32 L40 14 V50 H10 Z"/>
+  <path class="d" d="M32 6 V14 H40"/>
+  <path class="lt w w1" d="M15 21 H34" pathLength="10"/>
+  <path class="lt w w2" d="M15 27 H34" pathLength="10"/>
+  <path class="lt w w3" d="M15 33 H28" pathLength="10"/>
+  <path class="lt w w4" d="M15 39 H31" pathLength="10"/>
+  <path class="gb" d="M38 47 L49 36 L52.5 39.5 L41.5 50.5 Z"/>
+  <path class="o" d="M38 47 L35.5 53 L41.5 50.5"/>
+  <path class="d" d="M46.5 38.5 L50 42"/>"""),
+    # An eye that is shut, over two people talking.
+    "eye": _icon("eye", """
+  <path class="o" d="M13 14 Q28 25 43 14"/>
+  <path class="d" d="M17.5 16.8 L15.8 20.3 M22.5 18.8 L21.6 22.8 M28 19.5 V23.7 M33.5 18.8 L34.4 22.8 M38.5 16.8 L40.2 20.3"/>
+  <g class="b1"><path class="gb" d="M9 30 H27 A3 3 0 0 1 30 33 V37 A3 3 0 0 1 27 40 H15 L10 44 V40 H9 A3 3 0 0 1 6 37 V33 A3 3 0 0 1 9 30 Z"/><path class="lt" d="M11 35 H24"/></g>
+  <g class="b2"><path class="gb" d="M29 39 H47 A3 3 0 0 1 50 42 V46 A3 3 0 0 1 47 49 H46 V53 L41 49 H29 A3 3 0 0 1 26 46 V42 A3 3 0 0 1 29 39 Z"/><path class="lt" d="M31 44 H44"/></g>"""),
+    # A name badge with a handle on it and a cursor after it.
+    "badge": _icon("badge", """
+  <rect class="d" x="24" y="6" width="8" height="6" rx="1"/>
+  <rect class="o" x="6" y="12" width="44" height="32" rx="3"/>
+  <path class="k" d="M9 12 H47 A3 3 0 0 1 50 15 V21 H6 V15 A3 3 0 0 1 9 12 Z"/>
+  <text class="ink" x="10" y="35" font-size="9">Sparks</text>
+  <rect class="lf caret" x="43.5" y="27.5" width="3.5" height="8.5"/>
+  <path class="f" d="M10 39 H46"/>"""),
+    # A letter, and an hourglass running.
+    "keep": _icon("keep", """
+  <rect class="o" x="3" y="18" width="30" height="21" rx="1.5"/>
+  <path class="d" d="M3.5 19 L18 30 L32.5 19"/>
+  <path class="o" d="M37 9 H53 M37 47 H53"/>
+  <path class="o" d="M39.5 9 C39.5 20 44 24 45 28 C44 32 39.5 36 39.5 47 M50.5 9 C50.5 20 46 24 45 28 C46 32 50.5 36 50.5 47"/>
+  <path class="lf" d="M42 14.5 H48 C47.3 19.5 46.2 22.8 45 25.2 C43.8 22.8 42.7 19.5 42 14.5 Z" opacity="0.45"/>
+  <path class="lf" d="M41 47 C41.8 42 43.8 39.3 45 38.5 C46.2 39.3 48.2 42 49 47 Z"/>
+  <circle class="lf grain" cx="45" cy="32" r="0.9"/>"""),
+    # A listing with a lens going over it.
+    "code": _icon("code", """
+  <path class="o" d="M7 6 H31 L39 14 V50 H7 Z"/>
+  <path class="d" d="M31 6 V14 H39"/>
+  <path class="d" d="M12 19 H21 M15 24 H32 M15 29 H28 M12 34 H19 M15 39 H33 M12 44 H23"/>
+  <g class="lens"><circle class="l" cx="35" cy="31" r="7"/><path class="lw" d="M40 36 L48 44"/></g>"""),
+    # A calendar counting the days, and a board with its lamp on.
+    "year": _icon("year", """
+  <rect class="o" x="3" y="12" width="28" height="31" rx="2"/>
+  <path class="k" d="M5 12 H29 A2 2 0 0 1 31 14 V20 H3 V14 A2 2 0 0 1 5 12 Z"/>
+  <path class="o" d="M10 8 V15 M24 8 V15"/>
+  <text class="ink n n1" x="17" y="36" font-size="11" text-anchor="middle">1</text>
+  <text class="ink n n2" x="17" y="36" font-size="11" text-anchor="middle">182</text>
+  <text class="ink n n3" x="17" y="36" font-size="11" text-anchor="middle">365</text>
+  <rect class="pin" x="51" y="28" width="3" height="2" rx="0.5"/>
+  <rect class="pin" x="51" y="32.5" width="3" height="2" rx="0.5"/>
+  <rect class="pin" x="51" y="37" width="3" height="2" rx="0.5"/>
+  <rect class="body" x="36" y="25" width="15" height="17" rx="2"/>
+  <circle class="halo" cx="43.5" cy="33.5" r="4"/>
+  <circle class="lf" cx="43.5" cy="33.5" r="1.8"/>"""),
+    # A board with an aerial, calling out, and then quiet.
+    "cast": _icon("cast", """
+  <path class="l r r1" d="M32.6 19.1 A6 6 0 0 1 32.6 26.9 M23.4 19.1 A6 6 0 0 0 23.4 26.9"/>
+  <path class="l r r2" d="M36.4 15.9 A11 11 0 0 1 36.4 30.1 M19.6 15.9 A11 11 0 0 0 19.6 30.1"/>
+  <path class="l r r3" d="M40.3 12.7 A16 16 0 0 1 40.3 33.3 M15.7 12.7 A16 16 0 0 0 15.7 33.3"/>
+  <path class="o" d="M28 35 V25"/>
+  <circle class="lf" cx="28" cy="23" r="1.6"/>
+  <rect class="pin" x="23" y="47" width="2" height="3.5" rx="0.5"/>
+  <rect class="pin" x="31" y="47" width="2" height="3.5" rx="0.5"/>
+  <rect class="body" x="20" y="35" width="16" height="12" rx="2"/>
+  <circle class="lf" cx="31" cy="41" r="1.4"/>"""),
+}
+
+
+def _screen(x0, inner):
+    """One terminal of the first-call strip, the same build as WIRE's:
+    a case, a glass, a row of keys, a neck and a foot."""
+    return (f'<rect class="o" x="{x0 + 10}" y="6" width="90" height="64" rx="5"/>'
+            f'<rect class="g" x="{x0 + 16}" y="12" width="78" height="46" rx="2"/>'
+            f'<rect class="k" x="{x0 + 16}" y="62" width="78" height="4" rx="2"/>'
+            f'<path class="o" d="M{x0 + 47} 70 L{x0 + 43} 80 H{x0 + 67} L{x0 + 63} 70 Z"/>'
+            f'<rect class="o" x="{x0 + 37}" y="80" width="36" height="4" rx="2"/>'
+            + inner)
+
+
+def _caption(x0, first, second):
+    return (f'<text x="{x0 + 55}" y="102" font-size="10.5" text-anchor="middle">{first}</text>'
+            f'<text x="{x0 + 55}" y="115" font-size="10.5" text-anchor="middle">{second}</text>')
+
+
+FIRSTCALL_ALT = (
+    "Three screens from a first call. The first reads ANSI 80x24 and CP437: the "
+    "board has worked out what kind of terminal is calling. The second reads "
+    "Handle: with a blinking cursor. The third shows a line from Sparks and a "
+    "line from you in the chat room.")
+
+FIRSTCALL_ART = (
+    '<svg class="art steps" viewBox="-5 -6 354 130" role="img" '
+    'preserveAspectRatio="xMidYMid meet" aria-label="' + FIRSTCALL_ALT + '">'
+    + _screen(0,
+        '<text class="live p1" x="21" y="26" font-size="9">ANSI 80x24</text>'
+        '<text class="p1 p1b" x="21" y="38" font-size="9">CP437</text>'
+        '<g class="p1 p1c">'
+        '<rect class="c1" x="21" y="45" width="10" height="5" rx="1"/>'
+        '<rect class="c2" x="33" y="45" width="10" height="5" rx="1"/>'
+        '<rect class="c3" x="45" y="45" width="10" height="5" rx="1"/>'
+        '<rect class="c4" x="57" y="45" width="10" height="5" rx="1"/>'
+        '</g>')
+    + _caption(0, "it works out", "what you are")
+    + '<path class="d" d="M109 35 L113 38.5 L109 42"/>'
+    + _screen(118,
+        '<text class="ink" x="139" y="26" font-size="9">Handle:</text>'
+        '<rect class="lf caret" x="178" y="18.5" width="5" height="9"/>')
+    + _caption(118, "it asks for", "a handle")
+    + '<path class="d" d="M227 35 L231 38.5 L227 42"/>'
+    + _screen(236,
+        '<text x="257" y="26" font-size="9">#1:Sparks) hi</text>'
+        '<text class="ink p3b" x="257" y="38" font-size="9">#2:you) hey</text>')
+    + _caption(236, "then", "you are in")
+    + "</svg>")
+
+
+# The skull for the warning box on /how. Crossbones first, so the skull,
+# filled with the box's own background, sits in front of the crossing.
+# Not animated: a warning that moves is a warning that looks like an
+# advertisement.
+SKULL = """<svg class="art skull" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+  <path class="a" d="M9 22 L39 38 M39 22 L9 38"/>
+  <circle class="af" cx="7.2" cy="22.8" r="1.9"/><circle class="af" cx="8.7" cy="20.1" r="1.9"/>
+  <circle class="af" cx="39.3" cy="39.9" r="1.9"/><circle class="af" cx="40.8" cy="37.3" r="1.9"/>
+  <circle class="af" cx="40.8" cy="22.8" r="1.9"/><circle class="af" cx="39.3" cy="20.1" r="1.9"/>
+  <circle class="af" cx="8.7" cy="39.9" r="1.9"/><circle class="af" cx="7.2" cy="37.3" r="1.9"/>
+  <path class="af" d="M12 19 C12 10.5 17.5 4.5 24 4.5 C30.5 4.5 36 10.5 36 19 C36 24 33.5 26.5 31 27.5 V33 H17 V27.5 C14.5 26.5 12 24 12 19 Z"/>
+  <ellipse class="aff" cx="19" cy="18" rx="3.4" ry="3.8"/>
+  <ellipse class="aff" cx="29" cy="18" rx="3.4" ry="3.8"/>
+  <path class="aff" d="M24 22.5 L22.3 26 H25.7 Z"/>
+  <path class="a" d="M20.5 33 V29.5 M24 33 V29.5 M27.5 33 V29.5"/>
+</svg>"""
+
+
+# What "::: art <name>" can draw on a Markdown page.
+ART = {"firstcall": FIRSTCALL_ART}
+
+HOW = HOW.replace("@ART_CSS@", ART_CSS).replace("@SKULL@", SKULL)
+
+
 # The h1 is not decoration. This is the page the whole argument lives on and
 # it used to start at h2, so it had no document outline, no heading for a
 # screen reader to land on, and nothing on screen saying what it was called.
 ABOUT = """<h1>What this is</h1>
 <p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
 
-<p class="byline">Written and built by <b>QuantumRob</b>, who has been doing this
+<p class="byline">Written and built by <a class="author" href="/author">QuantumRob</a>, who has been doing this
 since the 4381 was the computer in the room. The argument below is his; the
 software is free for anybody who agrees with it, and for anybody who does
 not.</p>
-""" + DIAGRAM_CSS + WIRE + """
+""" + DIAGRAM_CSS + ART_CSS + WIRE + """
 <article>
 
 <p><b>A bulletin board is a machine that answers a phone number.</b> Somebody put a
@@ -3058,25 +3520,27 @@ entry was a second phone line.</p>
 
 <p><a href="https://en.wikipedia.org/wiki/CBBS">CBBS</a> went online in Chicago on
 16 February 1978, written by Ward Christensen with hardware by Randy Suess. The
-January blizzard that shut the city down handed them the quiet weeks to finish it.
-It ran on an S-100 machine with 64 kilobytes of memory and answered one caller at
-a time.</p>
+Great Blizzard of 1978, which dumped record snow across the Midwest that January,
+handed them the quiet weeks to build it. Their own write-up in
+<a href="https://archive.org/details/byte-magazine-1978-11">Byte that
+November</a> specified an 8080 on the S-100 bus with 24 kilobytes of memory and a
+single floppy disk, and it answered one caller at a time.</p>
 
 <p class="pull">I met Ward Christensen once, at a Maker Faire. I did not know it
 would be the only time. He died on
 <a href="https://www.theregister.com/offbeat/2024/10/15/rip-ward-christensen-co-developer-of-the-cbss/492871">11
 October 2024</a>, and I wish I had spent longer talking to him while I had the
 chance. If you get to meet the person who built the thing you love, take the extra
-hour.<br><br><span class="sig">&mdash; QuantumRob</span></p>
+hour.<br><br><span class="sig">&mdash; <a class="author" href="/author">QuantumRob</a></span></p>
 
 <p>Thousands of boards followed. Each one was somebody's own idea of what a
 community should look like: a music board, a board for one town, a board that was its
-sysop and eleven friends. At the
-<a href="https://en.wikipedia.org/wiki/Bulletin_board_system">peak in the
-mid-1990s</a> an estimated 60,000 were running in the United States alone, and
+sysop and eleven friends.
+<a href="https://en.wikipedia.org/wiki/Bulletin_board_system">InfoWorld
+estimated</a> 60,000 of them in the United States alone in 1994, and
 <a href="https://en.wikipedia.org/wiki/FidoNet">FidoNet</a> tied tens of thousands
-of them into a store-and-forward network that moved mail around the world overnight,
-for free, run entirely by hobbyists.</p>
+into a store-and-forward network that moved mail around the world overnight, when
+the long-distance rates were lowest, run by hobbyists.</p>
 
 <p>Almost all of them ran on hardware weaker than the five dollar chip this software
 runs on.</p>
@@ -3085,15 +3549,16 @@ runs on.</p>
 
 <p>This is an <a href="https://en.wikipedia.org/wiki/ESP32">ESP32-WROOM-32E</a>. It
 is a microcontroller about the size of a postage stamp with a radio on it: a
-240 MHz dual-core processor, <b>520 kilobytes</b> of RAM, four megabytes of flash,
-and Wi-Fi. It costs a few dollars, draws a few tens of milliamps, and runs from a
-phone charger.</p>
+dual-core processor that runs at up to 240 MHz, <b>520 kilobytes</b> of RAM, four
+megabytes of flash, and Wi-Fi. It costs a few dollars, draws about a tenth of an
+amp while it listens for callers, and runs from a phone charger.</p>
 
-<p>CBBS answered one caller at a time on 64 kilobytes. This has eight times that
-memory and answers ten at once, with a hidden eleventh line the sysop comes in
-on. There is no operating system underneath it worth the name, no web stack, no
-database, no container: the whole board is one program that fits in about a
-megabyte and never allocates memory while a caller is typing.</p>
+<p>CBBS answered one caller at a time on 24 kilobytes. This has more than twenty
+times that memory and answers ten at once, with a hidden eleventh line the sysop
+comes in on. There is no operating system underneath it worth the name, no web
+stack, no database, no container: the whole board is one program that fits in
+about a megabyte, and its sessions and buffers are set aside when it starts rather
+than asked for while callers are on.</p>
 
 <p>That is the argument in one object. A community does not need a data centre.
 It needs a machine somebody owns, on a connection somebody pays for, run by a
@@ -3123,10 +3588,10 @@ belonged to somebody you could name.</p>
 
 <p>A telnet BBS that runs on a bare ESP32 and grows into an IoT terminal server
 through plugins. Nodes, handles, a user list, a chat room in the style of DDial and
-Gtalk, mail between callers, file areas on an SD card, a caller log, a sysop who can
-page you. Forums are being built now: topic areas a sysop sets up, with
-conversations inside each one, read at the same prompt as everything
-else; doors come after them.</p>
+Gtalk, mail between callers, file areas on an SD card, forums on the same card, a
+caller log, a sysop who can page you. The forums are the newest part: topic areas
+a sysop sets up, with conversations inside each one, read at the same prompt as
+everything else. Doors come after them.</p>
 
 <p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
 server farm, not a feature that can be deprecated out from under you. A chip you own,
@@ -3147,7 +3612,8 @@ of the privacy argument, and everything else follows from it.</p>
 
 <p><b>There is no third party in the middle.</b> Not a company, not a platform, not an
 advertiser, not a model being trained. A message goes from one caller to another through
-a chip on somebody's shelf and stays there until one of them deletes it. Nobody is
+a chip on somebody's shelf and stays there until one of them deletes it or it
+expires. Nobody is
 standing between those two people taking a copy, because there is nowhere for a copy to
 go and nobody whose business it would be.</p>
 
@@ -3176,6 +3642,7 @@ you not having it.</p>
 <div class="freedoms">
 
 <div class="freedom">
+@ICON gate@
 <h4>Nobody has to say yes</h4>
 <p>No application, no review, no waiting list, no API key, no app store, no terms
 you agree to by scrolling past them. You buy a chip that costs a few dollars, you
@@ -3184,6 +3651,7 @@ decides whether you are allowed, because there is nobody else in it.</p>
 </div>
 
 <div class="freedom">
+@ICON net@
 <h4>It works with no internet at all</h4>
 <p>A board needs no cloud, no domain and no hosting company. Stand it up on an
 office network, a phone hotspot, a mesh, or a switch in a room with no uplink,
@@ -3193,14 +3661,16 @@ to the outside world goes down, or was never there, it is the same board.</p>
 </div>
 
 <div class="freedom">
+@ICON battery@
 <h4>It fits in a pocket and runs off a battery</h4>
 <p>The whole system is a chip the size of a postage stamp and a USB cable, drawing
-a few tens of milliamps. A phone charger runs it, and so does a power bank or a
+about a tenth of an amp. A phone charger runs it, and so does a power bank or a
 car socket. You can carry a community in a coat pocket and stand it up wherever
 you are, which is not something anybody says about a server.</p>
 </div>
 
 <div class="freedom">
+@ICON shelf@
 <h4>It does not announce itself as anything</h4>
 <p>No rack, no fan noise, no sign on the door, nothing to explain to anybody. A
 board is a small circuit board on a shelf, indistinguishable from the other things
@@ -3211,6 +3681,7 @@ and does not mean. What hides in plain sight is the machine.</p>
 </div>
 
 <div class="freedom">
+@ICON flag@
 <h4>Nobody can deplatform you</h4>
 <p>No account to suspend, no host to complain to, no payment processor to lean on,
 no app store to delist you from, no head office to write to about you. The board
@@ -3219,6 +3690,7 @@ off is you, and the only thing that can take it down is the electricity bill.</p
 </div>
 
 <div class="freedom">
+@ICON rules@
 <h4>You write the rules, and you are the appeal</h4>
 <p>No terms of service drafted by somebody else's lawyers, no content policy that
 changes next quarter, no decision handed down by a department you cannot reach.
@@ -3229,6 +3701,7 @@ cable.</p>
 </div>
 
 <div class="freedom">
+@ICON eye@
 <h4>Nobody is mining it</h4>
 <p>No analytics, no telemetry, no engagement metric, no recommendation engine, no
 advertiser, no model being trained on what you said. Nothing ranks the
@@ -3238,15 +3711,18 @@ nothing is filed away somewhere you cannot reach.</p>
 </div>
 
 <div class="freedom">
-<h4>No account, no email address, no phone number</h4>
-<p>A caller types a handle and picks a password, and that is the whole of signing
-up. A guest types a handle and nothing else, gets fifteen minutes, and leaves
-nothing behind. Nothing is verified because there is nothing to verify against,
-and no identity is being assembled anywhere. Being unknown to a system is the
-ordinary condition of being a person, and it should not take effort.</p>
+@ICON badge@
+<h4>Nobody checks who you are</h4>
+<p>A guest types a handle and nothing else, gets fifteen minutes, and no account
+is kept. Signing up asks for a password, a name and an email address, and none of
+it is verified: the board cannot send email, so there is no confirmation link and
+no code to type back. The phone number on the form is optional. No identity is
+being assembled anywhere. Being unknown to a system is the ordinary condition of
+being a person, and it should not take effort.</p>
 </div>
 
 <div class="freedom">
+@ICON keep@
 <h4>What you keep is what you chose to keep</h4>
 <p>Mail sits on the chip until the caller it was sent to reads it and says whether
 to keep it, reply to it or delete it, and it expires on its own after a fortnight
@@ -3257,6 +3733,7 @@ of human history until about twenty years ago.</p>
 </div>
 
 <div class="freedom">
+@ICON code@
 <h4>You can read every line of it, and change any of them</h4>
 <p>It is free software under the GPL. Not source-available, not "open" with a
 licence that revokes itself if you compete: free. Read it, change it, run the
@@ -3265,6 +3742,7 @@ hate, take the last version you liked and carry on without asking.</p>
 </div>
 
 <div class="freedom">
+@ICON year@
 <h4>It keeps working when nothing else does</h4>
 <p>No certificate to renew, no API to be deprecated, no subscription to lapse, no
 company to be acquired and shut down. Leave the board in a drawer for a year, plug
@@ -3273,6 +3751,7 @@ exist. Software that outlives the company that made it used to be ordinary.</p>
 </div>
 
 <div class="freedom">
+@ICON cast@
 <h4>You can be found, or not, entirely as you choose</h4>
 <p>List the board in a directory and strangers can call it. Leave it off and it
 exists only for the people you tell. Take it off the internet and it serves your
@@ -3300,8 +3779,11 @@ list is gone.</p>
 
 <p><b>Open communication over the internet is radio.</b> You transmit, whoever
 is on the channel hears you, and that is the whole of it. A walkie-talkie, not
-a sealed envelope. Telnet has no encryption, because a Commodore 64 cannot do
-TLS and pretending otherwise would be worse than saying so.</p>
+a sealed envelope. Telnet has no encryption, and the machines this is built for
+cannot carry much: a stock Commodore 64 has been made to finish a modern TLS
+handshake, and it takes
+<a href="https://github.com/JC-000/c64-https">about half an hour</a>. Pretending
+otherwise would be worse than saying so.</p>
 
 <p><b>Somebody has to be trying.</b> Being able to listen is not the same as
 listening. It takes a packet sniffer or the equivalent, placed somewhere on the
@@ -3326,9 +3808,10 @@ one sentence beats privacy you have to take on faith.</p>
 
 <h2>Small on purpose</h2>
 
-<p>One static binary. Static allocation, no heap in the main loop, a fixed memory
-budget on a chip with 520 KB of RAM. No web stack, no scripting runtime, no package
-tree to audit at two in the morning, no telemetry, no update that arrives without you.
+<p>One static binary. Sessions and buffers laid out when the board starts, a fixed
+memory budget on a chip with 520 KB of RAM. No web stack, no scripting runtime, two
+pinned libraries on top of Espressif's own framework rather than a package tree to
+audit at two in the morning, no telemetry, no update that arrives without you.
 What is not built cannot be exploited, and what fits in one head can be trusted by the
 person whose head it fits in.</p>
 
@@ -3339,7 +3822,7 @@ EIA in 1960. It still runs the console and management ports on network equipment
 industrial controllers and test gear, and its framing survives on nearly every
 microcontroller made since as a
 <a href="https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter">TTL-level
-UART</a>. Sixty-five years on, the way a machine from 1982 talks is still the way you
+UART</a>. More than sixty years on, the way a machine from 1982 talks is still the way you
 talk to the switch in the rack. That is why a
 <a href="https://en.wikipedia.org/wiki/Commodore_64">Commodore 64</a> and a laptop
 bought this year can both call one of these boards, and why a board can turn round and
@@ -3361,7 +3844,7 @@ drawer. Where the symbol cannot be shown, it is written <code>unleashed</code>.<
 stood inside the raised-floor room, and the point is that it was somebody else's
 room. You booked time on that machine. You did not own it, you could not take it
 home, and what you were allowed to do with it was decided by people who were not
-you.<br><br><span class="sig">&mdash; QuantumRob</span></p>
+you.<br><br><span class="sig">&mdash; <a class="author" href="/author">QuantumRob</a></span></p>
 
 <h2>You can do this today</h2>
 
@@ -3392,8 +3875,165 @@ the arguing was two-sided. Credit where it is due.</p>
 
 </article>"""
 
+# Each freedom's drawing goes in where its box names it. Done once, here,
+# rather than pasted into the markup above, so the prose still reads as
+# prose, and a misspelt name is a KeyError at import instead of a hole on
+# somebody's screen.
+ABOUT = re.sub(r"@ICON (\w+)@", lambda m: ICONS[m.group(1)], ABOUT)
 
-ABOUT_DESC = ("A bulletin board is a machine that answers a phone number. "
+
+# ----------------------------------------------------------------------
+# /author: who QuantumRob is, reached from his name on the manifesto.
+#
+# Every fact on it is Rob's own account, cleaned up for grammar and not
+# embellished, plus dates that were checked: the 4381 was announced in
+# September 1983, and Ward Christensen died on 11 October 2024. Nothing was
+# added from searching for his name. It is common enough that a namesake is
+# a real risk, and a page about a person is the last place to guess.
+#
+# The photographs are hotlinked from Wikimedia Commons, which permits it,
+# and that makes this the one prose page on the site that loads anything
+# from anywhere else. The page says so under the pictures, the images go
+# out with no referrer so Wikimedia is not told which page asked, and
+# THIRD_PARTY_NOTICES.md lists it. Two rules came out of wiring them up:
+#
+# - Wikimedia serves thumbnails at a fixed set of widths (20, 40, 60, 120,
+#   250, 330, 500, 960, 1280, 1920, 3840) and rejects a hotlink at any
+#   other width with an HTML error page, which a browser shows as a broken
+#   image. Every URL below is one of those widths or the original file.
+# - Every picture carries width and height, so the space is held while it
+#   loads, and alt text that says what it shows. If Wikimedia is down the
+#   page loses its pictures and nothing else: the captions and the text
+#   say everything the photographs do.
+# ----------------------------------------------------------------------
+
+AUTHOR_CSS = """
+<style>
+.photos { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
+        gap:1.5rem 1.5rem; margin:1.5rem 0 1.75rem; align-items:start; }
+@media (max-width: 900px) { .photos { grid-template-columns:1fr; } }
+.photos figure { margin:0; }
+.photos img { display:block; width:100%; height:auto; background:#0d0d12;
+        border:1px solid var(--rule); color:var(--dim); }
+.photos figcaption { color:var(--dim); font-size:0.8125rem; margin-top:0.5rem;
+        line-height:1.5; }
+.photos .credit { display:block; font-size:0.75rem; margin-top:0.25rem; }
+.photonote { color:var(--dim); font-size:0.8125rem; }
+</style>"""
+
+_WM = "https://upload.wikimedia.org/wikipedia/commons/"
+
+
+def _photo(thumb, full_w, full_h, alt, caption, credit):
+    """One figure. thumb is the path under /thumb/ up to the filename, or a
+    full URL for a picture small enough to use as it is."""
+    if thumb.startswith("http"):
+        src, srcset = thumb, ""
+        w, h = full_w, full_h
+    else:
+        base = _WM + "thumb/" + thumb
+        name = thumb.rsplit("/", 1)[1]
+        w, h = 960, round(960 * full_h / full_w)
+        src = f"{base}/960px-{name}"
+        srcset = (f' srcset="{base}/500px-{name} 500w, {base}/960px-{name} 960w"'
+                  ' sizes="(max-width: 900px) 100vw, 34rem"')
+    return (f'<figure><img src="{src}"{srcset} width="{w}" height="{h}" '
+            f'alt="{html.escape(alt, quote=True)}" loading="lazy" decoding="async" '
+            'referrerpolicy="no-referrer">'
+            f'<figcaption>{caption}<span class="credit">{credit}</span></figcaption>'
+            "</figure>")
+
+
+AUTHOR_PHOTOS = (
+    '<div class="photos">'
+    + _photo(
+        "5/5f/A_computer_operator_works_at_an_IBM_4381_four-window_work_station_in_a_computer_room_at_the_Arnold_Engineering_Development_Center%2C_where_numerous_mainframe_and_super_computers_are_u_-_DPLA_-_b8ef28c4e9b101b7ccc7f2e5ee1a68ed.jpeg",
+        2820, 1880,
+        "An operator in a red shirt seated at an IBM 4381 console in 1987. The "
+        "screen glows red-orange with several windows of text, and the wall "
+        "behind him is lined with reels of magnetic tape.",
+        "What the job looked like: an operator at an IBM 4381's console in "
+        "1987, at the Arnold Engineering Development Center in Tennessee, with "
+        "the reel tape on the wall behind him.",
+        'Photo: SMSgt Robert Wickley, US Department of Defense. Public domain. '
+        '<a href="https://commons.wikimedia.org/wiki/File:A_computer_operator_works_at_an_IBM_4381_four-window_work_station_in_a_computer_room_at_the_Arnold_Engineering_Development_Center,_where_numerous_mainframe_and_super_computers_are_u_-_DPLA_-_b8ef28c4e9b101b7ccc7f2e5ee1a68ed.jpeg">Wikimedia Commons</a>')
+    + _photo(
+        "2/27/IBM_4381.jpg", 6000, 3378,
+        "A row of tall blue and cream IBM 4381 cabinets in a museum hall, with a "
+        "terminal on a stand in front of them.",
+        "An IBM 4381, kept at the Technical Museum in Brno.",
+        'Photo: <a href="https://commons.wikimedia.org/wiki/User:Shansov.net">[Tycho]</a>, '
+        '<a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a>. '
+        '<a href="https://commons.wikimedia.org/wiki/File:IBM_4381.jpg">Wikimedia Commons</a>')
+    + _photo(
+        "9/9b/Printer_band.jpg", 1600, 770,
+        "A curved steel band carrying rows of raised characters, lying on a sheet "
+        "of printed test patterns.",
+        "A print band: the loop of engraved characters a band printer is named "
+        "for. It spins across the page and hammers strike the paper against it. "
+        "This one came out of a Data Products B600.",
+        'Photo: Sadg4000, '
+        '<a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>. '
+        '<a href="https://commons.wikimedia.org/wiki/File:Printer_band.jpg">Wikimedia Commons</a>')
+    + _photo(
+        _WM + "1/1a/IBM_Diskette_1_with_envelope.gif", 627, 600,
+        "An IBM Diskette 1, an 8-inch floppy disk half out of its grey paper "
+        "sleeve, labelled with its part number and a record length of 128 bytes.",
+        "An 8-inch IBM diskette, the size those controllers booted from.",
+        'Scan: Crimson Systems. Public domain. '
+        '<a href="https://commons.wikimedia.org/wiki/File:IBM_Diskette_1_with_envelope.gif">Wikimedia Commons</a>')
+    + "</div>")
+
+AUTHOR = """<h1>About the author</h1>
+<p class="lead">Robert Mech. Handles: QuantumRob and Daytona.</p>
+""" + AUTHOR_CSS + """
+<article>
+
+<p>He built µnleashed BBS and the directory you are reading. The argument for
+both is on <a href="/about">What this is</a>; this page is the person.</p>
+
+<h2>On the boards</h2>
+
+<p>In the 1990s he ran Psyberchat, a
+<a href="http://www.bbsdocumentary.com/software/IBM/DOS/GTALK/bbs_gtalk_history.html">GTalk</a>
+chat system: ten lines, community supported. He frequented God's Country, a
+<a href="https://en.wikipedia.org/wiki/Diversi-Dial">DDial</a>, and many other
+boards over the years.</p>
+
+<h2>In the machine room</h2>
+
+<p>He started his career in 1989 as a systems operator on an
+<a href="https://en.wikipedia.org/wiki/IBM_4300">IBM 4381</a> mainframe. He
+worked with DASD, which is what IBM called its disk drives, reel tape drives, a
+tape library, two band printers, and network controllers that booted from 8-inch
+floppies. If you were in a machine room then, you know the one.</p>
+
+""" + AUTHOR_PHOTOS + """
+
+<h2>After that</h2>
+
+<p>He worked in software development in the healthcare and banking industries,
+then moved into delivery leadership and project management, which is the work he
+still does today.</p>
+
+<h2>Still at it</h2>
+
+<p>Electronics and programming are still a passion of his. He had the privilege
+of meeting <a href="https://en.wikipedia.org/wiki/Ward_Christensen">Ward
+Christensen</a> once, at a Maker Faire, before Ward died in October 2024.</p>
+
+<p class="photonote">The photographs load from Wikimedia Commons, so opening this
+page asks Wikimedia's servers for them. They are the only thing on this page that
+does not come from this server, and they are sent without saying which page
+asked.</p>
+
+</article>"""
+
+AUTHOR_DESC = ("Robert Mech, QuantumRob: a GTalk sysop in the 1990s, a mainframe "
+               "operator from 1989, and the person who built this.")
+
+
+ABOUT_DESC =("A bulletin board is a machine that answers a phone number. "
               "Why that still matters, and what it takes to run one: a "
               "telnet BBS on a five dollar microcontroller.")
 DATA_DESC  = ("The directory, machine readable. No key, no signup, no rate "
@@ -3406,6 +4046,14 @@ def about_page(role, here):
     return simple_page(f"What this is - {SITE_NAME}",
                        ABOUT.replace("@GALLERY@", gallery_html()),
                        role, here, ABOUT_DESC)
+
+
+def author_page(role):
+    """Who wrote this. It belongs to the manifesto, so the menu lights What
+    this is: the link that entry is served as on this face, whatever that
+    is, rather than a path that only matches on one kind of deployment."""
+    return simple_page(f"About the author - {SITE_NAME}", AUTHOR, role,
+                       site_url("about", role, "/"), AUTHOR_DESC)
 
 
 def simple_page(title, body, role="list", here="", desc=SITE_DESC):
@@ -3474,6 +4122,12 @@ class Handler(BaseHTTPRequestHandler):
         # in pages/, and neither can shadow /health.
         elif path == "/about":
             self.reply(200, about_page(role, "/about"))
+        # Who wrote it, reached from his name on the manifesto. A route and
+        # not a pages/ file, because the dialect has no images and this page
+        # is mostly photographs with their credits. On every face, since the
+        # link that leads here is relative.
+        elif path == "/author":
+            self.reply(200, author_page(role))
         elif path == "/data":
             # Keyed on the role: the same path is reachable on any of the
             # three domains and the nav and the footer differ on each.
