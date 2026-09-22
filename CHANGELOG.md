@@ -14,6 +14,63 @@
 
 # Changelog
 
+## 0.14.0, 2026-09-22
+
+Rob: "In the header ... of the hero unleashed, put one of those ... line
+drawings with text and icons that rotate through that highlight the
+'freedoms' that we have. GPL2+, etc. It cant be very wide it just needs to be
+on the right side ... Retro scifi."
+
+- **The board's freedoms, beside the wordmark on every page.** A narrow panel
+  to the right of µnleashed, headed with the board's motto, Electronic
+  freedom, showing one freedom at a time with a line drawing and a short line
+  saying what it means:
+  - No web: a BBS, not a website
+  - No cloud: nobody else's server
+  - No browser: a C64 can call in
+  - Real hardware: a chip on your shelf
+  - GPL v2 or later: free software
+  - No internet needed: a local network is enough
+  - You write the rules: and you are the appeal
+  - Run your own directory: this one is free software
+
+  The first five are the board's own welcome screen (`tools/mkscreens.py` in
+  the firmware): its tagline, its ANSI line and its licence line. The other
+  three are the manifesto's, and each was already checked there.
+- **Retro sci-fi line work, and nothing from LCARS.** Thin `--dial` lines
+  with two corners cut, brackets round the drawing with a scan line sweeping
+  down inside them, a scale under the words with a caret that crosses it
+  once per freedom, and eight segments that light in turn. Site palette
+  only; the heading is `--name`, the wordmark's own colour.
+- **CSS only, no script.** Four seconds each on one 32 second timeline. The
+  change is out and then in, 0.3 seconds each, rather than both at once:
+  two lines of different words at half strength on top of each other read
+  as a smudge. All of the motion is inside
+  `prefers-reduced-motion: no-preference`, so a reader who has asked for
+  less motion sees one freedom, standing still.
+- **A screen reader gets all eight, in order**, as one list named
+  "Electronic freedom". The fade is opacity, which leaves every word in the
+  accessibility tree; the drawings are hidden from it.
+- **Each section of the menu opens on a different freedom**, from its
+  position in the menu, because the timeline starts again on every page
+  load and a reader clicking round would otherwise only ever see the first
+  two.
+- **It appears only where it fits beside the wordmark**, from 73em. In em,
+  so the breakpoint follows a reader's own default text size along with the
+  wordmark. The figure is the wordmark in the widest font the stack can land
+  on, the padding, the gap and the panel, and the suite does that sum
+  against the stylesheet. Below it the panel is not shown, rather than
+  stacked under the wordmark, because stacked it would push the menu down on
+  every page on a phone; the manifesto says the same things at length.
+  Measured in headless Chrome at 390, 901, 1100, 1168, 1280, 1366 and 1920:
+  nothing past the right edge at any of them, and at the widths that show
+  it, the panel shares the wordmark's top and bottom.
+- Two checks found the drawings' reduced-motion block by taking the first
+  one on the page. The page stylesheet has its own now, for the panel, and
+  it comes first, so they look inside the drawings' stylesheet.
+- 335 checks, up from 323. The two that guard the reduced-motion gate and
+  the breakpoint were proved by breaking each and watching it fail.
+
 ## 0.13.2, 2026-09-22
 
 Rob: "under build one, love the table, add some of those awesome graphics on a

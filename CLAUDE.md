@@ -174,9 +174,16 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   sizes are `font-size` attributes on the `<text>`. Third, **a class on the
   `<svg>` itself is matched as `svg.art.i-name`, not `svg.art .i-name`**. The
   first version wrote the descendant form, nothing moved, and it looked
-  finished in every still screenshot. Check motion by rendering two frames
-  with `--virtual-time-budget` and diffing them, with and without
-  `--force-prefers-reduced-motion`.
+  finished in every still screenshot. Check motion by rendering frames and
+  diffing them, with and without `--force-prefers-reduced-motion`. **Do not
+  rely on `--virtual-time-budget` to advance the animations**: on
+  2026-09-22 it gave identical frames seconds apart even on the manifesto,
+  whose drawings certainly move, so a diff of None proved nothing. What
+  works is a test-only copy of the page with a script appended that calls
+  `document.getAnimations()`, pauses each and sets `currentTime`, which also
+  reports how many animations are running (none, under reduced motion).
+  The site itself still carries no script; the copy lives in the scratch
+  directory.
 - **`/author` is the one prose page that loads anything from elsewhere**:
   four photographs hotlinked from Wikimedia Commons, credited under each,
   sent with `referrerpolicy="no-referrer"`, and listed in
@@ -186,6 +193,18 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   browser shows as a broken image. `_photo()` only builds 500 and 960, and
   the suite checks every width on the page. There is no CSP on this site;
   a comment used to say there was.
+- **The freedoms beside the wordmark (0.14.0) are the board's own words**,
+  and every one is a claim. `FREEDOMS` in `server.py` is the list; the
+  first five come from the board's welcome screen (`tools/mkscreens.py` in
+  the firmware), the rest from the manifesto. Before adding one, check it
+  is true of the board as it ships: "your data on a card you can pull" was
+  considered and is false, because accounts and settings live on internal
+  flash, and "no account needed" is only true while the sysop leaves
+  guests on. Labels 22 characters, the line under them 26, or the panel's
+  text column overflows in the widest font; the suite does the arithmetic.
+  The panel shows from `min-width: 73em`, in em so a reader's larger
+  default text moves the breakpoint with the wordmark, and is not shown
+  below it rather than stacked, so a phone's menu does not move down.
 - **A CSS or copy change is not verified until the rendered page has been
   looked at.** grep on the HTML proves a string is present, not that a rule
   applied, an element is positioned or a menu is readable. Three of the

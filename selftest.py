@@ -1410,9 +1410,13 @@ def main():
         check("and every one leaves room under its lowest label"
               + ("" if not short else "  <- " + " | ".join(short)),
               not short)
+        # The drawings' own no-preference block, found from the drawings'
+        # stylesheet: the page stylesheet has one of its own now, for the
+        # freedoms in the header, and it comes first.
         check("with the bridge's pulse declared where reduced motion stops it",
               "svg.art.bridge .go { animation:" in
-              term.split("@media (prefers-reduced-motion: no-preference) {")[1])
+              term.split("svg.art { display:block;")[1]
+                  .split("@media (prefers-reduced-motion: no-preference) {")[1])
 
         # The SD card wiring diagram, on /sdcard beside the pin table it
         # draws, and linked from the board table on /build. The diagram and
@@ -1453,7 +1457,8 @@ def main():
               wiring is not None and lowest + 8 <= top + height)
         check("and its pulses declared where reduced motion stops them",
               "svg.art.wiring .p-cs { animation:" in
-              sd.split("@media (prefers-reduced-motion: no-preference) {")[1])
+              sd.split("svg.art { display:block;")[1]
+                  .split("@media (prefers-reduced-motion: no-preference) {")[1])
         check("the build page's board table links to it",
               '<a href="/sdcard">SD card wiring diagram</a>' in get("/build")[1])
 
@@ -1487,6 +1492,112 @@ def main():
               "Any module with the same flash will do" not in flat_b
               and "Any module with 4 MB of flash works" not in
                   " ".join(get("/teachers")[1].split()))
+
+        # ------------------------------------------------------------------
+        # The freedoms beside the wordmark. The board's own words from its
+        # welcome screen, on every page, one at a time for a reader who
+        # does not mind motion and standing still for one who does.
+        print("The freedoms in the header")
+        faces = {"the board list": get("/")[1],
+                 "a page from the menu": get("/terminals")[1],
+                 "the manifesto": man,
+                 "the data face": get("/", host="data.example")[1]}
+
+        def ticker_of(page):
+            m = re.search(r'<div class="ticker">(.*?)</ul></div>', page, re.S)
+            return m.group(1) if m else ""
+        wanted = [(label, note) for _key, label, note in S.FREEDOMS]
+        labels = [l for l, _n in wanted]
+        head_css = faces["the board list"].split("<style>")[1].split("</style>")[0]
+        at = head_css.index(".ticker { display:none; }")
+        mv = head_css.index("@media (prefers-reduced-motion: no-preference) {", at)
+        resting = head_css[at:mv]
+        moving = head_css[mv:head_css.index("\n}\n", mv)]
+        check("every face carries the panel beside the wordmark",
+              all('<div class="masthead"><pre class="logo"' in p
+                  and ticker_of(p) for p in faces.values()))
+        check("with all eight freedoms, each with the line saying what it means",
+              len(wanted) == 8
+              and all(all(f"<b>{l}</b> <i>{n}</i>" in ticker_of(p)
+                          for l, n in wanted) for p in faces.values()))
+        check("in one list, named for a screen reader",
+              all(ticker_of(p).count("<li>") == 8
+                  and '<ul aria-label="Electronic freedom">' in ticker_of(p)
+                  for p in faces.values()))
+        # The frame, the heading drawn over it and the eight icons. The
+        # words are never hidden: the fade is opacity, which leaves every
+        # item in the accessibility tree, where visibility would take it out.
+        check("and every picture in it hidden from one, and no word",
+              all(ticker_of(p).count('aria-hidden="true"') == 10
+                  for p in faces.values())
+              and "visibility" not in resting and "visibility" not in moving)
+        check("the board's own welcome line and licence are among them",
+              all(w in labels for w in ("No web", "No cloud", "No browser",
+                                        "Real hardware", "GPL v2 or later")))
+        check("and nothing on any face runs a script to move them",
+              all("<script" not in p for p in faces.values()))
+
+        # Motion lives only inside the no-preference block, so the markup
+        # is the resting state: the first freedom, its segment lit.
+        check("the panel's motion is declared only where reduced motion stops it",
+              "animation" not in resting
+              and head_css.count("animation:tk") == moving.count("animation:tk") == 4)
+        check("and standing still, it shows the first freedom and lights its segment",
+              ".ticker li:first-child { opacity:1; }" in resting
+              and ".tf .sg1 { opacity:1; }" in resting
+              and re.search(r"\.ticker li \{[^}]*opacity:0; \}", resting) is not None)
+        # Eight freedoms, four seconds each: every item's delay is four
+        # seconds after the one before, on one 32 second timeline.
+        delays = [float(d) for d in re.findall(
+            r"\.ticker li:nth-child\(\d\), \.tf \.sg\d \{ animation-delay:(-?[\d.]+)s; \}",
+            moving)]
+        check("eight on one 32 second timeline, four seconds apart",
+              "tkshow 32s" in moving and "tkseg 32s" in moving
+              and len(delays) == 8
+              and all(abs(b - a - 4) < 1e-9 for a, b in zip(delays, delays[1:])))
+        # Each section of the menu opens on a different freedom, or a reader
+        # clicking round would only ever see the first two.
+        firsts = []
+        for path, host in (("/", None), ("/", "about.example"), ("/whofor", None),
+                           ("/terminals", None), ("/firstcall", None),
+                           ("/build", None), ("/forward", None), ("/how", None)):
+            first = re.search(r"<li>.*?<b>(.*?)</b>",
+                              ticker_of(get(path, host=host)[1]), re.S)
+            firsts.append(first.group(1) if first else None)
+        check("and each section of the menu opens on a different one",
+              None not in firsts and len(set(firsts)) == 8)
+
+        # No overflow. The panel is not shown until it fits beside the
+        # wordmark, and the width at which it fits is arithmetic, not a
+        # guess: the wordmark at its cap in the widest font the stack can
+        # land on (0.602em a cell, Menlo and DejaVu Sans Mono), the body's
+        # padding each side, the gap and the panel, at the 133% root.
+        # Measured in headless Chrome as well: nothing past the right edge
+        # at 390, 901, 1100, 1168, 1280, 1366 or 1920.
+        cap = float(re.search(
+            r"pre\.logo \{[^}]*font-size:clamp\([^,]+,[^,]+,\s*([\d.]+)rem\)",
+            head_css).group(1))
+        panel = float(re.search(r"\.ticker \{ display:block;[^}]*width:([\d.]+)rem",
+                                head_css).group(1))
+        gap = float(re.search(r"\.masthead \{[^}]*gap:0 ([\d.]+)rem",
+                              head_css).group(1))
+        shows = float(re.search(r"@media \(min-width: ([\d.]+)em\) \{\s*\.ticker",
+                                head_css).group(1))
+        cols = max(len(r) for r in S.LOGO_ROWS)
+        need = (cols * 0.602 * cap + 2 * 1 + gap + panel) * 1.33
+        check("it only appears at a width where it fits beside the wordmark",
+              ".ticker { display:none; }" in resting and need <= shows)
+        # And the words fit the panel: the text column is the panel less the
+        # left inset, the icon, the gap after it and the right inset.
+        bsize, bspace = (float(v) for v in re.search(
+            r"\.ticker li b \{[^}]*font-size:([\d.]+)rem;[^}]*letter-spacing:([\d.]+)rem",
+            head_css).groups())
+        isize = float(re.search(r"\.ticker li i \{[^}]*font-size:([\d.]+)rem",
+                                head_css).group(1))
+        column = panel - 1 - 2.5 - 0.75 - 0.75
+        check("and the longest label and line fit its text column",
+              max(len(l) for l in labels) * (0.602 * bsize + bspace) <= column
+              and max(len(n) for _l, n in wanted) * 0.602 * isize <= column)
 
         # ------------------------------------------------------------------
         print("The manifest is built from what is on disk")

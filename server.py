@@ -393,8 +393,22 @@ def nav_html(role, here=""):
 
 
 def head_html(role, here=""):
-    """The top of every page: wordmark, then the same menu everywhere."""
-    return logo_html() + nav_html(role, here)
+    """The top of every page: wordmark and the freedoms beside it, then the
+    same menu everywhere."""
+    return ('<div class="masthead">' + logo_html()
+            + ticker_html(nav_index(role, here)) + "</div>"
+            + nav_html(role, here))
+
+
+def nav_index(role, here=""):
+    """The position in the menu of the section this page belongs to, or 0
+    for a page that belongs to none. Matched exactly the way nav_html marks
+    the current item, so the two cannot disagree about where a reader is."""
+    here = NAV_SECTION.get(here, here)
+    for i, (target, path, _label) in enumerate(NAV):
+        if site_url(target, role, path) == here:
+            return i
+    return 0
 
 
 def foot_html(role, extra=""):
@@ -1686,6 +1700,100 @@ pre.logo i:nth-child(3) {{ color:#8f7ae8; }}
 pre.logo i:nth-child(4) {{ color:#6f84e0; }}
 pre.logo i:nth-child(5) {{ color:#4a7fc8; }}
 pre.logo i:nth-child(6) {{ color:#3f6cab; }}
+/* The wordmark and the freedoms panel share one row. flex-wrap is the
+   safety net rather than the plan: the panel only appears at a width where
+   it fits (below), so it should never need to wrap, and if some font the
+   stack lands on is wider than measured, wrapping is what happens instead
+   of the header running off the side of the page. */
+.masthead {{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:0 1.5rem; }}
+.masthead pre.logo {{ flex:none; }}
+/* The freedoms, one at a time, beside the wordmark.
+
+   Shown only from 73em up. In em, not px, because em in a media query is
+   the reader's own default text size: somebody who has set their browser
+   to a larger font has a larger wordmark and a larger panel, and the width
+   at which the two fit side by side moves with them. 73em is the wordmark
+   in the widest font the stack reaches (Menlo, 46.5em of the default),
+   the body padding, the gap and the panel, rounded up.
+
+   Below that it is not shown at all rather than stacked under the
+   wordmark. Stacked, it would push the menu down on every page on a phone,
+   and the manifesto, which is in the menu, says the same things at length. */
+.ticker {{ display:none; }}
+@media (min-width: 73em) {{
+  .ticker {{ display:block; position:relative; flex:none; width:16rem; height:5.625rem;
+          margin-left:auto; }}
+}}
+.ticker svg.tf {{ position:absolute; top:0; left:0; width:100%; height:100%;
+          overflow:visible; }}
+.tf .fr {{ fill:none; stroke:var(--dial); stroke-width:1; opacity:0.3; }}
+.tf .ac {{ fill:none; stroke:var(--dial); stroke-width:1.5; }}
+.tf .dm {{ fill:none; stroke:var(--dial); stroke-width:1; opacity:0.45; }}
+.tf .nt {{ fill:var(--name); }}
+.tf .sg {{ fill:var(--dial); opacity:0.2; }}
+.tf .sg1 {{ opacity:1; }}
+.tf .sc {{ fill:none; stroke:var(--dial); stroke-width:1; opacity:0; }}
+.tf .ct {{ fill:var(--dial); }}
+.ticker p.th {{ position:absolute; left:1rem; top:0.1875rem; margin:0; font-size:0.5625rem;
+          line-height:1rem; letter-spacing:0.1875rem; text-transform:uppercase;
+          color:var(--name); white-space:nowrap; }}
+.ticker ul {{ list-style:none; margin:0; padding:0; }}
+.ticker li {{ position:absolute; left:1rem; right:0.75rem; top:1.875rem; height:2.5rem;
+          display:flex; align-items:center; gap:0.75rem; opacity:0; }}
+.ticker li:first-child {{ opacity:1; }}
+.ticker li b {{ display:block; font-weight:normal; color:var(--ink); font-size:0.6875rem;
+          line-height:1.35; letter-spacing:0.0625rem; text-transform:uppercase;
+          white-space:nowrap; }}
+.ticker li i {{ display:block; font-style:normal; color:var(--dim); font-size:0.625rem;
+          line-height:1.35; white-space:nowrap; }}
+.ticker svg.ti {{ flex:none; width:2.5rem; height:2.5rem; fill:none; stroke:var(--dial);
+          stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }}
+.ticker svg.ti .d {{ opacity:0.6; }}
+.ticker svg.ti .xb {{ stroke:var(--bg); stroke-width:4.5; opacity:1; }}
+.ticker svg.ti .pn {{ fill:var(--bg); }}
+/* Eight freedoms, four seconds each. Every item runs the same 32 second
+   timeline and starts four seconds after the one before it. The change is
+   out and then in, 0.3 seconds each, rather than both at once: two lines
+   of different words at half strength on top of each other read as a
+   smudge, not as a change. The first starts 0.6 seconds in, so a page
+   opens with a freedom already showing rather than an empty frame. The lit
+   segment runs the same timing, the caret crosses the scale once per
+   freedom, and the scan line in the icon's brackets keeps its own pace.
+
+   All of it is in here, so a reader who has asked for less motion gets the
+   markup's resting state: the first freedom, its segment lit, nothing
+   moving. */
+@media (prefers-reduced-motion: no-preference) {{
+  .ticker li {{ opacity:0; animation:tkshow 32s linear infinite both; }}
+  .tf .sg {{ animation:tkseg 32s linear infinite both; }}
+  .ticker li:nth-child(1), .tf .sg1 {{ animation-delay:-0.6s; }}
+  .ticker li:nth-child(2), .tf .sg2 {{ animation-delay:3.4s; }}
+  .ticker li:nth-child(3), .tf .sg3 {{ animation-delay:7.4s; }}
+  .ticker li:nth-child(4), .tf .sg4 {{ animation-delay:11.4s; }}
+  .ticker li:nth-child(5), .tf .sg5 {{ animation-delay:15.4s; }}
+  .ticker li:nth-child(6), .tf .sg6 {{ animation-delay:19.4s; }}
+  .ticker li:nth-child(7), .tf .sg7 {{ animation-delay:23.4s; }}
+  .ticker li:nth-child(8), .tf .sg8 {{ animation-delay:27.4s; }}
+  .tf .ct {{ animation:tkcaret 4s linear -0.6s infinite; }}
+  .tf .sc {{ animation:tkscan 2.6s ease-in-out infinite; }}
+  @keyframes tkshow {{
+    0%, 0.9375% {{ opacity:0; }}  1.875%, 12.5% {{ opacity:1; }}
+    13.4375%, 100% {{ opacity:0; }}
+  }}
+  @keyframes tkseg {{
+    0%, 0.9375% {{ opacity:0.2; }}  1.875%, 12.5% {{ opacity:1; }}
+    13.4375%, 100% {{ opacity:0.2; }}
+  }}
+  @keyframes tkcaret {{
+    from {{ transform:translateX(0); }}
+    to {{ transform:translateX(168px); }}
+  }}
+  @keyframes tkscan {{
+    0% {{ transform:translateY(0); opacity:0; }}
+    20% {{ opacity:0.7; }}  80% {{ opacity:0.7; }}
+    100% {{ transform:translateY(40px); opacity:0; }}
+  }}
+}}
 /* The menu, as a menu bar rather than a run of links.
    Reverse video is how a terminal shows a selection and how a Mac menu
    showed the item you picked, so hovering fills the cell and the current
@@ -2322,6 +2430,145 @@ def logo_html():
     return ('<pre class="logo" role="img" aria-label="\u00b5nleashed">'
             + "".join(f"<i>{row}</i>" for row in LOGO_ROWS)
             + "</pre>")
+
+
+# --------------------------------------------------------------------------
+# The freedoms beside the wordmark, one at a time.
+#
+# The board says these on its own welcome screen: the motto, "no web, no
+# cloud, no browser, real hardware", and the GPL line (tools/mkscreens.py in
+# the firmware). The header says them too, with three the manifesto argues
+# at length. Each one is true of the board as it ships, and each short line
+# under it says what the slogan means, because "no cloud" on its own is a
+# poster and "nobody else's server" is a fact somebody can check.
+#
+# Rules this keeps, and a check in selftest.py holds it to them:
+#   - Labels are 22 characters at most and the line under them 26. The
+#     panel is 16rem, and the widest of the fonts the stack can land on
+#     (Menlo, 0.602em a cell) fills 11rem of text column at those lengths.
+#   - Every word is in the markup. The fade is opacity, and opacity does not
+#     take anything out of the accessibility tree, so a screen reader reads
+#     the whole list in order however far the animation has got.
+#   - Nothing moves unless the reader's system says motion is welcome. The
+#     markup, with no animation applied, shows the first freedom and stops.
+#
+# Each section of the menu starts the list at a different place: its
+# position in the menu, so Boards opens on the first freedom, What this is
+# on the second, and so on. The fade starts again on every page load, so
+# without this a reader clicking round the site would see the first two of
+# eight and never the rest. Data is ninth and wraps round to the first.
+# --------------------------------------------------------------------------
+FREEDOMS = (
+    ("web", "No web", "a BBS, not a website"),
+    ("cloud", "No cloud", "nobody else's server"),
+    ("browser", "No browser", "a C64 can call in"),
+    ("chip", "Real hardware", "a chip on your shelf"),
+    ("gpl", "GPL v2 or later", "free software"),
+    ("lan", "No internet needed", "a local network is enough"),
+    ("rules", "You write the rules", "and you are the appeal"),
+    ("list", "Run your own directory", "this one is free software"),
+)
+
+# 32 units square, drawn at 2.5rem. Stroke and colour come from the page
+# stylesheet, so these are shapes only. "xb" is the gap cut under a slash so
+# the slash reads as crossing the drawing rather than joining it, and "pn" is
+# the pen's body, filled with the page colour so it sits in front of the
+# lines it is writing.
+_SLASH = '<path class="xb" d="M5 27 L27 5"/><path d="M5 27 L27 5"/>'
+TICKER_ICONS = {
+    # A globe, struck out.
+    "web": ('<circle cx="16" cy="16" r="11"/>'
+            '<ellipse cx="16" cy="16" rx="4.5" ry="11"/>'
+            '<path class="d" d="M5 16 H27 M6.5 10.5 H25.5 M6.5 21.5 H25.5"/>'
+            + _SLASH),
+    # The cloud from the manifesto's "no internet" drawing, struck out.
+    "cloud": ('<path transform="translate(-11.8 3.5)" d="M18.5 22 C14 22 14 15.5'
+              ' 18.5 15.5 C19 10.5 25.5 9 28 12.5 C30 8 37 8.5 37.5 14 C42 14'
+              ' 42 22 37.5 22 Z"/>' + _SLASH),
+    # A browser window with its three buttons, struck out.
+    "browser": ('<rect x="4" y="7" width="24" height="18" rx="1.5"/>'
+                '<path d="M4 11.5 H28"/>'
+                '<path d="M7 9.25 H7.01 M9.5 9.25 H9.51 M12 9.25 H12.01"/>'
+                '<path class="d" d="M8 15.5 H20 M8 19 H16"/>' + _SLASH),
+    # A module the way a WROOM looks: the antenna trace across the top and
+    # the metal can under it, with pins down both sides.
+    "chip": ('<rect x="7" y="3" width="18" height="26" rx="1"/>'
+             '<path class="d" d="M9.5 8.5 V5.5 H12.5 V8.5 H15.5 V5.5 H18.5'
+             ' V8.5 H21.5 V5.5 H22.5"/>'
+             '<rect x="9.5" y="11.5" width="13" height="14.5" rx="0.8"/>'
+             '<path class="d" d="M7 14 H4.5 M7 18 H4.5 M7 22 H4.5 M7 26 H4.5'
+             ' M25 14 H27.5 M25 18 H27.5 M25 22 H27.5 M25 26 H27.5"/>'),
+    # Copyleft: a C turned to face the other way.
+    "gpl": ('<circle cx="16" cy="16" r="12"/>'
+            '<path d="M12.27 10.68 A6.5 6.5 0 1 1 12.27 21.32"/>'),
+    # A house with a Wi-Fi mark inside it: the network ends at the walls.
+    "lan": ('<path d="M4.5 15 L16 5.5 L27.5 15"/>'
+            '<path d="M8 12.5 V27 H24 V12.5"/>'
+            '<path d="M16 24 H16.01"/>'
+            '<path d="M13.53 21.53 A3.5 3.5 0 0 1 18.47 21.53"/>'
+            '<path d="M11.4 19.4 A6.5 6.5 0 0 1 20.6 19.4"/>'),
+    # A page of rules with a pen on it.
+    "rules": ('<path d="M5 3 H18 L23 8 V29 H5 Z"/>'
+              '<path class="d" d="M18 3 V8 H23"/>'
+              '<path class="d" d="M8.5 12 H19 M8.5 16 H19 M8.5 20 H14"/>'
+              '<path class="pn" d="M16 25 L25.5 15.5 L28.5 18.5 L19 28 Z"/>'
+              '<path d="M16 25 L14.5 29.5 L19 28"/>'),
+    # A listing: a heading rule and three rows, each with its marker.
+    "list": ('<rect x="4" y="5" width="24" height="22" rx="1.5"/>'
+             '<path d="M4 10 H28"/>'
+             '<path d="M8 14.5 H9.5 M8 19 H9.5 M8 23.5 H9.5"/>'
+             '<path class="d" d="M13 14.5 H24 M13 19 H24 M13 23.5 H20"/>'),
+}
+
+
+def _ticker_frame():
+    """The panel's line work, in a 256 x 90 viewBox, which is the panel's own
+    16rem x 5.625rem at 16 units to the rem. So a coordinate here and a
+    position in the stylesheet are the same number over 16, and the icon
+    sits inside its brackets without anybody measuring a render."""
+    ticks = " ".join(f"M{x} 80.5 V{74 if (x - 68) % 32 == 0 else 77.5}"
+                     for x in range(68, 237, 8))
+    segs = "".join(f'<rect class="sg sg{i + 1}" x="{180 + 7 * i}" y="8" '
+                   'width="5" height="6"/>' for i in range(len(FREEDOMS)))
+    return (
+        '<svg class="tf" viewBox="0 0 256 90" aria-hidden="true" '
+        'focusable="false">'
+        # Faint outline, cut across two corners, and the same cut picked out
+        # brighter where the eye lands first and last.
+        '<path class="fr" d="M10.5 0.5 H255.5 V79.5 L245.5 89.5 H0.5 V10.5 Z"/>'
+        '<path class="ac" d="M0.5 26 V10.5 L10.5 0.5 H42"/>'
+        '<path class="ac" d="M255.5 64 V79.5 L245.5 89.5 H214"/>'
+        '<rect class="nt" x="6" y="6.5" width="2.5" height="9"/>'
+        # One segment per freedom, lit for the one showing.
+        + segs +
+        # Brackets round the icon, and the line that sweeps down inside them.
+        '<path class="dm" d="M13.5 34 V27.5 H20 M52 27.5 H58.5 V34'
+        ' M58.5 66 V72.5 H52 M20 72.5 H13.5 V66"/>'
+        '<path class="sc" d="M15 30 H57"/>'
+        # A scale under the words, and a caret that crosses it once for each
+        # freedom: the time until the next one.
+        f'<path class="dm" d="M68 80.5 H236 {ticks}"/>'
+        '<path class="ct" d="M68 82 L65 86.5 H71 Z"/>'
+        "</svg>")
+
+
+TICKER_FRAME = _ticker_frame()
+
+
+def ticker_html(start=0):
+    """The freedoms panel, with the list starting at freedom number start.
+    The visual list and the one a screen reader gets are the same list: see
+    the note above FREEDOMS."""
+    start %= len(FREEDOMS)
+    order = FREEDOMS[start:] + FREEDOMS[:start]
+    items = "".join(
+        '<li><svg class="ti" viewBox="0 0 32 32" aria-hidden="true" '
+        f'focusable="false">{TICKER_ICONS[key]}</svg>'
+        f"<span><b>{label}</b> <i>{note}</i></span></li>"
+        for key, label, note in order)
+    return ('<div class="ticker">' + TICKER_FRAME
+            + '<p class="th" aria-hidden="true">Electronic freedom</p>'
+            + '<ul aria-label="Electronic freedom">' + items + "</ul></div>")
 
 
 # The micro sign out of the wordmark, at 12x12, which is the one glyph that
