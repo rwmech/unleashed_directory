@@ -920,15 +920,98 @@ def main():
         check("and nothing reorders them away from their source order",
               "order:" not in page[page.index("article .freedoms {"):
                                    page.index("article .freedoms {") + 400])
-        # The animated diagram scales rather than scrolling. overflow-x:auto
-        # stopped the page sliding sideways and put a scrollbar on the
-        # diagram instead, and it was a vertical one: when one axis is not
-        # visible, CSS computes the other to auto as well, and five printed
-        # lines at 1.5 line height are 105px in a 7.4em box.
+        # ------------------------------------------------------------------
+        # The manifesto's two diagrams. Both were ASCII art in a <pre>, which
+        # is laid out in character cells, so its size was a font size: 61
+        # columns in a 358px phone column meant 6px letters, and the animated
+        # one was eight whole copies of itself flipped 0.4s apart. They are
+        # inline SVG now.
+        #
+        # Verified by rendering as well as by this: at 1920, 1366 and a real
+        # 390 through an exactly sized viewport, no text or shape escapes its
+        # viewBox, the page never scrolls sideways, the smallest label is
+        # 10.0px at 390 and 16.4px at 1920, and the marker moves 545 to 799
+        # across two and a half seconds and does not move at all under
+        # reduced motion.
+        print("The manifesto's diagrams are drawn, not typed")
         _, page = get("/", host="about.example")
-        check("the diagram scales to fit instead of scrolling",
-              "overflow:hidden" in page and "clamp(6px" in page
-              and "overflow-x:auto;\n         font" not in page)
+        check("both are inline SVG and no ASCII art is left on the page",
+              '<svg class="wire"' in page
+              and '<svg class="trace bad"' in page
+              and '<svg class="trace good"' in page
+              and "[ YOU ]" not in page and 'pre class="chart"' not in page)
+        # A viewBox with a negative origin is one number per drawing instead
+        # of shifting forty coordinates, and it is what holds the outermost
+        # label off the frame. Without it the title sat 6px from the border.
+        check("and each viewBox leaves a margin, so nothing sits on the frame",
+              'viewBox="-5 -6 354 138"' in page
+              and 'viewBox="-6 -8 356 382"' in page
+              and 'viewBox="-6 -8 356 216"' in page)
+        # 344 units of art inside a 353px phone column is 1:1. Anything wider
+        # reads on a monitor and not on a phone, which is what the ASCII
+        # versions were; the max-width then stops the same art being blown up
+        # to twice size on a 1920 monitor.
+        check("they are sized for the phone column and capped on a monitor",
+              "svg.wire { display:block; width:100%; max-width:28rem;" in page
+              and "svg.trace { display:block; width:100%; max-width:26rem;"
+                  in page)
+        # The comparison is two panels rather than one drawing, because a
+        # viewBox scales and does not lay out again: a single SVG could not
+        # stack on a phone. align-items:start is the argument itself, since
+        # the left panel is tall because four parties keep a record and the
+        # right one is short because one does.
+        check("the comparison is two panels that stack at the one breakpoint",
+              "grid-template-columns:repeat(2, minmax(0, 26rem))" in page
+              and "align-items:start" in page
+              and "@media (max-width: 900px) { .compare "
+                  "{ grid-template-columns:1fr; } }" in page)
+        # Still no JavaScript, and the animation survived the translation.
+        check("the connection still animates, and with no script to do it",
+              "@keyframes wiretrip" in page
+              and "animation:wiretrip 3.2s ease-in-out infinite alternate"
+                  in page
+              and "<script" not in page)
+        # The resting state is not the absence of the diagram: it is what a
+        # screenshot, a printout and a reader with motion sensitivity all
+        # get, so the marker parks half way along the wire rather than at
+        # either end, and the lamp and the caret are lit rather than hidden.
+        rm = page[page.index("@media (prefers-reduced-motion: reduce) {\n"
+                             "  svg.wire"):][:340]
+        check("and it rests half way along the wire when motion is refused",
+              "animation:none" in rm and "transform:translateX(82px)" in rm
+              and "opacity:1" in rm)
+        # Red for a party that keeps a copy of you, green for one that does
+        # not. Both come from the palette at the root: the red used to be a
+        # literal in the diagram's own stylesheet, which is how a colour
+        # carrying an argument drifts away from the site making it.
+        check("the red and the green both come from the root palette",
+              "--risk:#e06c6c;" in page
+              and "svg.trace.bad .keep, svg.trace.bad .pool-box "
+                  "{ stroke:var(--risk); }" in page
+              and "svg.trace.good .keep { stroke:var(--live); }" in page)
+        check("and no diagram colour is typed in as a literal",
+              "#e06c6c" not in page.split("--risk:#e06c6c;")[1]
+              and "#6ee36e" not in page)
+        # An SVG shape with no fill declared is black, and black on #0d0d12
+        # is a shape nobody can see. The lines say so explicitly rather than
+        # relying on nobody noticing they are closed paths.
+        check("every drawn shape declares a fill, including the lines",
+              "svg.trace .link { fill:none; stroke:var(--faint);" in page
+              and "svg.trace .bus { fill:none;" in page
+              and "svg.wire .line { fill:none;" in page
+              and "svg.wire .case { fill:none;" in page)
+        # role="img" makes the whole drawing one object, so the labels inside
+        # it are never announced and the label has to carry the argument. The
+        # point of the pair is a list of parties who keep a record against a
+        # list of one, so that is what it has to say.
+        for want in ('Four of them keep a record',
+                     'One record is kept, a text file you can open and read',
+                     'there is no third party on the line'):
+            check("the drawing says in words what it says in shapes"
+                  f"  <- {want[:34]}", want in page)
+        check("and each one is announced as a picture, not as decoration",
+              page.count('role="img"') >= 3
+              and page.count('aria-label="Calling a ') == 2)
         # The day chart's viewBox is sized to the column it lives in. A 720
         # unit box in a 412px cell scaled by 0.57, so an 11px label rendered
         # at 6.3px and the expanded chart was 110px tall.
@@ -975,10 +1058,19 @@ def main():
                     continue
                 # A media query condition is a viewport width and belongs in
                 # px. Borders and rules stay in px too, because a hairline is
-                # a hairline at any size, and svg.hours text is in viewBox
-                # units, which scale with the chart already.
+                # a hairline at any size.
+                #
+                # So does anything inside an SVG viewBox: a `px` there is a
+                # user unit, not a layout length, and it scales with the
+                # drawing already. That covers the day chart's labels, the
+                # type in the two manifesto diagrams, and the translate that
+                # moves the marker along the wire, which is 164 units of
+                # viewBox and not 164 pixels of page.
                 if (line.lstrip().startswith("@media")
                         or "svg.hours text" in line
+                        or "svg.wire" in line
+                        or "svg.trace" in line
+                        or "translateX" in line
                         or "outline-offset" in line):
                     continue
                 rest = re.sub(r"\d+(?:\.\d+)?px\s+(?:solid|dotted|dashed)",
@@ -1008,9 +1100,13 @@ def main():
         # back the exact original line.
         _, page = get("/dialing")
         check("code blocks wrap on a phone rather than being dragged",
-              "article pre:not(.chart) { white-space:pre-wrap;" in page)
-        check("but the ascii diagram is left alone, because wrapping breaks it",
-              ":not(.chart)" in page)
+              "article pre { white-space:pre-wrap;" in page)
+        # This rule used to carry a :not(.chart) exception for the one <pre>
+        # on the site that wrapping would have destroyed, the manifesto's
+        # ASCII comparison diagram. That is an SVG now, so every <pre> left
+        # in an article is a command somebody may want to copy.
+        check("and nothing is excepted from it any more, because nothing is art",
+              ":not(.chart)" not in page)
         # Thirteen of the fifteen blockquotes on this site are real
         # warnings. The two that are reassurances were sitting in the same
         # alarm-coloured box, which said the opposite of the words inside.

@@ -61,8 +61,9 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   moved something, so the page is never stale but is also not rebuilt for
   every reader.
 - No JavaScript anywhere on the site, with exactly one exception, and the
-  shape of the exception is the rule. The ASCII animation is CSS, the day
-  chart is an SVG, the board list reloads with a meta refresh.
+  shape of the exception is the rule. The manifesto's two diagrams are
+  inline SVG moved by CSS keyframes, the day chart is an SVG, the board
+  list reloads with a meta refresh.
   **`/install` loads ESP Web Tools**, pinned at an exact version, from
   unpkg. A web page cannot reach a serial port without it, which is the
   kind of reason that clears the bar; convenience is not, and nothing else
@@ -147,6 +148,18 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   than at import, so the server starts fine and then 500s on the first
   request. After any CSS edit, curl `/health` **and** `/`, because `/health`
   never touches `PAGE`.
+- **Drawings are inline SVG, never ASCII art in a `<pre>`.** Art laid out
+  in character cells has a font size for a width, so 61 columns in a 358px
+  phone column meant 6px letters, and the only lever was shrinking the
+  type. An SVG viewBox fits any width for free. The rules that came out of
+  building the two on the manifesto: size the viewBox to the **phone**
+  column (about 353px here, so 344 to 356 units lands at 1:1) and cap the
+  wide case with `max-width`, because the failure runs the other way and is
+  invisible on a monitor; give every shape an explicit fill, since a shape
+  with none is black and black on `#0d0d12` cannot be seen; hold the art
+  off the frame with a negative viewBox origin rather than by moving forty
+  coordinates; and remember that one SVG cannot reflow, so anything that
+  has to stack on a phone is two SVGs in a grid.
 - **A CSS or copy change is not verified until the rendered page has been
   looked at.** grep on the HTML proves a string is present, not that a rule
   applied, an element is positioned or a menu is readable. Three of the
@@ -166,6 +179,13 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   should agree to the decimal. Headless Chrome will not open a window
   narrower than about 500px, so a 390 measurement has to go through an
   exactly sized iframe or it is silently a 504 measurement.
+  **A `px` inside an SVG viewBox is a user unit and not a layout
+  length**, so it is exempt and has to be: it scales with the drawing
+  already. That covers the day chart's labels, the type in the two
+  manifesto diagrams, and the `translateX(164px)` that walks the marker
+  along the wire, which is 164 units of a 354 unit viewBox. The exemption
+  is by selector (`svg.hours text`, `svg.wire`, `svg.trace`), so a px that
+  wanders out of an SVG rule is still caught.
   **The floor of a fit-to-viewport `clamp()` must stay in px.** The maximum
   and the gutter scale; the minimum exists to stop art becoming invisible,
   and in rem it grows with the root font until it is wider than the

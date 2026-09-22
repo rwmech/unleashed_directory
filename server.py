@@ -1622,7 +1622,14 @@ PAGE = """<!doctype html>
   --name:#b48ef0;   /* a board's own identity */
   --dial:#7fd4ff;   /* things you can act on */
   --busy:#ef8b5a;   /* activity */
-  --struct:#4ce0e0; /* structure only: headings and column names */ }}
+  --struct:#4ce0e0; /* structure only: headings and column names */
+  /* The one colour on this site that means somebody else is keeping a
+     copy of you. It is the red the manifesto's comparison diagram was
+     already drawn in, promoted out of that one block's stylesheet and
+     into the palette, because the argument it carries belongs to the site
+     and not to a diagram. Nothing on the board list is ever this colour:
+     a board that is down is dim, not alarming. */
+  --risk:#e06c6c; }}
 /* 900 is the site's one breakpoint. It used to have two, 620 and 900, which
    were two guesses at the same question: is there room here for a wide
    layout. With the type a third larger they answer it at the same width, so
@@ -1940,10 +1947,10 @@ article .tip a:focus-visible::after {{ outline:3px solid #ffd35c;
   /* A 133 character command in a 358px column is 692px of dragging, which
      nobody does. It wraps on a phone instead. pre-wrap inserts nothing, so
      a copy still yields the exact original line, and the alternative is a
-     command somebody cannot read at all. .chart is excluded because it is
-     an ASCII diagram and wrapping would destroy it; it scrolls inside its
-     own box, the way the markdown tables do. */
-  article pre:not(.chart) {{ white-space:pre-wrap; overflow-wrap:anywhere; }}
+     command somebody cannot read at all. It used to except the class the
+     ASCII comparison diagram wore, because wrapping would have destroyed
+     it; that diagram is an SVG now and the exception went with it. */
+  article pre {{ white-space:pre-wrap; overflow-wrap:anywhere; }}
 }}
 /* The ordered lists md_render now emits, spaced like the bullets beside
    them. */
@@ -2750,96 +2757,280 @@ repository</a>. It is one Python file and you are welcome to run your own.</p>
 </article>"""
 
 
-ANIM = """
+# ----------------------------------------------------------------------
+# The two diagrams on the manifesto, drawn rather than typed.
+#
+# Both used to be ASCII art in a <pre>. That is the right idiom for a
+# terminal and the wrong one for a web page: the art is laid out in
+# character cells, so its size is a font size, every font renders it a few
+# percent differently, and the only way to make 61 columns fit a 358px
+# phone column was to shrink the type until the letters were 6px. The
+# connection diagram was eight whole copies of itself flipped 0.4s apart,
+# which is a flipbook, and the comparison was a 53 column block that
+# scrolled sideways inside its own box.
+#
+# Inline SVG instead. No request, no external file (the CSP blocks an
+# external image anyway), themeable because every fill is a custom
+# property, and it fits any width for free because that is what a viewBox
+# does. Still no JavaScript: the motion is CSS keyframes on an SVG
+# element, where a length in `px` is a user unit inside the viewBox and
+# not a layout length.
+#
+# THE VIEWBOX IS 344 UNITS WIDE FOR BOTH, and that is the one number worth
+# defending. A phone column here is about 353px, so a 344 unit box lands
+# at 1.03:1 and an 11.5px label renders at 11.8px. Anything wider is a
+# diagram that reads on a monitor and not on a phone, which is exactly
+# what the ASCII versions were. The max-widths below then stop the same
+# art being blown up to twice size on a 1920 monitor: 26rem puts the panel
+# text at 18.5px against an 18.6px body, which is the size it should have
+# been all along.
+#
+# Every shape carries an explicit fill, including `fill:none` on the
+# lines, because an SVG shape with no fill declared is black, and black on
+# #0d0d12 is a shape nobody can see.
+# ----------------------------------------------------------------------
+
+DIAGRAM_CSS = """
 <style>
-/* The diagram is 61 characters of fixed-width art, so 470px at the body's
-   14px. A phone column is 358, and .scene pre is position:absolute with no
-   width, so it shrink-wrapped to its content and pushed the whole about
-   page sideways by 96px, header and footer included.
-
-   It scales instead of scrolling. Same trick the wordmark already uses:
-   the type shrinks with the viewport so 61 characters always fit, which is
-   the right answer for art with a fixed character count. An earlier attempt
-   put overflow-x:auto here, and that did stop the page moving but produced
-   a scrollbar on the diagram, because the five printed lines at 1.5 line
-   height are 105px against a 7.4em box, and when one axis is not visible
-   CSS computes the other to auto as well. So it was a VERTICAL scrollbar on
-   a fix aimed at horizontal overflow.
-
-   overflow:hidden is the backstop rather than the mechanism: with the
-   clamp, nothing should reach it, and if an unusual monospace font renders
-   a few percent wider then a decorative diagram loses a character off the
-   end, which beats a scrollbar and beats a page that slides sideways.
-
-   The divisor: 61 characters at 0.55em each is 33.6em, so (100vw - 44px)
-   over 37 leaves a margin and reaches the 14px cap at about 560px wide. */
-.scene { position:relative; margin:1.125rem 0 1.375rem; overflow:hidden;
-         font-size:clamp(6px, calc((100vw - 2.75rem) / 37), 0.875rem);
-         height:7.9em; }
-.scene pre { position:absolute; left:0; top:0; margin:0; opacity:0;
-             font-family:inherit; font-size:inherit; line-height:1.5;
-             color:#6ee36e; background:none; border:0; padding:0;
-             animation: flip 3.2s steps(1,end) infinite; }
-.scene pre:nth-child(1) { animation-delay:0.0s }
-.scene pre:nth-child(2) { animation-delay:0.4s }
-.scene pre:nth-child(3) { animation-delay:0.8s }
-.scene pre:nth-child(4) { animation-delay:1.2s }
-.scene pre:nth-child(5) { animation-delay:1.6s }
-.scene pre:nth-child(6) { animation-delay:2.0s }
-.scene pre:nth-child(7) { animation-delay:2.4s }
-.scene pre:nth-child(8) { animation-delay:2.8s }
-@keyframes flip { 0%,12.4% { opacity:1 } 12.5%,100% { opacity:0 } }
+/* ---- the connection, at the top of the page ---------------------- */
+svg.wire { display:block; width:100%; max-width:28rem; height:auto;
+        margin:1.125rem auto 1.5rem; background:#0d0d12;
+        border:1px solid var(--rule); }
+svg.wire text { font-family:inherit; fill:var(--dim); font-size:11px; }
+svg.wire text.end { fill:var(--ink); font-size:12px; letter-spacing:1.2px; }
+svg.wire text.cap { fill:var(--faint); font-size:10.5px; }
+svg.wire text.prompt { fill:var(--live); font-size:12px; }
+svg.wire text.chip { fill:var(--faint); font-size:10px; letter-spacing:1px; }
+svg.wire .case { fill:none; stroke:var(--dial); stroke-width:1.4; }
+svg.wire .glass { fill:var(--bg); stroke:var(--dial); stroke-width:1; }
+svg.wire .keys { fill:var(--dial); opacity:0.3; }
+svg.wire .caret { fill:var(--live); }
+svg.wire .line { fill:none; stroke:var(--live); stroke-width:1.4;
+        stroke-dasharray:3 5; opacity:0.45; }
+svg.wire .body { fill:var(--bg); stroke:var(--live); stroke-width:1.4; }
+svg.wire .pin { fill:var(--live); opacity:0.55; }
+svg.wire .pin1 { fill:var(--live); opacity:0.45; }
+svg.wire .led { fill:var(--live); }
+svg.wire .dot { fill:var(--live); }
+svg.wire .halo { fill:var(--live); opacity:0.18; }
+/* The marker crosses the 164 units of wire in 3.2s and `alternate` brings
+   it back, so a round trip is 6.4s and the chip's lamp lights at the half
+   way mark, which is the instant the marker is standing on it. Three
+   animations rather than one, because a drawing of a live connection
+   should look live: the terminal's caret blinks, the marker travels, the
+   chip answers. */
+@keyframes wiretrip { from { transform:translateX(0); }
+                      to   { transform:translateX(164px); } }
+@keyframes wireled  { 0%, 44%  { opacity:0.25; }
+                      50%      { opacity:1; }
+                      56%, 100%{ opacity:0.25; } }
+@keyframes wirecaret{ 0%, 49%  { opacity:1; }
+                      50%, 100%{ opacity:0; } }
+svg.wire .pulse { animation:wiretrip 3.2s ease-in-out infinite alternate; }
+svg.wire .led   { animation:wireled 6.4s ease-in-out infinite; }
+svg.wire .caret { animation:wirecaret 1.6s steps(1,end) infinite; }
+/* The resting state has to make the point on its own, because it is also
+   what a screenshot and a printout get: the marker parks half way along
+   the wire, the lamp is lit, the caret is solid. Nothing is hidden and
+   nothing moves. */
 @media (prefers-reduced-motion: reduce) {
-  .scene { height:auto }
-  .scene pre { position:static; opacity:1; animation:none }
-  .scene pre:not(:first-child) { display:none }
+  svg.wire .pulse, svg.wire .led, svg.wire .caret { animation:none; }
+  svg.wire .pulse { transform:translateX(82px); }
+  svg.wire .led, svg.wire .caret { opacity:1; }
 }
-.chart { color:#8a8a8a; background:#0d0d12; border:1px solid #1d1d24;
-         padding:0.875rem; overflow-x:auto; line-height:1.35; }
-.chart b { color:#e06c6c; font-weight:normal; }
-.chart i { color:#6ee36e; font-style:normal; }
-</style>
-<div class="scene">
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |  o--------------------------------------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |  ---o-----------------------------------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |  -------o-------------------------------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |  -----------o---------------------------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |     ---------------------------o--------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |     -----------------------o------------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |     -----------------o------------------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
-<pre>   [ YOU ]                                   [ THE BOARD ]
-     |                                              |
-     |     -----------o------------------------     |
-     |                                              |
-   any terminal, anywhere                   a chip on a shelf</pre>
+
+/* ---- the two traces, side by side -------------------------------- */
+/* The site's one breakpoint, and the same shape as .freedoms further
+   down. align-items:start is the argument rather than a detail: the two
+   panels are not the same height and must not be stretched to look as
+   though they are. The left one is tall because four parties keep a
+   record; the right one is short because one does. */
+.compare { display:grid; grid-template-columns:repeat(2, minmax(0, 26rem));
+        justify-content:center; gap:1.125rem 1.5rem; align-items:start;
+        margin:1.25rem 0 1.5rem; }
+@media (max-width: 900px) { .compare { grid-template-columns:1fr; } }
+svg.trace { display:block; width:100%; max-width:26rem; height:auto;
+        margin:0 auto; background:#0d0d12; border:1px solid var(--rule); }
+svg.trace text { font-family:inherit; fill:var(--ink); font-size:11.5px; }
+svg.trace text.title { font-size:12px; letter-spacing:1.4px; }
+svg.trace text.kept { font-size:11px; }
+svg.trace text.pool { font-size:10.5px; }
+svg.trace text.verdict { font-size:11.5px; letter-spacing:0.6px; }
+svg.trace .node { fill:#12121a; stroke:var(--faint); stroke-width:1; }
+svg.trace .link { fill:none; stroke:var(--faint); stroke-width:1; }
+svg.trace .head { fill:var(--faint); stroke:none; }
+svg.trace .keep, svg.trace .pool-box { fill:#12121a; stroke:var(--faint);
+        stroke-width:1; }
+svg.trace .bus { fill:none; stroke:var(--faint); stroke-width:1; opacity:0.75; }
+svg.trace .bhead { fill:var(--faint); stroke:none; }
+/* Red for a party that keeps a copy of you, green for one that does not.
+   Both come from the palette at the root rather than being typed in here,
+   so the diagram cannot drift away from the rest of the site. */
+svg.trace.bad text.title, svg.trace.bad text.kept,
+svg.trace.bad text.pool, svg.trace.bad text.verdict { fill:var(--risk); }
+svg.trace.bad .keep, svg.trace.bad .pool-box { stroke:var(--risk); }
+svg.trace.bad .bus { stroke:var(--risk); }
+svg.trace.bad .bhead { fill:var(--risk); }
+svg.trace.good text.title, svg.trace.good text.kept,
+svg.trace.good text.verdict { fill:var(--live); }
+svg.trace.good .keep { stroke:var(--live); }
+svg.trace.good .bus { stroke:var(--live); }
+svg.trace.good .bhead { fill:var(--live); }
+</style>"""
+
+
+# role="img" makes the whole drawing one object to a screen reader, so the
+# labels inside it are never announced and the aria-label has to carry the
+# entire argument by itself. "A diagram" would be worse than nothing: the
+# point of the pair below is a list of parties who keep a record against a
+# list of one, so that is what it says. They are built here rather than
+# typed into the markup so the source can wrap and the attribute cannot.
+WIRE_ALT = (
+    "One connection, with nothing in between. On the left, any terminal, "
+    "anywhere. On the right, a chip on a shelf. A single marker travels the "
+    "wire from one to the other and back again, and there is no third party "
+    "on the line for it to pass through.")
+
+BAD_ALT = (
+    "Calling a website. Five parties handle the request in turn: you, DNS, a "
+    "CDN, a load balancer, and the application. Four of them keep a record - "
+    "who asked and when, edge logs of your IP address, a session fingerprint, "
+    "and your account history - and all four records flow on into analytics, "
+    "an ad exchange, a data broker, model training, a retention policy, and a "
+    "breach disclosure in eighteen months. You cannot audit any of it.")
+
+GOOD_ALT = (
+    "Calling a board. Three parties handle the request: you, your router, and "
+    "a chip you own. One record is kept, a text file you can open and read. "
+    "That is the entire list.")
+
+
+WIRE = """
+<svg class="wire" viewBox="-5 -6 354 138" role="img"
+     preserveAspectRatio="xMidYMid meet" aria-label=\"""" + WIRE_ALT + """">
+  <text class="end" x="6" y="15">YOU</text>
+  <text class="end" x="338" y="15" text-anchor="end">THE BOARD</text>
+
+  <rect class="case" x="10" y="31" width="80" height="58" rx="5"/>
+  <rect class="glass" x="16" y="37" width="68" height="36" rx="2"/>
+  <text class="prompt" x="23" y="59">&gt;</text>
+  <rect class="caret" x="33" y="50" width="7" height="11"/>
+  <rect class="keys" x="16" y="78" width="68" height="5" rx="2"/>
+  <path class="case" d="M40 89 L36 99 H64 L60 89 Z"/>
+  <rect class="case" x="30" y="99" width="40" height="4" rx="2"/>
+
+  <line class="line" x1="90" y1="60" x2="254" y2="60"/>
+
+  <rect class="pin" x="254" y="42" width="8" height="4" rx="1"/>
+  <rect class="pin" x="254" y="58" width="8" height="4" rx="1"/>
+  <rect class="pin" x="254" y="74" width="8" height="4" rx="1"/>
+  <rect class="body" x="262" y="34" width="58" height="52" rx="4"/>
+  <rect class="pin" x="320" y="42" width="8" height="4" rx="1"/>
+  <rect class="pin" x="320" y="58" width="8" height="4" rx="1"/>
+  <rect class="pin" x="320" y="74" width="8" height="4" rx="1"/>
+  <circle class="pin1" cx="269" cy="42" r="2.5"/>
+  <text class="chip" x="291" y="57" text-anchor="middle">BBS</text>
+  <circle class="led" cx="291" cy="71" r="3.5"/>
+
+  <g class="pulse">
+    <circle class="halo" cx="90" cy="60" r="7"/>
+    <circle class="dot" cx="90" cy="60" r="3.2"/>
+  </g>
+
+  <text class="cap" x="6" y="118">any terminal, anywhere</text>
+  <text class="cap" x="338" y="118" text-anchor="end">a chip on a shelf</text>
+</svg>"""
+
+
+# Two panels rather than one drawing, because a single SVG cannot reflow:
+# a viewBox scales, it does not lay out again. Two of them in a grid stack
+# on a phone and sit side by side on a monitor, which is the only way this
+# is readable at 390px without dragging it sideways.
+TRACE = """
+<div class="compare">
+<svg class="trace bad" viewBox="-6 -8 356 382" role="img"
+     preserveAspectRatio="xMidYMid meet" aria-label=\"""" + BAD_ALT + """">
+  <text class="title" x="4" y="16">CALLING A WEBSITE</text>
+
+  <rect class="node" x="4" y="32" width="124" height="26" rx="3"/>
+  <text x="14" y="49">you</text>
+  <path class="link" d="M66 58 V71"/>
+  <polygon class="head" points="62.5,71 69.5,71 66,76"/>
+
+  <rect class="node" x="4" y="76" width="124" height="26" rx="3"/>
+  <text x="14" y="93">DNS</text>
+  <path class="link" d="M66 102 V115"/>
+  <polygon class="head" points="62.5,115 69.5,115 66,120"/>
+  <path class="link" d="M128 89 H145"/>
+  <polygon class="head" points="145,85.5 145,92.5 150,89"/>
+  <rect class="keep" x="152" y="76" width="176" height="26" rx="3"/>
+  <text class="kept" x="161" y="93">who asked, and when</text>
+
+  <rect class="node" x="4" y="120" width="124" height="26" rx="3"/>
+  <text x="14" y="137">CDN</text>
+  <path class="link" d="M66 146 V159"/>
+  <polygon class="head" points="62.5,159 69.5,159 66,164"/>
+  <path class="link" d="M128 133 H145"/>
+  <polygon class="head" points="145,129.5 145,136.5 150,133"/>
+  <rect class="keep" x="152" y="120" width="176" height="26" rx="3"/>
+  <text class="kept" x="161" y="137">edge logs your IP</text>
+
+  <rect class="node" x="4" y="164" width="124" height="26" rx="3"/>
+  <text x="14" y="181">load balancer</text>
+  <path class="link" d="M66 190 V203"/>
+  <polygon class="head" points="62.5,203 69.5,203 66,208"/>
+  <path class="link" d="M128 177 H145"/>
+  <polygon class="head" points="145,173.5 145,180.5 150,177"/>
+  <rect class="keep" x="152" y="164" width="176" height="26" rx="3"/>
+  <text class="kept" x="161" y="181">session fingerprint</text>
+
+  <rect class="node" x="4" y="208" width="124" height="26" rx="3"/>
+  <text x="14" y="225">the app</text>
+  <path class="link" d="M128 221 H145"/>
+  <polygon class="head" points="145,217.5 145,224.5 150,221"/>
+  <rect class="keep" x="152" y="208" width="176" height="26" rx="3"/>
+  <text class="kept" x="161" y="225">account history</text>
+
+  <path class="bus" d="M328 89 H336 V244 H172 V247"/>
+  <path class="bus" d="M328 133 H336"/>
+  <path class="bus" d="M328 177 H336"/>
+  <path class="bus" d="M328 221 H336"/>
+  <polygon class="bhead" points="168.5,247 175.5,247 172,253"/>
+
+  <rect class="pool-box" x="4" y="254" width="336" height="62" rx="3"/>
+  <text class="pool" x="172" y="274" text-anchor="middle">analytics \u00b7 ad exchange \u00b7 data broker</text>
+  <text class="pool" x="172" y="290" text-anchor="middle">model training \u00b7 retention policy</text>
+  <text class="pool" x="172" y="306" text-anchor="middle">breach disclosure in eighteen months</text>
+
+  <path class="bus" d="M172 316 V330"/>
+  <polygon class="bhead" points="168.5,330 175.5,330 172,336"/>
+  <text class="verdict" x="172" y="352" text-anchor="middle">you cannot audit any of it</text>
+</svg>
+
+<svg class="trace good" viewBox="-6 -8 356 216" role="img"
+     preserveAspectRatio="xMidYMid meet" aria-label=\"""" + GOOD_ALT + """">
+  <text class="title" x="4" y="16">CALLING A BOARD</text>
+
+  <rect class="node" x="4" y="32" width="124" height="26" rx="3"/>
+  <text x="14" y="49">you</text>
+  <path class="link" d="M66 58 V71"/>
+  <polygon class="head" points="62.5,71 69.5,71 66,76"/>
+
+  <rect class="node" x="4" y="76" width="124" height="26" rx="3"/>
+  <text x="14" y="93">your router</text>
+  <path class="link" d="M66 102 V115"/>
+  <polygon class="head" points="62.5,115 69.5,115 66,120"/>
+
+  <rect class="node" x="4" y="120" width="124" height="26" rx="3"/>
+  <text x="14" y="137">a chip you own</text>
+  <path class="bus" d="M128 133 H145"/>
+  <polygon class="bhead" points="145,129.5 145,136.5 150,133"/>
+  <rect class="keep" x="152" y="114" width="176" height="38" rx="3"/>
+  <text class="kept" x="161" y="130">a text file you</text>
+  <text class="kept" x="161" y="145">can open and read</text>
+
+  <text class="verdict" x="172" y="184" text-anchor="middle">that is the entire list</text>
+</svg>
 </div>"""
 
 
@@ -2853,7 +3044,7 @@ ABOUT = """<h1>What this is</h1>
 since the 4381 was the computer in the room. The argument below is his; the
 software is free for anybody who agrees with it, and for anybody who does
 not.</p>
-""" + ANIM + """
+""" + DIAGRAM_CSS + WIRE + """
 <article>
 
 <p><b>A bulletin board is a machine that answers a phone number.</b> Somebody put a
@@ -2962,34 +3153,7 @@ go and nobody whose business it would be.</p>
 
 <p>Here is the difference, drawn out.</p>
 
-<pre class="chart">  CALLING A WEBSITE
-
-  you  -->  DNS  -->  CDN  -->  load balancer  -->  the app
-             |         |             |                 |
-             v         v             v                 v
-         <b>who asked</b>  <b>edge logs</b>   <b>session</b>          <b>account</b>
-         <b>and when</b>   <b>your IP</b>     <b>fingerprint</b>      <b>history</b>
-             |         |             |                 |
-             +---------+------+------+-----------------+
-                              |
-                              v
-                <b>analytics . ad exchange . data broker</b>
-                <b>model training . retention policy</b>
-                <b>breach disclosure in eighteen months</b>
-                              |
-                              v
-                    <b>you cannot audit any of it</b>
-
-
-  CALLING A BOARD
-
-  you  -->  your router  -->  <i>a chip you own</i>
-                                    |
-                                    v
-                            <i>a text file you</i>
-                            <i>can open and read</i>
-
-                     <i>that is the entire list</i></pre>
+""" + TRACE + """
 
 <p>The left-hand column is not a conspiracy. Every box on it exists for a reason
 somebody could defend, and most of them were added by decent engineers solving a real

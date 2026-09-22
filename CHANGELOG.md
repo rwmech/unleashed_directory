@@ -14,6 +14,81 @@
 
 # Changelog
 
+## 0.12.3, 2026-09-22
+
+The manifesto's two diagrams were hand-drawn ASCII in a `<pre>`. They are
+inline SVG now, drawn properly, and the animated one still animates.
+
+- **ASCII art on a web page has a font size for a width, and that is the whole
+  problem.** The art is laid out in character cells, so the only lever for
+  making 61 columns fit a 358px phone column was shrinking the type until the
+  letters were 6px, which is what `.scene`'s `clamp(6px, ...)` was doing. Every
+  monospace font renders the same block a few percent differently, so the fit
+  was a guess in the first place. A viewBox fits any width for free.
+- **The connection diagram was eight whole copies of itself**, flipped 0.4s
+  apart with `steps(1,end)` and eight `animation-delay` values: a flipbook, and
+  45 lines of markup to move one character four positions and back. It is one
+  marker on one wire now, translated across 164 units of viewBox with
+  `ease-in-out`, so the motion is smooth rather than in four steps and the round
+  trip reads as a round trip.
+- **It gained two things it could not have had as text.** A terminal with a
+  blinking caret, and a chip with pins and a lamp that lights at the instant the
+  marker reaches it: the lamp's cycle is 6.4s against the marker's 3.2s
+  `alternate`, so the two are locked together by arithmetic rather than nudged
+  into agreement.
+- **The resting state is a design requirement, not a fallback.** Under
+  `prefers-reduced-motion` the marker parks half way along the wire, the lamp is
+  lit and the caret is solid. That is also what a screenshot and a printout get,
+  so the drawing has to make its point with nothing moving, and parking the
+  marker at either end would have said something the diagram does not mean.
+  Verified by sampling the marker's position four times over two seconds: 683px,
+  unmoved, against 545 to 799 with motion allowed.
+- **The comparison is two SVGs, not one, and that is forced rather than
+  chosen.** A viewBox scales; it does not lay out again. One drawing could never
+  stack on a phone, so it is two panels in a grid that goes to one column at the
+  site's single 900px breakpoint. `align-items:start` keeps them at their own
+  heights, which is the argument itself: the left panel is 596px tall because
+  four parties keep a record and the right one is 338px because one does, and
+  the paragraph under it already says "the right-hand column has no boxes to
+  add".
+- **The red was a literal in one block's stylesheet.** `#e06c6c` is `--risk` at
+  the root now, documented as the one colour on this site meaning somebody else
+  is keeping a copy of you, and the green is the existing `--live`. A colour
+  carrying an argument should not be able to drift away from the site making it.
+  `#6ee36e`, the old diagram green, is gone.
+- **Every shape declares a fill, including the lines.** An SVG shape with no
+  fill is black, and black on `#0d0d12` is a shape nobody can see. Checked by
+  render rather than by reading: 61 shapes across the three drawings, none
+  computing to `rgb(0, 0, 0)`.
+- **The viewBox origins are negative** (`-5 -6 354 138`, `-6 -8 356 382`,
+  `-6 -8 356 216`). The frame is a CSS border on the SVG, so the only way to
+  hold the outermost label off it is inside the coordinate system, and a
+  negative origin is one number per drawing against shifting forty coordinates.
+  Before it, the titles sat 6px from the border.
+- **`role="img"` makes the whole drawing one object**, so nothing inside it is
+  announced and the `aria-label` has to carry the entire argument: five parties
+  who keep a record, named, against one that keeps a text file. 427 characters
+  and 168, not "a diagram".
+- `article pre:not(.chart)` is `article pre` again. The exception existed for
+  the one `<pre>` on the site that wrapping would have destroyed, and there is
+  no longer such a `<pre>`.
+- **Measured at three widths in both colour schemes and both motion settings,
+  twelve combinations, in headless Chrome at an exactly sized viewport.** No
+  text or shape escapes its viewBox in any of them;
+  `documentElement.scrollWidth` equals the viewport at 1920, 1366 and a real
+  390, so nothing scrolls sideways; the smallest label is **10.0px at 390** and
+  16.4px at 1920 against an 18.6px body. The two colour schemes render
+  byte-identical, which is the expected answer for a site that declares
+  `color-scheme: dark` and carries no `prefers-color-scheme` rule anywhere.
+- **The one thing that did not survive the translation:** the ASCII version drew
+  the four "what it keeps" boxes hanging under their party with a `+---+---+---+`
+  join underneath. Laid out vertically that join would have crossed three boxes,
+  so it is a bus running down the right edge with a stub per box. Same claim,
+  different shape.
+- 12 new checks, 276 in total. The px scan now exempts `svg.wire` and
+  `svg.trace` alongside `svg.hours text`, for the reason it already exempted
+  that one: a `px` inside a viewBox is a user unit and scales with the drawing.
+
 ## 0.12.2, 2026-09-21
 
 A copy pass over all twenty-one pages. Words only: no layout, no CSS, nothing
