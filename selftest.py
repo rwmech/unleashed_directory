@@ -1385,9 +1385,34 @@ def main():
               "board_name  = The Rusty Modem" in how
               and "name        = The Rusty Modem" not in how)
 
+        # The machines on /terminals: one strip under each heading, each one
+        # a picture a screen reader is told about, and none of them cut off.
+        _, term = get("/terminals")
+        strips = re.findall(r'<svg class="art machines[^"]*" viewBox="([^"]+)" '
+                            r'role="img"[^>]*aria-label="([^"]+)">(.*?)</svg>',
+                            term, re.S)
+        check("the terminals page has a drawing for each of its eight sections",
+              len(strips) == 8 and all(len(alt) > 40 for _, alt, _ in strips)
+              and "art: term-" not in term)
+        # The first version ended three strips on their label baseline and
+        # the descenders were cut off. A viewBox is arithmetic, so this is
+        # checked as arithmetic rather than by looking.
+        short = []
+        for box, alt, inner in strips:
+            _, top, _, height = (float(v) for v in box.split())
+            lowest = max((float(y) for y in re.findall(r'<text [^>]*y="([\d.]+)"', inner)),
+                         default=0)
+            if lowest + 8 > top + height:
+                short.append(alt[:30])
+        check("and every one leaves room under its lowest label"
+              + ("" if not short else "  <- " + " | ".join(short)),
+              not short)
+        check("with the bridge's pulse declared where reduced motion stops it",
+              "svg.art.bridge .go { animation:" in
+              term.split("@media (prefers-reduced-motion: no-preference) {")[1])
+
         # A Chromebook, as it is: one you control usually can, a managed one
         # usually cannot without its administrator, Chrome alone never can.
-        _, term = get("/terminals")
         flat_t = " ".join(term.split())
         check("the Chromebook section leads with who controls it",
               "A Chromebook you control can usually call a board" in flat_t

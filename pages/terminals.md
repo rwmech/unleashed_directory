@@ -5,6 +5,10 @@ this and look a great deal better doing it.
 
 ## Just tell me what to install
 
+::: art
+term-modern
+:::
+
 **[SyncTERM](https://syncterm.bbsdev.net/)**, on Windows, macOS or Linux. It is
 made for calling boards: it speaks ANSI and CP437 properly, handles file
 transfers, keeps a dialling directory, and understands `telnet://` links so
@@ -46,6 +50,10 @@ default and it renders ANSI poorly. Use something else.
 > telnet board. [What that risks](/privacy).
 
 ## Chromebooks
+
+::: art
+term-chromebook
+:::
 
 A Chromebook you control can usually call a board. A school or work
 Chromebook usually cannot, until whoever manages it switches something on.
@@ -122,6 +130,10 @@ protocol was common.
 
 ### Commodore
 
+::: art
+term-commodore
+:::
+
 | Machine | Software | Onto the wire |
 |---|---|---|
 | C64, C128 | [CCGMS](https://github.com/mist64/ccgmsterm), [Novaterm](https://commodore.software/downloads/download/19-novaterm/653-novaterm-9-6c), [DesTerm 128](https://csdb.dk/release/?id=171068) | [TeensyROM](https://github.com/SensoriumEmbedded/TeensyROM), [WiModem232](https://www.cbmstuff.com/index.php?route=product/product&path=66&product_id=113), [Comet64](https://www.commodoreserver.com/ProductView.asp?PID=365065CF529B4C408F7D01C08BA34803), [Zimodem](https://github.com/bozimmerman/Zimodem), or an RS-232 cartridge |
@@ -134,12 +146,20 @@ C64 screen, not an approximation of one.
 
 ### Atari
 
+::: art
+term-atari
+:::
+
 | Machine | Software | Onto the wire |
 |---|---|---|
 | Atari 8-bit | [BobTerm](https://archive.org/details/a8b_misc_bobtrmxp), [Ice-T](https://github.com/itaych/Ice-T) | [FujiNet](https://fujinet.online/atari-8-bit/), or an 850 interface to a bridge |
 | Atari ST, Falcon | [UniTerm](https://www.atarimania.com/utility-atari-st-uniterm_33343.html), [CoNnect](https://www.atariuptodate.de/en/984/connect) | the built-in serial port to a bridge |
 
 ### Apple and Amiga
+
+::: art
+term-apple-amiga
+:::
 
 | Machine | Software | Onto the wire |
 |---|---|---|
@@ -148,6 +168,10 @@ C64 screen, not an approximation of one.
 | Amiga | [NComm](https://aminet.net/package/comm/term/ncomm307), [term](https://aminet.net/package/comm/term/Term), [JR-Comm](https://archive.org/details/JR-Comm_v1.02_1991_Radigan_John) | the serial port to a bridge, or a TCP/IP stack |
 
 ### Everything else
+
+::: art
+term-others
+:::
 
 | Machine | Software | Onto the wire |
 |---|---|---|
@@ -160,6 +184,10 @@ C64 screen, not an approximation of one.
 
 ### Actual terminals
 
+::: art
+term-terminals
+:::
+
 | Terminal | Onto the wire |
 |---|---|
 | [DEC VT100](https://en.wikipedia.org/wiki/VT100), [VT220](https://en.wikipedia.org/wiki/VT220), [VT320](https://en.wikipedia.org/wiki/VT320) | a terminal server, a USB serial adapter, or the board's own serial bridge |
@@ -167,6 +195,10 @@ C64 screen, not an approximation of one.
 | [Teletype Model 33 ASR](https://en.wikipedia.org/wiki/Teletype_Model_33) | a current loop converter, at 110 baud, if that is the sort of thing you enjoy |
 
 ## What a bridge is
+
+::: art
+term-bridge
+:::
 
 Most of the machines above have a serial port and no idea what TCP is. A bridge
 sits between the two: it takes the serial line on one side and speaks telnet on

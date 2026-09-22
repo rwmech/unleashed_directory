@@ -14,6 +14,38 @@
 
 # Changelog
 
+## 0.13.1, 2026-09-22
+
+Rob: "get some of those awesome line graphics on the terminals page. try to
+make pictures for the different systems, atari, commodore, chromebooks, etc."
+
+- **Eight drawings on `/terminals`, one under each heading**, in the hand of
+  the rest: a laptop and a phone; a Chromebook you control beside a managed one
+  with a padlock on its screen; a Commodore 64 with a 1541 and a monitor
+  reading READY.; an Atari 800XL and a television; an Apple II with its Disk II
+  and bracket prompt beside an Amiga 500; a DOS PC and a TRS-80 Model 100; a
+  VT220-style terminal and a Teletype Model 33; and the bridge, an old machine
+  on a serial cable to a small box with an aerial, reaching the board over
+  Wi-Fi.
+- **Only machines the page names, and no logos.** The Commodore's rainbow is
+  four stripes in the site's own colours, not a badge, and each machine is
+  recognised by its shape: the breadbin, the 800XL's column of console keys,
+  the Apple II's `]` prompt, the A500's function keys in two groups of five.
+  The labels are machine names and nothing else, so the drawings add no
+  claims to the page.
+- The only motion is the screens' carets and a dot travelling the bridge's
+  serial cable, both declared inside the no-preference block like every other
+  drawing here. Each is 354 units wide, 1:1 in a phone column, and at most
+  24rem on a desktop.
+- **Measured, not assumed:** through exactly sized iframes at 390, 1366 and
+  1920, `scrollWidth` equals `clientWidth` and no element extends past the
+  right edge. The drawings are 340px wide on a phone and 513px on a desktop.
+- **The first cut ended three strips on their label baseline**, and the
+  descenders were cut off. The render showed it; a check now does the
+  arithmetic on every strip, lowest label plus eight units inside the viewBox,
+  and fails on the first-draft heights.
+- 3 new checks, 317 in total.
+
 ## 0.13.0, 2026-09-22
 
 Rob's standard for this one, verbatim: "Check factuality on every assertion on

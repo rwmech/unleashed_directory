@@ -3194,6 +3194,13 @@ article .freedom svg.icon { float:right; width:4.25rem; height:4.25rem;
 svg.art.steps { width:100%; max-width:34rem; height:auto;
         margin:1.125rem auto 1.5rem; }
 
+/* The machines on /terminals, one strip under each heading. Narrower
+   than the first call strip, because there are eight of them on one page
+   and each has only to say which machine the section is about. */
+svg.art.machines { width:100%; max-width:24rem; height:auto;
+        margin:0.75rem auto 1.125rem; }
+svg.art text.dial { fill:var(--dial); }
+
 /* The skull is drawn in the warning box's own amber, on its background,
    so it belongs to the box it sits in rather than to the page. */
 svg.art.skull { background:none; border:0; }
@@ -3236,6 +3243,9 @@ svg.art .aff { fill:#f0c674; }
                       70%, 100% { opacity:0; } }
 @keyframes artshow  { 0% { opacity:0; } 8%, 85% { opacity:1; }
                       95%, 100% { opacity:0; } }
+@keyframes artserial { 0% { transform:translateX(-26px); opacity:0; }
+                      15%, 85% { opacity:1; }
+                      100% { transform:translateX(26px); opacity:0; } }
 
 @media (prefers-reduced-motion: no-preference) {
   /* nobody has to say yes: the gate is up and things go through it */
@@ -3279,6 +3289,8 @@ svg.art .aff { fill:#f0c674; }
   svg.art .p1b { animation-delay:0.6s; }
   svg.art .p1c { animation-delay:1.2s; }
   svg.art .p3b { animation:artshow 4.8s ease-out 1.4s infinite backwards; }
+  /* the bridge: bytes going down the serial cable to the box */
+  svg.art.bridge .go { animation:artserial 2.4s linear infinite; }
 }
 </style>"""
 
@@ -3472,6 +3484,221 @@ FIRSTCALL_ART = (
     + "</svg>")
 
 
+# ----------------------------------------------------------------------
+# The machines on /terminals, one strip per section of the page, drawn in
+# the same hand as everything above: --dial outlines, --live for anything
+# alive, a glass on every screen, keys as translucent strips.
+#
+# Only machines the page actually names, and no logos: the Commodore's
+# rainbow is four stripes in the site's own colours rather than a badge,
+# and a machine is recognised by its shape (the breadbin, the 800XL's
+# column of console keys, the Apple II's bracket prompt, the A500's split
+# row of function keys) rather than by anything anybody owns.
+#
+# Each is 354 units wide for the same reason the first call strip is: a
+# phone column is about 353px, so a phone draws it at 1:1. The only motion
+# is the carets and the dot on the bridge's serial cable, both declared in
+# the no-preference block like every other drawing here.
+# ----------------------------------------------------------------------
+
+def _machines(cls, height, alt, inner):
+    # height is the viewBox height from its origin at -6, and every strip
+    # ends 8 units below its lowest label's baseline. The first cut ended
+    # three of them on the baseline and cut the descenders off.
+    return (f'<svg class="art machines{cls}" viewBox="-5 -6 354 {height}" role="img" '
+            'preserveAspectRatio="xMidYMid meet" aria-label="'
+            + html.escape(alt, quote=True) + '">' + inner + "</svg>")
+
+
+def _label(x, y, text):
+    return (f'<text x="{x}" y="{y}" font-size="10.5" text-anchor="middle">'
+            + text + "</text>")
+
+
+def _keyrows(x, y, w, rows, step=6):
+    return "".join(f'<rect class="k" x="{x}" y="{y + i * step}" width="{w}" '
+                   'height="3.5" rx="1.5"/>' for i in range(rows))
+
+
+MACHINE_MODERN = _machines("", 140,
+    "A laptop running a terminal program, its screen reading Connected to a "
+    "board and Handle: with a blinking cursor, beside a phone running a "
+    "terminal app.",
+    '<rect class="o" x="40" y="4" width="164" height="96" rx="5"/>'
+    '<rect class="g" x="48" y="11" width="148" height="82" rx="2"/>'
+    '<text x="56" y="28" font-size="9">Connected to a board.</text>'
+    '<text class="ink" x="56" y="42" font-size="9">Handle:</text>'
+    '<rect class="lf caret" x="96" y="34" width="5" height="9"/>'
+    '<path class="o" d="M28 100 H216 L226 112 H18 Z"/>'
+    + _keyrows(46, 103, 152, 1)
+    + '<rect class="o" x="252" y="8" width="56" height="102" rx="8"/>'
+    '<rect class="g" x="257" y="19" width="46" height="80" rx="2"/>'
+    '<path class="d" d="M273 14 H287 M272 104 H288"/>'
+    '<text class="live" x="262" y="34" font-size="9">&gt;</text>'
+    '<rect class="lf caret" x="269" y="26" width="4.5" height="9"/>'
+    '<path class="d" d="M262 46 H297 M262 54 H290 M262 62 H294 M262 70 H285"/>'
+    + _label(122, 126, "a laptop") + _label(280, 126, "a phone"))
+
+MACHINE_CHROMEBOOK = _machines("", 134,
+    "Two Chromebooks. The one you control shows a terminal with a prompt "
+    "reading dollar telnet. The managed one, at a school or a workplace, "
+    "shows a padlock on its screen.",
+    '<rect class="o" x="14" y="4" width="140" height="90" rx="5"/>'
+    '<rect class="g" x="21" y="11" width="126" height="76" rx="2"/>'
+    '<text class="live" x="29" y="30" font-size="9">$ telnet</text>'
+    '<rect class="lf caret" x="76" y="22" width="5" height="9"/>'
+    '<path class="d" d="M29 44 H120 M29 52 H104"/>'
+    '<path class="o" d="M6 94 H162 L170 104 H-2 Z"/>'
+    + _keyrows(20, 97, 128, 1)
+    + '<rect class="o" x="190" y="4" width="140" height="90" rx="5"/>'
+    '<rect class="g" x="197" y="11" width="126" height="76" rx="2"/>'
+    '<path class="f" d="M252 47 V41 A8 8 0 0 1 268 41 V47"/>'
+    '<rect class="f" x="248" y="47" width="24" height="18" rx="2"/>'
+    '<path class="f" d="M260 53 V59"/>'
+    '<path class="o" d="M182 94 H338 L346 104 H174 Z"/>'
+    + _keyrows(196, 97, 128, 1)
+    + _label(84, 120, "one you control")
+    + _label(260, 120, "managed at school or work"))
+
+MACHINE_COMMODORE = _machines("", 138,
+    "A Commodore 64, the breadbin-shaped keyboard computer with a rainbow "
+    "stripe near its function keys, beside a 1541 disk drive with a monitor "
+    "on top reading READY.",
+    '<path class="o" d="M14 108 L24 74 Q26 70 30 70 H182 Q186 70 188 74 L198 108 Z"/>'
+    + _keyrows(34, 78, 124, 4, 7)
+    + "".join(f'<rect class="d" x="171" y="{y}" width="11" height="4" rx="1"/>'
+              for y in (78, 85, 92, 99))
+    + '<path class="c3" d="M150 75 L153 71 H155 L152 75 Z"/>'
+    '<path class="c4" d="M154 75 L157 71 H159 L156 75 Z"/>'
+    '<path class="c2" d="M158 75 L161 71 H163 L160 75 Z"/>'
+    '<path class="c1" d="M162 75 L165 71 H167 L164 75 Z"/>'
+    '<rect class="o" x="230" y="4" width="98" height="68" rx="6"/>'
+    '<rect class="g" x="238" y="11" width="82" height="52" rx="4"/>'
+    '<text class="dial" x="245" y="28" font-size="9">READY.</text>'
+    '<rect class="c1 caret" x="245" y="33" width="5.5" height="8"/>'
+    '<rect class="o" x="256" y="72" width="46" height="5" rx="1"/>'
+    '<rect class="o" x="222" y="77" width="114" height="31" rx="3"/>'
+    '<path class="d" d="M248 90 H310"/>'
+    '<rect class="d" x="273" y="86" width="12" height="8" rx="1"/>'
+    '<circle class="lf" cx="231" cy="101" r="1.6"/>'
+    + _label(106, 124, "Commodore 64") + _label(279, 124, "1541 and monitor"))
+
+MACHINE_ATARI = _machines("", 138,
+    "An Atari 800XL, a slim keyboard computer with a column of five console "
+    "keys beside its keyboard and a cartridge slot at the back, next to a "
+    "television reading READY.",
+    '<path class="o" d="M10 110 L18 70 H228 L236 110 Z"/>'
+    '<path class="d" d="M96 75 H150"/>'
+    + _keyrows(28, 82, 158, 4, 6)
+    + "".join(f'<rect class="d" x="198" y="{y}" width="22" height="3.5" rx="1"/>'
+              for y in (80, 86, 92, 98, 104))
+    + '<rect class="o" x="256" y="20" width="86" height="66" rx="10"/>'
+    '<rect class="g" x="264" y="28" width="60" height="50" rx="8"/>'
+    '<circle class="d" cx="334" cy="40" r="3"/>'
+    '<circle class="d" cx="334" cy="52" r="3"/>'
+    '<path class="o" d="M272 86 L268 96 M326 86 L330 96"/>'
+    '<text class="dial" x="271" y="45" font-size="9">READY</text>'
+    '<rect class="c1 caret" x="271" y="50" width="5.5" height="8"/>'
+    + _label(123, 124, "Atari 800XL") + _label(299, 124, "a TV"))
+
+MACHINE_APPLE_AMIGA = _machines("", 144,
+    "An Apple II with a Disk II drive and a green-screen monitor showing its "
+    "square bracket prompt, and an Amiga 500 keyboard computer with its "
+    "function keys in two groups of five, in front of a monitor showing a "
+    "1> prompt.",
+    '<rect class="o" x="26" y="4" width="110" height="60" rx="5"/>'
+    '<rect class="g" x="33" y="10" width="96" height="48" rx="3"/>'
+    '<text class="live" x="40" y="28" font-size="9">]</text>'
+    '<rect class="lf caret" x="47" y="20" width="5" height="9"/>'
+    '<rect class="o" x="34" y="66" width="64" height="18" rx="2"/>'
+    '<path class="d" d="M44 72 H88"/>'
+    '<rect class="d" x="60" y="76" width="12" height="5" rx="1"/>'
+    '<circle class="lf" cx="40" cy="80" r="1.2"/>'
+    '<rect class="o" x="22" y="84" width="132" height="10" rx="2"/>'
+    '<path class="o" d="M14 116 L22 94 H154 L162 116 Z"/>'
+    + _keyrows(34, 98, 108, 3, 6)
+    + '<rect class="o" x="206" y="4" width="116" height="70" rx="5"/>'
+    '<rect class="g" x="214" y="11" width="100" height="54" rx="3"/>'
+    '<text class="ink" x="221" y="28" font-size="9">1&gt;</text>'
+    '<rect class="lf caret" x="234" y="20" width="5" height="9"/>'
+    '<rect class="o" x="246" y="74" width="36" height="6" rx="2"/>'
+    '<path class="o" d="M186 116 L194 86 H336 L344 116 Z"/>'
+    + "".join(f'<rect class="d" x="{x}" y="90" width="9" height="3" rx="1"/>'
+              for x in (204, 215, 226, 237, 248, 268, 279, 290, 301, 312))
+    + _keyrows(202, 97, 126, 3, 6)
+    + _label(88, 130, "Apple II") + _label(265, 130, "Amiga 500"))
+
+MACHINE_OTHERS = _machines("", 144,
+    "A DOS PC, a flat system unit with two drive bays and a monitor on top "
+    "showing a C colon backslash prompt, with its keyboard in front, and a "
+    "TRS-80 Model 100, a flat portable with a small screen above its "
+    "keyboard.",
+    '<rect class="o" x="34" y="4" width="118" height="54" rx="5"/>'
+    '<rect class="g" x="42" y="11" width="102" height="40" rx="3"/>'
+    '<text class="ink" x="50" y="28" font-size="9">C:\\&gt;</text>'
+    '<rect class="lf caret" x="74" y="20" width="5" height="9"/>'
+    '<rect class="o" x="78" y="58" width="30" height="4" rx="1"/>'
+    '<rect class="o" x="10" y="62" width="176" height="30" rx="2"/>'
+    '<rect class="d" x="120" y="67" width="54" height="8" rx="1"/>'
+    '<rect class="d" x="120" y="78" width="54" height="8" rx="1"/>'
+    '<path class="d" d="M126 71 H168 M126 82 H168"/>'
+    '<circle class="lf" cx="20" cy="85" r="1.4"/>'
+    '<path class="o" d="M18 116 L22 100 H174 L178 116 Z"/>'
+    + _keyrows(30, 104, 136, 2, 6)
+    + '<path class="o" d="M214 116 L220 72 H338 L344 116 Z"/>'
+    '<rect class="g" x="226" y="76" width="106" height="18" rx="1.5"/>'
+    '<path class="d" d="M232 82 H300 M232 88 H286"/>'
+    + _keyrows(226, 99, 106, 3, 5.5)
+    + _label(98, 130, "a DOS PC") + _label(279, 130, "TRS-80 Model 100"))
+
+MACHINE_TERMINALS = _machines("", 148,
+    "A VT220-style terminal, a monitor on a stand with a separate long "
+    "keyboard, and a Teletype Model 33, a printing terminal with a sheet of "
+    "paper rising from its cover and a keyboard in front, on a stand.",
+    '<rect class="o" x="30" y="4" width="132" height="78" rx="8"/>'
+    '<rect class="g" x="40" y="12" width="112" height="60" rx="5"/>'
+    '<text class="live" x="48" y="30" font-size="9">Handle:</text>'
+    '<rect class="lf caret" x="88" y="22" width="5" height="9"/>'
+    '<path class="o" d="M84 82 L80 90 H112 L108 82"/>'
+    '<rect class="o" x="70" y="90" width="52" height="4" rx="2"/>'
+    '<path class="o" d="M10 118 L16 102 H176 L182 118 Z"/>'
+    + _keyrows(26, 106, 140, 2, 6)
+    + '<path class="o" d="M252 50 V16 H300 V50"/>'
+    '<path class="d" d="M258 24 H292 M258 30 H286 M258 36 H294 M258 42 H280"/>'
+    '<path class="gb" d="M214 70 Q214 50 240 48 H316 Q340 50 340 70 V92 H214 Z"/>'
+    '<rect class="d" x="220" y="74" width="18" height="10" rx="1"/>'
+    '<path class="o" d="M208 92 H346 L342 104 H212 Z"/>'
+    + _keyrows(226, 95, 104, 2, 4.5)
+    + '<path class="o" d="M228 104 V122 M326 104 V122"/>'
+    + _label(96, 134, "a VT220-style terminal")
+    + _label(277, 134, "Teletype Model 33"))
+
+MACHINE_BRIDGE = _machines(" bridge", 114,
+    "An old computer connected by a serial cable to a small bridge box with "
+    "an aerial, which reaches the board over Wi-Fi. A dot travels along the "
+    "serial cable.",
+    '<path class="o" d="M6 80 L12 56 H86 L92 80 Z"/>'
+    + _keyrows(18, 62, 62, 3, 6)
+    + '<path class="d" d="M92 68 H170"/>'
+    '<rect class="o" x="94" y="63" width="9" height="10" rx="1.5"/>'
+    '<rect class="o" x="160" y="63" width="10" height="10" rx="1.5"/>'
+    '<g class="go"><circle class="halo" cx="131" cy="68" r="4.2"/>'
+    '<circle class="lf" cx="131" cy="68" r="2.2"/></g>'
+    '<text x="131" y="56" font-size="10" text-anchor="middle">serial</text>'
+    '<rect class="body" x="170" y="52" width="56" height="32" rx="4"/>'
+    '<circle class="lf" cx="182" cy="76" r="1.6"/>'
+    '<path class="o" d="M218 52 V36"/>'
+    '<circle class="lf" cx="218" cy="34" r="1.6"/>'
+    '<path class="l" d="M222.6 30.1 A6 6 0 0 1 222.6 37.9 '
+    'M226.4 26.9 A11 11 0 0 1 226.4 41.1 M230.3 23.7 A16 16 0 0 1 230.3 44.3"/>'
+    '<path class="ld" d="M236 69 H292"/>'
+    '<text x="262" y="60" font-size="10" text-anchor="middle">Wi-Fi</text>'
+    '<rect class="body" x="292" y="56" width="46" height="26" rx="3"/>'
+    '<text x="315" y="73" font-size="9" text-anchor="middle">BBS</text>'
+    + _label(49, 100, "old machine") + _label(198, 100, "bridge")
+    + _label(315, 100, "the board"))
+
+
 # The skull for the warning box on /how. Crossbones first, so the skull,
 # filled with the box's own background, sits in front of the crossing.
 # Not animated: a warning that moves is a warning that looks like an
@@ -3491,7 +3718,15 @@ SKULL = """<svg class="art skull" viewBox="0 0 48 48" aria-hidden="true" focusab
 
 
 # What "::: art <name>" can draw on a Markdown page.
-ART = {"firstcall": FIRSTCALL_ART}
+ART = {"firstcall": FIRSTCALL_ART,
+       "term-modern": MACHINE_MODERN,
+       "term-chromebook": MACHINE_CHROMEBOOK,
+       "term-commodore": MACHINE_COMMODORE,
+       "term-atari": MACHINE_ATARI,
+       "term-apple-amiga": MACHINE_APPLE_AMIGA,
+       "term-others": MACHINE_OTHERS,
+       "term-terminals": MACHINE_TERMINALS,
+       "term-bridge": MACHINE_BRIDGE}
 
 HOW = HOW.replace("@ART_CSS@", ART_CSS).replace("@SKULL@", SKULL)
 
