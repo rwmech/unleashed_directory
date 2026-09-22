@@ -14,6 +14,45 @@
 
 # Changelog
 
+## 0.13.2, 2026-09-22
+
+Rob: "under build one, love the table, add some of those awesome graphics on a
+linked page from the table that says SD Card wiring diagram and include a bad
+ass wiring diagram, chips, card, etc on there."
+
+- **A wiring diagram on `/sdcard`, directly above the pin table it draws**,
+  rather than a second page that could drift from the first. The ESP32 dev
+  board with its module can, antenna and headers; the SD module with its
+  regulator, level shifter, socket and the card in it; and six wires between
+  them, each one colour from pin to pin with its name at both ends and on the
+  wire. Ground is `--faint` and power `--busy`; the data lines take four
+  palette colours and never `--risk`.
+- **The pins are the firmware's defaults and nothing else**: `struct SdPins`
+  in `src/platform/platform.h`, CS 5, MOSI 23, CLK 18, MISO 19. The rows run
+  in the order the common module prints its header, so every wire is
+  straight, and the note under the drawing says to go by the printed names
+  because no board promises that order. The power line says what the page
+  already says: start on 3V3, some modules want 5 V, see the note below.
+- **A check reads the pin names at both ends of every wire out of the
+  drawing and compares them with the table on the same page**, so the two
+  cannot disagree. Proved against a drawing with MISO and MOSI swapped.
+- A pulse runs the data lines in the order a transfer happens: CS, then the
+  clock and MOSI together, then MISO back. It stops under reduced motion like
+  every other drawing here; two frames 1.2 s apart are identical with motion
+  reduced.
+- **`SD card wiring diagram`** is a link in the board table on `/build`, in
+  the reference board's row. `/build` and `/teachers` both said the SD page
+  had "the three things that usually go wrong", which went stale when its
+  error table grew to four real messages in 0.13.0; they name the pin map,
+  the diagram and the error messages now.
+- Labels are 10 units, about 9.6px on a phone. Measured through sized iframes
+  at 390, 1366 and 1920 on `/sdcard` and `/build`: no horizontal overflow, the
+  diagram 340px wide on a phone and 640px on a desktop.
+- The check that the power advice comes before the wiring table looked for
+  the first `GPIO18` on the page, which is now a label in the drawing; it
+  measures against the table's own SCK row.
+- 6 new checks, 323 in total.
+
 ## 0.13.1, 2026-09-22
 
 Rob: "get some of those awesome line graphics on the terminals page. try to

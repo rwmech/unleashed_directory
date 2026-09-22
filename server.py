@@ -3201,6 +3201,26 @@ svg.art.machines { width:100%; max-width:24rem; height:auto;
         margin:0.75rem auto 1.125rem; }
 svg.art text.dial { fill:var(--dial); }
 
+/* The SD card wiring diagram on /sdcard. Each wire's colour is its wire,
+   its two pins, its three labels and its pulse, so a reader can follow one
+   colour from end to end. Ground is --faint and power --busy; the data
+   lines take four palette colours and never --risk. */
+svg.art.wiring { width:100%; max-width:30rem; height:auto;
+        margin:1rem auto 1.25rem; }
+svg.art .ww { fill:none; stroke-width:2.2; stroke-linecap:round; }
+svg.art .s-gnd { stroke:var(--faint); }
+svg.art .s-pwr { stroke:var(--busy); }
+svg.art .s-miso { stroke:var(--live); }
+svg.art .s-mosi { stroke:var(--dial); }
+svg.art .s-sck { stroke:var(--warm); }
+svg.art .s-cs { stroke:var(--name); }
+svg.art .f-gnd { fill:var(--dim); }
+svg.art .f-pwr { fill:var(--busy); }
+svg.art .f-miso { fill:var(--live); }
+svg.art .f-mosi { fill:var(--dial); }
+svg.art .f-sck { fill:var(--warm); }
+svg.art .f-cs { fill:var(--name); }
+
 /* The skull is drawn in the warning box's own amber, on its background,
    so it belongs to the box it sits in rather than to the page. */
 svg.art.skull { background:none; border:0; }
@@ -3246,6 +3266,14 @@ svg.art .aff { fill:#f0c674; }
 @keyframes artserial { 0% { transform:translateX(-26px); opacity:0; }
                       15%, 85% { opacity:1; }
                       100% { transform:translateX(26px); opacity:0; } }
+@keyframes artspiout { 0% { transform:translateX(-56px); opacity:0; }
+                      6% { opacity:1; }
+                      40% { transform:translateX(56px); opacity:1; }
+                      46%, 100% { transform:translateX(56px); opacity:0; } }
+@keyframes artspiin { 0% { transform:translateX(56px); opacity:0; }
+                      6% { opacity:1; }
+                      40% { transform:translateX(-56px); opacity:1; }
+                      46%, 100% { transform:translateX(-56px); opacity:0; } }
 
 @media (prefers-reduced-motion: no-preference) {
   /* nobody has to say yes: the gate is up and things go through it */
@@ -3291,6 +3319,10 @@ svg.art .aff { fill:#f0c674; }
   svg.art .p3b { animation:artshow 4.8s ease-out 1.4s infinite backwards; }
   /* the bridge: bytes going down the serial cable to the box */
   svg.art.bridge .go { animation:artserial 2.4s linear infinite; }
+  /* the SD card: select it, clock the command out, read the answer back */
+  svg.art.wiring .p-cs { animation:artspiout 3.2s linear infinite backwards; }
+  svg.art.wiring .p-out { animation:artspiout 3.2s linear 0.4s infinite backwards; }
+  svg.art.wiring .p-in { animation:artspiin 3.2s linear 1.2s infinite backwards; }
 }
 </style>"""
 
@@ -3699,6 +3731,107 @@ MACHINE_BRIDGE = _machines(" bridge", 114,
     + _label(315, 100, "the board"))
 
 
+# ----------------------------------------------------------------------
+# The SD card wiring diagram on /sdcard, beside the pin table it draws.
+#
+# The pins are the firmware's defaults and nothing else: struct SdPins in
+# src/platform/platform.h, CS 5, MOSI 23, CLK 18, MISO 19. If those ever
+# change, this and the table change in the same commit.
+#
+# The rows are in the order the common module prints its header (GND, VCC,
+# MISO, MOSI, SCK, CS) so every wire runs straight across. The dev board's
+# side is drawn in that same order to match, which is NOT the order any
+# particular board puts its pins in, and the note under the drawing says
+# to go by the printed names for exactly that reason.
+#
+# Colour means the same thing on the wire, the pin, the label and the pulse.
+# Ground is --faint and power --busy; the four data lines take --live,
+# --dial, --warm and --name, and never --risk, which on this site means
+# somebody keeping a copy of you. The pulses run CS, then clock and MOSI
+# together, then MISO back the other way: a transfer in the order it
+# happens, declared in the no-preference block like all the others.
+# ----------------------------------------------------------------------
+
+_SD_ROWS = (  # y, colour, ESP32 pin, wire label, module pin
+    (104, "gnd", "GND", "GND", "GND"),
+    (124, "pwr", "3V3", "3V3", "VCC"),
+    (144, "miso", "D19", "GPIO19", "MISO"),
+    (164, "mosi", "D23", "GPIO23", "MOSI"),
+    (184, "sck", "D18", "GPIO18", "SCK"),
+    (204, "cs", "D5", "GPIO5", "CS"),
+)
+_SD_PULSE = {"cs": "p-cs", "sck": "p-out", "mosi": "p-out", "miso": "p-in"}
+
+SD_WIRING_ALT = (
+    "Wiring an SD card module to an ESP32 dev board, six wires. Ground to GND. "
+    "Power from the 3V3 pin to VCC. GPIO19, printed D19, to MISO. GPIO23, D23, "
+    "to MOSI. GPIO18, D18, to SCK. GPIO5, D5, to CS. The module carries a "
+    "regulator, a level shifter and a micro SD card in its socket. Start the "
+    "power on 3V3, and go by the printed pin names, because boards put their "
+    "pins in different orders.")
+
+
+def _sd_wiring():
+    out = ['<svg class="art wiring" viewBox="-5 -6 354 308" role="img" '
+           'preserveAspectRatio="xMidYMid meet" aria-label="'
+           + html.escape(SD_WIRING_ALT, quote=True) + '">']
+    # The dev board: module can with its antenna, two headers, buttons, USB.
+    out.append(
+        '<rect class="o" x="8" y="8" width="98" height="222" rx="4"/>'
+        '<rect class="d" x="20" y="14" width="74" height="16" rx="1"/>'
+        '<path class="d" d="M26 22 H34 V18 H40 V26 H46 V18 H52 V26 H58 V18 '
+        'H64 V26 H70 V22 H86"/>'
+        '<rect class="o" x="20" y="30" width="74" height="58" rx="2"/>'
+        '<text x="57" y="63" font-size="10" text-anchor="middle">ESP32</text>'
+        + "".join(f'<rect class="k" x="11" y="{y}" width="4" height="4" rx="0.5"/>'
+                  for y in range(100, 212, 11))
+        + '<rect class="d" x="20" y="213" width="8" height="6" rx="1"/>'
+        '<rect class="d" x="86" y="213" width="8" height="6" rx="1"/>'
+        '<rect class="o" x="44" y="222" width="26" height="12" rx="2"/>')
+    # The module: its PCB, a three legged regulator, a level shifter, the
+    # socket, and the card sitting in it.
+    out.append(
+        '<rect class="o" x="236" y="92" width="104" height="128" rx="4"/>'
+        '<rect class="gb" x="300" y="100" width="18" height="12" rx="1"/>'
+        '<path class="d" d="M303 112 V116 M309 112 V116 M315 112 V116"/>'
+        '<rect class="gb" x="296" y="126" width="26" height="30" rx="1"/>'
+        '<path class="d" d="M292 131 H296 M292 137 H296 M292 143 H296 '
+        'M292 149 H296 M322 131 H326 M322 137 H326 M322 143 H326 M322 149 H326"/>'
+        '<circle class="lf" cx="300" cy="130" r="1"/>'
+        '<rect class="o" x="270" y="168" width="62" height="44" rx="2"/>'
+        '<path class="d" d="M274 174 H328"/>'
+        '<path class="gb" d="M286 186 H318 V228 H286 V198 L290 194 V186 Z"/>'
+        '<text x="302" y="216" font-size="9" text-anchor="middle">card</text>')
+    # The six wires, each with its pins, its names and, on the data lines,
+    # a pulse. The pulse sits mid-wire at rest, under the wire's label.
+    for y, c, pin, wire, mod in _SD_ROWS:
+        out.append(
+            f'<path class="ww s-{c}" d="M108 {y} H234"/>'
+            f'<rect class="f-{c}" x="101" y="{y - 2.5}" width="5" height="5" rx="1"/>'
+            f'<rect class="f-{c}" x="234" y="{y - 2.5}" width="5" height="5" rx="1"/>'
+            f'<text class="f-{c}" x="97" y="{y + 3}" font-size="10" '
+            f'text-anchor="end">{pin}</text>'
+            f'<text class="f-{c}" x="171" y="{y - 5}" font-size="10" '
+            f'text-anchor="middle">{wire}</text>'
+            f'<text class="f-{c}" x="245" y="{y + 3}" font-size="10">{mod}</text>')
+        if c in _SD_PULSE:
+            out.append(f'<circle class="f-{c} spi {_SD_PULSE[c]}" '
+                       f'cx="171" cy="{y}" r="2.2"/>')
+    out.append(
+        _label(57, 246, "ESP32 dev board") + _label(288, 246, "SD card module")
+        + '<text x="172" y="264" font-size="10" text-anchor="middle">'
+        "Power: start on 3V3. Some modules want 5 V: see below.</text>"
+        '<text x="172" y="278" font-size="10" text-anchor="middle">'
+        "Pin order differs between boards: go by the names.</text>"
+        '<text x="172" y="292" font-size="10" text-anchor="middle">'
+        "The pins can be changed on CONFIG sd.</text>"
+        "</svg>")
+    return "".join(out)
+
+
+SD_WIRING = _sd_wiring()
+
+
 # The skull for the warning box on /how. Crossbones first, so the skull,
 # filled with the box's own background, sits in front of the crossing.
 # Not animated: a warning that moves is a warning that looks like an
@@ -3726,7 +3859,8 @@ ART = {"firstcall": FIRSTCALL_ART,
        "term-apple-amiga": MACHINE_APPLE_AMIGA,
        "term-others": MACHINE_OTHERS,
        "term-terminals": MACHINE_TERMINALS,
-       "term-bridge": MACHINE_BRIDGE}
+       "term-bridge": MACHINE_BRIDGE,
+       "sd-wiring": SD_WIRING}
 
 HOW = HOW.replace("@ART_CSS@", ART_CSS).replace("@SKULL@", SKULL)
 

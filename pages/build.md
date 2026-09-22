@@ -37,7 +37,7 @@ what stops the radio's work from making callers' lines lag.
 
 | Chip | Runs it? | Why |
 |---|---|---|
-| ESP32-WROOM-32E | **Yes, tested** | The reference board: ten caller lines, a busy line and a hidden sysop line. The only one anybody has run. |
+| ESP32-WROOM-32E | **Yes, tested** | The reference board: ten caller lines, a busy line and a hidden sysop line. The only one anybody has run. [SD card wiring diagram](/sdcard) |
 | ESP32-WROVER | Should work, not yet tested | The same original ESP32 chip, and the same goes for other modules built on it. A WROVER adds PSRAM, a second memory chip on the module, which leaves room for more callers, but nobody has measured how many. |
 | ESP32-S3 | Should work, not yet tested | Two cores and Wi-Fi, with or without PSRAM. There is no ready-made firmware build for it yet. |
 | ESP32-S2 | No | One core. |
@@ -132,8 +132,9 @@ A directory nobody can replace would contradict the whole point.
 ## Adding an SD card
 
 Optional, four wires, about two dollars. It is what gets you file areas, forums
-and screens of your own. Without one the board is still a board. The pin map and the three things that
-usually go wrong are on the [SD card page](/sdcard).
+and screens of your own. Without one the board is still a board. The pin map,
+a wiring diagram and what the card's error messages mean are on the
+[SD card page](/sdcard).
 
 ## The source
 

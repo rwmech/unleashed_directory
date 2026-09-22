@@ -206,8 +206,8 @@ eleven upwards, covering the same ground in their own terms:
 ## Where to go next
 
 [Build one](/build) is the full instructions, including flashing and
-configuration. [Adding an SD card](/sdcard) has the pin map and the three
-things that usually go wrong. [Terminal software](/terminals) covers what to
+configuration. [Adding an SD card](/sdcard) has the pin map, a wiring diagram
+and what the card's error messages mean. [Terminal software](/terminals) covers what to
 call a board with, on every platform a classroom is likely to have, including
 Chromebooks and what to ask for when one is locked down.
 

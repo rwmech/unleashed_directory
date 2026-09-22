@@ -822,8 +822,11 @@ def main():
         # the common blue module with an AMS1117 regulator is specified for
         # 4.5 to 5.5 V: on 3V3 its card can sit near 2.2 V. 3V3 is still the
         # starting point, because it cannot damage either kind of module.
+        # Measured against the table's own SCK row. The wiring diagram above
+        # the table carries a GPIO18 label too, so "the first GPIO18 on the
+        # page" stopped meaning the table the day the drawing went in.
         check("and says where to start the power before the wiring table",
-              0 <= page.find("Start on 3V3") < page.index("GPIO18"))
+              0 <= page.find("Start on 3V3") < page.index("<td><code>SCK</code>"))
         check("without claiming 3V3 suits every module",
               "every module worth buying" not in page and "AMS1117" in page)
         # Espressif's datasheet: GPIO5 is a strapping pin for SDIO slave
@@ -1410,6 +1413,49 @@ def main():
         check("with the bridge's pulse declared where reduced motion stops it",
               "svg.art.bridge .go { animation:" in
               term.split("@media (prefers-reduced-motion: no-preference) {")[1])
+
+        # The SD card wiring diagram, on /sdcard beside the pin table it
+        # draws, and linked from the board table on /build. The diagram and
+        # the table on the same page must never disagree about a pin: the
+        # labels at each end of a wire are read out of the drawing and
+        # compared with the table's rows. Both come from struct SdPins in
+        # the firmware, CS 5, MOSI 23, CLK 18, MISO 19.
+        _, sd = get("/sdcard")
+        wiring = re.search(r'<svg class="art wiring" viewBox="([^"]+)" role="img"'
+                           r'[^>]*aria-label="([^"]+)">(.*?)</svg>', sd, re.S)
+        check("the SD page carries the wiring diagram, described for a screen reader",
+              wiring is not None
+              and all(g in wiring.group(2) for g in ("GPIO5", "GPIO18", "GPIO19", "GPIO23")))
+        drawn = {}
+        if wiring:
+            ends = re.findall(r'<text [^>]*x="(97|245)" y="([\d.]+)"[^>]*>([^<]+)</text>',
+                              wiring.group(3))
+            by_row = {}
+            for x, y, label in ends:
+                by_row.setdefault(y, {})[x] = label
+            drawn = {row["245"]: row["97"] for row in by_row.values()
+                     if "97" in row and "245" in row}
+        tabled = {m.group(1): m.group(2) for m in re.finditer(
+            r"<td><code>(\w+)</code>[^<]*(?:<code>\w+</code>)?</td><td><code>(\w+)</code>",
+            sd)}
+        want = {"CS": "D5", "MOSI": "D23", "SCK": "D18", "MISO": "D19",
+                "VCC": "3V3", "GND": "GND"}
+        check("its pins are the firmware's defaults, end to end",
+              {k: drawn.get(k) for k in want} == want)
+        check("and the table under it says the same",
+              all(tabled.get(k) == v for k, v in want.items() if k not in ("VCC",))
+              and tabled.get("3V3") == "3V3")
+        if wiring:
+            _, top, _, height = (float(v) for v in wiring.group(1).split())
+            lowest = max(float(y) for y in re.findall(r'<text [^>]*y="([\d.]+)"',
+                                                      wiring.group(3)))
+        check("with room under its last line",
+              wiring is not None and lowest + 8 <= top + height)
+        check("and its pulses declared where reduced motion stops them",
+              "svg.art.wiring .p-cs { animation:" in
+              sd.split("@media (prefers-reduced-motion: no-preference) {")[1])
+        check("the build page's board table links to it",
+              '<a href="/sdcard">SD card wiring diagram</a>' in get("/build")[1])
 
         # A Chromebook, as it is: one you control usually can, a managed one
         # usually cannot without its administrator, Chrome alone never can.

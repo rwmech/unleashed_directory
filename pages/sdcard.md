@@ -22,6 +22,10 @@ Four wires and a module that costs about two dollars.
 
 ## The wiring
 
+::: art
+sd-wiring
+:::
+
 | Module pin | ESP32 pin | Notes |
 |---|---|---|
 | `3V3` or `VCC` | `3V3` | **Start on 3V3.** Some modules want 5 V: see below. |
