@@ -14,6 +14,40 @@
 
 # Changelog
 
+## 0.20.1, 2026-09-23
+
+The board list's top, redone (Rob, on 0.20.0: "This seems a bit big for a
+button there in the middle ... The way that looks is terrible.").
+
+- **The announcement banner is one slim line above the heading**: a
+  hairline, a yellow lamp, small type, and one link. "µnleashed BBS 1.0.0
+  is out. Install it from your browser." goes to /install. It still shows
+  only once a 1.0.0 or later release is on disk, and with none there is no
+  box and no gap. The words are `ANNOUNCEMENT` in `server.py`, one string
+  of the page dialect's inline Markdown, so changing the announcement is
+  changing one line; an empty string switches it off. One line at 1366
+  and 1920, two at 390.
+- **"Run your own board" is a small card beside the heading**, in the
+  install card's box: the title, "An ESP32, a USB cable, five minutes.",
+  and two compact buttons, **Web installer** filled and **Build from
+  source** outlined. A grid column from 901px, level with the heading; on a
+  phone it follows the lead as the title and the two buttons on one row.
+  19.5rem rather than the 18 asked for, because at 18 the buttons stacked
+  and the card stood half as tall again as the text beside it. The full
+  size button pair and 0.20.0's drawing are gone from the board list;
+  /build and /setup keep theirs.
+- **The figures are a sentence under the heading**: "Unleashed is hosting
+  1 board with 1 caller on right now.", both figures in the colour that
+  means up, singular and plural right, "no callers" when nobody is on and
+  "no boards yet" on an empty directory. The callers are the sum of what
+  the table shows; the JSON and the feed are unchanged. `STAT_SUFFIX` can
+  add to the end of it later and is empty: nothing here knows where a
+  board is, so the page does not say "across the globe".
+- The board list's table header is at y=526 at 1366 x 768 (613 with the
+  first cut of the card), and the first board is on the first screen at
+  390 x 844.
+- 476 checks, up from 459.
+
 ## 0.20.0, 2026-09-23
 
 - **The BOOT button reset and the CONFIG Wi-Fi fallback wait for firmware

@@ -428,8 +428,8 @@ NAV_SECTION = {
     # Putting the firmware on a board is a step of building one, so it
     # lights up the section a reader came from. Not in the menu itself:
     # ten items is already the edge of what a phone can carry, and this is
-    # the button at the top of /build, /setup and the board list, and in the
-    # footer of every page.
+    # the button at the top of /build and /setup, the card beside the board
+    # list's heading, and in the footer of every page.
     "/install":         "/build",
     # The setup guide is the step after installing, so it is Build one too.
     "/setup":           "/build",
@@ -2205,37 +2205,23 @@ pre.logo i:nth-child(6) {{ color:#3f6cab; }}
    the one thing a link has to show, for somebody moving by keyboard. */
 .masthead a.home {{ flex:none; display:block; text-decoration:none; color:inherit; }}
 .masthead a.home:focus-visible {{ outline:3px solid #ffd35c; outline-offset:4px; }}
-/* The announcement banner, above the board list, and only when there is a
-   release to announce: see announcement_banner(). Yellow, which nothing
-   else on the site is, because it is news rather than a warning (amber)
-   or an invitation (the tip box). */
-.banner {{ display:flex; align-items:center; gap:1.25rem; margin:0 0 1.5rem;
-        padding:0.875rem 1.125rem; background:#1f1a08; border:1px solid #ffd35c;
-        border-radius:0.5rem; color:#fbe7a1; }}
-.banner svg {{ flex:none; width:7.5rem; height:auto; }}
-.banner .say {{ flex:1; min-width:0; }}
-.banner p {{ margin:0; }}
-.banner .cta {{ margin:0.75rem 0 0; }}
-.banner b {{ display:block; color:#ffd35c; font-weight:normal; font-size:1rem;
-        letter-spacing:0.0625rem; margin:0 0 0.25rem; }}
+/* The announcement banner: one quiet line above the board list's heading,
+   and only while there is something to announce (see announcement_banner).
+   Yellow, which nothing else on the site is, because it is news rather
+   than a warning (amber) or an invitation (the tip box). A strip, not a
+   box: a hairline round it, a lit lamp at the front, small type. 0.20.0's
+   was a box with a drawing and two buttons in it, and it put the board
+   list a screen further down than the news was worth. One line on a
+   monitor, two at most on a phone. */
+.banner {{ display:flex; align-items:center; gap:0.625rem; margin:0 0 1.125rem;
+        padding:0.375rem 0.75rem; background:#15130a; border:1px solid #4a3f17;
+        border-left:3px solid #ffd35c; border-radius:0.25rem; color:#fbe7a1;
+        font-size:0.8125rem; line-height:1.45; }}
+.banner::before {{ content:""; flex:none; width:0.4375rem; height:0.4375rem;
+        border-radius:50%; background:#ffd35c; }}
+.banner p {{ margin:0; min-width:0; }}
 .banner a {{ color:#ffd35c; }}
-.banner .o {{ fill:none; stroke:#ffd35c; stroke-width:1.4; stroke-linecap:round;
-        stroke-linejoin:round; }}
-.banner .d {{ fill:none; stroke:#ffd35c; stroke-width:1; stroke-linecap:round;
-        stroke-linejoin:round; opacity:0.6; }}
-.banner .g {{ fill:#1f1a08; stroke:#ffd35c; stroke-width:1; }}
-.banner .t {{ fill:#ffd35c; }}
-.banner .led {{ fill:var(--live); }}
-@media (max-width: 900px) {{
-  .banner {{ flex-direction:column; align-items:flex-start; gap:0.75rem; }}
-  /* The drawing is decoration, and on a phone it cost the buttons their
-     place on the first screen, under a menu that already takes a third. */
-  .banner svg {{ display:none; }}
-}}
-@media (prefers-reduced-motion: no-preference) {{
-  .banner .led {{ animation:bannerled 1.6s ease-in-out infinite; }}
-  @keyframes bannerled {{ 0%, 100% {{ opacity:0.35; }} 50% {{ opacity:1; }} }}
-}}
+.banner a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 /* The freedoms, one at a time, beside the wordmark.
 
    Shown only from 73em up. In em, not px, because em in a media query is
@@ -2359,10 +2345,59 @@ nav a.here {{ background:var(--name); color:var(--bg);
    that visibly beats the h2 without competing with the wordmark. */
 h1 {{ color:var(--ink); font-size:1.25rem; font-weight:normal; letter-spacing:0.125rem;
      margin:0 0 0.375rem; text-transform:uppercase; }}
-h1 span {{ color:var(--dim); font-size:0.8125rem; letter-spacing:0;
-     text-transform:none; }}
-h1 .count {{ color:var(--live); }}
 p.lead {{ color:var(--dim); margin:0 0 1.25rem; }}
+/* The board list's figures, as a sentence under its heading rather than a
+   run of small faint numbers beside it: "Unleashed is hosting 3 boards
+   with 5 callers on right now." The two figures are --live, the colour
+   that means up; they are the product, and they are the only colour in
+   the line. */
+p.stat {{ color:var(--ink); margin:0 0 0.5rem; }}
+p.stat .n {{ color:var(--live); }}
+/* The top of the board list: the heading, the figures and the lead on the
+   left, the "Run your own board" card on the right. From the site's one
+   breakpoint up it is a grid column, the way /install's card is, and not a
+   float; the card is top aligned, level with the heading, so the table
+   starts under whichever of the two is taller. Below it the card follows
+   the lead, full width and short.
+
+   19.5rem rather than 18: at 18 the two buttons stacked, which made the
+   card half as tall again as the text beside it and pushed the list down
+   by the difference. 19.5 holds both on one row, and the line of copy on
+   one line, in Menlo, the widest face the font stack reaches (0.602em a
+   character against Consolas's 0.55). */
+.listtop {{ margin:0 0 1.25rem; }}
+.listtop p.lead {{ margin:0; }}
+.runcard {{ background:#12121a; border:1px solid #2c3a44; border-radius:0.5rem;
+        padding:1.125rem 1.25rem; margin:1rem 0 0; }}
+.runcard h2 {{ color:var(--struct); font-size:0.875rem; font-weight:normal;
+        margin:0 0 0.125rem; }}
+.runcard p {{ margin:0; }}
+.runcard .say {{ color:var(--dim); font-size:0.75rem; }}
+.runcard .acts {{ display:flex; flex-wrap:wrap; gap:0.5rem; margin:0.625rem 0 0; }}
+/* Compact, on purpose: the card is a way off the page for the few who
+   came to build one, and the board list is what the page is for. The
+   installer's full size button lives on /install, where it is the point. */
+.runcard a.fill, .runcard a.line {{ display:inline-block; font-size:0.75rem;
+        border-radius:0.375rem; padding:0.3125rem 0.5625rem; text-decoration:none;
+        text-align:center; white-space:nowrap; }}
+.runcard a.fill {{ color:#04212c; background:var(--dial); border:1px solid #9fdfff; }}
+.runcard a.fill:hover {{ background:#a7e2ff; }}
+.runcard a.line {{ color:var(--dial); background:transparent; border:1px solid #35566b; }}
+.runcard a.line:hover {{ border-color:var(--dial); }}
+.runcard a.fill:focus-visible, .runcard a.line:focus-visible {{
+        outline:3px solid #ffd35c; outline-offset:2px; }}
+@media (min-width: 901px) {{
+  .listtop {{ display:grid; grid-template-columns:minmax(0, 1fr) 19.5rem;
+        column-gap:2rem; align-items:start; }}
+  .runcard {{ margin:0; }}
+}}
+/* On a phone the card is the title and the two buttons: the line of copy
+   is left out, so the list keeps its place on the first screen. */
+@media (max-width: 900px) {{
+  .runcard {{ padding:0.75rem 1rem; }}
+  .runcard .say {{ display:none; }}
+  .runcard .acts {{ margin:0.5rem 0 0; }}
+}}
 a {{ color:var(--dial); }}
 table {{ border-collapse:collapse; }}
 /* Full width is right for the board list, which is the product, and wrong
@@ -3559,56 +3594,79 @@ def cached(key, seconds, build):
 # --------------------------------------------------------------------------
 # The announcement banner.
 #
-# It says the software has had its first release, above the board list, in
-# yellow, with the three pages somebody needs next. It must not go live
-# early, and it does not depend on anybody remembering to switch it on: it
-# shows only when firmware_releases() finds a release of 1.0.0 or later on
-# disk, which is the moment the installer can actually deliver one. With no
-# release, or only older ones, it renders nothing.
+# One slim line above the board list's heading, in yellow: news, not a
+# warning and not an invitation. It must not go live early, and it does not
+# depend on anybody remembering to switch it on: it shows only when
+# firmware_releases() finds a release at or above BANNER_FROM on disk, which
+# is the moment the installer can actually deliver one. With no release, or
+# only older ones, or an empty ANNOUNCEMENT, it renders nothing at all, and
+# its margin goes with it, so there is no gap where it would have been.
 # --------------------------------------------------------------------------
 BANNER_FROM = (1, 0, 0)
 
-# A dev board in the banner's own yellow, its lamp lit. Decoration beside
-# words that say everything, so it is hidden from a screen reader.
-BANNER_ART = (
-    '<svg viewBox="0 0 120 76" aria-hidden="true" focusable="false">'
-    '<rect class="o" x="16" y="14" width="92" height="48" rx="3"/>'
-    '<path class="d" d="M22 14 V9 M30 14 V9 M38 14 V9 M46 14 V9 M54 14 V9'
-    ' M62 14 V9 M70 14 V9 M78 14 V9 M86 14 V9 M94 14 V9 M102 14 V9'
-    ' M22 62 V67 M30 62 V67 M38 62 V67 M46 62 V67 M54 62 V67 M62 62 V67'
-    ' M70 62 V67 M78 62 V67 M86 62 V67 M94 62 V67 M102 62 V67"/>'
-    '<rect class="g" x="42" y="21" width="40" height="30" rx="1.5"/>'
-    '<path class="d" d="M46 27 H50 V24 H55 V27 H60 V24 H65 V27 H70 V24 H75 V27 H78"/>'
-    '<text class="t" x="62" y="44" font-size="11" text-anchor="middle">1.0</text>'
-    '<rect class="o" x="6" y="32" width="10" height="12" rx="1"/>'
-    '<path class="d" d="M6 38 H1"/>'
-    '<circle class="led" cx="98" cy="54" r="3"/>'
-    "</svg>")
+# The announcement itself, and the one place to change it. It is the page
+# dialect's inline Markdown, so the link is [words](/path) and **bold**
+# works; "{version}" becomes the newest release on disk, so it stays true
+# after a patch release lands. One sentence and one link: it has to fit one
+# line on a monitor and two on a phone. "" switches the banner off.
+ANNOUNCEMENT = ("\u00b5nleashed BBS {version} is out. "
+                "[Install it from your browser.](/install)")
 
 
 def announcement_banner():
-    """The announcement banner, or "" until a release of 1.0.0 or later is
-    on disk. The version shown is the newest one there, so it stays true
-    after a patch release lands.
-
-    It carries the board list's one button while it shows, rather than
-    sitting under a second button that goes to the same place: the news and
-    the way to act on it are one box (see index_page)."""
+    """The announcement banner, or "" when there is nothing to announce."""
+    if not ANNOUNCEMENT.strip():
+        return ""
     rels = firmware_releases()
     if not rels or rels[0]["sort"] < BANNER_FROM:
         return ""
-    ver = html.escape(rels[0]["version"])
-    return ('<div class="banner" role="note">' + BANNER_ART
-            + '<div class="say"><p><b>\u00b5nleashed BBS ' + ver + " is out.</b>"
-            "A board of your own on an ESP32, installed from your browser in "
-            "about five minutes, with no toolchain.</p>"
-            + cta_html(HOME_BUTTONS) + "</div></div>")
+    # md_inline escapes first, so the version goes in before it does.
+    words = md_inline(ANNOUNCEMENT.replace("{version}", rels[0]["version"]))
+    return '<div class="banner" role="note"><p>' + words + "</p></div>"
 
 
-# The board list's two buttons, in the banner or on their own. A button that
-# goes somewhere says where it goes; only the one on /install says Install.
-HOME_BUTTONS = ("[Visit the web installer](/install)",
-                "[Build from source](/build#getting-it-running)")
+# --------------------------------------------------------------------------
+# The board list's figures, as one sentence under its heading.
+#
+# "Unleashed is hosting 3 boards with 5 callers on right now." The boards
+# are every listed board, up or quiet, the same count as the page's
+# description; the callers are the sum of the callers-on figure the table
+# shows for each board that is up. Nothing here reaches the JSON or the
+# feed, which keep their own figures.
+#
+# STAT_SUFFIX goes on the end of the sentence, before its full stop, for
+# the day there is something true to add. It is empty on purpose: "across
+# the globe" was asked for and left out, because the directory knows
+# nothing about where a board is, and with one board listed it would read
+# as a boast about nothing.
+# --------------------------------------------------------------------------
+STAT_SUFFIX = ""
+
+
+def stat_line(boards, callers):
+    """The sentence under the heading, with the two figures in --live."""
+    if not boards:
+        return '<p class="stat">Unleashed is hosting no boards yet.</p>'
+    b = (f"<span class='n'>{boards:,}</span> "
+         f"board{'' if boards == 1 else 's'}")
+    c = ("no callers" if not callers else
+         f"<span class='n'>{callers:,}</span> "
+         f"caller{'' if callers == 1 else 's'}")
+    return (f'<p class="stat">Unleashed is hosting {b} with {c} on right now'
+            + html.escape(STAT_SUFFIX) + ".</p>")
+
+
+# The way to a board of your own, as a small card beside the heading rather
+# than a pair of full size buttons across the page. The board list is the
+# product; this is the side door for the few who came to build one. The
+# buttons say where they go, and neither says Install: only the button on
+# /install does, because only that one installs.
+RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
+            '<h2 id="run-your-own">Run your own board</h2>'
+            '<p class="say">An ESP32, a USB cable, five minutes.</p>'
+            '<p class="acts"><a class="fill" href="/install">Web installer</a>'
+            '<a class="line" href="/build#getting-it-running">Build from source</a>'
+            "</p></aside>")
 
 
 def index_page():
@@ -3620,13 +3678,8 @@ def index_page():
             "ORDER BY state='online' DESC, "
             "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC").fetchall()
     live = [r for r in rows if r["state"] == "online"]
+    # The same figure each row's state shows as "N of M on", summed.
     on = sum(r["busy"] or 0 for r in live)
-    # --live, the colour that means "up" everywhere else on the page. This
-    # figure is the product and it used to be set in the smallest, faintest
-    # type above the fold.
-    who = (f" &middot; <span class='count'>{on} caller"
-           f"{'' if on == 1 else 's'} on</span>"
-           if on else " &middot; nobody on right now")
     with db() as con:
         charts = {}
         for r in rows:
@@ -3634,27 +3687,27 @@ def index_page():
             if hours:
                 charts[r["id"]] = chart_html(hours)
 
+    # The announcement, when there is one, sits above everything else the
+    # page says; then the heading, its figures and the lead, with the small
+    # "Run your own board" card beside them; then the list, which is still
+    # the first big thing on the screen at every width.
     head = (head_html("list", "/")
-            + f"<h1>BBS directory <span>&middot; {len(rows)} listed{who}</span></h1>"
+            + announcement_banner()
+            + '<div class="listtop"><div class="intro">'
+            + "<h1>BBS directory</h1>"
+            + stat_line(len(rows), on)
             + '<p class="lead">Boards that are up right now. '
             'Dial one with <a href="/terminals">any telnet client</a>, or click '
             'an address if you have one installed. '
             '<a href="/dialing">Nothing happened?</a> '
-            '<a href="/firstcall">Never called one before?</a></p>')
-    # The way to a board of your own, as the page's one button. The list is
-    # dialled by clicking addresses, which are links, so a button here does
-    # not compete with it; and somebody who has just found out these exist
-    # is exactly who is looking for how to run one. One line tall, so the
-    # list moves down by one line. While there is a release to announce the
-    # banner carries the same two buttons instead, so the page still has
-    # one of each.
-    action = announcement_banner() or cta_html(HOME_BUTTONS)
+            '<a href="/firstcall">Never called one before?</a></p></div>'
+            + RUN_CARD + "</div>")
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>State</th></tr>"
                 + board_rows(rows, now, charts) + "</table>")
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
-    body = head + action + body
+    body = head + body
     # Five clauses and sixty words with no break, and it is the only place
     # that says what the 24 hour figures and "up for" mean. Three lines, one
     # idea each.

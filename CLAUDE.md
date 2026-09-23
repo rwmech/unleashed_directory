@@ -227,9 +227,10 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   **`::: cta`** (0.19.0) is a page's one primary action: the first line
   that is only a link is the filled button, the second is an outlined one
   beside it (they stack on a phone, filled first), anything else is the
-  note under both. One per page. /build, /setup and the board list (built
-  in `index_page`, from `cta_html`) have one: **Visit the web installer**
-  and **Build from source**.
+  note under both. One per page. /build and /setup have one: **Visit the
+  web installer** and **Build from source**. The board list has none since
+  0.20.1 (below): no full size button belongs in its flow, and the suite
+  fails on one there.
   **A button that goes somewhere says where it goes, and only the button
   on /install says "Install"** (Rob, 0.19.1). 0.19.0 labelled the
   navigation "Install from your browser", which landed on a page with a
@@ -303,17 +304,36 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   face (0.16.0), `site_url("list", role, "/")`, with an `aria-label` of its
   own because a link whose only content is a picture is announced as the
   picture.
-- **The announcement banner** is the yellow box above the board list
-  saying "µnleashed BBS X.Y.Z is out", and while it shows it carries the
-  list's two buttons (`HOME_BUTTONS`: Visit the web installer, Build from
-  source) in place of the standalone pair, so the page has one pair, not
-  two. Its drawing is dropped on a phone so the buttons stay on the first
-  screen.
+- **The announcement banner** (0.20.1, Rob: "a banner up there for
+  announcements ... above the directory, it should be elegant") is one
+  slim yellow line between the menu and the board list's heading: a
+  hairline, a lamp, small type, one sentence and one link. **The words are
+  `ANNOUNCEMENT` in `server.py` and nowhere else**: one string of inline
+  Markdown, `{version}` filled in with the newest release on disk, `""`
+  for no banner. It must fit one line at 1366 and two at 390, so keep it
+  to a sentence and a link. No buttons and no drawing in it: 0.20.0's box
+  carried both and Rob called it terrible.
   `announcement_banner()` renders it only when `firmware_releases()` finds
   a release at or above `BANNER_FROM` (1.0.0) on disk, so it cannot go
-  live early and appears by itself when the release lands. Yellow
-  (`#ffd35c`) is used for nothing else on the site: amber is a warning and
-  the tip box an invitation. Call it the announcement banner in docs.
+  live early and appears by itself when the release lands. Absent means no
+  box and no margin: the heading follows the menu directly. Yellow
+  (`#ffd35c`) is used for nothing else on the site apart from focus rings:
+  amber is a warning and the tip box an invitation. Call it the
+  announcement banner in docs.
+- **The top of the board list** (0.20.1) is a grid from 901px: the
+  heading, its figures and the lead on the left, and `RUN_CARD` on the
+  right, "Run your own board" in the install card's box with two compact
+  buttons (Web installer, Build from source; classes `fill` and `line`, not
+  the full size `btn` pair). 19.5rem, because at 18 the buttons stacked in
+  Menlo and the card stood half as tall again as the text beside it. On a
+  phone it follows the lead, title and buttons only. The table has to be
+  the first big thing on the screen at 1366 x 768 and 390 x 844: re-measure
+  after changing anything above it.
+  **The figures are `stat_line()`**, "Unleashed is hosting N boards with M
+  callers on right now." N is every listed board, up or quiet; M is the sum
+  of the callers-on figure each up board shows. `STAT_SUFFIX` goes before
+  the full stop and is empty on purpose: "across the globe" was asked for
+  and left out, because nothing here knows where a board is.
 - **Anything the server reads beside itself must be installed by
   `deploy/setup.sh`, in the same change** (the 0.17.x outage). setup.sh
   copies into `/srv/unleashed_directory` and the droplet's checkout is

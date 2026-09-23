@@ -289,6 +289,42 @@ def main():
               "connected" in page and "calls" in page)
         check("the queued one still is not", "Squatter" not in page)
 
+        # The figures are a sentence under the heading now, not a run of
+        # small numbers beside it. One board, reporting two callers on.
+        print("The heading's figures")
+        check("the heading is the heading, with nothing crammed beside it",
+              "<h1>BBS directory</h1>" in page and "listed &middot;" not in page)
+        check("and the figures are a sentence under it, counted from the list",
+              '<h1>BBS directory</h1><p class="stat">Unleashed is hosting '
+              "<span class='n'>1</span> board with <span class='n'>2</span> "
+              "callers on right now.</p>" in page)
+        check("in --live, the colour that means up",
+              "p.stat .n { color:var(--live); }" in page)
+        # Plurals, and the two zeros, straight from the function that
+        # writes the sentence, since the running server has one board.
+        def said(n, m):
+            return re.sub(r"<[^>]+>", "", S.stat_line(n, m))
+        check("no boards: said as such, with no callers clause to go wrong",
+              said(0, 0) == "Unleashed is hosting no boards yet.")
+        check("one board, one caller: both singular",
+              said(1, 1) == "Unleashed is hosting 1 board with 1 caller on right now.")
+        check("one board, nobody on: no callers, not 0 callers",
+              said(1, 0) == "Unleashed is hosting 1 board with no callers on right now.")
+        check("two boards, five callers: both plural",
+              said(2, 5) == "Unleashed is hosting 2 boards with 5 callers on right now.")
+        check("a big figure gets its thousands separator",
+              said(1200, 3400) == "Unleashed is hosting 1,200 boards with 3,400 "
+                                  "callers on right now.")
+        # The directory knows nothing about where a board is, so nothing on
+        # the page may say "across the globe" until something true can.
+        check("the suffix is empty, and nothing claims the globe",
+              S.STAT_SUFFIX == "" and "globe" not in page.lower())
+        was_suffix = S.STAT_SUFFIX
+        S.STAT_SUFFIX = " in three time zones"
+        check("and a suffix, once set, goes before the full stop",
+              said(2, 5).endswith("callers on right now in three time zones."))
+        S.STAT_SUFFIX = was_suffix
+
         print("The JSON list")
         _, raw = get("/api/boards.json")
         listed = json.loads(raw)["boards"]
@@ -1652,8 +1688,7 @@ def main():
         # /install says Install, because only that one installs.
         print("Calls to action")
         for path, alt in (("/build", "#getting-it-running"),
-                          ("/setup", "/build#getting-it-running"),
-                          ("/", "/build#getting-it-running")):
+                          ("/setup", "/build#getting-it-running")):
             pg = get(path)[1]
             body = pg.split("</nav>")[1]
             check(f"{path}: Visit the web installer, and Build from source beside it",
@@ -1676,11 +1711,41 @@ def main():
         setp = get("/setup")[1].split("</nav>")[1]
         check("and on /setup before the drawing",
               setp.index('class="btn"') < setp.index('class="art steps"'))
+        # The board list is the other way round (0.20.1, Rob: "This seems a
+        # bit big for a button there in the middle"). No full size button
+        # anywhere in its flow; the way to a board of your own is a small
+        # card beside the heading, with two compact buttons in it.
         home = get("/")[1]
-        lst = home.find("<table>")
-        lst = lst if lst >= 0 else home.find("No boards listed yet")
-        check("on the board list it sits above the list, under the lead",
-              0 < home.find('<p class="lead">') < home.find('class="btn"') < lst)
+        hbody = home.split("</nav>")[1].split("<footer")[0]
+        check("the board list has no full size button in its flow",
+              'class="btn"' not in hbody and 'class="btn2"' not in hbody
+              and 'class="cta"' not in hbody)
+        check("it has the Run your own board card instead, with its two ways in",
+              '<aside class="runcard" aria-labelledby="run-your-own">'
+              '<h2 id="run-your-own">Run your own board</h2>'
+              '<p class="say">An ESP32, a USB cable, five minutes.</p>'
+              '<p class="acts"><a class="fill" href="/install">Web installer</a>'
+              '<a class="line" href="/build#getting-it-running">Build from source</a>'
+              in hbody and hbody.count('class="runcard"') == 1)
+        check("and neither of its buttons says Install",
+              not re.search(r'class="(fill|line)"[^>]*>[^<]*Install', hbody))
+        lst = hbody.find("<table>")
+        lst = lst if lst >= 0 else hbody.find("No boards listed yet")
+        check("the card follows the heading and the lead, and the list follows it",
+              0 <= hbody.find("<h1>BBS directory</h1>") < hbody.find('<p class="lead">')
+              < hbody.find('<aside class="runcard"') < lst)
+        css_h = home.split("<style>")[1]
+        check("beside them from 901px as a grid column, not a float",
+              ".listtop { display:grid; grid-template-columns:minmax(0, 1fr) 19.5rem;"
+              in css_h and not re.search(r"\.runcard[^{]*\{[^}]*float", css_h))
+        check("its buttons are the compact ones, in the installer card's box",
+              ".runcard a.fill, .runcard a.line { display:inline-block; font-size:0.75rem;"
+              in css_h
+              and ".runcard { background:#12121a; border:1px solid #2c3a44; "
+                  "border-radius:0.5rem;" in css_h
+              and "padding:1.125rem 1.25rem;" in css_h)
+        check("and on a phone the card is its title and the two buttons",
+              ".runcard .say { display:none; }" in css_h)
 
         # ------------------------------------------------------------------
         # Rob could not find the donation page. It is in the menu now, last,
@@ -2416,26 +2481,49 @@ def main():
                       'class="banner"' not in home2)
                 check("and none on a directory with no release at all",
                       'class="banner"' not in get("/")[1])
-                check("and the list's own buttons are there instead",
-                      home2.count('class="btn"') == 1
-                      and '<div class="cta"><p class="acts"><a class="btn" href="/install">'
-                          "Visit the web installer</a>" in home2)
+                # Absent means absent: the heading follows the menu directly,
+                # with no empty box and no margin standing in for one.
+                check("and nothing takes its place: the heading follows the menu",
+                      '</nav><div class="listtop"><div class="intro"><h1>BBS directory</h1>'
+                      in home2
+                      and '</nav><div class="listtop">' in get("/")[1])
+                check("and the page has no full size button without it either",
+                      'class="btn"' not in home2.split("</nav>")[1]
+                      and 'class="runcard"' in home2)
                 put("1.0.0", "esp32", whole)
                 home2 = fetch("/", base2)[2].decode("utf-8")
-                bn = home2.split('<div class="banner"')[1].split("</main>")[0] \
-                    if '<div class="banner"' in home2 else ""
-                bn = bn[:bn.find("<table>")] if "<table>" in bn else bn.split("No boards listed")[0]
+                bn = (home2.split('<div class="banner"')[1].split("</div>")[0]
+                      if '<div class="banner"' in home2 else "")
                 check("the banner shows once a 1.0.0 release is on disk",
-                      "\u00b5nleashed BBS 1.0.0 is out." in bn)
-                check("above the list, linking to the installer, the source beside it",
-                      home2.index('<div class="banner"') < home2.index("No boards listed yet")
-                      and '<a class="btn" href="/install">Visit the web installer</a>' in bn
-                      and '<a class="btn2" href="/build#getting-it-running">Build from source</a>'
-                          in bn)
-                check("and it carries the page's one pair of buttons, not a second pair",
-                      home2.count('class="btn"') == 1 and home2.count('class="btn2"') == 1)
-                check("and its drawing is hidden from a screen reader",
-                      '<svg viewBox="0 0 120 76" aria-hidden="true"' in bn)
+                      '<div class="banner" role="note"><p>\u00b5nleashed BBS 1.0.0 is out. '
+                      '<a href="/install">Install it from your browser.</a></p></div>'
+                      in home2)
+                check("above the directory heading, straight under the menu",
+                      '</nav><div class="banner"' in home2
+                      and home2.index('<div class="banner"')
+                          < home2.index("<h1>BBS directory</h1>"))
+                check("one sentence and one link: no buttons and no drawing",
+                      bn.count("<a ") == 1 and "btn" not in bn and "<svg" not in bn
+                      and 'class="btn"' not in home2.split("</nav>")[1])
+                check("slim: small type, a hairline, a lamp, and nothing animated",
+                      ".banner { display:flex; align-items:center;" in home2
+                      and "font-size:0.8125rem;" in home2.split(".banner {")[1].split("}")[0]
+                      and ".banner::before {" in home2
+                      and "bannerled" not in home2)
+                # The words live in one constant, so Rob changes them in one
+                # place; empty switches the banner off. In-process, where
+                # FIRMWARE_DIR is these same scratch releases.
+                was_ann = S.ANNOUNCEMENT
+                S.ANNOUNCEMENT = "Version {version}, **now**. [Read](/about)"
+                one = S.announcement_banner()
+                S.ANNOUNCEMENT = "   "
+                none_ann = S.announcement_banner()
+                S.ANNOUNCEMENT = was_ann
+                check("the words come from one constant, the version filled in",
+                      one == '<div class="banner" role="note"><p>Version 1.0.0, '
+                             '<b>now</b>. <a href="/about">Read</a></p></div>')
+                check("and an empty announcement renders nothing at all",
+                      none_ann == "")
                 # 1.0.0 sorts above 0.19.2, is served, and is what the card
                 # offers first, with the one before it kept as the choice.
                 rels_1 = S.firmware_releases()
