@@ -403,6 +403,8 @@ NAV_SECTION = {
     # nine items is already the edge of what a phone can carry, and this is
     # reached from /build and from the footer of every page.
     "/install":         "/build",
+    # The setup guide is the step after installing, so it is Build one too.
+    "/setup":           "/build",
     "/forward-netgear": "/forward",
     "/forward-tplink":  "/forward",
     "/forward-asus":    "/forward",
@@ -432,7 +434,8 @@ def nav_html(role, here=""):
 def head_html(role, here=""):
     """The top of every page: wordmark and the freedoms beside it, then the
     same menu everywhere."""
-    return ('<div class="masthead">' + logo_html()
+    return ('<div class="masthead">'
+            + logo_html(site_url("list", role, "/"))
             + ticker_html(nav_index(role, here)) + "</div>"
             + nav_html(role, here))
 
@@ -1721,7 +1724,14 @@ PAGE = """<!doctype html>
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}">
 <meta property="og:type" content="website">
+<meta property="og:image" content="@AVATAR_URL@">
+<meta property="og:image:width" content="1024">
+<meta property="og:image:height" content="1024">
+<meta property="og:image:alt" content="The µnleashed wordmark inside a circle, over the words Electronic freedom.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="@AVATAR_URL@">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 {refresh}<link rel="alternate" type="application/rss+xml" title="New boards" href="/feed.xml">
 <style>
 /* Everything on this site is sized in rem off this one number, so the whole
@@ -1794,6 +1804,38 @@ pre.logo i:nth-child(6) {{ color:#3f6cab; }}
    of the header running off the side of the page. */
 .masthead {{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:0 1.5rem; }}
 .masthead pre.logo {{ flex:none; }}
+/* The wordmark is the way home. No underline and no colour change, because
+   it is already the most recognisable thing on the page; the focus ring is
+   the one thing a link has to show, for somebody moving by keyboard. */
+.masthead a.home {{ flex:none; display:block; text-decoration:none; color:inherit; }}
+.masthead a.home:focus-visible {{ outline:3px solid #ffd35c; outline-offset:4px; }}
+/* The announcement banner, above the board list, and only when there is a
+   release to announce: see announcement_banner(). Yellow, which nothing
+   else on the site is, because it is news rather than a warning (amber)
+   or an invitation (the tip box). */
+.banner {{ display:flex; align-items:center; gap:1.25rem; margin:0 0 1.5rem;
+        padding:0.875rem 1.125rem; background:#1f1a08; border:1px solid #ffd35c;
+        border-radius:0.5rem; color:#fbe7a1; }}
+.banner svg {{ flex:none; width:7.5rem; height:auto; }}
+.banner p {{ margin:0; }}
+.banner b {{ display:block; color:#ffd35c; font-weight:normal; font-size:1rem;
+        letter-spacing:0.0625rem; margin:0 0 0.25rem; }}
+.banner a {{ color:#ffd35c; }}
+.banner .o {{ fill:none; stroke:#ffd35c; stroke-width:1.4; stroke-linecap:round;
+        stroke-linejoin:round; }}
+.banner .d {{ fill:none; stroke:#ffd35c; stroke-width:1; stroke-linecap:round;
+        stroke-linejoin:round; opacity:0.6; }}
+.banner .g {{ fill:#1f1a08; stroke:#ffd35c; stroke-width:1; }}
+.banner .t {{ fill:#ffd35c; }}
+.banner .led {{ fill:var(--live); }}
+@media (max-width: 900px) {{
+  .banner {{ flex-direction:column; align-items:flex-start; gap:0.75rem; }}
+  .banner svg {{ width:6rem; }}
+}}
+@media (prefers-reduced-motion: no-preference) {{
+  .banner .led {{ animation:bannerled 1.6s ease-in-out infinite; }}
+  @keyframes bannerled {{ 0%, 100% {{ opacity:0.35; }} 50% {{ opacity:1; }} }}
+}}
 /* The freedoms, one at a time, beside the wordmark.
 
    Shown only from 73em up. In em, not px, because em in a media query is
@@ -2520,12 +2562,20 @@ LOGO_ROWS = (
 )
 
 
-def logo_html():
-    """The wordmark, one <i> per row. No newlines inside the <pre>, because
-    each row is a block element, so nothing depends on source whitespace."""
-    return ('<pre class="logo" role="img" aria-label="\u00b5nleashed">'
+def logo_html(home="/"):
+    """The wordmark, one <i> per row, as a link to the board list: the home
+    page of the site, on every page and every face. No newlines inside the
+    <pre>, because each row is a block element, so nothing depends on
+    source whitespace.
+
+    The link carries its own name, because a link whose only content is a
+    picture is announced by a screen reader as the picture, and "µnleashed"
+    says nothing about where it goes."""
+    return ('<a class="home" href="' + html.escape(home, quote=True)
+            + '" aria-label="\u00b5nleashed: the board list">'
+            + '<pre class="logo" role="img" aria-label="\u00b5nleashed">'
             + "".join(f"<i>{row}</i>" for row in LOGO_ROWS)
-            + "</pre>")
+            + "</pre></a>")
 
 
 # --------------------------------------------------------------------------
@@ -2684,6 +2734,33 @@ FAVICON = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" '
            '<rect x="7" y="2" width="2" height="8" fill="#b48ef0"/>'
            '<rect x="5" y="9" width="2" height="1" fill="#b48ef0"/>'
            "</svg>")
+
+# The avatar: the wordmark in the site's line art, inside a circle, made by
+# brand/make_avatar.py from LOGO_ROWS and this file's palette. It is what a
+# link preview shows (og:image, twitter:image) and what a phone puts on its
+# home screen (apple-touch-icon). Everything that matters sits inside the
+# circle, so the round crops those places make lose nothing.
+#
+# Its own routes and its own folder, for the favicon's reason: gallery_html()
+# shows every image in static/, and a logo does not belong in that gallery.
+# og:image has to be an absolute address, and it is the board list's,
+# because that is the face a shared link most often points at; the route
+# answers on every face anyway.
+BRAND_DIR = pathlib.Path(__file__).resolve().parent / "brand"
+
+
+def _brand(name):
+    try:
+        return (BRAND_DIR / name).read_bytes()
+    except OSError:
+        return None
+
+
+AVATAR_PNG = _brand("unleashed-avatar-1024.png")
+TOUCH_PNG = _brand("unleashed-avatar-512.png")
+AVATAR_URL = ((f"https://{LIST_DOMAIN}" if LIST_DOMAIN else SITE_URL).rstrip("/")
+              + "/avatar.png")
+PAGE = PAGE.replace("@AVATAR_URL@", html.escape(AVATAR_URL, quote=True))
 
 
 def human_ago(seconds):
@@ -2937,6 +3014,51 @@ def cached(key, seconds, build):
     return value
 
 
+# --------------------------------------------------------------------------
+# The announcement banner.
+#
+# It says the software has had its first release, above the board list, in
+# yellow, with the three pages somebody needs next. It must not go live
+# early, and it does not depend on anybody remembering to switch it on: it
+# shows only when firmware_releases() finds a release of 1.0.0 or later on
+# disk, which is the moment the installer can actually deliver one. With no
+# release, or only older ones, it renders nothing.
+# --------------------------------------------------------------------------
+BANNER_FROM = (1, 0, 0)
+
+# A dev board in the banner's own yellow, its lamp lit. Decoration beside
+# words that say everything, so it is hidden from a screen reader.
+BANNER_ART = (
+    '<svg viewBox="0 0 120 76" aria-hidden="true" focusable="false">'
+    '<rect class="o" x="16" y="14" width="92" height="48" rx="3"/>'
+    '<path class="d" d="M22 14 V9 M30 14 V9 M38 14 V9 M46 14 V9 M54 14 V9'
+    ' M62 14 V9 M70 14 V9 M78 14 V9 M86 14 V9 M94 14 V9 M102 14 V9'
+    ' M22 62 V67 M30 62 V67 M38 62 V67 M46 62 V67 M54 62 V67 M62 62 V67'
+    ' M70 62 V67 M78 62 V67 M86 62 V67 M94 62 V67 M102 62 V67"/>'
+    '<rect class="g" x="42" y="21" width="40" height="30" rx="1.5"/>'
+    '<path class="d" d="M46 27 H50 V24 H55 V27 H60 V24 H65 V27 H70 V24 H75 V27 H78"/>'
+    '<text class="t" x="62" y="44" font-size="11" text-anchor="middle">1.0</text>'
+    '<rect class="o" x="6" y="32" width="10" height="12" rx="1"/>'
+    '<path class="d" d="M6 38 H1"/>'
+    '<circle class="led" cx="98" cy="54" r="3"/>'
+    "</svg>")
+
+
+def announcement_banner():
+    """The announcement banner, or "" until a release of 1.0.0 or later is
+    on disk. The version shown is the newest one there, so it stays true
+    after a patch release lands."""
+    rels = firmware_releases()
+    if not rels or rels[0]["sort"] < BANNER_FROM:
+        return ""
+    ver = html.escape(rels[0]["version"])
+    return ('<div class="banner" role="note">' + BANNER_ART
+            + "<p><b>\u00b5nleashed BBS " + ver + " is released.</b>"
+            'A board of your own, with no toolchain: <a href="/build">what '
+            'to buy</a>, <a href="/install">put it on the board from your '
+            'browser</a>, then <a href="/setup">set it up</a>.</p></div>')
+
+
 def index_page():
     now = int(time.time())
     with db() as con:
@@ -2972,7 +3094,7 @@ def index_page():
                 + board_rows(rows, now, charts) + "</table>")
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
-    body = head + body
+    body = head + announcement_banner() + body
     # Five clauses and sixty words with no break, and it is the only place
     # that says what the 24 hour figures and "up for" mean. Three lines, one
     # idea each.
@@ -3618,6 +3740,30 @@ svg.art .aff { fill:#f0c674; }
                       40% { transform:translateX(-56px); opacity:1; }
                       46%, 100% { transform:translateX(-56px); opacity:0; } }
 
+/* The board's own screens on /setup: a bezel, a dark glass, and the
+   terminal's colours. As wide as a comfortable reading column at most;
+   a phone draws them at nearly 1:1. */
+svg.art.shot { width:100%; height:auto; margin:1rem auto 1.5rem; }
+svg.art.shot .scr { fill:#06060a; stroke:var(--dial); stroke-width:1; }
+svg.art.shot text.cap { fill:var(--dial); }
+svg.art.shot text.cz { fill:#06060a; }
+svg.art.shot text.c0 { fill:#2a2a2a; }  svg.art.shot rect.b0 { fill:#2a2a2a; }
+svg.art.shot text.c1 { fill:#b04848; }  svg.art.shot rect.b1 { fill:#b04848; }
+svg.art.shot text.c2 { fill:#3fae5a; }  svg.art.shot rect.b2 { fill:#3fae5a; }
+svg.art.shot text.c3 { fill:#b58a2e; }  svg.art.shot rect.b3 { fill:#b58a2e; }
+svg.art.shot text.c4 { fill:#4f78c0; }  svg.art.shot rect.b4 { fill:#4f78c0; }
+svg.art.shot text.c5 { fill:#9a6fd8; }  svg.art.shot rect.b5 { fill:#9a6fd8; }
+svg.art.shot text.c6 { fill:#3fb8b8; }  svg.art.shot rect.b6 { fill:#3fb8b8; }
+svg.art.shot text.c7 { fill:#c0c0c0; }  svg.art.shot rect.b7 { fill:#c0c0c0; }
+svg.art.shot text.c8 { fill:#6a6a72; }  svg.art.shot rect.b8 { fill:#6a6a72; }
+svg.art.shot text.c9 { fill:#ff7a7a; }  svg.art.shot rect.b9 { fill:#ff7a7a; }
+svg.art.shot text.ca { fill:#6ee88a; }  svg.art.shot rect.ba { fill:#6ee88a; }
+svg.art.shot text.cb { fill:#ffe066; }  svg.art.shot rect.bb { fill:#ffe066; }
+svg.art.shot text.cc { fill:#7fa8ff; }  svg.art.shot rect.bc { fill:#7fa8ff; }
+svg.art.shot text.cd { fill:#c8a0ff; }  svg.art.shot rect.bd { fill:#c8a0ff; }
+svg.art.shot text.ce { fill:#7fe8e8; }  svg.art.shot rect.be { fill:#7fe8e8; }
+svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
+
 @media (prefers-reduced-motion: no-preference) {
   /* nobody has to say yes: the gate is up and things go through it */
   svg.art.i-gate .go { animation:artpass 3.2s ease-in-out infinite; }
@@ -4194,7 +4340,136 @@ SKULL = """<svg class="art skull" viewBox="0 0 48 48" aria-hidden="true" focusab
 
 
 # What "::: art <name>" can draw on a Markdown page.
+# ----------------------------------------------------------------------
+# Screens captured from the board itself, for /setup.
+#
+# Not raster images and not redrawn by hand: tools on the firmware side ran
+# the host build on 127.0.0.1, drove a real session, and the screen model
+# kept each cell's character, colour and reverse video. shots/<name>.json
+# holds the result, and this draws it as the site's art: the characters on
+# a grid, each run of one colour a <text> pinned to its columns with
+# textLength so the font's own width cannot drift it, and reverse video as
+# a filled cell behind dark text.
+#
+# The colours are the terminal's, not the site's palette, because they are
+# what a caller sees. Two kinds of class, text.cN and rect.bN, one per ANSI
+# colour and brightness, 0 to f.
+# ----------------------------------------------------------------------
+SHOTS_DIR = pathlib.Path(__file__).resolve().parent / "shots"
+SHOT_CELL, SHOT_LINE, SHOT_PAD = 6, 12, 8
+
+
+def shot_svg(name, alt):
+    """One captured screen as a drawing, in a monitor's bezel, with what
+    was typed to get it written under the glass."""
+    doc = json.loads((SHOTS_DIR / (name + ".json")).read_text(encoding="utf-8"))
+    cols, rows, attrs = doc["cols"], doc["rows"], doc["attrs"]
+    gw = cols * SHOT_CELL + 2 * SHOT_PAD
+    gh = len(rows) * SHOT_LINE + 2 * SHOT_PAD
+    x0, y0 = 10, 10
+    # Sized so the type lands near the page's own, about 1.7 times its
+    # 10 unit size, whatever the width of the capture: a 39 column form
+    # and a 47 column list then read at the same size.
+    width_rem = round((gw + 20) * 0.08, 2)
+    out = [f'<svg class="art shot" style="max-width:{width_rem}rem" '
+           f'viewBox="0 0 {gw + 20} {gh + 40}" role="img" '
+           'preserveAspectRatio="xMidYMid meet" aria-label="'
+           + html.escape(alt, quote=True) + '">',
+           f'<rect class="o" x="4" y="4" width="{gw + 12}" height="{gh + 12}" rx="6"/>',
+           f'<rect class="scr" x="{x0}" y="{y0}" width="{gw}" height="{gh}" rx="2"/>']
+    for r, (text, attr) in enumerate(zip(rows, attrs)):
+        top = y0 + SHOT_PAD + r * SHOT_LINE
+        base = top + 9.5
+        c = 0
+        while c < len(text):
+            code = attr[c]
+            e = c
+            while e < len(text) and attr[e] == code:
+                e += 1
+            run = text[c:e]
+            x = x0 + SHOT_PAD + c * SHOT_CELL
+            w = (e - c) * SHOT_CELL
+            rev = code >= "g"
+            hexcode = "0123456789abcdef"["ghijklmnopqrstuv".index(code)] if rev else code
+            if rev:
+                out.append(f'<rect class="b{hexcode}" x="{x}" y="{top}" '
+                           f'width="{w}" height="{SHOT_LINE}"/>')
+            if run.strip():
+                out.append(f'<text class="{"cz" if rev else "c" + hexcode}" x="{x}" '
+                           f'y="{base}" font-size="10" textLength="{w}" '
+                           'lengthAdjust="spacingAndGlyphs" xml:space="preserve">'
+                           + html.escape(run) + "</text>")
+            c = e
+    out.append(f'<text class="cap" x="{x0 + 2}" y="{gh + 32}" font-size="9">'
+               + html.escape("typed: " + doc["typed"]) + "</text>")
+    out.append(f'<circle class="lf" cx="{gw + 4}" cy="{gh + 29}" r="2"/>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+SHOTS = {
+    "shot-config-list": ("config-list",
+        "The board's answer to CONFIG: a list of settings pages. board, "
+        "limits, accounts, backup, staff and wifi, each with one line saying "
+        "what it holds, then one page per plugin: sd, files, forums, info, "
+        "example, chat, serial and announce."),
+    "shot-config-board": ("config-board",
+        "CONFIG board: a form headed BOARD with the fields Board, Hostname, "
+        "Timezone, NTP, Idle min, LED gpio and Land on, holding My Board, "
+        "unleashed, UTC0, pool.ntp.org, 20, 2 and main, with Save and "
+        "Cancel under them and the keys on the bottom line."),
+    "shot-config-files": ("config-files",
+        "CONFIG files: Enabled, Read, Write and Admin, then Area 1 to Area 8 "
+        "as buttons. The first two carry the names C64 Downloads and Text "
+        "Files; the rest say not set."),
+    "shot-config-area": ("config-area",
+        "Area 1 opened from CONFIG files: a form headed FILE AREA 1 with Path "
+        "pub/c64, Name C64 Downloads, and the levels Read all, Upload staff, "
+        "Download all and Delete sysop."),
+}
+
+SETUP_ALT = (
+    "Three steps. A board on a USB cable, flashed from the browser. Wi-Fi "
+    "waves, where the board is told your network. A screen showing the BOARD "
+    "settings form, where CONFIG sets the rest up.")
+
+# The same hand as the first call strip: three panels, captions under
+# them, and one caret that blinks in the last.
+SETUP_ART = (
+    '<svg class="art steps" viewBox="-5 -6 354 130" role="img" '
+    'preserveAspectRatio="xMidYMid meet" aria-label="' + SETUP_ALT + '">'
+    # A dev board on its cable, lamp lit.
+    '<rect class="o" x="22" y="14" width="66" height="44" rx="3"/>'
+    '<path class="d" d="M28 14 V10 M36 14 V10 M44 14 V10 M52 14 V10 M60 14 V10'
+    ' M68 14 V10 M76 14 V10 M84 14 V10 M28 58 V62 M36 58 V62 M44 58 V62'
+    ' M68 58 V62 M76 58 V62 M84 58 V62"/>'
+    '<rect class="g" x="38" y="20" width="34" height="24" rx="1.5"/>'
+    '<path class="d" d="M41 25 H44 V22 H48 V25 H52 V22 H56 V25 H60 V22 H64 V25 H69"/>'
+    '<rect class="gb" x="50" y="56" width="10" height="7" rx="1"/>'
+    '<path class="o" d="M55 63 V70 Q55 78 47 78 H18"/>'
+    '<circle class="lf" cx="81" cy="51" r="2"/>'
+    + _caption(0, "flash it", "from the browser")
+    + '<path class="d" d="M109 35 L113 38.5 L109 42"/>'
+    # Wi-Fi, three arcs over a dot.
+    '<path class="o" d="M166.87 52.86 A8 8 0 0 1 179.13 52.86"/>'
+    '<path class="o" d="M159.98 47.07 A17 17 0 0 1 186.02 47.07"/>'
+    '<path class="o" d="M153.08 41.28 A26 26 0 0 1 192.92 41.28"/>'
+    '<circle class="lf" cx="173" cy="60" r="2.6"/>'
+    + _caption(118, "tell it", "your Wi-Fi")
+    + '<path class="d" d="M227 35 L231 38.5 L227 42"/>'
+    + _screen(236,
+        '<text class="dial" x="257" y="23" font-size="8">BOARD</text>'
+        '<path class="d" d="M257 26.5 H326"/>'
+        '<text class="ink" x="257" y="37" font-size="8">Board</text>'
+        '<rect class="k" x="284" y="30" width="41" height="9" rx="1"/>'
+        '<rect class="lf caret" x="286" y="31" width="3.5" height="7"/>'
+        '<text x="257" y="50" font-size="8">Idle</text>'
+        '<path class="d" d="M284 48.5 H325"/>')
+    + _caption(236, "set it up", "with CONFIG")
+    + "</svg>")
+
 ART = {"firstcall": FIRSTCALL_ART,
+       "setup-steps": SETUP_ART,
        "term-modern": MACHINE_MODERN,
        "term-chromebook": MACHINE_CHROMEBOOK,
        "term-commodore": MACHINE_COMMODORE,
@@ -4204,6 +4479,7 @@ ART = {"firstcall": FIRSTCALL_ART,
        "term-terminals": MACHINE_TERMINALS,
        "term-bridge": MACHINE_BRIDGE,
        "sd-wiring": SD_WIRING}
+ART.update({key: shot_svg(name, alt) for key, (name, alt) in SHOTS.items()})
 
 HOW = HOW.replace("@ART_CSS@", ART_CSS).replace("@SKULL@", SKULL)
 
@@ -4850,6 +5126,17 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/favicon.svg":
             self.reply(200, FAVICON, "image/svg+xml",
                        {"Cache-Control": "public, max-age=86400"})
+        elif path in ("/avatar.png", "/apple-touch-icon.png"):
+            blob = AVATAR_PNG if path == "/avatar.png" else TOUCH_PNG
+            if blob is None:
+                self.reply(404, "no such file\n", "text/plain; charset=utf-8")
+            else:
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(blob)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(blob)
         elif path.startswith("/static/") or path.startswith("/pix/"):
             # /pix/ is the card art on /kids. Same name check, same types,
             # a different folder: see PIX_DIR for why it is not in static/.

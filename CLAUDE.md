@@ -99,19 +99,37 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   decimal JSON number; their type is `offset: number` and a hex string
   would be handed to the flasher unparsed. Full process in
   `firmware/README.md`.
-  **Where a release goes, for whoever cuts one** (the firmware side does,
-  from a fresh clone):
+  **Releases arrive from GitHub, not from commits** (0.16.0). The firmware
+  repository publishes a GitHub Release of `rwmech/unleashed_BBS`, tagged
+  `vX.Y.Z`, with seven assets: `bootloader.bin`, `partitions.bin`,
+  `ota_data_initial.bin`, `firmware.bin`, `storage.bin`,
+  `THIRD_PARTY_NOTICES.md` and `SHA256SUMS`. `deploy/update.sh` runs
+  `deploy/fetch_release.py` on every run, including one where the site had
+  nothing new, and that installs the latest release as:
 
   ```
-  firmware/<BBS_VERSION>/esp32/bootloader.bin         0x1000    4096
-  firmware/<BBS_VERSION>/esp32/partitions.bin         0x8000    32768
-  firmware/<BBS_VERSION>/esp32/ota_data_initial.bin   0xF000    61440
-  firmware/<BBS_VERSION>/esp32/firmware.bin           0x20000   131072
-  firmware/<BBS_VERSION>/esp32/storage.bin            0x3C0000  3932160
-  firmware/<BBS_VERSION>/THIRD_PARTY_NOTICES.md       from the firmware repo
-  firmware/<BBS_VERSION>/release.txt                  optional: date, one-line note
+  firmware/<version>/esp32/bootloader.bin         0x1000    4096
+  firmware/<version>/esp32/partitions.bin         0x8000    32768
+  firmware/<version>/esp32/ota_data_initial.bin   0xF000    61440
+  firmware/<version>/esp32/firmware.bin           0x20000   131072
+  firmware/<version>/esp32/storage.bin            0x3C0000  3932160
+  firmware/<version>/THIRD_PARTY_NOTICES.md
+  firmware/<version>/SHA256SUMS                   kept, for the record
+  firmware/<version>/release.txt                  the release's date
   ```
 
+  **Every file is checked against SHA256SUMS in a staging directory
+  before anything moves**, and so is `storage.bin` for staff passwords, a
+  Wi-Fi key or a token with a value; any failure deletes the staging
+  directory and leaves the installed release as it was. The move is a
+  rename on one filesystem. The newest two versions are kept. Public
+  releases only, no token: the repository is private until 1.0.0, and a
+  404 gets a message that says so. A fetch failure is reported and does
+  not fail the site update. `firmware/<version>/` is git-ignored, so a
+  fetched release never shows in `git status` and a binary cannot be
+  committed by accident; `firmware/README.md` stays tracked. The suite
+  runs the fetcher against a release served from 127.0.0.1, including every
+  way it should refuse. Dropping files in by hand still works, for testing.
   `storage.bin` is PlatformIO's `littlefs.bin`, renamed for its partition.
   **No `manifest.json` goes in the folder**: the server builds it from the
   five files and serves it at `/install/<version>/manifest.json`, with
@@ -119,19 +137,17 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `new_install_improv_wait_time` 30. The chip directory is `esp32` so an
   S3 build is a second directory (`esp32s3`, bootloader at 0x0) and not a
   code change. A family missing any part, or with an empty part, is not
-  offered. Two releases are offered, newest first; commit the new one and
-  `git rm` the oldest in the same change.
-  **The suite reads every committed `storage.bin`** and fails if a staff
-  password, a Wi-Fi key or a directory token in it has a value, because
-  `data/system.cfg` is built into that image and a developer's copy has
-  all three. `firmware.bin` cannot be checked the same way: a build with a
-  developer's `include/secrets.h` carries their network, and only building
-  from a fresh clone prevents that.
-  **A web-installed board has no sysop password yet**, and no way to set
-  one from the board. `pages/install.md` has a `TODO(sysop password)`
-  comment where the step goes and says nothing about it until the firmware
-  can do it. Do not write that step, or send a reader to CONFIG or the
-  announce plugin from that page, before then.
+  offered. Two releases are offered, newest first.
+  **The sysop password on /install** (1.0.0, Rob): a board ships with one
+  default password, the sysop's, `unleashed`. It works only from the
+  board's own network and only until changed; the first sign-up or login
+  from the same network asks for it and then for a password of the
+  caller's own; the board will not list itself while it is still set. The
+  page says all of that and says "local only" is a guard, not a wall,
+  because a router that rewrites forwarded traffic can make an outside
+  caller look local. These are the firmware side's facts for 1.0.0, not
+  read off 0.22.3, which predates them: re-read them against the firmware
+  when 1.0.0 is tagged.
   **A board that runs 0.22.1 or later is updated without the erase
   question**: ESP Web Tools matches the firmware name the board reports
   over Improv against the manifest `name` and goes straight to Update. A
@@ -167,8 +183,8 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   recognises it; on that one page it asked a reader to decode an
   unfamiliar visual language before being given a reason to care.
   **`<!-- ... -->` is a comment and never renders**, for a note that
-  belongs beside the words it is about (the sysop password TODO on
-  /install). It must start a line outside a fence or a card, and the suite
+  belongs beside the words it is about (it held the sysop password TODO on
+  /install until 1.0.0 answered it). It must start a line outside a fence or a card, and the suite
   counts openers against closers in every page, because an unclosed one
   swallows the rest of the page.
   **`::: installer` ... `:::`** is the third block and the only one that is
@@ -235,6 +251,42 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   browser shows as a broken image. `_photo()` only builds 500 and 960, and
   the suite checks every width on the page. There is no CSP on this site;
   a comment used to say there was.
+- **The wordmark is a link to the board list** on every page and every
+  face (0.16.0), `site_url("list", role, "/")`, with an `aria-label` of its
+  own because a link whose only content is a picture is announced as the
+  picture.
+- **The announcement banner** is the yellow box above the board list
+  saying a release is out, with links to /build, /install and /setup.
+  `announcement_banner()` renders it only when `firmware_releases()` finds
+  a release at or above `BANNER_FROM` (1.0.0) on disk, so it cannot go
+  live early and appears by itself when the release lands. Yellow
+  (`#ffd35c`) is used for nothing else on the site: amber is a warning and
+  the tip box an invitation. Call it the announcement banner in docs.
+- **The avatar** is `brand/`: `make_avatar.py` draws the wordmark from
+  LOGO_ROWS and the palette in this file into `unleashed-avatar.svg`, and
+  the two PNGs are that screenshotted at 1024 and 512. Served at
+  `/avatar.png` (og:image and twitter:image, absolute, on the list face's
+  address) and `/apple-touch-icon.png`, from their own routes and not
+  from `static/`, because `gallery_html()` shows every image in `static/`
+  on the manifesto. Everything important is inside a centred circle, so
+  round crops are safe.
+- **/setup is the setup guide**: every CONFIG page and setting, with the
+  board's own screens. Every fact came from the firmware source
+  (`bbs_sysop.cpp` kPages and the cfg tables, the plugins' settings) and
+  COMMANDS.md at 0.22.3, and the "as shipped" values from
+  `data/system.cfg.example`, which is what a release's `storage.bin`
+  carries. Where CONFIG's range and the parser's disagree the page gives
+  the one the board honours (backup window and WHO max: 1 to 60).
+  **The screens are captured, not drawn**: `shots/capture/webshots.sh`
+  runs the firmware's host build in a worktree of its own (harness tag
+  `webshots`, port 6670) on 127.0.0.1, drives an ANSI session at 48
+  columns, and `shots2json.py` keeps each cell's character, colour and
+  reverse video in `shots/<name>.json`. `shot_svg()` draws that as the
+  site's art, each run a `<text>` pinned with `textLength` so the font
+  cannot drift it. The suite checks every field label the captured forms
+  show is explained on the page, so the prose and the screens cannot
+  disagree. Re-capture when CONFIG changes; the capture says which
+  version it came from.
 - **The freedoms beside the wordmark (0.14.0) are the board's own words**,
   and every one is a claim. `FREEDOMS` in `server.py` is the list; the
   first five come from the board's welcome screen (`tools/mkscreens.py` in

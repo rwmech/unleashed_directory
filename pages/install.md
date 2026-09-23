@@ -200,16 +200,38 @@ VT220 on a serial adapter all get a screen drawn for them rather than a
 compromise. If this is your first time, [what to expect on a first
 call](/firstcall) is two minutes long.
 
-For callers from outside your own network, [forward port 6400](/forward) on
-your router. That page covers the common routers step by step, and says what
-it opens before it says how.
+## The sysop password
 
-<!--
-TODO(sysop password): a board installed from this page has no sysop
-password, and today there is no way to set one from the board itself. A
-firmware fix is proposed and not built. Do not write this step, and do not
-tell a reader to use BYE <password>, CONFIG or the announce plugin (getting
-listed needs CONFIG, so it needs the sysop), until the firmware can do it
-and the steps have been checked against a board. When it lands, the step
-belongs in this section, before calling the board.
--->
+A new board has one password, the sysop's, and it is `unleashed`. The sysop is
+whoever runs the board: the person who can change every setting on it.
+
+That password is written here, on a page anybody can read, so on its own it
+protects nothing, and the board treats it that way. It only works from your
+own network, from a computer on the same Wi-Fi or wired network as the board,
+and only until you change it. While it is still set, the board will not put
+itself on this directory.
+
+Taking the board over is part of your first call:
+
+1. From a computer on the same network, [call the board](/terminals).
+2. Sign up for an account, or log in if you already have one.
+3. The board asks for the sysop password to set itself up. Type `unleashed`.
+4. It then asks you to choose your own. Choose one you use nowhere else:
+   calls to a BBS are not encrypted, and [the privacy page](/privacy) says
+   what that means in plain terms.
+
+> **Change it before anything else.** Do not [forward the port](/forward) and
+> do not turn on the directory listing until you have. "Only from your own
+> network" is a guard, not a wall: the board goes by the address a call arrives
+> from, and some routers rewrite forwarded traffic so that a caller from
+> outside arrives with an address from inside. On a router like that, an open
+> port and the default password would let a stranger in as the sysop. A
+> password of your own closes that, whatever the router does.
+
+## Then
+
+- [Set up your BBS](/setup): every setting, page by page, all of it from the
+  board with `CONFIG`.
+- For callers from outside your own network, [forward port 6400](/forward) on
+  your router, once the sysop password is yours. That page covers the common
+  routers step by step, and says what it opens before it says how.

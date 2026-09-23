@@ -14,8 +14,14 @@
 
 # Firmware releases
 
-This directory is what `/install` serves. Drop a release in, and the page
-offers it; take it out, and the page stops. **Nothing here is a list somebody
+This directory is what `/install` serves. A release lands here, and the page
+offers it; take it out, and the page stops.
+
+**Releases are not committed.** The firmware repository publishes each one as
+a GitHub Release, and `deploy/update.sh` on the server fetches the newest with
+`deploy/fetch_release.py`, checks every file against its `SHA256SUMS`, and
+installs it here. The version directories are git-ignored; only this README is
+tracked. **Nothing here is a list somebody
 maintains.** `server.py` walks this directory on each render and builds the
 ESP Web Tools manifest from what is actually on disk, so a release cannot be
 half-published, and the "no release published yet" state on the page is the
@@ -33,7 +39,8 @@ firmware/
   README.md                      this file
   0.22.1/                        one directory per release, named for the version
     release.txt                  optional: date on line 1, a short note after
-    THIRD_PARTY_NOTICES.md       copied from the firmware repo at release time
+    THIRD_PARTY_NOTICES.md       from the firmware repo, with the release
+    SHA256SUMS                   the release's own, kept for the record
     esp32/                       one directory per chip family
       bootloader.bin
       partitions.bin
@@ -184,7 +191,8 @@ words. Two consequences worth knowing:
 
 ## Cutting a release
 
-Everything before step 6 happens in the firmware repo.
+Steps 1 to 6 happen in the firmware repository. The directory's part is to
+fetch it, which `update.sh` does.
 
 1. **Check the source for that version is public.** The binaries are GPL v2 or
    later, so anybody who receives one is owed the corresponding source. The
@@ -231,41 +239,46 @@ Everything before step 6 happens in the firmware repo.
    The first should find nothing. The second should find only the empty keys
    from `system.cfg.example`. If either finds a real value, throw the build
    away and start at step 2; do not edit the binary. `selftest.py` repeats the
-   second check on every `storage.bin` committed here, and fails on any
+   second check on every `storage.bin` placed here, and fails on any
    password, Wi-Fi or token key that has a value.
 
 4. **Note the version.** It is `BBS_VERSION` in `src/config.h`, and the
-   directory you are about to create must be named exactly that.
+   release's tag must be `v` and exactly that: the tag names the directory the
+   release is installed into.
 
 5. **Copy the third-party notices**, `THIRD_PARTY_NOTICES.md` from the firmware
    repo root. It describes the code in the binaries beside it, so it travels
    with them rather than being linked to a moving target.
 
-6. In this repository:
+6. **Publish a GitHub Release** of `rwmech/unleashed_BBS`, tagged `v` and the
+   version (`v1.0.0`), public, with these seven assets:
+
+   ```
+   bootloader.bin  partitions.bin  ota_data_initial.bin  firmware.bin
+   storage.bin     THIRD_PARTY_NOTICES.md                SHA256SUMS
+   ```
+
+   `storage.bin` is PlatformIO's `littlefs.bin` renamed. `SHA256SUMS` is
+   `sha256sum`'s own output over the other six. A release without all seven,
+   or with a file that does not match its sum, or whose `storage.bin` carries a
+   password, a Wi-Fi key or a token, is refused and nothing on the site moves.
+
+7. **Rob runs `sudo /srv/unleashed_directory/deploy/update.sh`** on the
+   droplet. It fetches the newest release on every run, whether or not the site
+   itself changed, installs it here, and keeps the newest two. A fetch that
+   fails says why and leaves the installed release alone.
+
+8. **To check a build locally before it is published**, copy it in by hand;
+   the version directory is git-ignored, so it cannot be committed by
+   accident. Nothing here talks to the live site.
 
    ```sh
-   cd unleashed_directory
-   V=0.22.1                                  # BBS_VERSION, exactly
+   V=1.0.0
    S=../esp32-bbs-release/.pio/build/esp32dev
    mkdir -p firmware/$V/esp32
    cp $S/bootloader.bin $S/partitions.bin $S/ota_data_initial.bin \
       $S/firmware.bin firmware/$V/esp32/
    cp $S/littlefs.bin firmware/$V/esp32/storage.bin
-   cp ../esp32-bbs-release/THIRD_PARTY_NOTICES.md firmware/$V/
-   printf '%s\nWhat changed in one sentence.\n' "$(date +%F)" > firmware/$V/release.txt
-   ```
-
-7. **Delete the oldest release** so two remain. The server would stop listing
-   it anyway, but leaving it on disk grows the repository for no one's benefit.
-
-   ```sh
-   git rm -r firmware/0.21.9
-   ```
-
-8. **Check it locally before it is pushed.** Nothing here talks to the live
-   site.
-
-   ```sh
    python selftest.py
    DIRECTORY_PORT=8937 python3 server.py > /tmp/dir.log 2>&1 &
    curl -s localhost:8937/install/$V/manifest.json | python3 -m json.tool
@@ -285,9 +298,8 @@ Everything before step 6 happens in the firmware repo.
    prints one blocking line per request from its handler thread, and an
    undrained pipe wedges it in a way that reads exactly like a crash.
 
-9. **Update `CHANGELOG.md`, commit, push.** Rob runs
-   `sudo /srv/unleashed_directory/deploy/update.sh` on the droplet. Nobody
-   else deploys.
+9. **Delete the hand-copied release** when you are done, so the next fetch is
+   what the page offers.
 
 10. **Flash a real board from the live page** before telling anybody the
     release exists. The installer is the one part of this project that cannot
@@ -318,30 +330,18 @@ Everything before step 6 happens in the firmware repo.
     > A merged release is one part at offset 0, which `FLASH_PARTS` would have
     > to say. Do not change it on a hunch; change it if a board does not boot.
 
-## Size, and why the binaries are in git
+## Size
 
-`deploy/update.sh` is a `git pull`, so anything the site serves has to be in
-the repository. A release is roughly 1.1 MB of application and 256 KB of
-filesystem per chip family, so two releases is about 2.7 MB. Keeping two, and
-deleting the third, is what stops that growing without bound.
-
-If that ever stops being acceptable, the fix is to put this directory on a
-volume outside the checkout and point `DIRECTORY_FIRMWARE_DIR` at it. The
-server reads that variable for exactly this reason and nothing else about the
-page changes.
+A release is roughly 1.1 MB of application and 256 KB of filesystem per chip
+family, so the two kept are about 2.7 MB of the server's disk and none of the
+repository. To keep them somewhere else, point `DIRECTORY_FIRMWARE_DIR` at
+another directory: the server and `fetch_release.py` both read it.
 
 ## What still gates the first release
 
-Not the Wi-Fi any more. Since firmware 0.22.1 the network is set from the
-browser over Improv Wi-Fi Serial and kept in `system.cfg` on `userdata`, so an
-image built without `include/secrets.h` joins nobody's network until its owner
-tells it which. The installer page is ready for that.
-
-Two things still stand between a build and this directory, and neither is the
-site's to decide:
-
-- **Step 1 above: the source.** The firmware repository is private today.
-- **The sysop password.** A board installed from this page has none, and no way
-  to set one from the board, so nobody can administer it. A firmware fix is
-  proposed. `pages/install.md` carries a comment marking where the step goes
-  and says nothing about it until the firmware can do it.
+Not the Wi-Fi: since firmware 0.22.1 the network is set from the browser over
+Improv Wi-Fi Serial. Not the sysop password either: 1.0.0 ships a default,
+`unleashed`, that works only from the board's own network and only until it is
+changed, and `pages/install.md` says so. What is left is step 1: the source
+has to be public, which for this repository happens at 1.0.0, and until then
+`fetch_release.py` finds no public release and says so.

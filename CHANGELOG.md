@@ -14,6 +14,48 @@
 
 # Changelog
 
+## 0.16.0, 2026-09-23
+
+For the firmware's 1.0.0 release (Rob).
+
+- **/install says the default sysop password plainly**: `unleashed`, which
+  works only from the board's own network and only until it is changed. The
+  first call from the same network asks for it and then for a password of your
+  own; the board will not list itself while the default is set; and the page
+  is honest that "local only" is a guard, not a wall, because a router that
+  rewrites forwarded traffic can make an outside caller look local. It
+  replaces the TODO comment that held the place. These are the firmware
+  side's facts for 1.0.0.
+- **/setup, "Set up your BBS"**: every CONFIG page and every setting, board,
+  limits, accounts, backup, staff and wifi, then chat, files, forums, info,
+  announce and sd, with serial and example noted as off. Every fact from the
+  firmware source and COMMANDS.md at 0.22.3; "as shipped" values from the
+  shipped `system.cfg`. Linked from /install, /build and the announcement
+  banner, under Build one in the menu.
+- **The board's own screens on /setup**, captured from the firmware's host
+  build on 127.0.0.1 in a worktree of its own, and drawn as the site's line
+  art rather than pictures: `shots/<name>.json` keeps every cell's character,
+  colour and reverse video, and `shot_svg()` pins each run to its columns.
+  `shots/capture/` is how to do it again. A three-step drawing opens the page.
+- **The wordmark links to the board list** on every page and every face.
+- **The announcement banner**: a yellow box above the board list saying
+  µnleashed BBS is released, with line art and links to build one, flash it
+  and set it up. It renders only when a firmware release of 1.0.0 or later is
+  on disk, so it cannot go live early and appears by itself when one lands.
+- **update.sh fetches the firmware release** (`deploy/fetch_release.py`): the
+  latest public GitHub Release of rwmech/unleashed_BBS, tagged vX.Y.Z, seven
+  assets. Every file is checked against SHA256SUMS, and the screens image for
+  credentials, in a staging directory before anything moves; any failure
+  leaves the installed release untouched. The newest two are kept. It runs on
+  every update, and a failed fetch says why without failing the update.
+  Fetched releases are git-ignored.
+- **The avatar**: the wordmark in the site's line art, inside a circle. In
+  `brand/` with its generator, served at `/avatar.png` (og:image,
+  twitter:image) and `/apple-touch-icon.png`.
+- 393 checks, up from 355, including the release fetcher against a release
+  served from 127.0.0.1 with every way it should refuse. The banner threshold
+  and the checksum check were proved by breaking each.
+
 ## 0.15.0, 2026-09-23
 
 Rob: "Have the website agent get the web flasher running." The firmware

@@ -1314,13 +1314,28 @@ def main():
               and "untried" in flat_i)
         check("and points on to calling the board and forwarding the port",
               'href="/terminals"' in inst and 'href="/forward"' in inst)
-        # The sysop password is the firmware's to solve first. The page
-        # carries the note for whoever writes that step and shows a reader
-        # nothing about it, and above all no instruction it cannot keep.
+        # The one default password, said plainly, with the limits the
+        # firmware puts on it and the honest limit of those limits.
+        check("the install page gives the default sysop password plainly",
+              "<h2>The sysop password</h2>" in inst
+              and "and it is <code>unleashed</code>" in flat_i)
+        check("and says it works only from your own network, and only until changed",
+              "It only works from your own network" in flat_i
+              and "only until you change it" in flat_i)
+        check("and that the board will not list itself while it is set",
+              "the board will not put itself on this directory" in flat_i)
+        check("and walks through choosing your own on the first call",
+              "asks for the sysop password to set itself up" in flat_i
+              and "It then asks you to choose your own" in flat_i)
+        check("and says local only is a guard, not a wall, and why",
+              "is a guard, not a wall" in flat_i
+              and "rewrite forwarded traffic" in flat_i
+              and "Do not <a href=\"/forward\">forward the port</a>" in flat_i)
         src_i = open(os.path.join("pages", "install.md"), encoding="utf-8").read()
-        check("the sysop step is a marked TODO in the source and nowhere on the page",
-              "TODO(sysop password)" in src_i and "TODO" not in inst
-              and "sysop password" not in inst.lower())
+        check("and the TODO it replaced is gone",
+              "TODO" not in src_i and "TODO" not in inst)
+        check("and the page points on to the setup guide",
+              'href="/setup"' in inst)
         # A comment is dropped whole, so one left open would swallow the
         # rest of its page without a word. Every page opens as many as it
         # closes.
@@ -1393,6 +1408,92 @@ def main():
         # nav marks nothing, or worse marks Boards.
         check("and the menu marks Build one as the section it belongs to",
               '<a class="here" href="/build">Build one</a>' in inst)
+
+        # ------------------------------------------------------------------
+        # The setup guide: every CONFIG page, with the board's own screens.
+        print("The setup guide")
+        code, setup = get("/setup")
+        flat_s = " ".join(setup.split())
+        check("there is a setup page, under Build one",
+              code == 200 and '<a class="here" href="/build">Build one</a>' in setup)
+        check("with every core CONFIG page",
+              all(f"<h2>{p}</h2>" in setup
+                  for p in ("board", "limits", "accounts", "backup", "staff", "wifi")))
+        check("and every plugin page",
+              all(f"<h3>{p}</h3>" in setup
+                  for p in ("chat", "files", "forums", "info", "announce", "sd"))
+              and "<h3>serial and example</h3>" in setup)
+        check("it starts with becoming the sysop, and points at the password step",
+              "<h2>First, become the sysop</h2>" in setup
+              and "<code>unleashed</code>" in setup and 'href="/install"' in setup)
+        # The screens are the board's own, drawn as the site's art: a grid of
+        # text pinned to its columns, not a picture.
+        shots = re.findall(r'<svg class="art shot"[^>]*role="img"[^>]*aria-label="[^"]+"', setup)
+        check("with four screens captured from the board, each described",
+              len(shots) == 4 and setup.count('lengthAdjust="spacingAndGlyphs"') > 40
+              and "<img" not in setup.split("<article>")[1])
+        # The prose and the captures cannot disagree about a field's name:
+        # every label the board drew on the board and file area forms is a
+        # row in the page's tables.
+        drawn = []
+        for shot in ("config-board", "config-area"):
+            doc = json.load(open(os.path.join("shots", shot + ".json"), encoding="utf-8"))
+            for row, attr in zip(doc["rows"], doc["attrs"]):
+                if row.startswith(" ") and len(row) > 10 and attr[1] in "bc" and row[1:10].strip():
+                    drawn.append(row[1:10].strip())
+        missing_l = [l for l in drawn if f"<b>{l}</b>" not in setup]
+        check("and every field those forms show is explained in a table"
+              + ("" if not missing_l else "  <- " + ", ".join(missing_l)),
+              len(drawn) >= 12 and not missing_l)
+        check("each capture says where it came from",
+              all(json.load(open(os.path.join("shots", n), encoding="utf-8"))
+                  .get("source", "").startswith("unleashed BBS ")
+                  for n in os.listdir("shots") if n.endswith(".json")))
+        check("the guide is linked from the build and install pages",
+              'href="/setup"' in get("/build")[1] and 'href="/setup"' in get("/install")[1])
+        check("and says the listing waits for the password to change",
+              "the board will not list itself while the default password is still set"
+              in flat_s)
+
+        # The wordmark is the way home, on every page of every face.
+        print("The wordmark goes home")
+        homes = {"the board list": (get("/")[1], "/"),
+                 "a page": (get("/setup")[1], "/"),
+                 "the manifesto": (get("/", host="about.example")[1], "https://boards.example/"),
+                 "the data face": (get("/", host="data.example")[1], "https://boards.example/")}
+        check("the wordmark links to the board list on every face",
+              all(f'<a class="home" href="{want}" aria-label="' in page
+                  and '<pre class="logo"' in page.split('<a class="home"')[1].split("</a>")[0]
+                  for page, want in homes.values()))
+
+        # The avatar: link previews and the home-screen icon.
+        print("The avatar")
+        import struct
+
+        def png_size(blob):
+            return struct.unpack(">II", blob[16:24]) if blob[:8] == b"\x89PNG\r\n\x1a\n" else None
+        code, ctype, blob = fetch("/avatar.png")
+        check("the avatar is served as a PNG, 1024 square",
+              code == 200 and ctype == "image/png" and png_size(blob) == (1024, 1024))
+        code, ctype, blob = fetch("/apple-touch-icon.png")
+        check("and the home-screen icon, 512 square",
+              code == 200 and ctype == "image/png" and png_size(blob) == (512, 512))
+        faces_a = [get("/")[1], get("/setup")[1], get("/", host="about.example")[1],
+                   get("/", host="data.example")[1]]
+        check("every face names it for link previews, by an absolute address",
+              all(re.search(r'<meta property="og:image" content="https://[^"]+/avatar\.png">', p)
+                  and '<meta name="twitter:card" content="summary">' in p
+                  and re.search(r'<meta name="twitter:image" content="https://[^"]+/avatar\.png">', p)
+                  and '<meta property="og:image:alt" content="' in p
+                  for p in faces_a))
+        check("and as the icon a phone puts on its home screen",
+              all('<link rel="apple-touch-icon" href="/apple-touch-icon.png">' in p
+                  for p in faces_a))
+        # Not in static/, or the manifesto's gallery would show a logo.
+        check("and it lives in brand/ with its generator, not in static/",
+              os.path.isfile(os.path.join("brand", "make_avatar.py"))
+              and os.path.isfile(os.path.join("brand", "unleashed-avatar.svg"))
+              and not any("avatar" in n for n in os.listdir("static")))
 
         print("Every other page is still script-free")
         scripted = [p for p in ("/", "/about", "/data", "/build", "/whofor",
@@ -1620,7 +1721,7 @@ def main():
         resting = head_css[at:mv]
         moving = head_css[mv:head_css.index("\n}\n", mv)]
         check("every face carries the panel beside the wordmark",
-              all('<div class="masthead"><pre class="logo"' in p
+              all(re.search(r'<div class="masthead"><a class="home" [^>]*><pre class="logo"', p)
                   and ticker_of(p) for p in faces.values()))
         check("with all eight freedoms, each with the line saying what it means",
               len(wanted) == 8
@@ -1881,6 +1982,27 @@ def main():
                       and fetch("/install/9.9.9/manifest.json", base2)[0] == 404)
                 check("and the bundle is served to this server too",
                       fetch(S.EWT_SCRIPT, base2)[0] == 200)
+
+                # The announcement banner appears by itself when a release
+                # of 1.0.0 or later lands, and not a moment before.
+                print("The announcement banner")
+                home2 = fetch("/", base2)[2].decode("utf-8")
+                check("no banner while the newest release is before 1.0.0",
+                      'class="banner"' not in home2)
+                check("and none on a directory with no release at all",
+                      'class="banner"' not in get("/")[1])
+                put("1.0.0", "esp32", whole)
+                home2 = fetch("/", base2)[2].decode("utf-8")
+                bn = home2.split('<div class="banner"')[1].split("</div>")[0] \
+                    if '<div class="banner"' in home2 else ""
+                check("the banner shows once a 1.0.0 release is on disk",
+                      "\u00b5nleashed BBS 1.0.0 is released." in bn)
+                check("above the list, with build, flash and set-up links",
+                      home2.index('<div class="banner"') < home2.index("No boards listed yet")
+                      and 'href="/build"' in bn and 'href="/install"' in bn
+                      and 'href="/setup"' in bn)
+                check("and its drawing is hidden from a screen reader",
+                      '<svg viewBox="0 0 120 76" aria-hidden="true"' in bn)
             finally:
                 server2.terminate()
                 try:
@@ -1895,6 +2017,172 @@ def main():
         finally:
             S.FIRMWARE_DIR = was_dir
             shutil.rmtree(fwroot, ignore_errors=True)
+
+        # ------------------------------------------------------------------
+        # The last hop of the build pipeline: update.sh fetches the newest
+        # GitHub release and installs it. Tested against a release served
+        # from 127.0.0.1, never GitHub, with every way it should refuse.
+        print("The release fetcher")
+        upd = open(os.path.join("deploy", "update.sh"), encoding="utf-8").read()
+        check("update.sh runs the fetcher whether or not the site changed",
+              "deploy/fetch_release.py" in upd
+              and upd.count("\n    fetch_release\n") == 1
+              and upd.count("\nfetch_release\n") == 1)
+        import hashlib
+        import http.server
+        relroot = tempfile.mkdtemp(prefix="dirrel")
+        dest = tempfile.mkdtemp(prefix="dirdest")
+        rel_state = {"tag": "v1.0.0", "missing": None, "tamper": None, "status": 200,
+                     "secret": False}
+
+        def make_release():
+            d = os.path.join(relroot, "assets")
+            shutil.rmtree(d, ignore_errors=True)
+            os.makedirs(d)
+            files = {}
+            for n in ("bootloader.bin", "partitions.bin", "ota_data_initial.bin",
+                      "firmware.bin", "storage.bin"):
+                body = (n + rel_state["tag"]).encode() * 64
+                if n == "storage.bin":
+                    body += (b"\nsysop_password = hunter2\n" if rel_state["secret"]
+                             else b"\nsysop_password =\ntoken       =    ; only if\n")
+                files[n] = body
+            files["THIRD_PARTY_NOTICES.md"] = b"notices\n"
+            sums = "".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n" for n, b in files.items())
+            files["SHA256SUMS"] = sums.encode()
+            if rel_state["tamper"]:
+                files[rel_state["tamper"]] = files[rel_state["tamper"]] + b"x"
+            for n, b in files.items():
+                if n != rel_state["missing"]:
+                    with open(os.path.join(d, n), "wb") as fh:
+                        fh.write(b)
+
+        class Rel(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                port = self.server.server_address[1]
+                if self.path == "/releases/latest":
+                    if rel_state["status"] != 200:
+                        self.send_response(rel_state["status"])
+                        self.end_headers()
+                        return
+                    names = sorted(os.listdir(os.path.join(relroot, "assets")))
+                    body = json.dumps({
+                        "tag_name": rel_state["tag"],
+                        "published_at": "2026-10-01T12:00:00Z",
+                        "assets": [{"name": n, "browser_download_url":
+                                    f"http://127.0.0.1:{port}/dl/{n}"} for n in names],
+                    }).encode()
+                elif self.path.startswith("/dl/"):
+                    f = os.path.join(relroot, "assets", self.path[4:])
+                    if not os.path.isfile(f):
+                        self.send_response(404)
+                        self.end_headers()
+                        return
+                    body = open(f, "rb").read()
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        relsrv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Rel)
+        threading.Thread(target=relsrv.serve_forever, daemon=True).start()
+        relenv = dict(os.environ, UNLEASHED_RELEASE_API=
+                      f"http://127.0.0.1:{relsrv.server_address[1]}/releases/latest")
+
+        def run_fetch():
+            r = subprocess.run([sys.executable, os.path.join("deploy", "fetch_release.py"),
+                                "--dest", dest], env=relenv, capture_output=True,
+                               text=True, timeout=60)
+            return r.returncode, r.stdout
+
+        def tree(ver):
+            d = os.path.join(dest, ver)
+            if not os.path.isdir(d):
+                return None
+            out = {}
+            for root, _dirs, fs in os.walk(d):
+                for f in fs:
+                    p = os.path.join(root, f)
+                    out[os.path.relpath(p, d).replace(os.sep, "/")] = open(p, "rb").read()
+            return out
+
+        try:
+            make_release()
+            rc, out = run_fetch()
+            t = tree("1.0.0")
+            check("a good release is installed where the installer looks",
+                  rc == 0 and "Installed firmware 1.0.0" in out and t is not None
+                  and all("esp32/" + n in t for n in ("bootloader.bin", "partitions.bin",
+                                                      "ota_data_initial.bin", "firmware.bin",
+                                                      "storage.bin"))
+                  and "THIRD_PARTY_NOTICES.md" in t and "SHA256SUMS" in t
+                  and t.get("release.txt") == b"2026-10-01\n")
+            # Read by the server exactly as a hand-placed release would be.
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                man_f = S.firmware_manifest("1.0.0")
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("and the server builds its manifest from it",
+                  man_f is not None and len(man_f["builds"][0]["parts"]) == 5)
+            rc, out = run_fetch()
+            check("a second run changes nothing and says so",
+                  rc == 0 and "already installed" in out and tree("1.0.0") == t)
+
+            # Every refusal leaves 1.0.0 exactly as it was.
+            rel_state.update(tag="v1.0.1", tamper="firmware.bin")
+            make_release()
+            rc, out = run_fetch()
+            check("a file that does not match SHA256SUMS installs nothing",
+                  rc == 1 and "does not match SHA256SUMS" in out
+                  and tree("1.0.1") is None and tree("1.0.0") == t)
+            rel_state.update(tamper=None, missing="storage.bin")
+            make_release()
+            rc, out = run_fetch()
+            check("nor does a release missing a part",
+                  rc == 1 and "missing storage.bin" in out and tree("1.0.1") is None)
+            rel_state.update(missing=None, secret=True)
+            make_release()
+            rc, out = run_fetch()
+            check("nor one whose screens carry a password",
+                  rc == 1 and "carries a password" in out and tree("1.0.1") is None)
+            rel_state.update(secret=False, tag="1.0.1")
+            make_release()
+            rc, out = run_fetch()
+            check("nor one whose tag is not vX.Y.Z",
+                  rc == 1 and "not vX.Y.Z" in out and tree("1.0.1") is None)
+            rel_state.update(status=404, tag="v1.0.1")
+            rc, out = run_fetch()
+            check("and a private repository or no release gets a clear message",
+                  rc == 1 and "no public release" in out and "private until 1.0.0" in out
+                  and tree("1.0.0") == t)
+            check("with nothing left behind from any of them",
+                  not [n for n in os.listdir(dest) if n.startswith(".")])
+
+            # Newest two are kept.
+            rel_state.update(status=200, tag="v1.0.1")
+            make_release()
+            run_fetch()
+            rel_state.update(tag="v1.1.0")
+            make_release()
+            rc, out = run_fetch()
+            kept = sorted(n for n in os.listdir(dest) if re.match(r"^\d+\.\d+\.\d+$", n))
+            check("the newest two releases are kept and the older removed",
+                  rc == 0 and kept == ["1.0.1", "1.1.0"] and "Removed older releases: 1.0.0" in out)
+        finally:
+            relsrv.shutdown()
+            shutil.rmtree(relroot, ignore_errors=True)
+            shutil.rmtree(dest, ignore_errors=True)
+        check("fetched releases are kept out of git",
+              "/firmware/[0-9]*/" in open(".gitignore", encoding="utf-8").read())
 
         # The code a visitor runs is the code in this repository, at an
         # exact version, and cannot change between one reader and the next.
@@ -1920,7 +2208,7 @@ def main():
                 img = os.path.join("firmware", rel, chip, "storage.bin")
                 if os.path.isfile(img) and secret.search(open(img, "rb").read()):
                     leaky.append(rel + "/" + chip)
-        check("no committed release carries a password, a Wi-Fi key or a token"
+        check("no release in firmware/ carries a password, a Wi-Fi key or a token"
               + ("" if not leaky else "  <- " + ", ".join(leaky)),
               not leaky)
         # And the scan finds one when there is one to find.

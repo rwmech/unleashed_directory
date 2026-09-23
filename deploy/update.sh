@@ -5,7 +5,9 @@
 #
 # File:        deploy/update.sh
 # Purpose:     Pull, re-install, restart, check it still works, and say what
-#              changed. Safe to run when there is nothing to do.
+#              changed. Then fetch the newest firmware release for the
+#              browser installer (deploy/fetch_release.py). Safe to run when
+#              there is nothing to do.
 #
 # Usage:       sudo ./deploy/update.sh                 update now, say everything
 #              sudo ./deploy/update.sh --quiet         only speak up if something
@@ -89,12 +91,34 @@ fi
 cd "$SRC"
 [ -d .git ] || { loud "$SRC is not a git checkout, so there is nothing to pull"; exit 1; }
 
+# ---------------------------------------------------------------------------
+# The firmware release for /install. The firmware repository publishes a
+# GitHub Release (tag vX.Y.Z, five images, the notices and SHA256SUMS), and
+# fetch_release.py checks every file before anything moves, keeps the newest
+# two and leaves the current one untouched if anything is wrong. It runs on
+# every update, including one where the site itself had nothing new, because
+# a firmware release does not come with a site change.
+#
+# A failure here is reported and does not fail the update: the site is
+# fine, it simply keeps offering the release it had.
+# ---------------------------------------------------------------------------
+fetch_release() {
+    [ "$CHECK" -eq 1 ] && return 0
+    local q=""
+    [ "$QUIET" -eq 1 ] && q="--quiet"
+    # shellcheck disable=SC2086
+    if ! python3 "$SRC/deploy/fetch_release.py" $q; then
+        loud "(the directory itself is unaffected)"
+    fi
+}
+
 OLD="$(git rev-parse HEAD)"
 git fetch --quiet origin
 NEW="$(git rev-parse '@{u}')"
 
 if [ "$OLD" = "$NEW" ]; then
     say "Already up to date at $(git log -1 --format='%h %s')"
+    fetch_release
     exit 0
 fi
 
@@ -113,6 +137,10 @@ if ! git merge --ff-only "$NEW" >/dev/null 2>&1; then
 fi
 
 loud "Updated $(git log -1 --format='%h' "$OLD") -> $(git log -1 --format='%h %s')"
+
+# After the pull, so a change to the fetcher itself is the one that runs.
+loud ""
+fetch_release
 
 # ---------------------------------------------------------------------------
 # What changed, in words rather than commit subjects. The changelog is the

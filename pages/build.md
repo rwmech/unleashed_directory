@@ -8,8 +8,9 @@ dev board in a drawer, you already have most of it.
 > [!TIP]
 > **[Install from the browser](/install).** Chrome or Edge, a USB cable,
 > about five minutes, and no toolchain. The same page sets up the board's
-> Wi-Fi, and says whether there is a release ready to install. This page is
-> the longer road, and the one you want once you start changing things.
+> Wi-Fi, and says whether there is a release ready to install, and [the setup
+> guide](/setup) covers every setting after that. This page is the longer
+> road, and the one you want once you start changing things.
 
 ## What you need
 
