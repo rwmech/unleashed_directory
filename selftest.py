@@ -434,23 +434,38 @@ def badge_checks(S, db):
     check("the name has a box of its own, the width of the name",
           "<td class='name' data-label='Board'><span class='bname'>Badge Board</span>"
           "<span class=\"badges\">" in page)
-    # Alphabetical by name within each group (0.22.0, Rob): Chat, Doors,
-    # Files, Guests welcome, Machine, PETSCII, Software, then New.
-    check("the board's own badges in alphabetical order by name, then N",
-          found == [("feat", "C"), ("feat", "D"), ("feat", "Fi"), ("guest", "G"),
-                    ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;"), ("term", "P"),
-                    ("soft", "unleashed"), ("new", "N")])
+    # Site 1.0.0 (Rob: "The unleashed and esp32 should be upfront ... that
+    # way they look consistent when scrolling"): the software with its
+    # version, then the machine, on a row of their own; then the small
+    # badges in a fixed order, PETSCII, guests, the features as C M F Fi D,
+    # then new or steady and time listed.
+    check("the software with its version and the machine first, then the rest in "
+          "their fixed order",
+          found == [("soft", "unleashed 1.0.0"),
+                    ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;"),
+                    ("term", "P"), ("guest", "G"), ("feat", "C"), ("feat", "Fi"),
+                    ("feat", "D"), ("new", "N")])
+    ident = (row.split('<span class="bid">')[1].split('<span class="bset">')[0]
+             if '<span class="bid">' in row else "")
+    check("on two rows: what the board is, and the small badges under it",
+          row.count('<span class="bid">') == 1 and row.count('<span class="bset">') == 1
+          and row.index('<span class="bid">') < row.index('<span class="bset">')
+          and badges_in(ident) == [("soft", "unleashed 1.0.0"),
+                                   ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;")])
+    check("its tooltip says the software and the version, as the board sent them",
+          'aria-label="Software: unleashed 1.0.0, as the board reports it."' in row)
     check("each feature that is not running has no badge",
           ("feat", "F") not in found and ("feat", "M") not in found)
     check("then its support symbol, drawn not typed; ham is not a cause any more",
           row.count('class="bd k-sup"') == 1
           and 'aria-label="Supports LGBTQ+ people.' in row
           and "Supports amateur radio" not in row
-          and row.count("<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"") == 5)
+          and row.split('<span class="bset">')[-1].count(
+              "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"") == 5)
     labels = re.findall(r'class="bd k-int"[^>]*aria-label="Interest: ([^."]+)\.', row)
-    check("then the four interests, in rose, in the page's order: by group, "
-          "then by name, amateur radio with the radio and the sky",
-          labels == ["Commodore 64", "Electronics", "Chiptune", "Amateur radio"]
+    check("then the four interests, in rose, alphabetical by name across their "
+          "groups, after the causes",
+          labels == ["Amateur radio", "Chiptune", "Commodore 64", "Electronics"]
           and row.rindex('class="bd k-sup"') < row.index('class="bd k-int"'))
     check("the row carries every badge it has for the filter, in the page's order",
           re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
@@ -463,9 +478,13 @@ def badge_checks(S, db):
           and 'data-tip="Runs on: Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;, in the '
               "board&#x27;s own words.\"" in row)
     n = row.count('class="bd ')
+    # The update arrow, if this checkout's firmware/ holds a release newer
+    # than the 1.0.0 the board sends, is a link with a tooltip of its own.
+    arrow = row.count('class="bu"')
     check("every badge carries a tooltip, a name for a screen reader, and a "
           "focus stop for a keyboard or a tap",
-          n == 13 and row.count("data-tip=\"") == n and row.count("aria-label=\"") == n
+          n == 13 and row.count("data-tip=\"") == n + arrow
+          and row.count("aria-label=\"") == n + arrow
           and row.count('tabindex="0"') == n and row.count('role="img"') == n)
     check("and no title, which would draw the browser's tooltip over ours",
           " title=" not in row.split("<span class='desc'>")[0])
@@ -475,15 +494,21 @@ def badge_checks(S, db):
     jrow = badge_row(page, "Junk Fields")
     check("a board that sent nothing usable shows only what the directory "
           "worked out", badges_in(jrow) == [("new", "N")])
+    check("and with nothing for the first row it has no first row, not an empty one",
+          '<span class="bid">' not in jrow and jrow.count('<span class="bset">') == 1)
     check("the tooltip is CSS, drawn from data-tip, on hover and on focus",
           "content:attr(data-tip);" in page
-          and ".bd:hover::after, .bd:focus::after { visibility:visible; opacity:1; }"
-          in page and "data-tip" not in S.BADGE_JS and "::after" not in S.BADGE_JS)
+          and ".bd:hover::after, .bd:focus::after, .bu:hover::after, .bu:focus::after {\n"
+              "        visibility:visible; opacity:1; }" in page
+          and "data-tip" not in S.BADGE_JS and "::after" not in S.BADGE_JS)
     check("at the page's own type size, and never wider than a phone",
           "font-size:0.875rem; line-height:1.45;" in page
           and "max-width:min(24rem, calc(100vw - 3rem));" in page)
-    check("badges wrap under the name rather than pushing the Dial column",
-          ".badges { position:relative; display:flex; flex-wrap:wrap;" in page
+    check("badges wrap under the name rather than pushing the Dial column, "
+          "each row positioned so a phone's tooltip hangs from it",
+          ".badges { display:flex; flex-direction:column;" in page
+          and ".badges > .bid, .badges > .bset { position:relative; display:flex; "
+              "flex-wrap:wrap;" in page
           and "main > table { table-layout:fixed; }" in page)
     keylink = '<p class="keylink"><a href="/badges">What the badges mean</a></p>'
     check("a small key to them sits right above the table, beside the Filter "
@@ -495,9 +520,13 @@ def badge_checks(S, db):
           '<a href="/badges">Badges</a>' in feet["list"].split("<footer>")[1]
           and '<a href="https://boards.example/badges">Badges</a>'
           in feet["about"].split("<footer>")[1])
+    check("the JSON says what the board runs and which version (site 1.0.0)",
+          bb.get("software") == "unleashed" and bb.get("version") == "1.0.0"
+          and jb.get("software") == "" and jb.get("version") == "")
     feed = get("/feed.xml")[1]
     check("the feed says it in words, escaped for XML",
-          "Runs on: Compaq 486 &amp;lt;b&amp;gt;&amp;amp;&amp;lt;/b&amp;gt;" in feed
+          "Software: unleashed 1.0.0" in feed
+          and "Runs on: Compaq 486 &amp;lt;b&amp;gt;&amp;amp;&amp;lt;/b&amp;gt;" in feed
           and "Supports: LGBTQ+ people" in feed
           and "Interests: Commodore 64, Electronics, Chiptune, Amateur radio" in feed
           and "Speaks: ANSI, PETSCII" in feed and "Guests welcome" in feed
@@ -746,14 +775,22 @@ def badge_checks(S, db):
           and 'href="#how-steady-is-worked-out"' in leg)
     check("every row is on the page with no script: one per badge, the steps "
           "of Listed sharing one",
-          len(trs) == len(S.BADGES) - 5 == 79
+          len(trs) == len(S.BADGES) - 5 == 80
           and '<tr data-k="' in leg and " hidden>" not in leg.split("</nav>")[1]
           .replace("data-js hidden>", ""))
     check("each says where it comes from: the field a board sends, or worked "
           "out here",
-          leg.count("none: worked out here") == 3
+          leg.count("none: worked out here") == 4
           and "<code>petscii</code> <span class='src'>in terminals</span>" in leg
           and "<code>chat</code> <span class='src'>in features</span>" in leg)
+    # Site 1.0.0: a µnleashed board behind the newest release. On a row it
+    # is an arrow on the software badge; here and in the filter, a badge.
+    check("Update available is in the legend, in dim cyan, and a chip in the filter",
+          "<b>Update available</b>" in leg
+          and '<span class="cn k-upd">dim cyan</span>' in leg
+          and 'class="bd k-upd"' in leg and S.UP_ARROW in leg
+          and 'value="update"' in pane and "update" in S.FILTER_KEYS
+          and "<b>Software</b>" in leg and ">unleashed 1.0.0</span>" in leg)
     check("then Show your support: every symbol, its slug and its sentence",
           all(f"<code>{slug}</code>" in leg and html.escape(sentence) in leg
               for slug, _a, _n, sentence in S.SUPPORT)
@@ -816,10 +853,19 @@ def badge_checks(S, db):
     carried = dict((n, k) for n, k, _h in list_rows(get("/")[1])).get("Badge Board", [])
     shown = badge_row(get("/")[1], "Badge Board")
     marks = [m for m in re.findall(r'aria-label="(?:Supports |Interest: )([^."]+)\.', shown)]
-    check("and a board's row carries them in that order too",
-          len(carried) > 5 and carried == sorted(carried, key=rank.get)
-          and marks == ["LGBTQ+ people", "Commodore 64", "Electronics", "Chiptune",
-                        "Amateur radio"])
+    check("a board's filter keys are in that order too",
+          len(carried) > 5 and carried == sorted(carried, key=rank.get))
+    # Its row does not (site 1.0.0): ROW_ORDER, then the causes, then the
+    # interests, only those two alphabetical, the interests across groups.
+    check("but its row is the fixed order: causes, then interests A to Z",
+          marks == ["LGBTQ+ people", "Amateur radio", "Chiptune", "Commodore 64",
+                    "Electronics"]
+          and S.ROW_ORDER == ("petscii", "guests", "chat", "mail", "forums", "files",
+                              "doors", "new", "steady")
+          and [b["sort"] for b in S.ROW_INTERESTS]
+              == sorted(b["sort"] for b in S.ROW_INTERESTS)
+          and [b["key"] for b in S.ROW_SUPPORT]
+              == [b["key"] for b in S.BADGES if b["group"] == "support"])
     check("it belongs to Boards in the menu, on the list face",
           '<a class="here" href="/">Boards</a>' in leg)
     about_leg = get("/badges", host="about.example")[1]
@@ -2601,8 +2647,26 @@ def main():
                   and S.EWT_BASE + "LICENSE" not in top)
         css_i = inst2.split("<style>")[1]
         check("two columns from 901px, the card sticky and level with the title",
-              "grid-template-columns:minmax(0, 1fr) 22rem" in css_i
+              "grid-template-columns:minmax(0, 1fr) 24rem" in css_i
               and "grid-row:1 / span 2" in css_i and "position:sticky" in css_i)
+        # Site 1.0.0: both buttons on the first screen at 1366 x 768 with a
+        # second release offered. Measured with headless Chrome when it was
+        # built (the Update button's bottom went from 831px to about 740px);
+        # here, the rules that bought the room are pinned.
+        check("the card tightened so both buttons fit the first screen at 1366 x 768",
+              "article .installer svg.art.mini { height:3.5rem; }" in css_i
+              and "article .installer { display:flex; flex-direction:column; gap:0.5rem; }"
+                  in css_i
+              and "position:sticky; top:1rem; padding:1rem 1.25rem; }" in css_i
+              and "article .installer button.go { padding-top:0.5625rem; "
+                  "padding-bottom:0.5625rem; }" in css_i)
+        check("each button carries its line-art symbol, at the badges' stroke weight",
+              "article .installer button.go svg.bi { flex:none; width:1.25rem; "
+              "height:1.25rem; fill:none;\n        stroke:currentColor; stroke-width:1.8;"
+              in css_i
+              and (not published
+                   or (S.BTN_ICON_NEW + "Install on a new board</button>" in inst2
+                       and S.BTN_ICON_UPDATE + "Update my board</button>" in inst2)))
         check("and on a phone the button comes before the amber box",
               "article .installer esp-web-install-button { order:2; }" in css_i
               and "article .installer .pre { order:5; }" in css_i)
@@ -2847,6 +2911,22 @@ def main():
         check("with no address, it says where to find one",
               "115200 baud" in flat_c and "<code>unleashed</code>" in flat_c
               and "telnet unleashed.local 6400" in flat_c)
+        # Site 1.0.0: the installer's dashboard sends a board read before it
+        # joined Wi-Fi here with no address, so this is a page people land on.
+        noaddr = (conn.split('<div class="board-at unknown" id="noaddr">')[1]
+                  .split("</div>")[0] if 'id="noaddr"' in conn else "")
+        flat_n = " ".join(re.sub(r"<[^>]+>", " ", html.unescape(noaddr)).split())
+        check("and says why there is none, and the three ways, in order",
+              "before it had joined your Wi-Fi" in flat_n
+              and noaddr.count("<li>") == 3 and "<ol>" in noaddr
+              and flat_n.index("By name.") < flat_n.index("From the board itself.")
+              < flat_n.index("From your router.")
+              and "Hostname" in flat_n and "unleashed.local" in flat_n
+              and "open Logs & Console in the installer, then press the board's reset "
+                  "button" in flat_n
+              and "Reset Device" in flat_n
+              and "online 192.168.0.109 dial in: telnet 192.168.0.109 6400" in flat_n
+              and "list of connected devices" in flat_n)
         check("and gives the default sysop password, the warning, and the setup guide",
               "sysop password is <code>unleashed</code>" in flat_c
               and "Change it before anything else." in flat_c
@@ -2867,6 +2947,26 @@ def main():
               dlg_src.count('?"/connected#"+this._client.nextUrl.slice(9)') == 2
               and dlg_src.count('?"Telnet details":"Visit Device"') == 2
               and dlg_src.count("href=${this._client.nextUrl}") == 0)
+        # Site 1.0.0: the dashboard's item is always there. With no URL yet
+        # (a board read before it joined Wi-Fi) it is Telnet details to
+        # /connected with no fragment; the page after a successful Wi-Fi
+        # step keeps its guard, because by then there is a URL or nothing
+        # to say.
+        dash = (dlg_src[dlg_src.index("_renderDashboard(){"):
+                        dlg_src.index("_renderDashboardNoImprov(){")]
+                if "_renderDashboard(){" in dlg_src else "")
+        check("the dashboard always offers Telnet details, to /connected when the "
+              "board has sent no address yet",
+              'href=${void 0===this._client.nextUrl?"/connected":/^telnet:\\/\\//i.test('
+              'this._client.nextUrl)?"/connected#"+this._client.nextUrl.slice(9)' in dash
+              and '${void 0===this._client.nextUrl||/^telnet:\\/\\//i.test(this._client'
+                  '.nextUrl)?"Telnet details":"Visit Device"}' in dash
+              and 'void 0===this._client.nextUrl?"":s`' not in dash
+              and dlg_src.count('void 0===this._client.nextUrl?"":s`') == 1)
+        check("and the notice at its top says so",
+              "4. The dashboard of a board that answered over Improv always offers"
+              in dlg_src[:6000]
+              and "and to /connected, which says how to find" in dlg_src[:6000])
         check("and the vendor README records upstream's checksum for the file",
               "6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5"
               in open(os.path.join("vendor", "esp-web-tools", "README.md"),
@@ -2931,9 +3031,17 @@ def main():
         check("the bundle is served under a path carrying this site's revision",
               S.EWT_BASE == "/install/esp-web-tools/" + S.EWT_VERSION + "-"
                             + str(S.EWT_REV) + "/"
-              and S.EWT_REV >= 2
+              and S.EWT_REV >= 3
               and fetch("/install/esp-web-tools/" + S.EWT_VERSION + "/"
                         + dlg[0])[0] == 200)
+        # 1.0.0 moved it to -3; a tab still holding -2's entry point fetches
+        # the rest of the bundle from -2, so every earlier path answers.
+        old_paths = [fetch("/install/esp-web-tools/" + S.EWT_VERSION + "-" + str(n) + "/"
+                           + dlg[0]) for n in range(1, S.EWT_REV + 1)]
+        check("and every earlier revision's path still answers, with today's files",
+              all(c == 200 and b.decode("utf-8") == dlg_src for c, _t, b in old_paths)
+              and fetch("/install/esp-web-tools/" + S.EWT_VERSION + "-"
+                        + str(S.EWT_REV + 1) + "/" + dlg[0])[0] == 404)
 
         # ------------------------------------------------------------------
         # The footer: two rows, then the colophon, on every face.
@@ -3583,7 +3691,8 @@ def main():
                   shown.count(">Update my board</button>") == 2
                   and '<esp-web-install-button class="r0 upd" manifest="/install/'
                       '0.19.2/manifest-update.json"><button class="go upd" '
-                      'slot="activate">Update my board</button>' in shown
+                      'slot="activate">' + S.BTN_ICON_UPDATE + 'Update my board</button>'
+                      in shown
                   and 'manifest="/install/0.19.1/manifest-update.json"' in shown
                   and shown.index('manifest="/install/0.19.2/manifest.json"')
                       < shown.index('manifest="/install/0.19.2/manifest-update.json"')
@@ -3591,6 +3700,20 @@ def main():
                                   '<span slot="not-allowed"></span>') == 2)
             check("the board slot names the board and its flash",
                   '<p class="meta board">Board: ESP32, 4 MB flash</p>' in shown)
+            # Site 1.0.0: a symbol on each button, a fresh chip with a
+            # sparkle and a chip in an arrow going round it. Decoration: the
+            # words say it, so a screen reader is not told twice.
+            check("each button has its symbol before its words, hidden from a "
+                  "screen reader",
+                  shown.count('slot="activate">' + S.BTN_ICON_NEW
+                              + "Install on a new board</button>") == 2
+                  and shown.count('slot="activate">' + S.BTN_ICON_UPDATE
+                                  + "Update my board</button>") == 2
+                  and all(ic.startswith('<svg class="bi" viewBox="0 0 24 24" '
+                                        'aria-hidden="true" focusable="false">')
+                          and not re.search(r"<text|\sid=|<script|href", ic)
+                          for ic in (S.BTN_ICON_NEW, S.BTN_ICON_UPDATE))
+                  and S.BTN_ICON_NEW != S.BTN_ICON_UPDATE)
             check("the words inside the block are the card's amber box",
                   '<div class="pre"><p><b>Before you start:</b> x</p></div>'
                   in S.installer_html(["**Before you start:** x"]))
@@ -3607,7 +3730,10 @@ def main():
             base2 = f"http://127.0.0.1:{port2}"
             db2 = os.path.join(tempfile.gettempdir(), f"dirtest{os.getpid()}b.db")
             env2 = dict(os.environ, DIRECTORY_PAGE_CACHE="0", DIRECTORY_DB=db2,
-                        DIRECTORY_PORT=str(port2), DIRECTORY_FIRMWARE_DIR=fwroot)
+                        DIRECTORY_PORT=str(port2), DIRECTORY_FIRMWARE_DIR=fwroot,
+                        # Two boards are listed here to see the update arrow
+                        # follow the releases on disk (site 1.0.0).
+                        DIRECTORY_PENDING_HOURS="0.0006", DIRECTORY_MIN_SECONDS="0")
             server2 = subprocess.Popen([sys.executable, "server.py"], env=env2,
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT)
@@ -3620,6 +3746,16 @@ def main():
                         break
                     except Exception:
                         time.sleep(0.1)
+                # Two boards for the update arrow, announced now so their
+                # pending window has passed by the time 1.0.1 is on disk.
+                behind = {"software": "unleashed", "version": "1.0.0",
+                          "name": "Behind Board", "port": 6400, "token": "",
+                          "system": "ESP32-WROOM-32E", "features": ["chat"]}
+                other = {"software": "Mystic", "version": "0.0.1",
+                         "name": "Other Board", "port": 23, "token": ""}
+                t_listed = time.time()
+                _c, tb = post_from(behind, "192.0.2.61", base2)
+                _c, to = post_from(other, "192.0.2.62", base2)
                 code, ctype, page2 = fetch("/install", base2)
                 page2 = page2.decode("utf-8")
                 srcs = re.findall(r'<script[^>]*src="([^"]+)"', page2)
@@ -3743,6 +3879,115 @@ def main():
                       and S.ART["boot-button"] not in inst41
                       and "goes back to the last network that worked" not in inst41
                       and "::: from" not in inst41)
+
+                # ----------------------------------------------------------
+                # Site 1.0.0 (Rob: "a version number should apply to all
+                # honestly. Then when an unleashed board is behind, mark on
+                # there a subtle up arrow"). In-process first, where
+                # FIRMWARE_DIR is these scratch releases, newest 1.0.1.
+                print("Versions, and the update arrow")
+                vk = S.version_key
+                check("versions compare part by part: 1.0.10 is newer than 1.0.9",
+                      vk("1.0.10") > vk("1.0.9") and vk("1.0.1") == vk("1.0.1")
+                      and vk("0.23.0") < vk("1.0.0") < vk("1.0.1") < vk("1.1.0")
+                      and vk("v1.0.1") == vk("1.0.1") and vk(" 1.0.1 ") == vk("1.0.1"))
+                check("a pre-release is older than its release, and newer than the one "
+                      "before; build metadata does not count",
+                      vk("1.0.1-rc.2") < vk("1.0.1") and vk("1.0.1-rc.2") > vk("1.0.0")
+                      and vk("1.0.1+build.7") == vk("1.0.1"))
+                check("anything that is not three numbers is not a version",
+                      all(vk(g) is None for g in ("", None, "1.0", "1", "dev", "1.0.0.1",
+                                                   "1.0.x", "one.two.three", "1..0",
+                                                   "<b>1.0.0</b>", "1.0.0 beta",
+                                                   "1.0.0-", "-1.0.0")))
+                latest = S.newest_release()
+
+                # A stored row, listed ten days: past new, short of a month,
+                # so the directory adds no badge of its own to it.
+                def brow(**kw):
+                    r = {"software": "unleashed", "version": "1.0.0", "system": "",
+                         "terminals": "", "guests": None, "features": "", "support": "",
+                         "interests": "", "public_at": int(time.time()) - 10 * 86400,
+                         "first_seen": int(time.time()) - 10 * 86400}
+                    r.update(kw)
+                    return r
+
+                check("the newest release is the one /install offers first",
+                      latest == "1.0.1" and latest == S.firmware_releases()[0]["version"])
+                check("a board on an older version is behind; one that is equal, newer "
+                      "or unparseable is not",
+                      S.update_for(brow(version="1.0.0"), latest) == "1.0.1"
+                      and S.update_for(brow(version="0.23.0"), latest) == "1.0.1"
+                      and S.update_for(brow(version="1.0.1-rc.1"), latest) == "1.0.1"
+                      and S.update_for(brow(version="1.0.1"), latest) == ""
+                      and S.update_for(brow(version="1.0.2"), latest) == ""
+                      and S.update_for(brow(version="1.0.10"), latest) == ""
+                      and S.update_for(brow(version="garbage"), latest) == ""
+                      and S.update_for(brow(version=""), latest) == "")
+                check("other software is never flagged, whatever its version",
+                      S.update_for(brow(software="Mystic", version="0.0.1"), latest) == ""
+                      and S.update_for(brow(software="unleashed-fork", version="0.0.1"),
+                                       latest) == ""
+                      and S.update_for(brow(software="", version="0.0.1"), latest) == "")
+                check("and nothing is flagged with no release on disk",
+                      S.update_for(brow(), "") == "" and "update" not in S.row_keys(
+                          brow(), int(time.time()), False, ""))
+                bb1 = S.board_badges(brow(system="ESP32"), int(time.time()), False, latest)
+                check("a board that is behind has the arrow on its software badge, "
+                      "linked to /upgrade, before the machine",
+                      '<span class="bid"><span class="bd k-soft" role="img"' in bb1
+                      and '>unleashed 1.0.0</span><a class="bu" href="/upgrade" ' in bb1
+                      and bb1.index('class="bu"') < bb1.index('class="bd k-sys"')
+                      and 'data-tip="Update available: 1.0.0 → 1.0.1. Plug it in and '
+                          'use Update my board on /install."' in bb1
+                      and 'aria-label="Update available: 1.0.0 → 1.0.1.' in bb1
+                      and "update" in S.row_keys(brow(), int(time.time()), False, latest))
+                check("and none for a board on the newest, or for other software",
+                      'class="bu"' not in S.board_badges(brow(version="1.0.1"),
+                                                         int(time.time()), False, latest)
+                      and 'class="bu"' not in S.board_badges(
+                          brow(software="Mystic", version="0.0.1"), int(time.time()),
+                          False, latest))
+                ul = S.update_link('1.0.0"><script>x</script>', "1.0.1")
+                check("the arrow's tooltip is escaped, once, in both attributes",
+                      "<script>" not in ul and '"><' not in ul.split(">", 1)[0]
+                      and ul.count("1.0.0&quot;&gt;&lt;script&gt;x&lt;/script&gt;") == 2)
+                check("without a system badge the software badge is alone on its row; "
+                      "with nothing else there is no second row",
+                      S.board_badges(brow(version="1.0.1"), int(time.time()), False, latest)
+                      == '<span class="badges"><span class="bid">'
+                         + S.badge("soft", "unleashed 1.0.1",
+                                   "Software: unleashed 1.0.1, as the board reports it.")
+                         + "</span></span>"
+                      and S.board_badges(brow(software="", version=""), int(time.time()),
+                                         False, latest) == "")
+                check("the arrow is drawn in a dim cyan, a link and not an image",
+                      ".bu { --bc:#5ab4b4;" in inst41
+                      and ".k-upd { --bc:#5ab4b4;" in inst41
+                      and 'role="img"' not in ul and "tabindex" not in ul)
+
+                # Over HTTP: the two boards announced when this server
+                # started, now past their pending window.
+                time.sleep(max(0.0, 2.5 - (time.time() - t_listed)))
+                post_from(dict(behind, token=tb.get("token", "")), "192.0.2.61", base2)
+                post_from(dict(other, token=to.get("token", "")), "192.0.2.62", base2)
+                home3 = fetch("/", base2)[2].decode("utf-8")
+                brow3, orow3 = badge_row(home3, "Behind Board"), badge_row(home3, "Other Board")
+                check("on the list, the board behind carries the arrow and the other "
+                      "software does not",
+                      '>unleashed 1.0.0</span><a class="bu" href="/upgrade" ' in brow3
+                      and "1.0.0 → 1.0.1." in brow3
+                      and ">Mystic 0.0.1</span>" in orow3 and 'class="bu"' not in orow3)
+                upd_rows = list_rows(fetch("/?b=update", base2)[2].decode("utf-8"))
+                check("and the filter finds the boards that are behind",
+                      [n for n, _k, h in upd_rows if not h] == ["Behind Board"]
+                      and all(("update" in k) != h for _n, k, h in upd_rows))
+                j3 = {b["name"]: b for b in json.loads(
+                    fetch("/api/boards.json", base2)[2].decode("utf-8"))["boards"]}
+                check("and the JSON has each board's software and version",
+                      j3.get("Behind Board", {}).get("version") == "1.0.0"
+                      and j3.get("Other Board", {}).get("software") == "Mystic"
+                      and j3.get("Other Board", {}).get("version") == "0.0.1")
                 put("1.0.2", "esp32", whole)
                 inst5 = fetch("/install", base2)[2].decode("utf-8")
                 flat5 = " ".join(inst5.split())
@@ -3751,6 +3996,9 @@ def main():
                       and "Press and let go of <b>RESET</b>" in flat5
                       and "goes back to the last network that worked" in flat5
                       and "::: from" not in inst5)
+                check("and the update arrow follows the newest release on disk",
+                      "1.0.0 → 1.0.2." in badge_row(fetch("/", base2)[2].decode("utf-8"),
+                                                         "Behind Board"))
             finally:
                 server2.terminate()
                 try:

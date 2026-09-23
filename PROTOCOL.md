@@ -101,7 +101,9 @@ For the four lists: case does not matter, duplicates count once, a word the dire
 
 A directory works out some badges for itself, from its own records, and a board cannot send them: at unleashedbbs.com, **new** (listed less than a week), **steady** (answered more than 95% of the heartbeats its own `interval` said were due over the last seven days) and **time listed** (one month up to ten years). They appear in `/api/boards.json` as `listed_at` and `steady`.
 
-The board list at unleashedbbs.com can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest slugs, the feature words, `petscii`, `guests`, `new`, `steady`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
+`software` and `version` are shown together, as the board sent them, on the board's first badge ("unleashed 1.0.0", "Mystic 1.12"), and both are in `/api/boards.json`. When `software` is `unleashed` and `version` is older than the newest release the directory itself offers for installing, unleashedbbs.com marks that badge with a small arrow, **update available**, linked to how to update. Versions are compared as three numbers, part by part, so 1.0.10 is newer than 1.0.9, and a pre-release such as `1.0.1-rc.1` is older than `1.0.1`; a version that is not three numbers is never marked. Other software is never marked, because a directory cannot know another program's newest version.
+
+The board list at unleashedbbs.com can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest slugs, the feature words, `petscii`, `guests`, `new`, `steady`, `update`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
 
 ## Response
 

@@ -52,8 +52,9 @@ licence files are served; `EWT_VERSION` in `server.py` says which directory.
 `EWT_REV` is this site's own revision of the directory, and goes up by one
 whenever a file in it changes: every file is cached for a day, and a new
 path is the only way a browser that already has the old dialog fetches the
-new one. The bare `/install/esp-web-tools/<version>/` is still served, for
-a tab left open across a deploy.
+new one. The bare `/install/esp-web-tools/<version>/`, and every earlier
+revision's path, is still served with today's files, for a tab left open
+across a deploy.
 
 ## The one modified file
 
@@ -61,7 +62,7 @@ a tab left open across a deploy.
 its top, as section 4(b) of the Apache License 2.0 requires. The notice
 lists every changed string. Upstream's SHA-256 for it is
 `6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5`;
-`SHA256SUMS` carries the modified file's. Three changes, all in that file.
+`SHA256SUMS` carries the modified file's. Four changes, all in that file.
 
 **Telnet details (0.19.0 of this site).** After the Wi-Fi step the dialog
 offers the link the device sends over Improv, labelled "Visit Device". A
@@ -110,9 +111,22 @@ does not know `unleashed_update`: upstream's, or this site's own from
 before 0.22.1 in a browser's cache. With it, the worst an old copy can do
 is ask, with the box unticked.
 
-Moving to a new version means making all three again by hand in that
-version's dialog chunk: search for `Visit Device`, `_renderAskErase`,
-`_startInstall(e)` and `this._manifest,this._installErase)`. Nobody can
+**Telnet details, always (site 1.0.0).** Upstream's dashboard shows the
+device's link only when the device has sent one. The dialog often reads a
+board while it is still starting, before it has joined Wi-Fi and so before
+it has an address, and the dashboard then offered nothing to call. In
+`_renderDashboard` the item is always rendered now: to
+`/connected#<address>:<port>` for a `telnet://` URL, to `/connected` with
+no fragment when the device sent no URL, and "Visit Device" to the URL as
+upstream for anything else. `/connected` without a fragment says how to
+find the board by other means. The page shown after a successful Wi-Fi
+step is unchanged. `EWT_REV` went to 3 for it.
+
+Moving to a new version means making all four again by hand in that
+version's dialog chunk: search for `Visit Device` (twice; the first is the
+dashboard, whose `void 0===this._client.nextUrl?"":` guard is the one
+removed), `_renderAskErase`, `_startInstall(e)` and
+`this._manifest,this._installErase)`. Nobody can
 click through the dialog in a test here, so check it the way 0.22.1 was:
 import the chunk in a page in headless Chrome, construct
 `ewt-install-dialog`, set `_manifest` with and without the key, and call

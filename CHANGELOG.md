@@ -14,6 +14,61 @@
 
 # Changelog
 
+## 1.0.0, 2026-09-23
+
+The site's 1.0.0 marks the public launch of the µnleashed firmware at 1.0.0.
+It is Rob's call, and it is the last time the two numbers move together:
+from here the site and the firmware each keep their own version, and a
+site release says nothing about which firmware is out.
+
+- **A board's badges are two rows, in the same places on every board**
+  (Rob: "The unleashed and esp32 should be upfront ... sort those so core
+  system ones are always first, etc. that way they look consistent when
+  scrolling"). The first row is what the board is: its software and
+  version, then the machine it runs on. The second is the small badges in
+  a fixed order: PETSCII, guests, what is running (chat, mail, forums,
+  files, doors), new or steady, time listed, then the causes and the
+  interests. Only those last two are alphabetical, by name. A board with
+  nothing for a row has no row. /badges and the filter keep their order.
+- **The software badge carries the version** the board sends: "unleashed
+  1.0.0", "Mystic 1.12", or the name alone when no version came.
+  `software` and `version` are cleaned the way `system` is, and both are
+  in `/api/boards.json` now, and in the feed as "Software:".
+- **Update available.** A µnleashed board older than the newest release on
+  /install gets a small arrow on the end of its software badge, in a dim
+  cyan, with the tooltip "Update available: 1.0.0 → 1.0.1. Plug it in and
+  use Update my board on /install.", and the arrow links to /upgrade.
+  Versions are compared part by part, so 1.0.10 is newer than 1.0.9; a
+  pre-release is older than its release; a version that is not three
+  numbers, and any other software, never gets one. It is a badge in its
+  own right in the filter and on /badges, **Update available** (`?b=update`),
+  so a sysop can find which of their boards are behind. /upgrade says what
+  the arrow is.
+- **Icons on the two install buttons**: a fresh chip with a sparkle on
+  **Install on a new board**, and a chip inside an arrow going round it on
+  **Update my board**, line art at the badges' stroke weight.
+- **Both buttons are on the first screen at 1366 x 768**, with a second
+  release offered, which is the tallest the card gets. The card's column is
+  two rem wider, which takes a line off the amber box; the drawing is held
+  to 3.5rem tall; the gaps and padding are smaller and the buttons a
+  little shorter. The Update button ended at 831px and ends at about
+  740px. A phone still gets the buttons first.
+- **The installer always offers Telnet details.** The dialog often reads a
+  board while it is still starting, before it has joined Wi-Fi and so
+  before it has an address, and its dashboard then offered **Connect to
+  Wi-Fi** and nothing to call. The item is always there now: with an
+  address it goes to `/connected#<address>:<port>` as before, and without
+  one to `/connected`, which says plainly the three ways to find the
+  board: `unleashed.local` (or whatever Hostname it was given), the line
+  it prints in **Logs & Console** when it starts (press reset with the
+  console open), and the router's list of devices. The notice at the top
+  of the dialog chunk says so, and the bundle moved to
+  `/install/esp-web-tools/10.4.0-3/` so a browser fetches the new dialog
+  at once. Every earlier path still answers.
+- The short badge codes Rob asked for (`MNTLH` for mental health) were
+  worked out for this release and then held back, to ship with firmware
+  1.0.2 as a site version of their own. The slugs are unchanged here.
+
 ## 0.22.2, 2026-09-23
 
 The filter condensed to a screen, amateur radio moved to the interests,

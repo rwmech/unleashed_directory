@@ -2,7 +2,9 @@
 
 The small marks under a board's name on the [board list](/). Some are sent by the board itself, and the rest are worked out here, from this directory's own record of that board. Point at one, or tap it, and it says what it is. The **Filter** button above the list shows only the boards carrying the badges you pick.
 
-<!-- The tables below are drawn from BADGES in server.py, the same list the board list and its filter use, so the key cannot disagree with either. Change a badge there, not here. Within a group every view lists the badges alphabetically by name. -->
+Under each name, the first line is what the board is: the software and its version, then the machine it runs on. The second line is the rest, in the same order on every board, so each badge sits in the same place as you scroll: PETSCII, guests, what is running, what this directory worked out, then the causes and the interests, those two in alphabetical order.
+
+<!-- The tables below are drawn from BADGES in server.py, the same list the board list's filter uses, so the key cannot disagree with it. Change a badge there, not here. Within a group the tables list the badges alphabetically by name; a board's row uses ROW_ORDER instead (site 1.0.0). -->
 
 ::: badgefind
 :::
@@ -14,7 +16,7 @@ A board says these about itself in every heartbeat, so each one is as current as
 
 ::: badges
 directory
-A board cannot set these. The directory works them out from what it has seen for itself: when the board was first listed, and which of its heartbeats arrived.
+A board cannot set these. The directory works them out from what it has seen for itself: when the board was first listed, which of its heartbeats arrived, and, for a µnleashed board, whether the version it reports is older than the newest one on [the install page](/install).
 :::
 
 ::: badges

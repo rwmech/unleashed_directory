@@ -102,7 +102,8 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   links both. `SHA256SUMS` in that directory is checked by the suite, and
   `.gitattributes` keeps the directory binary so no line ending moves.
   `vendor/esp-web-tools/README.md` is how to move to a new version.
-  **One file is modified** (0.19.0, Rob): `install-dialog-*.js`, where the
+  **One file is modified** (0.19.0, Rob; four changes by site 1.0.0, listed
+  in its notice and the vendor README): `install-dialog-*.js`, where the
   device link the dialog offers after the Wi-Fi step, "Visit Device", goes
   to `/connected#<address>:<port>` and reads "Telnet details" when the
   board's Improv answer is `telnet://`, which a browser cannot open. The file
@@ -569,13 +570,20 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   text; check new ones on a contact sheet at 17, 30 and 72px, because a
   drawing that reads at 72 can be a blob at 17 (the first Amiga ball read as
   a web globe and the first penguin as a bottle).
-  **`BADGES` is every badge once, in the one order all three views use**:
-  /badges, the filter's grid and a board's row walk it and none of them
-  sorts. Rob: alphabetical by the name a reader sees within each group, a
-  leading digit or symbol set aside (`sort_key`), the groups in their own
-  order. So a row reads C D Fi G, the machine, P, the software, and "3D
-  printing" files under D. The six time-listed steps are one badge,
-  "Listed", sharing one key, so they stay together and in duration order.
+  **`BADGES` is every badge once, in the order /badges and the filter's
+  grid use**, and neither sorts. Rob: alphabetical by the name a reader
+  sees within each group, a leading digit or symbol set aside
+  (`sort_key`), the groups in their own order, so "3D printing" files
+  under D. The six time-listed steps are one badge, "Listed", sharing one
+  key, so they stay together and in duration order. **A board's row does
+  not use it since site 1.0.0** (Rob: "The unleashed and esp32 should be
+  upfront ... sort those so core system ones are always first ... that way
+  they look consistent when scrolling"): `board_badges` draws two rows,
+  `.bid` (the software with its version, the update arrow, the machine)
+  and `.bset` (`ROW_ORDER`: P, G, C M F Fi D, N, S, then time listed, then
+  `ROW_SUPPORT` and `ROW_INTERESTS`, the only two alphabetical, the
+  interests across their sub-groups). A board with nothing for a row has
+  no row. The row's `data-b` filter keys stay in BADGES order.
   `FILTER_KEYS` is every badge a reader can filter on; software and machine
   are free text and are not.
   **The filter**: `filter_bar_html` draws a small Filter button (a
@@ -620,6 +628,41 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   beacon, deliberately not the thin blue line). Autism is covered by
   neurodiversity and military families by veterans. HIV's ribbon stays red
   until Rob decides.
+- **Versions and the update arrow (site 1.0.0, Rob: "a version number
+  should apply to all honestly. Then when an unleashed board is behind,
+  mark on there a subtle up arrow").** The software badge reads "unleashed
+  1.0.0" or "Mystic 1.12"; `software` and `version` are cleaned with
+  `tidy_label` like `system`, and both are in the JSON and the feed.
+  `version_key` compares three numbers part by part (1.0.10 > 1.0.9), a
+  pre-release below its release, `+build` ignored, anything else None and
+  never flagged. `update_for` flags only `software == unleashed` older than
+  `newest_release()`, which is `firmware_releases()[0]`, the one /install
+  offers first, so the arrow follows whatever is on disk. `update_link` is
+  an `<a class="bu">` to /upgrade joined to the software badge (negative
+  margin, no left border), dim cyan, with the badges' CSS tooltip, and is
+  deliberately not `role="img"`. It is also a directory badge, "Update
+  available" (`update`, `k-upd`), on /badges and in the filter, so a sysop
+  can find their boards that are behind. `row_keys` takes `latest`, and
+  `index_page` works it out once per render.
+- **The badge codes are not in 1.0.0.** Rob asked for short slugs
+  (`MNTLH` for mental health, six characters at most, upper case on
+  /badges, lower case on the wire), they were built, then moved to their
+  own site version alongside firmware 1.0.2. The proposal, with every code
+  and every alias, is `internal/badge-codes-proposal-2026-09-23.md` in the
+  firmware repository. Start there; the firmware's own badge test compares
+  the directory's JSON against long slugs and will need changing with it.
+- **The installer always offers Telnet details (site 1.0.0).** The fourth
+  change to the vendored dialog: `_renderDashboard` renders the link item
+  whether or not the device sent a URL, to `/connected` with no fragment
+  when it sent none. /connected's no-address box is the three ways to find
+  a board (`<hostname>.local`, the console line at boot, the router), and
+  is now a page people land on, not a fallback. `EWT_REV` 3; `EWT_PATHS`
+  keeps every earlier revision's path answering with today's files.
+- **The install card fits 1366 x 768 with both buttons** (site 1.0.0): a
+  24rem column, the drawing held to 3.5rem, gap 0.5rem, shorter buttons,
+  each with a line-art symbol (`BTN_ICON_NEW`, `BTN_ICON_UPDATE`). Measured
+  with two releases offered, the tallest the card gets: the Update button
+  ends near 740px. Re-measure after touching the card or the amber box.
 - **The card's lamps (0.22.0, from the UX spec)**: two lamps half a lap
   apart, each a head and three beads, 20s a lap, linear. Three a third of a
   lap apart looked scattered because a rectangle has no three-fold

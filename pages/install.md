@@ -68,7 +68,9 @@ install-wifi
    with the board's address on your network and how to call it: the telnet
    command, a link, and the settings for SyncTERM and PuTTY. The address goes
    from the board to your browser and no further; this site never receives
-   it.
+   it. If the board had not joined your Wi-Fi yet when the installer read
+   it, there is no address to pass on, and that page says the three ways to
+   find it instead.
 
 If the Wi-Fi step never appears, the page stopped waiting before the board was
 ready. Close the box, press **Update my board** and pick the same port. The

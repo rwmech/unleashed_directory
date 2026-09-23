@@ -216,9 +216,13 @@ EWT_DIR     = (pathlib.Path(__file__).resolve().parent
 # expects the new one. A new path is fetched fresh, whole. The bare version
 # is still served, for a tab left open across a deploy, which has the old
 # entry point loaded and fetches the rest of the bundle as it goes.
-EWT_REV     = 2
+EWT_REV     = 3
 EWT_PATH    = EWT_VERSION + "-" + str(EWT_REV)
 EWT_BASE    = "/install/esp-web-tools/" + EWT_PATH + "/"
+# Every path the bundle has been served under: the bare version and each
+# earlier revision still answer, with today's files, so a tab left open
+# across a deploy keeps finding the chunks it asks for.
+EWT_PATHS   = (EWT_VERSION,) + tuple(EWT_VERSION + "-" + str(n) for n in range(1, EWT_REV + 1))
 EWT_SCRIPT  = EWT_BASE + "install-button.js"
 # A chunk name is the only thing a request can choose, and it is checked as a
 # name, the way static_file() does it: letters, digits, "-" and "_", then
@@ -1229,7 +1233,11 @@ def cta_html(lines):
 # ignores anything else.
 #
 # With no fragment, or no script, the box shows the Markdown inside the
-# block instead: how to find the address another way.
+# block instead: how to find the address another way. Since site 1.0.0 the
+# dialog's dashboard always offers Telnet details, and a board it read
+# before it joined Wi-Fi has sent no address yet, so that dashboard sends a
+# reader here with no fragment at all: the Markdown is the three ways to
+# find the board, and it is a page people will actually land on.
 # --------------------------------------------------------------------------
 CONNECTED_JS = (
     "<script>(function(){"
@@ -2000,6 +2008,28 @@ def firmware_manifest(version, update=False):
     return None
 
 
+# The two install buttons' symbols (site 1.0.0): a fresh chip with a
+# sparkle for a new board, and a chip inside an arrow going round it for an
+# update. Line art in a 24 unit square at the stroke weight the badges'
+# drawings use, drawn in the button's own colour, and hidden from a screen
+# reader because the button's words say it already.
+BTN_ICON_NEW = (
+    '<svg class="bi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+    '<rect x="4" y="9" width="11" height="11" rx="1.5"/>'
+    '<path d="M7 9 V6.5 M12 9 V6.5 M7 20 V22.5 M12 20 V22.5 M4 12.5 H1.5 '
+    'M4 16.5 H1.5 M15 12.5 H17.5 M15 16.5 H17.5"/>'
+    '<circle cx="7" cy="12" r="0.9" fill="currentColor" stroke="none"/>'
+    '<path d="M19.5 1.2 C19.5 3.8 20.2 4.5 22.8 4.5 C20.2 4.5 19.5 5.2 19.5 7.8 '
+    'C19.5 5.2 18.8 4.5 16.2 4.5 C18.8 4.5 19.5 3.8 19.5 1.2 Z"/></svg>')
+BTN_ICON_UPDATE = (
+    '<svg class="bi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+    '<rect x="9" y="9" width="6" height="6" rx="1"/>'
+    '<path d="M10.5 9 V7.8 M13.5 9 V7.8 M10.5 15 V16.2 M13.5 15 V16.2 M9 10.5 H7.8 '
+    'M9 13.5 H7.8 M15 10.5 H16.2 M15 13.5 H16.2"/>'
+    '<path d="M17.66 17.66 A8 8 0 1 1 17.66 6.34"/>'
+    '<path d="M17.38 3.15 L17.66 6.34 L14.47 6.06"/></svg>')
+
+
 def board_label(family):
     """What the picker slot says a build is for. The ESP32 build is laid out
     for 4 MB of flash, which is the one fact about a board a reader can
@@ -2093,8 +2123,8 @@ def installer_html(lines=()):
         # the first button's says it once, and the second hides itself on a
         # browser that cannot use it.
         out.append(f'<esp-web-install-button class="r{i}" manifest="/install/{v}'
-                   '/manifest.json"><button class="go" slot="activate">Install on '
-                   "a new board</button>"
+                   '/manifest.json"><button class="go" slot="activate">'
+                   + BTN_ICON_NEW + "Install on a new board</button>"
                    # Both fallbacks are given rather than left to the
                    # component's defaults, which name Firefox first and say
                    # nothing about what to do next. The precedence in their
@@ -2109,7 +2139,7 @@ def installer_html(lines=()):
                    "port.</span></esp-web-install-button>")
         out.append(f'<esp-web-install-button class="r{i} upd" manifest="/install/{v}'
                    '/manifest-update.json"><button class="go upd" slot="activate">'
-                   "Update my board</button>"
+                   + BTN_ICON_UPDATE + "Update my board</button>"
                    '<span slot="unsupported"></span><span slot="not-allowed"></span>'
                    "</esp-web-install-button>")
     for i, rel in enumerate(rels):
@@ -2145,7 +2175,7 @@ def installer_terms_html():
     return ('<p class="meta terms">The installer on this page is '
             '<a href="https://github.com/esphome/esp-web-tools">ESP Web '
             "Tools</a> " + html.escape(EWT_VERSION) + ", served from this site, "
-            "with three changes made here: its last step offers the board's "
+            "with three changes made here: it always offers the board's "
             "telnet details instead of trying to open an address a browser "
             "cannot, its erase question is worded for somebody updating a "
             "board they already run, and the Update button never erases. "
@@ -2292,8 +2322,10 @@ def announce(payload, address):
         "name":        name,
         "owner":       tidy(payload.get("owner"), 40),
         "description": tidy(payload.get("description"), 120),
-        "software":    tidy(payload.get("software"), 20),
-        "version":     tidy(payload.get("version"), 20),
+        # Both are shown in a badge since site 1.0.0 ("unleashed 1.0.0"), so
+        # they get the badge's cleaning, the same as system does.
+        "software":    tidy_label(payload.get("software"), 20),
+        "version":     tidy_label(payload.get("version"), 20),
         "host":        tidy(payload.get("host"), 80),
         "address":     address,
         "group_key":   group,
@@ -2843,8 +2875,14 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
    the software badge, which used to sit beside the name: what a board
    runs, said quietly, because every board is welcome here and a
    directory that only ever shows one name does not look like it means
-   that. They come in BADGES order, alphabetical by name within each
-   group (0.22.0, Rob), the same order /badges and the filter use.
+   that.
+
+   Two rows since site 1.0.0 (Rob: "The unleashed and esp32 should be
+   upfront ... that way they look consistent when scrolling"). .bid is
+   what the board is, the software and its version, then the machine;
+   .bset is the small badges in ROW_ORDER, the same places on every row.
+   Each row is positioned, so on a phone a tooltip hangs from its own
+   row.
 
    One or two letters, or a small drawing, in a colour that says what
    kind of thing it is: purple for what a board speaks, amber for
@@ -2857,8 +2895,9 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
    -------------------------------------------------------------------- */
 .name > .bname {{ display:block; width:fit-content; max-width:100%; position:relative; }}
 .name > .desc {{ display:block; }}
-.badges {{ position:relative; display:flex; flex-wrap:wrap; align-items:center;
-        gap:0.25rem; margin:0.375rem 0 0.375rem; }}
+.badges {{ display:flex; flex-direction:column; gap:0.25rem; margin:0.375rem 0 0.375rem; }}
+.badges > .bid, .badges > .bset {{ position:relative; display:flex; flex-wrap:wrap;
+        align-items:center; gap:0.25rem; }}
 .bd {{ display:inline-flex; align-items:center; justify-content:center;
         box-sizing:border-box; min-width:1.375rem; min-height:1.25rem; max-width:100%;
         padding:0.0625rem 0.3125rem; border:1px solid var(--bb); border-radius:0.1875rem;
@@ -2877,13 +2916,27 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
 /* Interests (0.22.0) are rose, a family nothing else here uses: the
    drawing is currentColor, so the chip's own colour draws it. */
 .k-int {{ --bc:#f096c4; --bb:rgba(240, 150, 196, 0.5); --bt:rgba(240, 150, 196, 0.1); }}
+/* Update available (site 1.0.0): a dim cyan, quieter than steady's, because
+   it is news for one sysop rather than something every caller wants. */
+.k-upd {{ --bc:#5ab4b4; --bb:rgba(90, 180, 180, 0.4); --bt:rgba(90, 180, 180, 0.06); }}
 .bd.k-soft, .bd.k-sys {{ font-size:0.75rem; letter-spacing:0; }}
 .bd.k-sup, .bd.k-int {{ padding:0 0.125rem; }}
 .bd.k-sup svg, .bd.k-int svg, .cb svg {{ display:block; width:1.0625rem; height:1.0625rem;
         fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
-.k-int svg {{ stroke:currentColor; }}
-.bd:focus {{ outline:none; }}
-.bd:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.k-int svg, .k-upd svg {{ stroke:currentColor; }}
+/* The arrow on the end of a behind board's software badge: a link to
+   /upgrade, joined to the badge by giving back the row's gap and having no
+   left edge of its own. */
+.bu {{ --bc:#5ab4b4; display:inline-flex; align-items:center; box-sizing:border-box;
+        min-height:1.25rem; margin-left:-0.25rem; padding:0 0.1875rem;
+        border:1px solid rgba(90, 180, 180, 0.4); border-left:0;
+        border-radius:0 0.1875rem 0.1875rem 0; background:rgba(90, 180, 180, 0.06);
+        color:var(--bc); text-decoration:none; }}
+.bu svg, .bd.k-upd svg {{ display:block; width:0.8125rem; height:0.8125rem; fill:none;
+        stroke:currentColor; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }}
+.bu:hover {{ color:#8fe3e3; background:rgba(90, 180, 180, 0.16); }}
+.bd:focus, .bu:focus {{ outline:none; }}
+.bd:focus-visible, .bu:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 /* The tooltip, CSS only, from data-tip: on hover for a mouse, and on focus
    for a keyboard or a tap, which is what the tabindex is for. At the
    page's own type size, in a dark box edged in the badge's colour. On a
@@ -2892,19 +2945,21 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
    wider than the screen, which stops a badge at the right edge pushing the
    page sideways. It takes no pointer events, so it never sits between the
    mouse and whatever is under it. */
-.bd::after {{ content:attr(data-tip); position:absolute; left:0; top:calc(100% + 0.375rem);
+.bd::after, .bu::after {{ content:attr(data-tip); position:absolute; left:0;
+        top:calc(100% + 0.375rem);
         z-index:5; width:max-content; max-width:min(24rem, calc(100vw - 3rem));
         box-sizing:border-box; padding:0.4375rem 0.625rem; background:#16161e;
         border:1px solid var(--bc); border-radius:0.25rem; color:var(--ink);
         font-size:0.875rem; line-height:1.45; letter-spacing:0; text-align:left;
         white-space:normal; overflow-wrap:normal; box-shadow:0 0.25rem 1rem rgba(0, 0, 0, 0.6);
         visibility:hidden; opacity:0; pointer-events:none; }}
-.bd:hover::after, .bd:focus::after {{ visibility:visible; opacity:1; }}
+.bd:hover::after, .bd:focus::after, .bu:hover::after, .bu:focus::after {{
+        visibility:visible; opacity:1; }}
 @media (min-width: 901px) {{
-  .bd {{ position:relative; }}
+  .bd, .bu {{ position:relative; }}
 }}
 @media (prefers-reduced-motion: no-preference) {{
-  .bd::after {{ transition:opacity 0.12s, visibility 0.12s; }}
+  .bd::after, .bu::after {{ transition:opacity 0.12s, visibility 0.12s; }}
 }}
 /* Anything the page marks hidden stays hidden, whatever display a rule
    below gives it: the filter hides rows, the searches hide tiles, rows and
@@ -3750,9 +3805,14 @@ article .installer .no {{ display:block; color:#f0c674; background:#241d10;
    are the full width of the card, because they are the things in it to
    press.
    -------------------------------------------------------------------- */
-article .installer {{ display:flex; flex-direction:column; gap:0.625rem; }}
+article .installer {{ display:flex; flex-direction:column; gap:0.5rem; }}
 article .installer > *, article .installer .meta {{ margin:0; }}
-article .installer button.go {{ width:100%; text-align:center; }}
+article .installer button.go {{ width:100%; text-align:center; display:flex;
+        align-items:center; justify-content:center; gap:0.5rem; }}
+/* The buttons' symbols (1.0.0): the badges' line weight, the button's own
+   colour, a little taller than the words beside them. */
+article .installer button.go svg.bi {{ flex:none; width:1.25rem; height:1.25rem; fill:none;
+        stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
 /* Update my board: the same size and shape as the install button, so it
    reads as the other of two choices rather than as a lesser one, and
    outlined so the two are told apart at a glance. A browser that cannot
@@ -3765,7 +3825,7 @@ article .installer esp-web-install-button.upd[install-unsupported] {{ display:no
 article .installer .pre {{ color:#f0c674; background:#241d10;
         border-left:3px solid #8a6d39; border-radius:0.25rem;
         padding:0.625rem 0.875rem; font-size:0.8125rem; }}
-article .installer .pre p {{ margin:0; line-height:1.5; }}
+article .installer .pre p {{ margin:0; line-height:1.45; }}
 article .installer .pre b {{ color:#ffd35c; }}
 /* The board slot keeps its height whether it holds one line or a choice,
    so nothing moves the day a second board or release arrives. */
@@ -3784,12 +3844,21 @@ article .install-top > .installer {{ margin:1.25rem 0 1.5rem; }}
    desktop, and after it on a phone, where the markup puts it. Not indented
    the way a note inside prose is, because nothing above it is prose. */
 article .install-top > .steps > p.aside:first-child {{ margin:0 0 1.25rem; }}
+/* Site 1.0.0 tightened the card so both buttons are on the first screen at
+   1366 x 768 with a second release offered, which is the tallest the card
+   gets: a column two rem wider, which takes a line off the amber box; the
+   drawing held to 3.5rem tall rather than growing with the width; smaller
+   gaps, a little less padding and buttons 0.25rem shorter. The Update
+   button went from ending at 831px to about 740px. Re-measure it after
+   changing anything in the card or the amber box's words. */
 @media (min-width: 901px) {{
-  article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 22rem;
+  article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 24rem;
         grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}
   article .install-top > .intro {{ grid-column:1; grid-row:1; }}
   article .install-top > .installer {{ grid-column:2; grid-row:1 / span 2; margin:0;
-        position:sticky; top:1rem; }}
+        position:sticky; top:1rem; padding:1rem 1.25rem; }}
+  article .installer svg.art.mini {{ height:3.5rem; }}
+  article .installer button.go {{ padding-top:0.5625rem; padding-bottom:0.5625rem; }}
   article .install-top > .steps {{ grid-column:1; grid-row:2; }}
   article .install-top .steps svg.art.steps {{ margin:1rem 0 1.25rem; }}
 }}
@@ -4289,7 +4358,8 @@ AGES = ((3652, "10y", "for ten years"), (1826, "5y", "for five years"),
 # thing it is, and its letters say which one.
 BADGE_COLOURS = {"soft": "grey", "sys": "white", "term": "purple",
                  "guest": "amber", "feat": "blue", "new": "orange",
-                 "steady": "cyan", "age": "lavender", "int": "rose"}
+                 "steady": "cyan", "age": "lavender", "int": "rose",
+                 "upd": "dim cyan"}
 
 # The support list: causes a sysop can show support for, one line each, in
 # the order /badges lists them. A board sends the slugs in its "support"
@@ -4955,10 +5025,10 @@ def _badge_table():
 
     # Sent by the board. The software and the machine are the board's own
     # words, so they have no fixed symbol and nothing to filter on.
-    add("board", "software", "Software", "soft", "unleashed",
-        "What the board runs, and its version in the tooltip.",
+    add("board", "software", "Software", "soft", "unleashed 1.0.0",
+        "What the board runs, and which version of it.",
         "<code>software</code> <span class='src'>and <code>version</code></span>",
-        tip="Software: unleashed, as the board reports it.", filt=False)
+        tip="Software: unleashed 1.0.0, as the board reports it.", filt=False)
     add("board", "system", "Machine", "sys", "Compaq 486",
         f"What the board runs on, in its own words, up to {SYSTEM_MAX} characters: "
         "the chip it runs on, or the Compaq 486 in the corner.",
@@ -4984,6 +5054,17 @@ def _badge_table():
             f"On this directory {words} or more.",
             "<span class='src'>none: worked out here</span>",
             tip=f"Listed {words}.", sort=sort_key("Listed"))
+    # A µnleashed board behind the newest release /install offers (site
+    # 1.0.0, Rob: "when an unleashed board is behind, mark on there a subtle
+    # up arrow"). On a board's row it is an arrow on the software badge,
+    # linked to /upgrade; here and in the filter it is a badge of its own,
+    # so a sysop can find which of their boards are behind.
+    add("directory", "update", "Update available", "upd", "",
+        "A µnleashed board running an older version than the newest one "
+        "on the install page. The arrow on its software badge says which, "
+        "and links to how to update it.",
+        "<span class='src'>none: worked out here</span>",
+        tip="Update available: a newer µnleashed release is on the install page.")
     for slug, art, name, sentence in SUPPORT:
         add("support", slug, _cap(name), "sup", art, sentence, f"<code>{slug}</code>",
             tip=f"Supports {name}.")
@@ -5004,6 +5085,24 @@ BADGE_BY_KEY = {b["key"]: b for b in BADGES}
 # Everything a reader can filter the board list on, in the page's order.
 FILTER_KEYS = tuple(b["key"] for b in BADGES if b["filter"])
 
+# The order of the small badges on a board's row (site 1.0.0, Rob: "sort
+# those so core system ones are always first ... that way they look
+# consistent when scrolling"). Fixed, so a badge sits in the same place on
+# every row: what it speaks, guests, what is running, what the directory
+# worked out, then the causes and the interests, and only those two
+# alphabetical, because there a reader is scanning for a name. /badges and
+# the filter keep BADGES order; only the row uses this.
+ROW_ORDER = ("petscii", "guests", "chat", "mail", "forums", "files", "doors",
+             "new", "steady")
+ROW_SUPPORT = tuple(b for b in BADGES if b["group"] == "support")
+ROW_INTERESTS = tuple(sorted((b for b in BADGES if b["group"] == "interests"),
+                             key=lambda b: b["sort"]))
+
+# The arrow on the software badge of a board that is behind: line art in
+# the badges' own hand, drawn in the chip's colour.
+UP_ARROW = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            '<path d="M12 19.5 V5.5 M6 11.5 L12 5.5 L18 11.5"/></svg>')
+
 
 def badge_symbol(b):
     """What a badge shows: its letters or its drawing, already markup."""
@@ -5011,6 +5110,8 @@ def badge_symbol(b):
         return support_svg(b["sym"])
     if b["cls"] == "int":
         return interest_svg(b["sym"])
+    if b["cls"] == "upd":
+        return UP_ARROW
     return html.escape(b["sym"])
 
 
@@ -5020,6 +5121,59 @@ def badge_words(b):
     source" and "games" all find something."""
     parts = (b["name"], b["key"], b["key"].replace("-", " "), b["sub"])
     return " ".join(p for p in parts if p).lower()
+
+
+# --------------------------------------------------------------------------
+# Versions (site 1.0.0). A board's software badge says which version it
+# runs, and a µnleashed board behind the newest release /install offers
+# carries an arrow saying so.
+# --------------------------------------------------------------------------
+_VERSION = re.compile(r"^v?(\d{1,6})\.(\d{1,6})\.(\d{1,6})(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$")
+
+
+def version_key(text):
+    """A version as something to compare, or None when it is not one.
+
+    Three numbers, compared part by part, so 1.0.10 is newer than 1.0.9. A
+    pre-release (1.0.1-rc.1) is older than the release it leads to, and
+    build metadata after a "+" does not count. Anything else, "1.0", "dev"
+    or nothing at all, is not a version, and a board sending it is never
+    told it is behind: a guess that nags somebody wrongly is worse than no
+    arrow."""
+    m = _VERSION.match((text or "").strip())
+    if not m:
+        return None
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3)), 0 if m.group(4) else 1)
+
+
+def newest_release():
+    """The version /install offers first, found the way /install finds it,
+    or "" when nothing is published."""
+    rels = firmware_releases()
+    return rels[0]["version"] if rels else ""
+
+
+def update_for(r, latest):
+    """The newer release a board could move to, or "". Only µnleashed
+    boards: nothing here knows what another program's newest version is.
+    Nothing for a board on the newest release or newer, or one whose
+    version is not a version."""
+    if (r["software"] or "").strip().lower() != "unleashed":
+        return ""
+    have, want = version_key(r["version"]), version_key(latest)
+    if have is None or want is None or have >= want:
+        return ""
+    return latest
+
+
+def update_link(have, newer):
+    """The arrow on a behind board's software badge: a link to /upgrade, with
+    the badge tooltip saying from which version to which. Plain text in,
+    escaped here once for both attributes that carry it."""
+    t = html.escape(f"Update available: {have} → {newer}. Plug it in and use "
+                    "Update my board on /install.", quote=True)
+    return (f'<a class="bu" href="/upgrade" aria-label="{t}" data-tip="{t}">'
+            + UP_ARROW + "</a>")
 
 
 def badge(cls, content, tip):
@@ -5042,12 +5196,13 @@ def listed_at(r):
     return r["public_at"] or r["first_seen"]
 
 
-def row_keys(r, now, steady=False):
+def row_keys(r, now, steady=False, latest=""):
     """Every badge a board carries, as the keys the filter uses: what it
     sent, what the directory worked out, and every step of time listed it
     has reached, so "listed a year" finds a board listed for two. A board's
     row carries these, and the filter matches on them, on the server and in
-    the browser alike."""
+    the browser alike. latest is the newest release on /install, for
+    "update"."""
     keys = set(unpick(r["features"]))
     if "petscii" in unpick(r["terminals"]):
         keys.add("petscii")
@@ -5058,6 +5213,8 @@ def row_keys(r, now, steady=False):
         keys.add("new")
     if steady:
         keys.add("steady")
+    if update_for(r, latest):
+        keys.add("update")
     keys.update(label for days, label, _w in AGES if age >= days * 86400)
     keys.update(row_support(r))
     keys.update(row_interests(r))
@@ -5081,40 +5238,47 @@ def row_interests(r):
     return [s for s in INTEREST_SLUGS if s in got]
 
 
-def board_badges(r, now, steady=False):
-    """The badges under one board's name, or "" for a board with none. In
-    BADGES order, like every other view of them."""
-    keys = row_keys(r, now, steady)
+def board_badges(r, now, steady=False, latest=""):
+    """The badges under one board's name, or "" for a board with none.
+
+    Two rows (site 1.0.0). The first is what the board is: its software and
+    version, with the update arrow when it is behind, then the machine it
+    runs on. The second is the small badges in ROW_ORDER, the same places
+    on every row. A board with nothing for a row has no row, not an empty
+    one."""
+    keys = row_keys(r, now, steady, latest)
     since = listed_at(r)
     age = now - since
-    chips, aged = [], False
-    for b in BADGES:
-        key = b["key"]
-        if key == "software":
-            if r["software"]:
-                what = r["software"] + (" " + r["version"] if r["version"] else "")
-                chips.append(badge("soft", html.escape(r["software"]),
-                                   f"Software: {what}, as the board reports it."))
-        elif key == "system":
-            if r["system"]:
-                chips.append(badge("sys", html.escape(r["system"]),
-                                   f"Runs on: {r['system']}, in the board's own words."))
-        elif b["cls"] == "age":
-            # One chip for the whole family: the highest step reached.
-            if not aged:
-                aged = True
-                for days, label, words in AGES:
-                    if age >= days * 86400:
-                        chips.append(badge("age", label,
-                                           f"Listed {words}: on this directory "
-                                           f"since {day_text(since)}."))
-                        break
-        elif key in keys:
-            tip = b["tip"]
-            if b["cls"] in ("sup", "int"):
-                tip += " Chosen by the sysop."
-            chips.append(badge(b["cls"], badge_symbol(b), tip))
-    return '<span class="badges">' + "".join(chips) + "</span>" if chips else ""
+    ident, marks = [], []
+    if r["software"]:
+        what = r["software"] + (" " + r["version"] if r["version"] else "")
+        ident.append(badge("soft", html.escape(what),
+                           f"Software: {what}, as the board reports it."))
+        newer = update_for(r, latest)
+        if newer:
+            ident.append(update_link(r["version"], newer))
+    if r["system"]:
+        ident.append(badge("sys", html.escape(r["system"]),
+                           f"Runs on: {r['system']}, in the board's own words."))
+    for key in ROW_ORDER:
+        if key in keys:
+            b = BADGE_BY_KEY[key]
+            marks.append(badge(b["cls"], badge_symbol(b), b["tip"]))
+    # One chip for the whole of time listed: the highest step reached.
+    for days, label, words in AGES:
+        if age >= days * 86400:
+            marks.append(badge("age", label, f"Listed {words}: on this directory "
+                                             f"since {day_text(since)}."))
+            break
+    for b in ROW_SUPPORT + ROW_INTERESTS:
+        if b["key"] in keys:
+            marks.append(badge(b["cls"], badge_symbol(b), b["tip"] + " Chosen by the sysop."))
+    rows = ""
+    if ident:
+        rows += '<span class="bid">' + "".join(ident) + "</span>"
+    if marks:
+        rows += '<span class="bset">' + "".join(marks) + "</span>"
+    return '<span class="badges">' + rows + "</span>" if rows else ""
 
 
 def legend_html(lines):
@@ -5201,6 +5365,9 @@ def about_lines(r):
     """What a board sent about itself, as plain lines of words, for the feed,
     which has no badges and no tooltips. Plain text: the caller escapes."""
     lines = []
+    if r["software"]:
+        lines.append("Software: " + r["software"]
+                     + (" " + r["version"] if r["version"] else ""))
     if r["system"]:
         lines.append(f"Runs on: {r['system']}")
     terms = [TERMINAL_NAMES[t] for t in unpick(r["terminals"]) if t in TERMINAL_NAMES]
@@ -5236,6 +5403,10 @@ def board_json(r, steady):
     out = {k: r[k] for k in ("name", "owner", "description", "host", "address",
                              "port", "nodes", "busy", "state", "calls24",
                              "minutes24", "streak_start", "last_seen")}
+    # What it runs, as the board said (site 1.0.0: the badge shows the
+    # version now, so the data says it too).
+    out["software"]  = r["software"]
+    out["version"]   = r["version"]
     out["system"]    = r["system"]
     out["terminals"] = unpick(r["terminals"])
     out["guests"]    = None if r["guests"] is None else bool(r["guests"])
@@ -5255,14 +5426,14 @@ def board_matches(keys, sel, any_=False):
     return any(k in keys for k in sel) if any_ else all(k in keys for k in sel)
 
 
-def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False):
+def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False, latest=""):
     out = []
     for r in rows:
         # The badges this board carries, for the filter, in the page's order.
         # Every row is sent whatever the filter says, and the ones it leaves
         # out are hidden: that is what lets the script show them again the
         # moment a chip is let go, with no trip back here.
-        keys = row_keys(r, now, r["id"] in (steady or ()))
+        keys = row_keys(r, now, r["id"] in (steady or ()), latest)
         carried = " ".join(k for k in FILTER_KEYS if k in keys)
         tr = (f'<tr data-b="{html.escape(carried, quote=True)}"'
               + ("" if board_matches(keys, sel, any_) else " hidden") + ">")
@@ -5350,7 +5521,7 @@ def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False):
             tr
             + f"<td class='name' data-label='Board'><span class='bname'>"
             f"{html.escape(r['name'])}</span>"
-            + board_badges(r, now, r["id"] in (steady or ()))
+            + board_badges(r, now, r["id"] in (steady or ()), latest)
             + f"<span class='desc'>{html.escape(r['description'])}</span>"
             + who_runs
             + ((charts or {}).get(r["id"]) or "")
@@ -5647,12 +5818,13 @@ def index_page(sel=(), any_=False, data=None):
         # looking. Not in the table's header row, which a phone does not
         # show. When nothing passes the filter the table is hidden and a
         # sentence says so, rather than a header over nothing.
+        latest = newest_release()
         shown = sum(1 for r in rows
-                    if board_matches(row_keys(r, now, r["id"] in steady), sel, any_))
+                    if board_matches(row_keys(r, now, r["id"] in steady, latest), sel, any_))
         body = (filter_bar_html(sel, any_, shown, len(rows))
                 + '<table id="boards"' + ("" if shown else " hidden") + ">"
                 "<tr><th>Board</th><th>Dial</th><th>State</th></tr>"
-                + board_rows(rows, now, charts, steady, sel, any_) + "</table>"
+                + board_rows(rows, now, charts, steady, sel, any_, latest) + "</table>"
                 + '<p class="none" id="fnone"' + (" hidden" if shown else "") + ">"
                 + f"No board with {'any' if any_ else 'all'} of those yet.</p>"
                 + BADGE_JS)
@@ -5753,7 +5925,8 @@ mentioning. It is a list of hobby BBSes.</p>
 <dt><code>GET /api/boards.json</code></dt>
 <dd>Every listed board: name, owner, description, where to dial it, how many lines it
 has and how many are busy, whether it is up, and how long it has been up. Then what
-the <a href="/badges">badges</a> are made of: what the board said it runs on, speaks,
+the <a href="/badges">badges</a> are made of: what the board said it runs and which
+version, what it runs on, speaks,
 allows, supports and is into, when it was first listed, and whether it has been
 steady this past week. Cached for a few seconds.</dd>
 <dt><code>POST /announce</code></dt>
@@ -5837,8 +6010,8 @@ directory, and it does not expire. It is not worth it.</p></aside>
 <h2>Running something else</h2>
 
 <p>Synchronet, Mystic, WWIV, ENiGMA, Citadel, something you wrote yourself in a
-weekend: all welcome, all listed the same way, and what you run is shown next to
-your board's name. This is a directory of boards that are up, not a directory of
+weekend: all welcome, all listed the same way, and what you run, with its
+version, is shown under your board's name. This is a directory of boards that are up, not a directory of
 one program's users. If it were the second thing it would not be worth running.</p>
 
 <p>There is no plugin to install and no account to make. Post this every few
@@ -7228,7 +7401,9 @@ BOOT_BUTTON = _deco(206,
 # The small drawing at the top of the install card: the same hand as the
 # first step's, laptop, cable and board, with no caption and no box of its
 # own, because it sits inside a box already. 354 wide like the others, and
-# only 96 tall, so at the card's 415px it is 1.17 times its own size.
+# only 96 tall. From site 1.0.0 a desktop holds it to 3.5rem tall, centred,
+# so the card's buttons stay on the first screen; on a phone it is last in
+# the card and fills the width.
 INSTALL_MINI = (
     '<svg class="art mini" viewBox="0 0 354 96" aria-hidden="true" '
     'focusable="false" preserveAspectRatio="xMidYMid meet">'
@@ -8031,7 +8206,7 @@ class Handler(BaseHTTPRequestHandler):
             rest = path[len("/install/"):]
             bits = rest.split("/")
             if (len(bits) == 3 and bits[0] == "esp-web-tools"
-                    and bits[1] in (EWT_PATH, EWT_VERSION)):
+                    and bits[1] in EWT_PATHS):
                 got = ewt_file(bits[2])
             else:
                 got = firmware_file(rest)
