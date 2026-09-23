@@ -1278,21 +1278,41 @@ def main():
         S_EWT_VERSION = S.EWT_VERSION
         S_EWT_BASE = S.EWT_BASE
         S_EWT_SCRIPT = S.EWT_SCRIPT
-        print("The installer page, with nothing published")
+        # Which state the deployment is in decides which checks apply. Before
+        # 1.0.0 the firmware repository is private, so the fetcher cannot
+        # reach it and a test release (0.23.0) is committed into firmware/
+        # by hand, for Rob to flash a fresh board from /install. With it
+        # there, "nothing published" is simply not the state any more, and
+        # checking for it reported the working page as four failures.
+        # os.path, not pathlib: this function imports pathlib further down,
+        # which makes the name local here and unbound at this point.
+        fw_repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware")
+        published = os.path.isdir(fw_repo) and any(
+            os.path.isfile(os.path.join(fw_repo, d, "esp32", "firmware.bin"))
+            for d in os.listdir(fw_repo))
         code, inst = get("/install")
-        check("there is an install page", code == 200)
-        check("it says plainly that no release is published yet",
-              "No release published yet" in inst
-              and "no firmware image on this site to install yet" in inst)
-        check("and sends a reader to the build page instead",
-              '<div class="installer none">' in inst
-              and 'the <a href="/build">build page</a>' in inst)
-        check("it offers no button and no element to press",
-              "<esp-web-install-button" not in inst and 'slot="activate"' not in inst)
-        # The whole point of tying the script to the widget: with nothing
-        # published there is no widget, so there is no code on the page
-        # either. A flag would have had to be remembered.
-        check("and loads no script at all", "<script" not in inst)
+        if published:
+            print("The installer page, with a release published")
+            check("there is an install page", code == 200)
+            check("it offers the install button", "<esp-web-install-button" in inst)
+            check("and the only script is this site's own copy of ESP Web Tools",
+                  "<script" in inst and 'src="/install/esp-web-tools/' in inst
+                  and "unpkg" not in inst)
+        else:
+            print("The installer page, with nothing published")
+            check("there is an install page", code == 200)
+            check("it says plainly that no release is published yet",
+                  "No release published yet" in inst
+                  and "no firmware image on this site to install yet" in inst)
+            check("and sends a reader to the build page instead",
+                  '<div class="installer none">' in inst
+                  and 'the <a href="/build">build page</a>' in inst)
+            check("it offers no button and no element to press",
+                  "<esp-web-install-button" not in inst and 'slot="activate"' not in inst)
+            # The whole point of tying the script to the widget: with nothing
+            # published there is no widget, so there is no code on the page
+            # either. A flag would have had to be remembered.
+            check("and loads no script at all", "<script" not in inst)
         check("no release path is served when there is no release",
               get("/install/0.22.1/manifest.json")[0] == 404
               and get("/install/0.22.1/esp32/firmware.bin")[0] == 404)
@@ -1488,10 +1508,14 @@ def main():
               "Supporters get posts and development news on Buy Me a Coffee" in flat_d
               and "What support never buys is features or priority." in flat_d
               and "Giving buys no features" not in flat_d)
-        check("and how supporters are thanked, the ABOUT credit for lifetime members only",
-              "<h2>Thank you</h2>" in don and "Unleashed HQ" in flat_d
-              and "release notes of the version that shipped" in flat_d
-              and "that credit is for lifetime members only" in flat_d)
+        # Rob, 2026-09-23: only lifetime members are named, on the ABOUT
+        # screen and on this page. No list of every supporter, no release
+        # notes mention, no page on Unleashed HQ: nobody has time to keep
+        # those up, and a promise nobody keeps is worse than none.
+        check("and how supporters are thanked: lifetime members named, nobody else listed",
+              "<h2>Thank you</h2>" in don and "Lifetime members" in flat_d
+              and "ABOUT" in flat_d and "Unleashed HQ" not in flat_d
+              and "release notes" not in flat_d)
         # The list starts empty, and an empty list says nothing at all.
         check("an empty thanks list shows no list and no heading",
               "The thanks list" not in don and 'class="thanks"' not in don)

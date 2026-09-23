@@ -62,11 +62,10 @@ is not what keeps your board alive.
 
 ## Thank you
 
-Supporters who say yes are named on the thanks list on this page, mentioned in
-the release notes of the version that shipped while they were supporting, and
-listed on an information page on Unleashed HQ, Rob's own board. Lifetime
-members are also credited on the ABOUT screen of the firmware, which ships on
-every µnleashed board; that credit is for lifetime members only.
+Every supporter gets the posts and news on Buy Me a Coffee. Lifetime members
+are also named, or left anonymous if they prefer, in the credits on the ABOUT
+screen of the firmware, which ships on every µnleashed board, and in the list
+below.
 
 ::: thanks
 :::
