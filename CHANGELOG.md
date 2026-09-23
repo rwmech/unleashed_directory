@@ -14,6 +14,67 @@
 
 # Changelog
 
+## 0.21.0, 2026-09-23
+
+Badges on the board list (Rob), and the list's rows striped and lit on
+hover.
+
+- **Five optional announce fields**, in PROTOCOL.md with an example and
+  their limits: `system` (the machine, up to 40 printable characters),
+  `terminals`, `guests`, `features` and `support`. Old boards send none
+  and are listed as before. Junk is dropped rather than refused, so a bad
+  badge field never costs a listing: control and format characters out of
+  `system` (bidi overrides and zero-width characters included), at most two
+  combining marks a character, and only known words, once each, from the
+  first 16 entries of a list. `guests` has to be a real JSON boolean.
+- **Badges under each board's name**, wrapping so they never push the Dial
+  column. The software badge moved into the same row, then the machine as
+  text, then one or two letters in colours from the palette: P (PETSCII,
+  purple), G (guests, amber), C, F, Fi, M, D (chat, forums, files, mail,
+  doors: blue, only what is running now), and three the directory works out
+  for itself: N (listed under a week, orange), S (steady, cyan) and how long
+  listed, 1m to 10y, highest only (lavender). Then the support symbols.
+- **Steady** is a new hourly record, `beathours`: each accepted heartbeat is
+  counted into its UTC hour, and a week is kept. A board is steady when the
+  heartbeats that arrived over the last 168 hours are more than 95% of what
+  its own `interval` said were due, each hour counted at most up to its own
+  due, so a burst cannot cover a silent hour. It needs a full week of record
+  first, so every board already listed gets its first chance a week after
+  this is deployed.
+- **The support list**: eleven causes a sysop can show, as line-art
+  symbols in their causes' own colours, one table in server.py (`SUPPORT`).
+  LGBTQ+ (rainbow), transgender people (the trans symbol), disabled people
+  (the disability pride flag), neurodiversity (infinity), mental health
+  (green ribbon), suicide prevention (semicolon), veterans (a dog tag),
+  cancer (lavender ribbon), HIV (red ribbon), animal welfare (paw) and
+  amateur radio (a mast). Only these slugs are shown, so nobody can put
+  words of their own on the page.
+- **Tooltips, CSS only**, from `data-tip`, on hover and on focus, so a tap or
+  a keyboard gets one too; each badge also has an aria-label and a tabindex.
+  No title attribute: it drew the browser's own tooltip on top on a desktop
+  and nothing on a phone. Below the breakpoint the tooltip hangs from the
+  start of the row and is never wider than the screen.
+- **/badges**, the legend: every badge, its colour, what it means and where
+  it comes from, how steady is worked out, and "Show your support" with each
+  symbol, its slug and a sentence. Built from the same tables as the list.
+  Linked from a small "What the badges mean" above the table and from the
+  footer. The menu lights Boards on it, on any face.
+- The JSON gains `system`, `terminals`, `guests`, `features`, `support`,
+  `listed_at` and `steady`, and is now built field by field so a new column
+  can never leak the token or the note. The feed says the same in words.
+- **Zebra rows**: every other board `#111116`, a few percent over the page;
+  every text colour keeps its contrast grade (--dim 5.45:1, --ink 11.25:1).
+- **Row hover**: a `--dial` outline at 35% alpha, so nothing moves, and one
+  of the site's small blue lamps flies once under the board's name trailing
+  a fading streak, sized to the name's own width. Hover only where a pointer
+  hovers, so a tap on a phone leaves nothing lit; the flight only without
+  reduced motion.
+- **Migration**: six columns added with `ALTER TABLE ... ADD COLUMN` when
+  missing, and a new table; no rebuild. The suite starts a server on a
+  database made by the old schema and checks it serves, gains exactly a new
+  database's columns, keeps its rows, and takes the next heartbeat.
+- 563 checks, up from 491.
+
 ## 0.20.2, 2026-09-23
 
 - **The "Run your own board" card stands out** (Rob). A wash of the

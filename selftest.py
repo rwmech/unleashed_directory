@@ -137,6 +137,448 @@ def fk_grade(page):
     return 0.39 * (len(words) / len(sentences)) + 11.8 * (syl / len(words)) - 15.59
 
 
+# The boards table as it stood before the badges (site 0.20.2 and earlier),
+# for the migration check: exactly what CREATE TABLE made then, before the
+# ALTERs that setup() applies on start. The live database is one of these.
+OLD_SCHEMA = """
+CREATE TABLE boards (
+    id           INTEGER PRIMARY KEY,
+    token        TEXT UNIQUE NOT NULL,
+    name         TEXT NOT NULL,
+    owner        TEXT NOT NULL DEFAULT '',
+    description  TEXT NOT NULL DEFAULT '',
+    software     TEXT NOT NULL DEFAULT '',
+    version      TEXT NOT NULL DEFAULT '',
+    host         TEXT NOT NULL DEFAULT '',
+    address      TEXT NOT NULL DEFAULT '',
+    group_key    TEXT NOT NULL DEFAULT '',
+    port         INTEGER NOT NULL DEFAULT 6400,
+    nodes        INTEGER NOT NULL DEFAULT 0,
+    busy         INTEGER NOT NULL DEFAULT 0,
+    calls24      INTEGER,
+    minutes24    INTEGER,
+    uptime       INTEGER NOT NULL DEFAULT 0,
+    interval_min INTEGER NOT NULL DEFAULT 10,
+    state        TEXT NOT NULL DEFAULT 'pending',
+    first_seen   INTEGER NOT NULL,
+    last_seen    INTEGER NOT NULL,
+    streak_start INTEGER NOT NULL,
+    public_at    INTEGER NOT NULL DEFAULT 0,
+    beats        INTEGER NOT NULL DEFAULT 0,
+    note         TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE activity (
+    board_id INTEGER NOT NULL,
+    hour     INTEGER NOT NULL,
+    beats    INTEGER NOT NULL DEFAULT 0,
+    busy     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, hour)
+);
+CREATE TABLE reports (
+    id       INTEGER PRIMARY KEY,
+    board_id INTEGER NOT NULL,
+    at       INTEGER NOT NULL,
+    address  TEXT NOT NULL DEFAULT '',
+    reason   TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE hits (
+    address TEXT PRIMARY KEY,
+    at      INTEGER NOT NULL
+);
+"""
+
+
+def post_from(payload, addr, base=None):
+    """An announce that arrives from addr, through the trusted loopback
+    proxy, so a test can have boards at different addresses."""
+    req = urllib.request.Request(f"{base or BASE}/announce",
+                                 data=json.dumps(payload).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "X-Forwarded-For": addr})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read().decode() or "{}")
+
+
+def badge_row(page, name):
+    """One board's row of the list, from its name to the end of the row."""
+    at = page.find(f"<span class='bname'>{name}</span>")
+    return page[at:page.find("</tr>", at)] if at >= 0 else ""
+
+
+def badges_in(row):
+    """(colour class, text) for every lettered badge in a row, in order."""
+    return re.findall(r'<span class="bd k-(\w+)"[^>]*>([^<]*)</span>', row)
+
+
+def badge_checks(S, db):
+    """Site 0.21.0: the badge fields, the badges, the steady record, the
+    legend, the zebra rows and the hover, and a database from before."""
+    import sqlite3
+
+    # ----------------------------------------------------------------------
+    print("Badges: what a board sends about itself")
+    full = {"software": "unleashed", "version": "1.0.0", "name": "Badge Board",
+            "owner": "Tester", "description": "every badge there is",
+            "port": 6400, "nodes": 4, "busy": 1, "interval": 10, "token": "",
+            "system": "  Com​paq‮ 486\t<b>&</b>  ",
+            "terminals": ["PETSCII", "ansi", "bogus", 7, None, "ansi"],
+            "guests": True,
+            "features": ["doors", "chat", "Files", "gopher"],
+            "support": ["ham", "lgbtq", "<script>alert(1)</script>", "HAM", "nazis"]}
+    junk = {"name": "Junk Fields", "port": 6400, "token": "",
+            "system": ["not", "a", "string"], "terminals": "petscii",
+            "guests": "yes", "features": {"chat": True}, "support": "lgbtq"}
+    shut = {"name": "No Guests", "port": 6400, "token": "", "guests": False}
+    code, got = post_from(full, "198.51.100.7")
+    check("a heartbeat carrying every badge field is accepted", code == 200)
+    code, gotj = post_from(junk, "198.51.100.8")
+    check("and one with nothing but junk in them is accepted too, not refused",
+          code == 200)
+    _c, gots = post_from(shut, "198.51.100.9")
+    time.sleep(2.5)                                    # the pending window
+    post_from(dict(full, token=got.get("token", "")), "198.51.100.7")
+    post_from(dict(junk, token=gotj.get("token", "")), "198.51.100.8")
+    post_from(dict(shut, token=gots.get("token", "")), "198.51.100.9")
+    listed = {b["name"]: b for b in json.loads(get("/api/boards.json")[1])["boards"]}
+    bb, jb = listed.get("Badge Board", {}), listed.get("Junk Fields", {})
+    check("guests false is kept as false, not as not sent",
+          listed.get("No Guests", {}).get("guests") is False)
+    check("system: a zero-width and a bidi override removed, a tab made a "
+          "space, the ends trimmed",
+          bb.get("system") == "Compaq 486 <b>&</b>")
+    check("terminals: known words only, once each, any case, in the "
+          "directory's order", bb.get("terminals") == ["ansi", "petscii"])
+    check("guests: a JSON true is true", bb.get("guests") is True)
+    check("features: known words only, in order",
+          bb.get("features") == ["chat", "files", "doors"])
+    check("support: known slugs only; a made-up one, markup and all, is dropped",
+          bb.get("support") == ["lgbtq", "ham"])
+    check("a field of the wrong type counts as not sent, and the board is "
+          "still listed",
+          jb.get("system") == "" and jb.get("terminals") == []
+          and jb.get("guests") is None and jb.get("features") == []
+          and jb.get("support") == [])
+    check("the JSON carries the directory's own two as well",
+          isinstance(bb.get("listed_at"), int) and bb.get("steady") is False)
+    check("and still no token and no note, now that it is built field by field",
+          all("token" not in b and "note" not in b for b in listed.values()))
+    check("system is cut to 40 characters",
+          len(S.tidy_label("x" * 90, S.SYSTEM_MAX)) == 40 and S.SYSTEM_MAX == 40)
+    check("a line separator is a space, a bidi override is nothing",
+          S.tidy_label("a b‮c", 40) == "a bc")
+    check("a character keeps at most two combining marks",
+          S.tidy_label("e" + "́" * 30 + "f", 40) == "é́f")
+    check("only the first 16 entries of a list are read",
+          S.pick(["x"] * 16 + ["ansi"], S.TERMINALS) == []
+          and S.pick(["x"] * 15 + ["ansi"], S.TERMINALS) == ["ansi"])
+
+    # ----------------------------------------------------------------------
+    print("Badges on the board list")
+    page = get("/")[1]
+    row = badge_row(page, "Badge Board")
+    found = badges_in(row)
+    check("the name has a box of its own, the width of the name",
+          "<td class='name' data-label='Board'><span class='bname'>Badge Board</span>"
+          "<span class=\"badges\">" in page)
+    check("software first, then the machine, then P, G and the features, then N",
+          found == [("soft", "unleashed"), ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;"),
+                    ("term", "P"), ("guest", "G"), ("feat", "C"), ("feat", "Fi"),
+                    ("feat", "D"), ("new", "N")])
+    check("each feature that is not running has no badge",
+          ("feat", "F") not in found and ("feat", "M") not in found)
+    check("and the two support symbols, in the list's order, drawn not typed",
+          row.count('class="bd k-sup"') == 2
+          and row.index('aria-label="Supports LGBTQ+ people.')
+          < row.index('aria-label="Supports amateur radio.')
+          and row.count("<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"") == 2)
+    check("nothing a board sent reaches the page unescaped",
+          "<b>&</b>" not in page and "<script>alert" not in page
+          and 'data-tip="Runs on: Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;, in the '
+              "board&#x27;s own words.\"" in row)
+    n = row.count('class="bd ')
+    check("every badge carries a tooltip, a name for a screen reader, and a "
+          "focus stop for a keyboard or a tap",
+          n == 10 and row.count("data-tip=\"") == n and row.count("aria-label=\"") == n
+          and row.count('tabindex="0"') == n and row.count('role="img"') == n)
+    check("and no title, which would draw the browser's tooltip over ours",
+          " title=" not in row.split("<span class='desc'>")[0])
+    check("a PETSCII board's badge says what it means",
+          'aria-label="PETSCII: a Commodore 64 or 128 gets colour and graphics '
+          'here, not just text."' in row)
+    jrow = badge_row(page, "Junk Fields")
+    check("a board that sent nothing usable shows only what the directory "
+          "worked out", badges_in(jrow) == [("new", "N")])
+    check("the tooltip is CSS, drawn from data-tip, on hover and on focus",
+          "content:attr(data-tip);" in page
+          and ".bd:hover::after, .bd:focus::after { visibility:visible; opacity:1; }"
+          in page and "<script" not in page)
+    check("at the page's own type size, and never wider than a phone",
+          "font-size:0.875rem; line-height:1.45;" in page
+          and "max-width:min(24rem, calc(100vw - 3rem));" in page)
+    check("badges wrap under the name rather than pushing the Dial column",
+          ".badges { position:relative; display:flex; flex-wrap:wrap;" in page
+          and "main > table { table-layout:fixed; }" in page)
+    check("a small key to them sits right above the table",
+          '<p class="keylink"><a href="/badges">What the badges mean</a></p>'
+          "<table>" in page)
+    feet = {"list": page, "about": get("/", host="about.example")[1]}
+    check("and the footer links the legend on every face",
+          '<a href="/badges">Badges</a>' in feet["list"].split("<footer>")[1]
+          and '<a href="https://boards.example/badges">Badges</a>'
+          in feet["about"].split("<footer>")[1])
+    feed = get("/feed.xml")[1]
+    check("the feed says it in words, escaped for XML",
+          "Runs on: Compaq 486 &amp;lt;b&amp;gt;&amp;amp;&amp;lt;/b&amp;gt;" in feed
+          and "Supports: LGBTQ+ people, amateur radio" in feed
+          and "Speaks: ANSI, PETSCII" in feed and "Guests welcome" in feed
+          and "No guests: an account is needed" in feed)
+
+    # ----------------------------------------------------------------------
+    print("Badges the directory works out")
+    now = int(time.time())
+    con = sqlite3.connect(db)
+    bid = con.execute("SELECT id FROM boards WHERE name='Badge Board'").fetchone()[0]
+    check("every heartbeat is counted into its hour",
+          con.execute("SELECT SUM(beats) FROM beathours WHERE board_id=?",
+                      (bid,)).fetchone()[0] == 2)
+    check("and the board's tally started with its first heartbeat",
+          0 < con.execute("SELECT tracked_since FROM boards WHERE id=?",
+                          (bid,)).fetchone()[0] <= now)
+    con.execute("UPDATE boards SET public_at=?, tracked_since=? WHERE id=?",
+                (now - 400 * 86400, now - 8 * 86400, bid))
+    con.executemany("INSERT OR REPLACE INTO beathours(board_id, hour, beats) "
+                    "VALUES(?,?,6)", [(bid, h) for h in range(now // 3600 - 170,
+                                                              now // 3600 + 1)])
+    con.commit()
+    row = badge_row(get("/")[1], "Badge Board")
+    check("a week with every heartbeat in it earns S", ("steady", "S") in badges_in(row))
+    check("a board listed 400 days is no longer new, and shows 1y and only 1y",
+          ("new", "N") not in badges_in(row)
+          and [t for c, t in badges_in(row) if c == "age"] == ["1y"])
+    check("and its tooltip says since when",
+          f"Listed for a year: on this directory since {S.day_text(now - 400 * 86400)}."
+          in row)
+    check("the JSON says steady too",
+          {b["name"]: b for b in json.loads(get("/api/boards.json")[1])["boards"]}
+          ["Badge Board"]["steady"] is True)
+    first = now // 3600 - 100
+    con.execute("DELETE FROM beathours WHERE board_id=? AND hour>=? AND hour<?",
+                (bid, first, first + 24))
+    con.commit()
+    check("a silent day in the week loses it",
+          ("steady", "S") not in badges_in(badge_row(get("/")[1], "Badge Board")))
+    con.execute("UPDATE beathours SET beats=60 WHERE board_id=?", (bid,))
+    con.commit()
+    check("and a burst of extra heartbeats in the other hours cannot buy it back",
+          ("steady", "S") not in badges_in(badge_row(get("/")[1], "Badge Board")))
+    con.close()
+    # The arithmetic on its own, against a scratch table.
+    mem = sqlite3.connect(":memory:")
+    mem.row_factory = sqlite3.Row
+    mem.executescript(S.SCHEMA)
+    hour = now // 3600
+    every = {h: 6 for h in range(hour - 167, hour + 1)}
+    check("every heartbeat at a ten minute interval is the whole share",
+          S.steady_share(every, 10, now) > 0.99)
+    check("one a hour is the whole share at a sixty minute interval",
+          S.steady_share({h: 1 for h in every}, 60, now) > 0.99)
+    check("every other hour at double rate is about half, not all of it",
+          0.45 < S.steady_share({h: 12 for h in every if h % 2}, 10, now) < 0.55)
+    check("two hours missing in a week is still steady, a day missing is not",
+          S.steady_share({h: 6 for h in every if not hour - 50 < h < hour - 47},
+                         10, now) > 0.95
+          > S.steady_share({h: 6 for h in every if not hour - 50 < h < hour - 25},
+                           10, now))
+    for h in range(hour - 200, hour + 1):
+        S.tally(mem, 1, h * 3600)
+    check("the hourly record lets go of anything older than the week",
+          mem.execute("SELECT MIN(hour) FROM beathours").fetchone()[0]
+          == hour - S.STEADY_HOURS)
+    mem.executemany("INSERT OR REPLACE INTO beathours(board_id, hour, beats) "
+                    "VALUES(1,?,6)", [(h,) for h in every])
+    young = {"id": 1, "tracked_since": now - 3 * 86400, "interval_min": 10}
+    old = dict(young, tracked_since=now - 8 * 86400)
+    never = dict(young, tracked_since=0)
+    check("a board not watched for the whole week cannot be steady yet",
+          S.steady_boards(mem, [young, never], now) == set()
+          and S.steady_boards(mem, [old], now) == {1})
+    mem.close()
+
+    # ----------------------------------------------------------------------
+    print("The badges page")
+    code, leg = get("/badges")
+    check("it is served, with its title", code == 200
+          and has_h(leg, 1, "What the badges mean"))
+    check("every lettered badge is on it, with its colour named",
+          all(f">{letters}</span>" in leg and f"<b>{name}</b>" in leg
+              and f'<span class="cn k-{cls}">{S.BADGE_COLOURS[cls]}</span>' in leg
+              for _k, letters, cls, name, _m in S.LETTER_BADGES))
+    check("and the machine, the software and every time-listed step",
+          "<b>Machine</b>" in leg and "<b>Software</b>" in leg
+          and all(f">{label}</span>" in leg for _d, label, _w in S.AGES))
+    check("each says where it comes from, board or directory",
+          leg.count("Sent by the board:") == 9
+          and leg.count("Worked out here") == 3)
+    check("with the two groups under their own headings",
+          has_h(leg, 2, "Sent by the board") and has_h(leg, 2, "Worked out by the directory")
+          and has_h(leg, 3, "How steady is worked out")
+          and 'href="#how-steady-is-worked-out"' in leg)
+    check("then Show your support: every symbol, its slug and its sentence",
+          has_h(leg, 2, "Show your support")
+          and all(f"<code>{slug}</code>" in leg and html.escape(sentence) in leg
+                  for slug, _a, _n, sentence in S.SUPPORT))
+    check("eleven of them, amateur radio last",
+          len(S.SUPPORT) == 11 and S.SUPPORT[-1][0] == "ham"
+          and leg.count('class="bd k-sup"') == 11)
+    check("each support slug is a plain lower case word, so a board can type it",
+          all(re.fullmatch(r"[a-z][a-z-]{1,23}", s) for s in S.SUPPORT_SLUGS)
+          and len(set(S.SUPPORT_SLUGS)) == len(S.SUPPORT_SLUGS))
+    check("every drawing named in the list exists",
+          all(art in S.SUPPORT_ART for _s, art, _n, _t in S.SUPPORT))
+    check("the legend's badges have tooltips too",
+          'data-tip="Supports amateur radio."' in leg and "<script" not in leg)
+    check("it belongs to Boards in the menu, on the list face",
+          '<a class="here" href="/">Boards</a>' in leg)
+    about_leg = get("/badges", host="about.example")[1]
+    check("and on the about face, not to What this is",
+          '<a class="here" href="https://boards.example/">Boards</a>' in about_leg
+          and 'class="here" href="/">What this is' not in about_leg)
+    check("How to get listed shows the fields and links the legend",
+          'href="/badges"' in get("/how")[1] and '"support":["ham"]' in get("/how")[1])
+
+    # ----------------------------------------------------------------------
+    print("Rows: every other one striped, and the hover")
+    css = get("/")[1].split("<style>")[1].split("</style>")[0]
+    check("every other board is a shade lighter, starting on the second",
+          "main > table tr:nth-child(odd):not(:first-child) { background:#111116; }" in css)
+    hover = css[css.index("@media (hover: hover) and (pointer: fine) {\n  main > table"):]
+    hover = hover[:hover.index("\n}\n")]
+    check("a hovered row gets a dim --dial outline, which moves nothing",
+          "outline:1px solid rgba(127, 212, 255, 0.35);" in hover
+          and "outline-offset:-1px;" in hover and "border" not in hover)
+    check("hover of any kind only where a pointer hovers, so a tap leaves "
+          "nothing lit",
+          "@media (hover: hover) and (pointer: fine) {\n  tr:hover td {" in css
+          and "\ntr:hover td" not in css)
+    fly = css[css.index("@media (prefers-reduced-motion: no-preference) and "
+                        "(hover: hover) and (pointer: fine) {"):]
+    fly = fly[:fly.index("\n}\n")]
+    check("the dot flies once per hover, only where motion is not turned down",
+          "main > table tr:hover .bname::after { animation:namedot 1s linear 1 both; }"
+          in fly and "main > table tr:hover .bname::before { animation:nametail "
+          "1s linear 1 both; }" in fly
+          and css.count("animation:namedot") == 1 and css.count("animation:nametail") == 1)
+    check("its keyframes live where reduced motion switches them off",
+          css.index("@keyframes namedot") > css.index(
+              "@media (prefers-reduced-motion: no-preference) {\n  @keyframes nametail"))
+    check("at rest the dot and its streak are transparent, so reduced motion "
+          "leaves the outline alone",
+          ".name > .bname::before, .name > .bname::after { content:\"\"; "
+          "position:absolute; left:0;\n        opacity:0;" in css)
+    check("it travels the name's own width",
+          "85% { left:100%; opacity:1; }" in css
+          and ".name > .bname { display:block; width:fit-content;" in css)
+
+    # ----------------------------------------------------------------------
+    # The live database has rows in it. The change must add its columns to
+    # a table made by the old code, leave every row as it was, and serve.
+    print("A database from before the badges")
+    old_db = os.path.join(tempfile.gettempdir(), f"dirold{os.getpid()}.db")
+    for leftover in (old_db, old_db + "-wal", old_db + "-shm"):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    con = sqlite3.connect(old_db)
+    con.executescript(OLD_SCHEMA)
+    con.execute("INSERT INTO boards(token, name, owner, software, port, nodes, "
+                "state, first_seen, last_seen, streak_start, public_at, beats) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("a" * 32, "Old Timer", "Grandad", "unleashed", 6400, 6, "online",
+                 now - 90 * 86400, now, now - 90 * 86400, now - 90 * 86400, 5000))
+    con.execute("INSERT INTO activity(board_id, hour, beats, busy) VALUES(1, 20, 30, 12)")
+    con.commit()
+    con.close()
+    port4 = PORT + 3
+    base4 = f"http://127.0.0.1:{port4}"
+    env4 = dict(os.environ, DIRECTORY_PAGE_CACHE="0", DIRECTORY_DB=old_db,
+                DIRECTORY_PORT=str(port4), DIRECTORY_MIN_SECONDS="0")
+    server4 = subprocess.Popen([sys.executable, "server.py"], env=env4,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out4 = []
+    threading.Thread(target=lambda: [out4.append(l) for l in server4.stdout],
+                     daemon=True).start()
+    try:
+        up4 = None
+        for _ in range(60):
+            try:
+                up4 = fetch("/health", base4)[0]
+                break
+            except Exception:
+                if server4.poll() is not None:
+                    break
+                time.sleep(0.1)
+        home4 = fetch("/", base4) if up4 else (None, "", b"")
+        check("the server starts on it and serves the list"
+              + ("" if up4 else "  <- " + b"".join(out4[-3:]).decode("utf-8", "replace")),
+              up4 == 200 and home4[0] == 200 and b"Old Timer" in home4[2])
+        con = sqlite3.connect(old_db)
+        con.row_factory = sqlite3.Row
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(boards)")}
+        fresh = sqlite3.connect(":memory:")
+        fresh.executescript(S.SCHEMA)
+        want = {r[1] for r in fresh.execute("PRAGMA table_info(boards)")}
+        fresh.close()
+        check("its table now has exactly the columns a new one has",
+              cols == want and all(c in cols for c, _d in S.BADGE_COLUMNS))
+        check("and the hourly record's table",
+              con.execute("SELECT name FROM sqlite_master WHERE name='beathours'")
+              .fetchone() is not None)
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("a" * 32,)).fetchone()
+        check("the old row is untouched, and simply has no badge fields yet",
+              r["name"] == "Old Timer" and r["beats"] == 5000
+              and r["first_seen"] == now - 90 * 86400 and r["system"] == ""
+              and r["guests"] is None and r["support"] == ""
+              and r["tracked_since"] == 0)
+        check("its busy hours survived", con.execute(
+            "SELECT beats FROM activity WHERE board_id=1").fetchone()[0] == 30)
+        con.close()
+        check("its row shows the badges it earned without sending any: 1m",
+              badges_in(badge_row(home4[2].decode("utf-8"), "Old Timer"))
+              == [("soft", "unleashed"), ("age", "1m")])
+        code4, _b = post_from({"name": "Old Timer", "port": 6400, "token": "a" * 32,
+                               "software": "unleashed", "system": "ESP32-WROOM-32E",
+                               "features": ["chat"]}, "192.0.2.44", base4)
+        con = sqlite3.connect(old_db)
+        con.row_factory = sqlite3.Row
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("a" * 32,)).fetchone()
+        con.close()
+        check("its next heartbeat keeps its listing and adds the new fields",
+              code4 == 200 and r["system"] == "ESP32-WROOM-32E" and r["features"] == "chat"
+              and r["beats"] == 5001 and r["tracked_since"] > 0)
+        S.DB_PATH, was = old_db, S.DB_PATH
+        try:
+            S.setup()
+            S.setup()
+            again = True
+        except Exception:
+            again = False
+        S.DB_PATH = was
+        check("and starting again on the migrated database changes nothing", again)
+    finally:
+        server4.terminate()
+        try:
+            server4.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server4.kill()
+        for leftover in (old_db, old_db + "-wal", old_db + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+
+
 def main():
     db = os.path.join(tempfile.gettempdir(), f"dirtest{os.getpid()}.db")
     for leftover in (db, db + "-wal", db + "-shm"):
@@ -793,7 +1235,7 @@ def main():
                      "/firstcall", "/privacy", "/whofor", "/kids",
                      "/teachers", "/forward", "/forward-netgear",
                      "/forward-tplink", "/forward-asus", "/forward-xfinity",
-                     "/forward-mesh"):
+                     "/forward-mesh", "/badges"):
             every[path] = get(path)[1]
         # Forums, not message bases. The feature is the same one; the name
         # changed, and a reader meeting both words assumes they are two
@@ -2048,7 +2490,7 @@ def main():
                                 "/terminals", "/firstcall", "/forward", "/how",
                                 "/rules", "/privacy", "/kids", "/teachers",
                                 "/sdcard", "/dialing", "/author", "/donate",
-                                "/setup")
+                                "/setup", "/badges")
                     if "<script" in get(p)[1]]
         check("nothing else on the site loads any JavaScript"
               + ("" if not scripted else "  <- " + ", ".join(scripted)),
@@ -2874,6 +3316,8 @@ def main():
               429 in codes)
         check("nothing it posted reached the published list",
               [b["name"] for b in after] == [b["name"] for b in before])
+
+        badge_checks(S, db)
     finally:
         server.terminate()
         try:

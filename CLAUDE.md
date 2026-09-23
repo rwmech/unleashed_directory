@@ -484,6 +484,48 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   viewport it was meant to fit inside. At 390px with the browser text at
   200% that was a 437px wordmark in a 390px page. `selftest.py` allows
   exactly that one px and no other.
+- **Badges (0.21.0, Rob).** Five optional announce fields (`system`,
+  `terminals`, `guests`, `features`, `support`, in PROTOCOL.md) and three
+  badges worked out here (new, steady, time listed). **Everything is in
+  tables in server.py and /badges is built from the same tables**:
+  `LETTER_BADGES`, `AGES`, `BADGE_COLOURS`, `SUPPORT` (one line per cause:
+  slug, drawing, name, sentence) and `SUPPORT_ART`. Changing the support
+  list is editing a line of `SUPPORT`; a new cause needs a drawing in
+  `SUPPORT_ART` too. Rob reviews that list before it goes live, and it is
+  the directory's list, not a board's: an unknown slug is ignored, which is
+  what keeps free text (and slurs) off the page.
+  **Junk is dropped, never refused**: a bad badge field must not cost a
+  listing. `tidy_label` is stricter than `tidy`: Unicode controls, format
+  characters (bidi overrides, zero-width) and separators, two combining
+  marks at most. `pick` reads known words from the first 16 entries.
+  **Steady** is `beathours`, one row per board per UTC hour for a week,
+  written by `tally()` on every accepted heartbeat. Answered over due, each
+  hour capped at its own due: a cap of due plus one let a board be silent
+  one hour in seven and stay steady. Needs a whole week of record
+  (`tracked_since`), so boards listed before 0.21.0 could first earn it a
+  week after that deploy.
+  **Tooltips are CSS from `data-tip`**, on :hover and :focus (tabindex so a
+  tap focuses), with an aria-label. **No title attribute**, deliberately: it
+  draws the browser's tooltip over ours on a desktop and nothing on a phone.
+  From 901px a badge is positioned and its tooltip hangs from it; below, it
+  hangs from the row (or the legend's dt) and is capped at `100vw - 3rem`.
+  The colours live on `k-` classes so the legend's colour names wear them.
+  The name is `span.bname`, `width:fit-content`, because the hover dot's
+  travel is `left` 0 to 100% of it.
+  **Row hover and zebra** (0.21.0): odd rows after the header `#111116`, on
+  the `tr` so a phone's card is striped (and the card gained 0.5rem side
+  padding, the pinned state moving in with it). Hover is an outline, never a
+  border, and every hover rule is inside `(hover: hover) and (pointer:
+  fine)` so a tap cannot leave a row lit. The dot's keyframes are in the
+  no-preference block and its resting state is transparent, so reduced
+  motion is the outline alone. Check the flight by pausing it at negative
+  delays in a test copy (`base href` to the local server, CSS appended).
+- **Migrations are additive and tested from an old file.** `setup()` adds a
+  missing column with ALTER TABLE and nothing else; `BADGE_COLUMNS` must
+  match SCHEMA, and the suite builds a database with the 0.20.2 schema
+  (`OLD_SCHEMA` in selftest.py), starts a server on it, and compares its
+  columns with a fresh one's. Add the next migration's old schema the same
+  way.
 
 ## Anti-spam, and why it is shaped this way
 

@@ -62,6 +62,7 @@ import secrets
 import sqlite3
 import threading
 import time
+import unicodedata
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # --------------------------------------------------------------------------
@@ -301,7 +302,22 @@ CREATE TABLE IF NOT EXISTS boards (
     streak_start INTEGER NOT NULL,
     public_at    INTEGER NOT NULL DEFAULT 0,
     beats        INTEGER NOT NULL DEFAULT 0,
-    note         TEXT NOT NULL DEFAULT ''
+    note         TEXT NOT NULL DEFAULT '',
+    tz_offset    INTEGER NOT NULL DEFAULT 0,
+    system       TEXT NOT NULL DEFAULT '',
+    terminals    TEXT NOT NULL DEFAULT '',
+    guests       INTEGER,
+    features     TEXT NOT NULL DEFAULT '',
+    support      TEXT NOT NULL DEFAULT '',
+    tracked_since INTEGER NOT NULL DEFAULT 0
+);
+-- Heartbeats received, one row per board per UTC hour, for the last week
+-- and a bit. The steady badge is worked out from it: see steady_boards().
+CREATE TABLE IF NOT EXISTS beathours (
+    board_id INTEGER NOT NULL,
+    hour     INTEGER NOT NULL,          -- seconds since the epoch // 3600
+    beats    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, hour)
 );
 CREATE TABLE IF NOT EXISTS activity (
     board_id INTEGER NOT NULL,
@@ -443,11 +459,25 @@ NAV_SECTION = {
     "/forward-asus":    "/forward",
     "/forward-xfinity": "/forward",
     "/forward-mesh":    "/forward",
+    # The key to the board list belongs to the board list. Written with its
+    # face because "/" alone is every face's own home, and on the about
+    # face that would light "What this is" for a page about badges.
+    "/badges":          "list:/",
 }
 
 
-def nav_html(role, here=""):
+def nav_here(role, here):
+    """The menu entry a page belongs to, as the link that entry is served
+    as on this face. A section written "face:/path" names a face."""
     here = NAV_SECTION.get(here, here)
+    if ":" in here and not here.startswith("http"):
+        face, path = here.split(":", 1)
+        here = site_url(face, role, path)
+    return here
+
+
+def nav_html(role, here=""):
+    here = nav_here(role, here)
     out = []
     for target, path, label in NAV:
         # Matched on the link this deployment would actually serve, not on
@@ -477,7 +507,7 @@ def nav_index(role, here=""):
     """The position in the menu of the section this page belongs to, or 0
     for a page that belongs to none. Matched exactly the way nav_html marks
     the current item, so the two cannot disagree about where a reader is."""
-    here = NAV_SECTION.get(here, here)
+    here = nav_here(role, here)
     for i, (target, path, _label) in enumerate(NAV):
         if site_url(target, role, path) == here:
             return i
@@ -513,7 +543,7 @@ def foot_html(role, extra=""):
     refer = " &middot; ".join(
         [f'<a class="donate" href="{site_url("list", role, "/donate")}">Donate</a>']
         + [f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
-            ("/rules", "House rules"), ("/feed.xml", "RSS"))]
+            ("/rules", "House rules"), ("/badges", "Badges"), ("/feed.xml", "RSS"))]
         + [f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>'])
     links = ('<span class="row"><span class="lbl">Get started</span> ' + start + "</span>"
              '<br><span class="row"><span class="lbl">Reference</span> ' + refer + "</span>")
@@ -554,6 +584,26 @@ def setup():
         # bucket by. Zero means UTC, which is what they were doing anyway.
         if "tz_offset" not in have:
             con.execute("ALTER TABLE boards ADD COLUMN tz_offset INTEGER NOT NULL DEFAULT 0")
+        # The badge fields (site 0.21.0). Added, never rebuilt: the live
+        # table has rows in it, and ADD COLUMN leaves every one of them
+        # alone. An old board simply has none of these until it sends them,
+        # which is also what a board running old firmware looks like.
+        # tracked_since is 0 until the board's first heartbeat after this
+        # runs, which is when its hourly tally starts; see steady_boards().
+        for col, decl in BADGE_COLUMNS:
+            if col not in have:
+                con.execute(f"ALTER TABLE boards ADD COLUMN {col} {decl}")
+
+
+# The columns the badges added, as ALTER TABLE wants them. A column added
+# here must also be in SCHEMA, so a new database and a migrated one end up
+# with the same table; the self-test compares the two.
+BADGE_COLUMNS = (("system",        "TEXT NOT NULL DEFAULT ''"),
+                 ("terminals",     "TEXT NOT NULL DEFAULT ''"),
+                 ("guests",        "INTEGER"),
+                 ("features",      "TEXT NOT NULL DEFAULT ''"),
+                 ("support",       "TEXT NOT NULL DEFAULT ''"),
+                 ("tracked_since", "INTEGER NOT NULL DEFAULT 0"))
 
 
 def tidy(value, limit):
@@ -561,6 +611,62 @@ def tidy(value, limit):
     if not isinstance(value, str):
         return ""
     return CLEAN.sub(" ", value).strip()[:limit]
+
+
+def tidy_label(value, limit):
+    """A short label somebody else chose, such as the machine a board runs
+    on, made safe to put in a badge.
+
+    Stricter than tidy(), which only knows the ASCII controls. This also
+    takes out every Unicode control, format and separator character: the
+    bidi overrides that would turn the rest of a table row backwards, the
+    zero-width characters that make two labels look alike, and the line and
+    paragraph separators. A control or a separator becomes a space, because
+    it was separating something; a format character is removed, because a
+    zero-width one sits inside a word. Runs of whitespace of any kind become
+    one space, and a character can carry at most two combining marks,
+    because forty characters of stacked accents is a badge that paints over
+    the rows above and below it. Then it is cut to limit.
+    """
+    if not isinstance(value, str):
+        return ""
+    out, marks = [], 0
+    for ch in value:
+        cat = unicodedata.category(ch)
+        if cat in ("Cc", "Zl", "Zp"):
+            ch, marks = " ", 0
+        elif cat[0] == "C":
+            continue
+        elif cat[0] == "M":
+            marks += 1
+            if marks > 2:
+                continue
+        else:
+            marks = 0
+        out.append(ch)
+    return " ".join("".join(out).split())[:limit].rstrip()
+
+
+def pick(value, allowed, most=16):
+    """The words in a list that this directory knows, once each and in the
+    directory's own order.
+
+    Anything that is not a list, and any entry that is not one of the
+    allowed words, is ignored rather than refused: a board running newer
+    software than this directory must still be listed, and an unknown word
+    is exactly what newer software sends. Only the first `most` entries are
+    looked at, so a list of a million strings costs nothing.
+    """
+    if not isinstance(value, list):
+        return []
+    got = {v.strip().lower() for v in value[:most] if isinstance(v, str)}
+    return [a for a in allowed if a in got]
+
+
+def unpick(stored):
+    """A list column as a Python list. Stored comma separated, and only
+    words from a fixed list ever reach it, so a comma cannot be data."""
+    return [w for w in (stored or "").split(",") if w]
 
 
 def trusted_nets(spec):
@@ -713,6 +819,10 @@ def settle(con, now):
         "DELETE FROM activity WHERE board_id IN "
         "(SELECT id FROM boards WHERE ? - last_seen > ?)",
         (now, int(EXPIRE_DAYS * 86400)))
+    con.execute(
+        "DELETE FROM beathours WHERE board_id IN "
+        "(SELECT id FROM boards WHERE ? - last_seen > ?)",
+        (now, int(EXPIRE_DAYS * 86400)))
     con.execute("DELETE FROM boards WHERE ? - last_seen > ?",
                 (now, int(EXPIRE_DAYS * 86400)))
     return con.total_changes - before
@@ -738,6 +848,78 @@ def sample(con, board_id, busy, tz_offset, now):
         con.execute("UPDATE activity SET beats=beats/2, busy=busy/2 WHERE board_id=?",
                     (board_id,))
         con.execute("DELETE FROM activity WHERE board_id=? AND beats=0", (board_id,))
+
+
+# --------------------------------------------------------------------------
+# Steady: a board that answered more than 95% of the heartbeats it was due
+# over the last seven days.
+#
+# The directory has always counted a board's heartbeats, but only as one
+# running total, which cannot say anything about last week. So each accepted
+# heartbeat also goes into beathours, one row per board per UTC hour, and
+# rows older than a week are dropped as new ones arrive: 169 small rows a
+# board at most.
+#
+# "Due" is the board's own promise. It says how often it will call
+# (interval, in minutes), so over the window it owes window / interval
+# heartbeats. "Answered" is what arrived, counted per hour and capped at an
+# hour's due (rounded up), so a burst of extra heartbeats (a board pushes one
+# early when somebody logs on) cannot paper over an hour it was silent. A cap
+# of one more than due looked kinder and let a board be silent one hour in
+# seven and still be steady: the self-test's burst check found that.
+# The window is the last 168 hourly buckets, the current partial hour
+# included, and the due count covers exactly the time those buckets span.
+#
+# A board earns it only after the directory has watched it for the whole
+# week, from the first heartbeat after its tally started (tracked_since):
+# a week it was not watched for is not a week it was steady in. That
+# includes every board already listed when this arrived, which gets its
+# first chance at the badge seven days after the update.
+# --------------------------------------------------------------------------
+STEADY_DAYS  = 7
+STEADY_HOURS = STEADY_DAYS * 24
+STEADY_SHARE = 0.95
+
+
+def tally(con, board_id, now):
+    """Count one accepted heartbeat into the board's hourly record, and let
+    go of anything older than the steady window."""
+    hour = now // 3600
+    con.execute(
+        "INSERT INTO beathours(board_id, hour, beats) VALUES(?,?,1) "
+        "ON CONFLICT(board_id, hour) DO UPDATE SET beats=beats+1",
+        (board_id, hour))
+    con.execute("DELETE FROM beathours WHERE board_id=? AND hour<?",
+                (board_id, hour - STEADY_HOURS))
+
+
+def steady_share(beats, interval_min, now):
+    """What share of its due heartbeats a board answered in the window, from
+    {hour: beats}. See the note above for how due and answered are counted."""
+    first = now // 3600 - STEADY_HOURS + 1
+    span = now - first * 3600
+    every = max(1, int(interval_min or 10)) * 60
+    due = span / every
+    cap = -(-3600 // every)
+    heard = sum(min(n, cap) for h, n in beats.items() if h >= first)
+    return heard / due if due > 0 else 0.0
+
+
+def steady_boards(con, rows, now):
+    """The ids of the boards in rows that have earned the steady badge."""
+    first = now // 3600 - STEADY_HOURS + 1
+    beats = {}
+    for r in con.execute("SELECT board_id, hour, beats FROM beathours WHERE hour>=?",
+                         (first,)):
+        beats.setdefault(r["board_id"], {})[r["hour"]] = r["beats"]
+    out = set()
+    for r in rows:
+        since = r["tracked_since"]
+        if not since or now - since < STEADY_DAYS * 86400:
+            continue
+        if steady_share(beats.get(r["id"], {}), r["interval_min"], now) > STEADY_SHARE:
+            out.add(r["id"])
+    return out
 
 
 # Enough of a shape to be worth drawing, and enough to stop calling it
@@ -909,8 +1091,11 @@ CARD_BLOCKS = ("cards", "hero")
 # "cta" is a page's one primary action, drawn as a button: see cta_html().
 # "connected" is the box on /connected that shows a board's address, and
 # "installer-terms" is the line naming the installer's code and its licence.
+# "badges" is the key to the board list's badges on /badges, with "board" or
+# "directory" on the line inside it for which group, and "support" is the
+# support list; both are built from the tables the board list draws with.
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
-                             "installer-terms")
+                             "installer-terms", "badges", "support")
 
 
 # --------------------------------------------------------------------------
@@ -953,6 +1138,13 @@ def md_block(kind, lines):
         return cta_html(lines)
     if kind == "connected":
         return connected_html(lines)
+    if kind == "badges":
+        which = next((l.strip() for l in lines if l.strip()), "")
+        if which in ("board", "directory"):
+            return badge_key_html(which)
+        return "<p>" + html.escape("badges: " + which) + "</p>"
+    if kind == "support":
+        return support_key_html()
     return md_cards(kind, lines)
 
 
@@ -1990,6 +2182,19 @@ def announce(payload, address):
         value = payload.get(key)
         fields[key] = int(value) if isinstance(value, int) else None
 
+    # The badge fields, all optional and all absent from older boards.
+    # Every heartbeat replaces them, so a board that stops sending one loses
+    # its badge: features in particular are what is running now, not what
+    # ran once. Junk is dropped rather than refused, for the same reason an
+    # unknown word in a list is: the listing matters more than the badge.
+    # guests has to be a real JSON true or false; "yes" is not true.
+    fields["system"]    = tidy_label(payload.get("system"), SYSTEM_MAX)
+    fields["terminals"] = ",".join(pick(payload.get("terminals"), TERMINALS))
+    guests = payload.get("guests")
+    fields["guests"]    = int(guests) if isinstance(guests, bool) else None
+    fields["features"]  = ",".join(pick(payload.get("features"), FEATURES))
+    fields["support"]   = ",".join(pick(payload.get("support"), SUPPORT_SLUGS))
+
     with db() as con:
         if rate_limited(con, address, now):
             return 429, {"error": "slow down"}, {}
@@ -2031,9 +2236,12 @@ def announce(payload, address):
                 f"UPDATE boards SET {sets}, last_seen=?, beats=beats+1, "
                 f"state=?, streak_start=?, "
                 f"public_at=CASE WHEN public_at=0 AND ?='online' THEN ? "
-                f"ELSE public_at END WHERE id=?",
-                args + [now, state, streak, state, now, row["id"]])
+                f"ELSE public_at END, "
+                f"tracked_since=CASE WHEN tracked_since=0 THEN ? "
+                f"ELSE tracked_since END WHERE id=?",
+                args + [now, state, streak, state, now, now, row["id"]])
             sample(con, row["id"], fields.get("busy") or 0, tz, now)
+            tally(con, row["id"], now)
             fresh = con.execute("SELECT * FROM boards WHERE id=?", (row["id"],)).fetchone()
             if fresh["state"] != row["state"]:
                 _cache.clear()                         # the page says something new now
@@ -2072,6 +2280,7 @@ def announce(payload, address):
                 # either a lot of real boards or somebody being a nuisance.
                 return 429, {"error": "too many listings from this address"}, {}
             con.execute("DELETE FROM activity WHERE board_id=?", (stalest["id"],))
+            con.execute("DELETE FROM beathours WHERE board_id=?", (stalest["id"],))
             con.execute("DELETE FROM boards WHERE id=?", (stalest["id"],))
             held = held[1:]
             _cache.clear()
@@ -2091,10 +2300,11 @@ def announce(payload, address):
         marks = ", ".join("?" for _ in fields)
         con.execute(
             f"INSERT INTO boards(token, {cols}, state, first_seen, last_seen, "
-            f"streak_start, beats) VALUES(?, {marks}, ?, ?, ?, ?, 1)",
-            [token] + list(fields.values()) + [state, now, now, now])
+            f"streak_start, beats, tracked_since) VALUES(?, {marks}, ?, ?, ?, ?, 1, ?)",
+            [token] + list(fields.values()) + [state, now, now, now, now])
         fresh = con.execute("SELECT * FROM boards WHERE token=?", (token,)).fetchone()
         sample(con, fresh["id"], fields.get("busy") or 0, tz, now)
+        tally(con, fresh["id"], now)
         _cache.clear()                                 # a board we had not met before
         return 200, listing(fresh, now), {"X-Listing-Token": token}
 
@@ -2450,7 +2660,12 @@ article table, article .tablewrap table {{ width:auto; min-width:0; }}
 }}
 th {{ text-align:left; color:var(--struct); border-bottom:1px solid var(--rule); padding:0.375rem 0.5rem; font-weight:normal; }}
 td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:top; }}
-tr:hover td {{ background:#111; }}
+/* Hover only where there is a pointer that hovers. A phone turns a tap into
+   a hover that stays until the next tap somewhere else, which left a row
+   lit for no reason; (hover: hover) is false there, so nothing sticks. */
+@media (hover: hover) and (pointer: fine) {{
+  tr:hover td {{ background:#111; }}
+}}
 .name {{ color:var(--name); }}
 /* overflow-wrap, so a 44 character hostname breaks inside its own column
    instead of dictating the geometry of the whole table. */
@@ -2458,11 +2673,95 @@ tr:hover td {{ background:#111; }}
         display:inline-block; padding:0.375rem 0; overflow-wrap:anywhere; }}
 .addr a:hover {{ border-bottom-style:solid; }}
 .desc {{ color:var(--dim); }}
-/* What a board runs, said quietly next to its name. Every board is
-   welcome here, and a directory that only ever shows one name does not
-   look like it means that. */
-.soft {{ color:var(--dim); font-size:0.75rem; margin-left:0.5rem;
-        border:1px solid var(--rule); border-radius:0.1875rem; padding:0.0625rem 0.3125rem; }}
+/* --------------------------------------------------------------------
+   The badges under a board's name (board_badges() builds them, /badges
+   explains them).
+
+   The name has a line to itself, in a box exactly as wide as the name
+   (width:fit-content), which is what the hover dot below flies along.
+   Then the badges, a flex row that wraps, so a board with fifteen of
+   them grows downwards and never pushes the Dial column. The first is
+   the software badge, which used to sit beside the name: what a board
+   runs, said quietly, because every board is welcome here and a
+   directory that only ever shows one name does not look like it means
+   that.
+
+   One or two letters, or a small drawing, in a colour that says what
+   kind of thing it is: purple for what a board speaks, amber for
+   guests, blue for what is running, orange for new, cyan for steady,
+   lavender for how long it has been listed. The colour is the letters
+   and the border over a faint wash of itself; each wash is written out
+   as rgba() of its colour, because a custom property cannot take an
+   alpha. The k- classes hold the colours so the legend's colour names
+   can wear them too.
+   -------------------------------------------------------------------- */
+.name > .bname {{ display:block; width:fit-content; max-width:100%; position:relative; }}
+.name > .desc {{ display:block; }}
+.badges {{ position:relative; display:flex; flex-wrap:wrap; align-items:center;
+        gap:0.25rem; margin:0.375rem 0 0.375rem; }}
+.bd {{ display:inline-flex; align-items:center; justify-content:center;
+        box-sizing:border-box; min-width:1.375rem; min-height:1.25rem; max-width:100%;
+        padding:0.0625rem 0.3125rem; border:1px solid var(--bb); border-radius:0.1875rem;
+        background:var(--bt); color:var(--bc); font-size:0.6875rem; line-height:1.2;
+        letter-spacing:0.03125rem; overflow-wrap:anywhere; cursor:help; }}
+.k-soft, .k-sys, .k-term, .k-guest, .k-feat, .k-new, .k-steady, .k-age, .k-sup {{
+        --bc:var(--dim); --bb:#2c2c38; --bt:transparent; }}
+.k-sys {{ --bc:var(--ink); --bb:#3a3a4a; --bt:rgba(200, 200, 200, 0.05); }}
+.k-term {{ --bc:#b48ef0; --bb:rgba(180, 142, 240, 0.55); --bt:rgba(180, 142, 240, 0.12); }}
+.k-guest {{ --bc:#e0a94e; --bb:rgba(224, 169, 78, 0.55); --bt:rgba(224, 169, 78, 0.12); }}
+.k-feat {{ --bc:#7fd4ff; --bb:rgba(127, 212, 255, 0.5); --bt:rgba(127, 212, 255, 0.1); }}
+.k-new {{ --bc:#ef8b5a; --bb:rgba(239, 139, 90, 0.55); --bt:rgba(239, 139, 90, 0.12); }}
+.k-steady {{ --bc:#4ce0e0; --bb:rgba(76, 224, 224, 0.5); --bt:rgba(76, 224, 224, 0.1); }}
+.k-age {{ --bc:#e2d4ff; --bb:rgba(226, 212, 255, 0.45); --bt:rgba(226, 212, 255, 0.08); }}
+.k-sup {{ --bt:#0d0d12; }}
+.bd.k-soft, .bd.k-sys {{ font-size:0.75rem; letter-spacing:0; }}
+.bd.k-sup {{ padding:0 0.125rem; }}
+.bd.k-sup svg {{ display:block; width:1.0625rem; height:1.0625rem; fill:none;
+        stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
+.bd:focus {{ outline:none; }}
+.bd:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+/* The tooltip, CSS only, from data-tip: on hover for a mouse, and on focus
+   for a keyboard or a tap, which is what the tabindex is for. At the
+   page's own type size, in a dark box edged in the badge's colour. On a
+   desktop it hangs from the badge; below the breakpoint the badge is not
+   positioned, so it hangs from the start of the row instead and is never
+   wider than the screen, which stops a badge at the right edge pushing the
+   page sideways. It takes no pointer events, so it never sits between the
+   mouse and whatever is under it. */
+.bd::after {{ content:attr(data-tip); position:absolute; left:0; top:calc(100% + 0.375rem);
+        z-index:5; width:max-content; max-width:min(24rem, calc(100vw - 3rem));
+        box-sizing:border-box; padding:0.4375rem 0.625rem; background:#16161e;
+        border:1px solid var(--bc); border-radius:0.25rem; color:var(--ink);
+        font-size:0.875rem; line-height:1.45; letter-spacing:0; text-align:left;
+        white-space:normal; overflow-wrap:normal; box-shadow:0 0.25rem 1rem rgba(0, 0, 0, 0.6);
+        visibility:hidden; opacity:0; pointer-events:none; }}
+.bd:hover::after, .bd:focus::after {{ visibility:visible; opacity:1; }}
+@media (min-width: 901px) {{
+  .bd {{ position:relative; }}
+}}
+@media (prefers-reduced-motion: no-preference) {{
+  .bd::after {{ transition:opacity 0.12s, visibility 0.12s; }}
+}}
+/* The key to them, small and right above the table. */
+p.keylink {{ margin:-0.5rem 0 0.25rem; text-align:right; font-size:0.75rem; }}
+/* /badges: each badge beside what it means, its colour and where it comes
+   from. Two columns at every width, because the badges are narrow and the
+   words still get the page. The badge column is positioned so that a
+   tooltip below the breakpoint hangs from it rather than from the page. */
+dl.legend {{ display:grid; grid-template-columns:7rem minmax(0, 1fr); gap:1rem 1.25rem;
+        margin:0.75rem 0 1.75rem; }}
+dl.legend dt {{ position:relative; display:flex; flex-wrap:wrap; gap:0.25rem;
+        align-content:flex-start; margin:0.125rem 0 0; }}
+dl.legend dd {{ margin:0; }}
+dl.legend .cn {{ color:var(--bc); font-size:0.75rem; margin-left:0.25rem; }}
+dl.legend .src {{ color:var(--dim); font-size:0.75rem; }}
+dl.legend.support .bd.k-sup svg {{ width:1.75rem; height:1.75rem; }}
+/* On a phone the badge goes above its words instead of beside them: a
+   badge column wide enough for "Compaq 486" left the words 200px. */
+@media (max-width: 900px) {{
+  dl.legend {{ grid-template-columns:minmax(0, 1fr); gap:0.375rem 0; }}
+  dl.legend dd {{ margin:0 0 0.875rem; }}
+}}
 .act {{ color:var(--busy); }}
 .owner {{ color:var(--warm); }}
 .on {{ color:var(--live); }}
@@ -2942,6 +3241,63 @@ ewt-install-dialog, ewt-no-port-picked-dialog {{
 .name > .owner {{ font-size:0.75rem; }}
 .status > .upfor {{ color:var(--dim); }}
 .lbl {{ color:var(--faint); }}
+/* Every other board a shade lighter than the page, just enough to tell one
+   entry from the next. The header is the first row, so the stripe starts
+   on the second board. #111116 against the page's #0b0b0f: --dim text is
+   5.45:1 on it against 5.69:1 on the page, --ink 11.25 against 11.74 and
+   the board's name 7.23 against 7.55, so every line keeps the contrast
+   grade it had (AA and better; --faint labels stay the structural 3.5 they
+   were chosen as). On the row, not its cells, so on a phone the whole card
+   is striped. */
+main > table tr:nth-child(odd):not(:first-child) {{ background:#111116; }}
+/* Hovering a board: a hairline round the row in --dial at low alpha, as an
+   outline, so nothing moves by the width of a border; and one of the
+   site's small blue lamps flies once along under the board's name,
+   trailing a short fading streak, and fades out past the end of it.
+
+   The dot and its streak are the name box's two pseudo-elements. They
+   travel by left, from 0 to 100% of that box, which is the name's own
+   width, so a long name and a short one both get a whole pass; the streak
+   is pinned to the dot by translateX(-100%) and grows to full length in
+   the first third, so it never pokes out behind the name's first letter.
+   At rest both are transparent. Once per hover, not a loop: the animation
+   is applied only while the row is hovered, so it starts afresh on the
+   next hover and nothing is left running.
+
+   All of it only where a pointer hovers, so a tap on a phone lights
+   nothing that then stays lit; and the flight only where motion is not
+   turned down, so with reduced motion a hover is the outline alone. */
+.name > .bname::before, .name > .bname::after {{ content:""; position:absolute; left:0;
+        opacity:0; pointer-events:none; }}
+.name > .bname::before {{ bottom:-0.1875rem; width:1.75rem; height:0.125rem;
+        border-radius:0.0625rem; transform:translateX(-100%);
+        background:linear-gradient(to right, rgba(127, 212, 255, 0), rgba(127, 212, 255, 0.7)); }}
+.name > .bname::after {{ bottom:-0.3125rem; width:0.375rem; height:0.375rem;
+        margin-left:-0.1875rem; border-radius:50%; background:var(--dial);
+        box-shadow:0 0 0.375rem rgba(127, 212, 255, 0.8); }}
+@media (hover: hover) and (pointer: fine) {{
+  main > table tr:not(:first-child):hover {{ outline:1px solid rgba(127, 212, 255, 0.35);
+        outline-offset:-1px; }}
+}}
+@media (prefers-reduced-motion: no-preference) {{
+  @keyframes nametail {{
+    0% {{ left:0; width:0; opacity:0; }}
+    10% {{ opacity:1; }}
+    30% {{ width:1.75rem; }}
+    85% {{ left:100%; opacity:1; }}
+    100% {{ left:calc(100% + 1.25rem); width:1.75rem; opacity:0; }}
+  }}
+  @keyframes namedot {{
+    0% {{ left:0; opacity:0; }}
+    10% {{ opacity:1; }}
+    85% {{ left:100%; opacity:1; }}
+    100% {{ left:calc(100% + 1.25rem); opacity:0; }}
+  }}
+}}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {{
+  main > table tr:hover .bname::before {{ animation:nametail 1s linear 1 both; }}
+  main > table tr:hover .bname::after {{ animation:namedot 1s linear 1 both; }}
+}}
 /* Below 900px the table stops being a table and becomes a list of boards,
    one field per line, with the state pinned top right where somebody
    scanning looks for it.
@@ -2960,8 +3316,10 @@ ewt-install-dialog, ewt-no-port-picked-dialog {{
    at every width. */
 @media (max-width: 900px) {{
   main > table, main > table > tbody {{ display:block; }}
+  /* Half a rem each side, so a striped card's words do not sit flush on
+     the edge of its stripe. The pinned state moves in by the same. */
   main > table tr {{ display:flex; flex-direction:column; position:relative;
-        padding:0.875rem 0 1rem; border-bottom:1px solid var(--rule); }}
+        padding:0.875rem 0.5rem 1rem; border-bottom:1px solid var(--rule); }}
   main > table tr:first-child {{ display:none; }}          /* the header row */
   main > table td {{ display:block; border:0; padding:0.0625rem 0; width:auto; }}
   main > table td.name {{ order:1; padding-right:16ch; }}
@@ -2972,7 +3330,7 @@ ewt-install-dialog, ewt-no-port-picked-dialog {{
      it takes the width back rather than drawing itself 16 characters
      narrower than the card for no reason. */
   main > table td.name details.chart {{ margin-right:-16ch; }}
-  main > table td.status .state {{ position:absolute; right:0; top:0.875rem;
+  main > table td.status .state {{ position:absolute; right:0.5rem; top:0.875rem;
         max-width:15ch; text-align:right; }}
   /* The one field a phone has no heading for and no label inside it. */
   main > table td.addr::before {{ content:attr(data-label) " ";
@@ -3520,7 +3878,350 @@ def chart_html(info):
             + "</span></details>")
 
 
-def board_rows(rows, now, charts=None):
+# --------------------------------------------------------------------------
+# Badges: the small marks under a board's name.
+#
+# Some are sent by the board (what it runs on, what it speaks, whether
+# guests may look round, what is running, what the sysop supports) and the
+# rest are worked out here from the directory's own record (new, steady,
+# how long it has been listed). /badges is the legend and is built from
+# these same tables, so the key and the list cannot disagree.
+#
+# Every badge carries its meaning three ways: a tooltip drawn by CSS from
+# data-tip, which a mouse gets on hover and a phone or a keyboard gets on
+# focus (hence tabindex); an aria-label, which is what a screen reader
+# reads; and the legend page. There is deliberately no title attribute: a
+# title draws a second tooltip, the browser's own, on top of this one on a
+# desktop, and shows nothing at all on a phone, which is the case it would
+# be there for.
+# --------------------------------------------------------------------------
+SYSTEM_MAX = 40
+TERMINALS  = ("ansi", "utf8", "petscii", "ascii", "vt100")
+FEATURES   = ("chat", "forums", "files", "mail", "doors")
+NEW_DAYS   = 7
+
+# The small badges, in the order they appear: key, letters, colour class,
+# name, and what it means, which the tooltip says after the name. The first
+# seven are sent by the board and the last two are worked out here.
+LETTER_BADGES = (
+    ("petscii", "P",  "term",   "PETSCII",
+     "a Commodore 64 or 128 gets colour and graphics here, not just text."),
+    ("guests",  "G",  "guest",  "Guests welcome",
+     "you can look around without making an account."),
+    ("chat",    "C",  "feat",   "Chat",   "a live chat room, running now."),
+    ("forums",  "F",  "feat",   "Forums", "message boards, running now."),
+    ("files",   "Fi", "feat",   "Files",  "file areas to download from, running now."),
+    ("mail",    "M",  "feat",   "Mail",   "private mail between callers, running now."),
+    ("doors",   "D",  "feat",   "Doors",  "games and programs to run, running now."),
+    ("new",     "N",  "new",    "New",    "listed here for less than a week."),
+    ("steady",  "S",  "steady", "Steady",
+     "answered more than 95% of the heartbeats it was due over the last seven days."),
+)
+
+# How long a board has been listed, counted from the day it first went
+# public. Only the highest reached is shown. A month is 30 days and a year
+# 365, which is near enough for a badge and simple enough to say.
+AGES = ((3652, "10y", "for ten years"), (1826, "5y", "for five years"),
+        (730, "2y", "for two years"), (365, "1y", "for a year"),
+        (182, "6m", "for six months"), (30, "1m", "for a month"))
+
+# What each colour is called on /badges. A badge's colour says what kind of
+# thing it is, and its letters say which one.
+BADGE_COLOURS = {"soft": "grey", "sys": "white", "term": "purple",
+                 "guest": "amber", "feat": "blue", "new": "orange",
+                 "steady": "cyan", "age": "lavender"}
+
+# The support list: causes a sysop can show support for, one line each, in
+# the order /badges lists them. A board sends the slugs in its "support"
+# list and anything not in this table is ignored, which is what keeps a
+# sysop from putting words of their own on the page, slurs included.
+#
+# The first ten are the causes most often shown as support badges, ribbons
+# and flair on community sites and profiles, picked to be broadly
+# recognised and not party political; the eleventh, amateur radio, is here
+# because it is this hobby's oldest neighbour. Changing the list is editing
+# a line: slug, drawing (a key of SUPPORT_ART), what it supports as it reads
+# after "Supports", and one plain sentence for /badges.
+SUPPORT = (
+    ("lgbtq",              "rainbow",   "LGBTQ+ people",
+     "Lesbian, gay, bisexual, trans and queer callers are welcome here, and the sysop says so."),
+    ("trans",              "trans",     "transgender people",
+     "Trans and non-binary callers are welcome here, by the names they use."),
+    ("disability",         "disflag",   "disabled people",
+     "For disabled people, visible and invisible disabilities alike, and for making things accessible."),
+    ("neurodiversity",     "infinity",  "neurodiversity",
+     "Autistic, ADHD and other neurodivergent minds are welcome as they are."),
+    ("mental-health",      "ribbon-mh", "mental health",
+     "For looking after mental health, and for anybody living with a mental illness."),
+    ("suicide-prevention", "semicolon", "suicide prevention",
+     "The semicolon: a sentence that could have ended and carried on."),
+    ("veterans",           "tags",      "veterans",
+     "For people who have served in the armed forces, and their families."),
+    ("cancer",             "ribbon-c",  "people with cancer",
+     "For people living with any cancer, the survivors, and the people who care for them."),
+    ("hiv",                "ribbon-h",  "people living with HIV",
+     "The red ribbon: solidarity with people living with HIV and AIDS."),
+    ("animals",            "paw",       "animal welfare",
+     "For animal rescue, adoption and welfare."),
+    ("ham",                "antenna",   "amateur radio",
+     "Hams welcome: the other hobby of talking to strangers over home-made equipment."),
+)
+SUPPORT_SLUGS = tuple(s[0] for s in SUPPORT)
+
+# The drawings, in a 24 unit square, line art in the manner of the rest of
+# the site: strokes, round ends, no fill except the dots. Each keeps the
+# colours its cause is known by, lifted enough to read on the page's black.
+# The chip behind them is #0d0d12, which is what "cut" strokes are drawn in:
+# the gap where one line passes under another.
+_CUT = "#0d0d12"
+
+
+def _ribbon(colour):
+    return (f'<path d="M14.8 9.4 L8.2 20.5" stroke="{colour}"/>'
+            f'<path d="M9.2 9.4 L15.8 20.5" stroke="{_CUT}" stroke-width="4"/>'
+            f'<path d="M9.2 9.4 L15.8 20.5 M9.2 9.4 C7.4 6.2 9 3.5 12 3.5 '
+            f'C15 3.5 16.6 6.2 14.8 9.4" stroke="{colour}"/>')
+
+
+SUPPORT_ART = {
+    # Six arcs of the pride flag.
+    "rainbow": "".join(
+        f'<path d="M{12 - r} 17.5 A{r} {r} 0 0 1 {12 + r} 17.5" stroke="{c}" '
+        'stroke-width="1.35"/>'
+        for r, c in ((10.5, "#ef6a5a"), (9, "#f39a4a"), (7.5, "#f2d54e"),
+                     (6, "#5cc478"), (4.5, "#5b9df0"), (3, "#b07ae8"))),
+    # The transgender symbol, in the trans flag's blue, pink and white.
+    "trans": ('<circle cx="12" cy="13.5" r="4.2" stroke="#eeeef4"/>'
+              '<path d="M12 17.7 V22.3 M9.8 20.2 H14.2" stroke="#f5a9b8"/>'
+              '<path d="M15 10.5 L19 6.5 M15.8 6.5 H19 V9.7" stroke="#6ccff6"/>'
+              '<path d="M9 10.5 L5 6.5 M8.2 6.5 H5 V9.7 M6.2 10.4 L8.6 8"'
+              ' stroke="#f5a9b8"/>'),
+    # The disability pride flag: five stripes cutting across it corner to
+    # corner, in its own muted red, yellow, white, blue and green.
+    "disflag": ('<rect x="3" y="6" width="18" height="12" rx="1.5" stroke="#8a8a8a"'
+                ' stroke-width="1.2"/>'
+                '<g stroke-width="1.35" stroke-linecap="butt">'
+                '<path d="M7.5 6 L21 15" stroke="#d57a86"/>'
+                '<path d="M5.25 6 L21 16.5" stroke="#e8d27a"/>'
+                '<path d="M3 6 L21 18" stroke="#e6e6ea"/>'
+                '<path d="M3 7.5 L18.75 18" stroke="#7ab8e0"/>'
+                '<path d="M3 9 L16.5 18" stroke="#4fb487"/></g>'),
+    # The neurodiversity infinity, its four quarters in rainbow colours.
+    "infinity": ('<path d="M12 12 C10.5 9.5 9 8 7.5 8 C5.5 8 4 9.8 4 12" stroke="#ef6a5a"/>'
+                 '<path d="M4 12 C4 14.2 5.5 16 7.5 16 C9 16 10.5 14.5 12 12" stroke="#f2d54e"/>'
+                 '<path d="M12 12 C13.5 9.5 15 8 16.5 8 C18.5 8 20 9.8 20 12" stroke="#5cc478"/>'
+                 '<path d="M20 12 C20 14.2 18.5 16 16.5 16 C15 16 13.5 14.5 12 12" stroke="#5b9df0"/>'),
+    # Awareness ribbons, in the colour each cause is known by: green for
+    # mental health, lavender for every cancer, red for HIV and AIDS.
+    "ribbon-mh": _ribbon("#5fcf8c"),
+    "ribbon-c":  _ribbon("#c6a4f0"),
+    "ribbon-h":  _ribbon("#e25a55"),
+    # Project Semicolon's mark.
+    "semicolon": ('<circle cx="12" cy="7" r="1.9" fill="#5cc6bf" stroke="#5cc6bf"'
+                  ' stroke-width="0.6"/>'
+                  '<circle cx="12" cy="14" r="1.9" fill="#5cc6bf" stroke="#5cc6bf"'
+                  ' stroke-width="0.6"/>'
+                  '<path d="M13.8 14.4 C13.9 17.2 12.8 19.5 10.3 21" stroke="#5cc6bf"/>'),
+    # A dog tag on its ball chain, with its lines stamped in. Two
+    # overlapping tags read as a "copy" icon at this size; one on a chain
+    # reads as a tag.
+    "tags": ('<path d="M12 11 C7.5 8.5 8 2.5 12 2.5 C16 2.5 16.5 8.5 12 11"'
+             ' stroke="#e0a94e" stroke-width="1.3" stroke-dasharray="0.01 1.75"/>'
+             '<rect x="6.8" y="10" width="10.4" height="12.2" rx="3.6" stroke="#e0a94e"/>'
+             '<circle cx="12" cy="12.6" r="0.9" stroke="#e0a94e" stroke-width="1.1"/>'
+             '<path d="M9.6 16 H14.4 M9.6 18.6 H13" stroke="#e0a94e" stroke-width="1.2"'
+             ' opacity="0.7"/>'),
+    # A paw print.
+    "paw": ('<path d="M8 17 C8 14 10 12 12 12 C14 12 16 14 16 17 C16 19 14.4 20 12 20'
+            ' C9.6 20 8 19 8 17 Z" stroke="#e3a36b"/>'
+            '<ellipse cx="6.2" cy="11" rx="1.6" ry="2.1" transform="rotate(-20 6.2 11)"'
+            ' stroke="#e3a36b"/>'
+            '<ellipse cx="9.7" cy="7.2" rx="1.7" ry="2.2" stroke="#e3a36b"/>'
+            '<ellipse cx="14.3" cy="7.2" rx="1.7" ry="2.2" stroke="#e3a36b"/>'
+            '<ellipse cx="17.8" cy="11" rx="1.6" ry="2.1" transform="rotate(20 17.8 11)"'
+            ' stroke="#e3a36b"/>'),
+    # A lattice mast, calling out both ways.
+    "antenna": ('<path d="M12 8.5 L8 21 M12 8.5 L16 21 M9.3 17 H14.7 M10.6 12.8 H13.4'
+                ' M7 21 H17" stroke="#8fb4ff"/>'
+                '<circle cx="12" cy="7" r="1.2" fill="#8fb4ff" stroke="#8fb4ff"'
+                ' stroke-width="0.6"/>'
+                '<path d="M15.2 4.4 A4.2 4.2 0 0 1 15.2 9.6 M8.8 4.4 A4.2 4.2 0 0 0 8.8 9.6'
+                ' M17.6 2.4 A7.25 7.25 0 0 1 17.6 11.6 M6.4 2.4 A7.25 7.25 0 0 0 6.4 11.6"'
+                ' stroke="#8fb4ff" stroke-width="1.4"/>'),
+}
+
+
+def support_svg(key):
+    """One support drawing, hidden from a screen reader because the chip it
+    sits in is named already."""
+    return ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            + SUPPORT_ART[key] + "</svg>")
+
+
+def badge(cls, content, tip):
+    """One badge. content is markup, already escaped; tip is plain text and
+    is escaped here, once, for both of the attributes that carry it."""
+    t = html.escape(tip, quote=True)
+    return (f'<span class="bd k-{cls}" role="img" tabindex="0" aria-label="{t}" '
+            f'data-tip="{t}">{content}</span>')
+
+
+def day_text(when):
+    """A date the way a person writes it: 3 Mar 2025."""
+    t = time.gmtime(when)
+    return f"{t.tm_mday} {time.strftime('%b %Y', t)}"
+
+
+def listed_at(r):
+    """When a board first went public, or when it was first heard from, for
+    a row from before public_at existed."""
+    return r["public_at"] or r["first_seen"]
+
+
+def board_badges(r, now, steady=False):
+    """The badges under one board's name, or "" for a board with none."""
+    chips = []
+    if r["software"]:
+        what = r["software"] + (" " + r["version"] if r["version"] else "")
+        chips.append(badge("soft", html.escape(r["software"]),
+                           f"Software: {what}, as the board reports it."))
+    if r["system"]:
+        chips.append(badge("sys", html.escape(r["system"]),
+                           f"Runs on: {r['system']}, in the board's own words."))
+    since = listed_at(r)
+    age = now - since
+    lit = set(unpick(r["features"]))
+    if "petscii" in unpick(r["terminals"]):
+        lit.add("petscii")
+    if r["guests"] == 1:
+        lit.add("guests")
+    if age < NEW_DAYS * 86400:
+        lit.add("new")
+    if steady:
+        lit.add("steady")
+    for key, letters, cls, name, means in LETTER_BADGES:
+        if key in lit:
+            chips.append(badge(cls, letters, f"{name}: {means}"))
+    for days, label, words in AGES:
+        if age >= days * 86400:
+            chips.append(badge("age", label, f"Listed {words}: on this directory "
+                                             f"since {day_text(since)}."))
+            break
+    chosen = set(unpick(r["support"]))
+    for slug, art, name, _sentence in SUPPORT:
+        if slug in chosen:
+            chips.append(badge("sup", support_svg(art),
+                               f"Supports {name}. Chosen by the sysop."))
+    return '<span class="badges">' + "".join(chips) + "</span>" if chips else ""
+
+
+def badge_key_html(which):
+    """The legend for one group of badges on /badges: "board" for the ones a
+    board sends, "directory" for the ones worked out here. A definition
+    list, a badge beside what it means, its colour and where it comes from,
+    built from the same tables the board list draws from."""
+    def row(chips, name, cls, means, source):
+        colour = BADGE_COLOURS[cls]
+        return (f'<dt>{chips}</dt><dd><b>{name}</b> <span class="cn k-{cls}">'
+                f"{colour}</span><br>{means}<br>"
+                f'<span class="src">{source}</span></dd>')
+
+    out = []
+    if which == "board":
+        out.append(row(badge("soft", "unleashed", "Software: unleashed, as the board reports it."),
+                       "Software", "soft", "What the board runs, and its version in the tooltip.",
+                       "Sent by the board: <code>software</code> and <code>version</code>."))
+        out.append(row(badge("sys", "Compaq 486", "Runs on: Compaq 486, in the board's own words."),
+                       "Machine", "sys",
+                       "What the board runs on, in its own words, up to "
+                       f"{SYSTEM_MAX} characters: the chip it runs on, or the Compaq 486 "
+                       "in the corner.",
+                       "Sent by the board: <code>system</code>."))
+        where = {"petscii": "<code>petscii</code> in <code>terminals</code>",
+                 "guests": "<code>guests</code> set to <code>true</code>"}
+        for key, letters, cls, name, means in LETTER_BADGES:
+            if key in ("new", "steady"):
+                continue
+            src = where.get(key, f"<code>{key}</code> in <code>features</code>")
+            out.append(row(badge(cls, letters, f"{name}: {means}"), name, cls,
+                           means[0].upper() + means[1:], f"Sent by the board: {src}."))
+    else:
+        how = {"new": "Worked out here, from the day the board first went public.",
+               "steady": "Worked out here, from the heartbeats the directory recorded, "
+                         "hour by hour, for that week. "
+                         '<a href="#how-steady-is-worked-out">How</a>.'}
+        for key, letters, cls, name, means in LETTER_BADGES:
+            if key in how:
+                out.append(row(badge(cls, letters, f"{name}: {means}"), name, cls,
+                               means[0].upper() + means[1:], how[key]))
+        ages = "".join(badge("age", label, f"Listed {words}.")
+                       for _days, label, words in reversed(AGES))
+        out.append(row(ages, "Time listed", "age",
+                       "How long the board has been on this directory: a month, six "
+                       "months, then one, two, five and ten years. Only the highest "
+                       "reached is shown.",
+                       "Worked out here, from the day the board first went public."))
+    return '<dl class="legend">' + "".join(out) + "</dl>"
+
+
+def support_key_html():
+    """The support list on /badges: each symbol, the slug a sysop puts in
+    their board's settings, and one sentence."""
+    out = []
+    for slug, art, name, sentence in SUPPORT:
+        out.append(f"<dt>{badge('sup', support_svg(art), f'Supports {name}.')}</dt>"
+                   f"<dd><b>{html.escape(name[0].upper() + name[1:])}</b> "
+                   f"<code>{html.escape(slug)}</code><br>{html.escape(sentence)}</dd>")
+    return '<dl class="legend support">' + "".join(out) + "</dl>"
+
+
+TERMINAL_NAMES = {"ansi": "ANSI", "utf8": "UTF-8", "petscii": "PETSCII",
+                  "ascii": "ASCII", "vt100": "VT100"}
+
+
+def about_lines(r):
+    """What a board sent about itself, as plain lines of words, for the feed,
+    which has no badges and no tooltips. Plain text: the caller escapes."""
+    lines = []
+    if r["system"]:
+        lines.append(f"Runs on: {r['system']}")
+    terms = [TERMINAL_NAMES[t] for t in unpick(r["terminals"]) if t in TERMINAL_NAMES]
+    if terms:
+        lines.append("Speaks: " + ", ".join(terms))
+    if r["guests"] == 1:
+        lines.append("Guests welcome")
+    elif r["guests"] == 0:
+        lines.append("No guests: an account is needed")
+    if unpick(r["features"]):
+        lines.append("Running: " + ", ".join(unpick(r["features"])))
+    chosen = set(unpick(r["support"]))
+    names = [name for slug, _a, name, _s in SUPPORT if slug in chosen]
+    if names:
+        lines.append("Supports: " + ", ".join(names))
+    return lines
+
+
+def board_json(r, steady):
+    """One board as /api/boards.json gives it. The same fields it always
+    had, in the same names, then what the badges are made of: the fields a
+    board sent, as lists and a true, false or null rather than the stored
+    text, and the two the directory works out. Named field by field rather
+    than the whole row, so the token and the moderator's note can never
+    leak into it by somebody adding a column."""
+    out = {k: r[k] for k in ("name", "owner", "description", "host", "address",
+                             "port", "nodes", "busy", "state", "calls24",
+                             "minutes24", "streak_start", "last_seen")}
+    out["system"]    = r["system"]
+    out["terminals"] = unpick(r["terminals"])
+    out["guests"]    = None if r["guests"] is None else bool(r["guests"])
+    out["features"]  = unpick(r["features"])
+    out["support"]   = unpick(r["support"])
+    out["listed_at"] = listed_at(r)
+    out["steady"]    = bool(steady)
+    return out
+
+
+def board_rows(rows, now, charts=None, steady=None):
     out = []
     for r in rows:
         where = r["host"] or r["address"]
@@ -3597,12 +4298,17 @@ def board_rows(rows, now, charts=None):
         act_line = (f"<span class='act'>{act_html}</span>" if activity else
                     "<span class='muted'><span class='lbl'>24h</span> "
                     "not shared</span>")
+        # The name on a line of its own, in a box exactly as wide as the
+        # name, because that box is what the hover dot flies along. Then the
+        # badges, which wrap under it rather than beside it, so however many
+        # a board has they grow the row downwards and never push the Dial
+        # column: the software badge that used to sit beside the name is the
+        # first of them.
         out.append(
             "<tr>"
-            f"<td class='name' data-label='Board'>{html.escape(r['name'])}"
-            + (f"<span class='soft'>{html.escape(r['software'])}</span>"
-               if r["software"] else "")
-            + "<br>"
+            f"<td class='name' data-label='Board'><span class='bname'>"
+            f"{html.escape(r['name'])}</span>"
+            + board_badges(r, now, r["id"] in (steady or ()))
             + f"<span class='desc'>{html.escape(r['description'])}</span>"
             + who_runs
             + ((charts or {}).get(r["id"]) or "")
@@ -3732,6 +4438,7 @@ def index_page():
             hours = hours_for(con, r["id"])
             if hours:
                 charts[r["id"]] = chart_html(hours)
+        steady = steady_boards(con, rows, now)
 
     # The announcement, when there is one, sits above everything else the
     # page says; then the heading, its figures and the lead, with the small
@@ -3749,8 +4456,12 @@ def index_page():
             '<a href="/firstcall">Never called one before?</a></p></div>'
             + RUN_CARD + "</div>")
     if rows:
-        body = ("<table><tr><th>Board</th><th>Dial</th><th>State</th></tr>"
-                + board_rows(rows, now, charts) + "</table>")
+        # The key to the badges, small and right above the table, where
+        # somebody wondering what "Fi" means is already looking. Not in the
+        # table's header row, which a phone does not show.
+        body = ('<p class="keylink"><a href="/badges">What the badges mean</a></p>'
+                "<table><tr><th>Board</th><th>Dial</th><th>State</th></tr>"
+                + board_rows(rows, now, charts, steady) + "</table>")
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
     body = head + body
@@ -3799,6 +4510,10 @@ def feed_xml():
         body = f"{desc}<br>Dial: {where}"
         if owner:
             body += f"<br>Sysop: {owner}"
+        # What the board has told us about itself, in words: a feed reader
+        # has no badges and no tooltips.
+        for line in about_lines(r):
+            body += "<br>" + html.escape(line)
         items.append(
             "<item>"
             f"<title>{html.escape(r['name'])}</title>"
@@ -3843,8 +4558,10 @@ mentioning. It is a list of hobby BBSes.</p>
 <dl>
 <dt><code>GET /api/boards.json</code></dt>
 <dd>Every listed board: name, owner, description, where to dial it, how many lines it
-has and how many are busy, whether it is up, and how long it has been up. Cached for
-a few seconds.</dd>
+has and how many are busy, whether it is up, and how long it has been up. Then what
+the <a href="/badges">badges</a> are made of: what the board said it runs on, speaks,
+allows and supports, when it was first listed, and whether it has been steady this
+past week. Cached for a few seconds.</dd>
 <dt><code>POST /announce</code></dt>
 <dd>How a board lists itself. One JSON object, about 200 bytes, repeated every few
 minutes. Plain HTTP on purpose: the boards are microcontrollers with no TLS stack.</dd>
@@ -3946,6 +4663,17 @@ minutes from anything that can make an HTTP request:</p>
 back in <code>token</code> on every later heartbeat: that is what stops somebody
 else taking over your entry. Send it whole. It is 32 characters and a fragment of
 one will be refused.</p>
+
+<p><b>Badges, if you want them.</b> Five optional fields put small badges under
+your board's name: what it runs on in your own words, what terminals it speaks,
+whether guests can look around, what is running, and the causes you support.
+Leave them out and nothing changes. In the same JSON:</p>
+
+<pre>"system":"Compaq 486", "terminals":["ansi","ascii"], "guests":true,
+"features":["chat","files"], "support":["ham"]</pre>
+
+<p>What each badge means is on <a href="/badges">the badges page</a>, and the
+exact rules for each field are in the protocol.</p>
 
 <p><b>The same rules apply to everyone.</b> Three hours of uninterrupted
 heartbeats before a listing goes public, and it disappears when the heartbeats
@@ -6137,10 +6865,11 @@ class Handler(BaseHTTPRequestHandler):
                 with db() as con:
                     settle(con, now)
                     rows = con.execute(
-                        "SELECT name, owner, description, host, address, port, nodes, busy, "
-                        "state, calls24, minutes24, streak_start, last_seen FROM boards "
+                        "SELECT * FROM boards "
                         "WHERE state IN ('online','offline')").fetchall()
-                return json.dumps({"boards": [dict(r) for r in rows]}, indent=1)
+                    steady = steady_boards(con, rows, now)
+                return json.dumps({"boards": [board_json(r, r["id"] in steady)
+                                              for r in rows]}, indent=1)
             self.reply(200, cached("json", PAGE_CACHE, build),
                        "application/json; charset=utf-8")
         elif path == "/feed.xml":

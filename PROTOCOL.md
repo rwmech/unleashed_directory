@@ -57,8 +57,46 @@ Connection: close
 | `token` | string | no | empty on the first announce, then whatever the directory issued |
 | `calls24` | number | no | calls in the last 24 hours. Only when the sysop opted in |
 | `minutes24` | number | no | caller-minutes in the last 24 hours. Only when the sysop opted in |
+| `system` | string | no | the machine the board runs on, up to 40 printable characters. See [Badges](#badges) |
+| `terminals` | array of strings | no | what the board can speak to a caller: any of `ansi`, `utf8`, `petscii`, `ascii`, `vt100` |
+| `guests` | boolean | no | `true` if a caller can look around without an account, `false` if not |
+| `features` | array of strings | no | what is running right now: any of `chat`, `forums`, `files`, `mail`, `doors` |
+| `support` | array of strings | no | causes the sysop shows support for, as slugs from the directory's published list |
 
 **No field identifies a caller, and none ever should.** Not handles, not addresses, not what anybody typed. A directory receiving such a field should drop it.
+
+## Badges
+
+The last five fields in the table are optional and describe the board rather than its state. A directory may show them as badges beside the board's name; the one at unleashedbbs.com does, and explains each at `/badges`. Old boards send none of them and are listed exactly as before. A directory ignores any field it does not know, so a board may send these to any directory.
+
+```
+{"software":"unleashed","version":"1.0.0",
+ "name":"The Rusty Modem","owner":"Sparks",
+ "description":"A BBS on a chip in a shack in Illinois",
+ "host":"","port":6400,"nodes":6,"busy":0,
+ "uptime":3600,"interval":10,"token":"",
+ "system":"ESP32-WROOM-32E",
+ "terminals":["ansi","utf8","petscii","ascii"],
+ "guests":true,
+ "features":["chat","forums","files","mail"],
+ "support":["lgbtq","ham"]}
+```
+
+| Field | Rules |
+|---|---|
+| `system` | Free text, the board's own words: a board that knows its hardware can report it, and any board can say `Compaq 486`. The directory removes control and format characters (the bidirectional overrides and zero-width characters included), collapses runs of spaces, keeps at most two combining marks on a character, and cuts what is left to 40 characters. |
+| `terminals` | Lower case words from the list above. `utf8` means UTF-8 ANSI; `ansi` means CP437 ANSI. |
+| `guests` | A JSON `true` or `false` and nothing else. A string such as `"yes"` counts as not sent. |
+| `features` | Only what is running when the heartbeat is sent. A board that switches its file areas off should stop sending `files`. |
+| `support` | Slugs from the list the directory publishes. The one at unleashedbbs.com publishes its list at `/badges`. |
+
+For the three lists: case does not matter, duplicates count once, a word the directory does not know is ignored rather than refused, and only the first 16 entries are read; an entry that is not a string is skipped. A field of the wrong type, a list where a string belongs or a string where a list belongs, counts as not sent. None of this ever makes a heartbeat fail: a board with a bad badge field is listed without that badge.
+
+**A directory may drop any value it cannot show.** A word it does not know, a machine name in a script its page cannot draw, a cause it does not carry: the listing stands and the badge does not. That is also why `support` is a list of slugs and not free text: a directory publishes the causes it will show, and nobody can put words of their own on its page.
+
+**Every heartbeat replaces them.** Send them every time, or the badge goes. That is the point for `features`, which says what is running now, and it costs nothing for the rest: with all five the example above is about 400 bytes, and this directory refuses only a body over 4,096 bytes, with `413`.
+
+A directory works out some badges for itself, from its own records, and a board cannot send them: at unleashedbbs.com, **new** (listed less than a week), **steady** (answered more than 95% of the heartbeats its own `interval` said were due over the last seven days) and **time listed** (one month up to ten years). They appear in `/api/boards.json` as `listed_at` and `steady`.
 
 ## Response
 
