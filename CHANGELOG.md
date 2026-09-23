@@ -14,6 +14,60 @@
 
 # Changelog
 
+## 0.19.0, 2026-09-23
+
+For the firmware's 1.0.0 release (Rob): the installer easy to find, the
+donation page easy to find, /install laid out as a page you act on, and
+somewhere for the installer's last step to go.
+
+- **One button on each entry page.** /build, /setup and the board list each
+  open with one primary action, drawn like the installer's own button:
+  **Install from your browser** (on the board list, **Run your own board**),
+  with the manual route beside it as a plain link. On /build it replaces the
+  invitation box whose third sentence was the link Rob could not find. All
+  three are on the first screen at 1366 x 768 and 390 x 844. A new
+  `::: cta` block in the page dialect draws it.
+- **Donate is in the menu**, last, and first in the footer's second row in
+  the warm colour, renamed from "Support". The menu is ten items now: at
+  390px "Donate" lands on the row "Get listed" and "Data" already share, and
+  at 1366 and 1920 the menu is still one row.
+- **/install, two columns.** From 901px the page is the title and the steps
+  on the left and a sticky install card on the right, 22rem wide and level
+  with the title: a small drawing, the "before you start" box, the board
+  (ESP32, 4 MB flash), the button, one version line and the notices link.
+  The version was on the card three times and is on it once, and the button
+  no longer carries it. On a phone the card sits between the title and the
+  steps with the button first. The installer's own licence moved to "Doing
+  it the other way". Laid out to the tty-ux spec, with Rob's two calls: the
+  box goes after the button on a phone, and the card is a grid column, not a
+  float. One departure, measured: level with the title rather than with the
+  steps, because the box as written is seven lines at the card's width and
+  that put the button under the fold at 768.
+- **A kept older release is a choice in the card**, two radios with no
+  script, where it used to be a second button. The labels are short so both
+  fit on one line; two lines put the button under the fold.
+- **Headings have ids on every page**, the heading's words in lower case
+  with every other run of characters one "-", unique on the page. The
+  install card's box links to #before-you-start.
+- **"Visit Device" is "Telnet details", and goes to /connected.** A board
+  answers the Wi-Fi step with `telnet://<address>:6400`, which no browser
+  opens. The vendored copy of ESP Web Tools is changed in one file to send a
+  telnet link to `/connected#<address>:<port>` instead, and says so in a
+  notice at its top, as the Apache License requires; the vendor README has
+  upstream's checksum for the file.
+- **/connected**: the board's address, the telnet command, a telnet link,
+  SyncTERM and PuTTY one line each, the default sysop password with the
+  warning to change it first, and the setup guide. The address stays in the
+  part of the link after the #, which a browser never sends, so it is in no
+  log here. A dozen inline lines read it, write it with textContent only and
+  send nothing; anything but a dotted IPv4 address and a port is ignored.
+  With no address the page says where to find it: the board's console, the
+  router's device list, or `unleashed.local`. It is the second page on the
+  site with a script, and the suite pins what that script may do.
+- The no-release box on /install was in the faint colour, borrowed from the
+  board list's empty line by sharing its class name; it is --dim.
+- 448 checks, up from 416.
+
 ## 0.18.0, 2026-09-23
 
 - **A check that would have caught the 0.17.x outage, and does now.** The

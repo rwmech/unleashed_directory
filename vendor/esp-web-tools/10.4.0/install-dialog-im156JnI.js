@@ -1,3 +1,16 @@
+/*
+ * MODIFIED FILE. This is install-dialog-im156JnI.js from esp-web-tools
+ * 10.4.0 (dist/web), Apache License 2.0, changed by the unleashed BBS
+ * directory on 2026-09-23. Upstream SHA-256:
+ * 6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5
+ *
+ * The change, in both places the dialog offers the device's own link after
+ * the Wi-Fi step: when the device's URL is telnet://, which a browser cannot
+ * open, the link goes to /connected#<address>:<port> on this site instead
+ * and is labelled "Telnet details" rather than "Visit Device". Any other URL
+ * is left exactly as upstream has it. Nothing else in this file is changed.
+ * See vendor/esp-web-tools/README.md.
+ */
 import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c as h,s as p,D as u,d as f,f as m,r as v,g,h as _,j as b,k as y,B as x,l as w,p as E,q as S,u as k,T as A,v as R,w as I,y as C}from"./styles-sT2V1cOw.js";let T;function L(e,t=z){const i=$(e,t);return i&&(i.tabIndex=0,i.focus()),i}function O(e,t=z){const i=M(e,t);return i&&(i.tabIndex=0,i.focus()),i}function D(e,t=z){for(let i=0;i<e.length;i++){const r=e[i];if(0===r.tabIndex&&t(r))return{item:r,index:i}}return null}function $(e,t=z){for(const i of e)if(t(i))return i;return null}function M(e,t=z){for(let i=e.length-1;i>=0;i--){const r=e[i];if(t(r))return r}return null}function P(e,t,i=z,r=!0){if(t){const s=function(e,t,i=z,r=!0){for(let s=1;s<e.length;s++){const o=(s+t)%e.length;if(o<t&&!r)return null;const a=e[o];if(i(a))return a}return e[t]?e[t]:null}(e,t.index,i,r);return s&&(s.tabIndex=0,s.focus()),s}return L(e,i)}function F(e,t,i=z,r=!0){if(t){const s=function(e,t,i=z,r=!0){for(let s=1;s<e.length;s++){const o=(t-s+e.length)%e.length;if(o>t&&!r)return null;const a=e[o];if(i(a))return a}return e[t]?e[t]:null}(e,t.index,i,r);return s&&(s.tabIndex=0,s.focus()),s}return O(e,i)}function z(e){return!e.disabled}const B={ArrowDown:"ArrowDown",ArrowLeft:"ArrowLeft",ArrowUp:"ArrowUp",ArrowRight:"ArrowRight",Home:"Home",End:"End"};class U{constructor(e){this.handleKeydown=e=>{const t=e.key;if(e.defaultPrevented||!this.isNavigableKey(t))return;const i=this.items;if(!i.length)return;const r=D(i,this.isActivatable);e.preventDefault();const s=this.isRtl();let o=null;switch(t){case B.ArrowDown:case s?B.ArrowLeft:B.ArrowRight:o=P(i,r,this.isActivatable,this.wrapNavigation());break;case B.ArrowUp:case s?B.ArrowRight:B.ArrowLeft:o=F(i,r,this.isActivatable,this.wrapNavigation());break;case B.Home:o=L(i,this.isActivatable);break;case B.End:o=O(i,this.isActivatable)}o&&r&&r.item!==o&&(r.item.tabIndex=-1)},this.onDeactivateItems=()=>{const e=this.items;for(const t of e)this.deactivateItem(t)},this.onRequestActivation=e=>{this.onDeactivateItems();const t=e.target;this.activateItem(t),t.focus()},this.onSlotchange=()=>{const e=this.items;let t=!1;for(const i of e){!(!i.disabled&&i.tabIndex>-1)||t?i.tabIndex=-1:(t=!0,i.tabIndex=0)}if(t)return;const i=$(e,this.isActivatable);i&&(i.tabIndex=0)};const{isItem:t,getPossibleItems:i,isRtl:r,deactivateItem:s,activateItem:o,isNavigableKey:a,isActivatable:n,wrapNavigation:l}=e;this.isItem=t,this.getPossibleItems=i,this.isRtl=r,this.deactivateItem=s,this.activateItem=o,this.isNavigableKey=a,this.isActivatable=n,this.wrapNavigation=l??(()=>!0)}get items(){const e=this.getPossibleItems(),t=[];for(const i of e){if(this.isItem(i)){t.push(i);continue}const e=i.item;e&&this.isItem(e)&&t.push(e)}return t}activateNextItem(){const e=this.items,t=D(e,this.isActivatable);return t&&(t.item.tabIndex=-1),P(e,t,this.isActivatable,this.wrapNavigation())}activatePreviousItem(){const e=this.items,t=D(e,this.isActivatable);return t&&(t.item.tabIndex=-1),F(e,t,this.isActivatable,this.wrapNavigation())}}const N=new Set(Object.values(B));class H extends r{get items(){return this.listController.items}constructor(){super(),this.listController=new U({isItem:e=>e.hasAttribute("md-list-item"),getPossibleItems:()=>this.slotItems,isRtl:()=>"rtl"===getComputedStyle(this).direction,deactivateItem:e=>{e.tabIndex=-1},activateItem:e=>{e.tabIndex=0},isNavigableKey:e=>N.has(e),isActivatable:e=>!e.disabled&&"text"!==e.type}),this.internals=this.attachInternals(),this.internals.role="list",this.addEventListener("keydown",this.listController.handleKeydown)}render(){return s`
       <slot
         @deactivate-items=${this.listController.onDeactivateItems}
@@ -579,11 +592,11 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
           ${void 0===this._client.nextUrl?"":s`
                 <ew-list-item
                   type="link"
-                  href=${this._client.nextUrl}
+                  href=${/^telnet:\/\//i.test(this._client.nextUrl)?"/connected#"+this._client.nextUrl.slice(9).replace(/\/.*$/,""):this._client.nextUrl}
                   target="_blank"
                 >
                   ${la}
-                  <div slot="headline">Visit Device</div>
+                  <div slot="headline">${/^telnet:\/\//i.test(this._client.nextUrl)?"Telnet details":"Visit Device"}</div>
                 </ew-list-item>
               `}
           ${this._manifest.home_assistant_domain&&this._client.state===fa.PROVISIONED?s`
@@ -739,12 +752,12 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
                   ${void 0===this._client.nextUrl?"":s`
                         <ew-list-item
                           type="link"
-                          href=${this._client.nextUrl}
+                          href=${/^telnet:\/\//i.test(this._client.nextUrl)?"/connected#"+this._client.nextUrl.slice(9).replace(/\/.*$/,""):this._client.nextUrl}
                           target="_blank"
                           @click=${()=>{this._state="DASHBOARD"}}
                         >
                           ${la}
-                          <div slot="headline">Visit Device</div>
+                          <div slot="headline">${/^telnet:\/\//i.test(this._client.nextUrl)?"Telnet details":"Visit Device"}</div>
                         </ew-list-item>
                       `}
                   ${this._manifest.home_assistant_domain?s`

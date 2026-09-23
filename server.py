@@ -60,6 +60,7 @@ import pathlib
 import re
 import secrets
 import sqlite3
+import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -390,6 +391,13 @@ def site_url(target, role, path="/"):
 # rather than a section of the manifesto because its job is to talk somebody
 # into setting a board up, and that wants a link you can paste at a club or
 # a school, not an anchor two thirds of the way down a long argument.
+#
+# Donate is last, and it is in the menu because Rob looked for it and could
+# not find it: it was one word in the middle of the footer's second row. The
+# menu had been held at nine on the grounds that a phone could carry no
+# more, which was measured when it was written and is not true of this one:
+# at 390px "Donate" lands on the row "Get listed" and "Data" already share,
+# and at 1366 and 1920 the menu is still one row.
 NAV = (("list",  "/",          "Boards"),
        ("about", "/",          "What this is"),
        ("list",  "/whofor",    "Who it's for"),
@@ -398,7 +406,8 @@ NAV = (("list",  "/",          "Boards"),
        ("list",  "/build",     "Build one"),
        ("list",  "/forward",   "Go public"),
        ("list",  "/how",       "Get listed"),
-       ("data",  "/",          "Data"))
+       ("data",  "/",          "Data"),
+       ("list",  "/donate",    "Donate"))
 
 # A page that is not in the menu still has a place in it. Every one of these
 # is a child of a section that is, so the section lights up rather than
@@ -409,7 +418,7 @@ NAV_SECTION = {
     "/dialing":         "/terminals",
     "/privacy":         "/firstcall",
     # Deliberately not in the menu. Both are reached from the page they
-    # belong to: a nine item menu is already at the edge of what a phone can
+    # belong to: a ten item menu is already at the edge of what a phone can
     # carry, and neither is something a general visitor is hunting for.
     # Being off the menu is not the same as being buried, and they are the
     # first and the most prominent links on /whofor.
@@ -418,11 +427,14 @@ NAV_SECTION = {
     "/sdcard":          "/build",
     # Putting the firmware on a board is a step of building one, so it
     # lights up the section a reader came from. Not in the menu itself:
-    # nine items is already the edge of what a phone can carry, and this is
-    # reached from /build and from the footer of every page.
+    # ten items is already the edge of what a phone can carry, and this is
+    # the button at the top of /build, /setup and the board list, and in the
+    # footer of every page.
     "/install":         "/build",
     # The setup guide is the step after installing, so it is Build one too.
     "/setup":           "/build",
+    # Where the installer's last step lands, with the board's address.
+    "/connected":       "/build",
     "/forward-netgear": "/forward",
     "/forward-tplink":  "/forward",
     "/forward-asus":    "/forward",
@@ -489,9 +501,15 @@ def foot_html(role, extra=""):
             ("/build", "Build one"), ("/install", "Install"), ("/setup", "Set up"),
             ("/terminals", "Terminals"), ("/dialing", "Dial links"),
             ("/forward", "Go public"), ("/how", "Get listed")))
+    # "Donate", first in its row and in the warm colour, as well as last in
+    # the menu, because Rob looked for it and could not find it. It was
+    # "Support", in the middle of the row, the same colour as everything
+    # round it, and "Support" reads as help with a problem as often as it
+    # reads as money. The word people scan for is the one on the link now.
     refer = " &middot; ".join(
-        [f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
-            ("/rules", "House rules"), ("/donate", "Support"), ("/feed.xml", "RSS"))]
+        [f'<a class="donate" href="{site_url("list", role, "/donate")}">Donate</a>']
+        + [f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
+            ("/rules", "House rules"), ("/feed.xml", "RSS"))]
         + [f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>'])
     links = ('<span class="row"><span class="lbl">Get started</span> ' + start + "</span>"
              '<br><span class="row"><span class="lbl">Reference</span> ' + refer + "</span>")
@@ -881,7 +899,12 @@ CARD_BLOCKS = ("cards", "hero")
 # ":::" to close. The markup lives in ART in this file rather than in the
 # page, because the dialect has no inline HTML on purpose and an SVG typed
 # into a Markdown file would be the first exception to that.
-BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks")
+#
+# "cta" is a page's one primary action, drawn as a button: see cta_html().
+# "connected" is the box on /connected that shows a board's address, and
+# "installer-terms" is the line naming the installer's code and its licence.
+BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
+                             "installer-terms")
 
 
 # --------------------------------------------------------------------------
@@ -913,12 +936,128 @@ def md_block(kind, lines):
     """A ":::" block, by name. Cards, the installer, a drawing, or the
     thanks list."""
     if kind == "installer":
-        return installer_html()
+        return installer_html(lines)
+    if kind == "installer-terms":
+        return installer_terms_html()
     if kind == "thanks":
         return thanks_html()
     if kind == "art":
         return art_html(lines)
+    if kind == "cta":
+        return cta_html(lines)
+    if kind == "connected":
+        return connected_html(lines)
     return md_cards(kind, lines)
+
+
+# --------------------------------------------------------------------------
+# A page's one primary action, as a button, with the other way round beside
+# it as a plain link.
+#
+#     ::: cta
+#     [Install from your browser](/install)
+#     [or build it from source](#getting-it-running)
+#     A line or two under the button, in the page's own words.
+#     :::
+#
+# The first line that is a link and nothing else is the button, the second
+# such line is the quieter way, and anything else is the note under them.
+# One button a page, which is the point: an entry page with two things
+# shouting at the same size has not decided what it is for, and Rob could
+# not find the browser installer on /build because it was the third
+# sentence of a box.
+# --------------------------------------------------------------------------
+_MD_LONE_LINK = re.compile(r"^\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)$")
+
+
+def cta_html(lines):
+    """The ::: cta block: one button, the quieter way beside it, and a note
+    under both. The home page builds one the same way, from a list."""
+    button, alt, note = "", "", []
+    for ln in (l.strip() for l in lines):
+        m = _MD_LONE_LINK.match(ln)
+        if m and not (button and alt) and m.group(2).startswith(("/", "#", "https://")):
+            href = html.escape(m.group(2), quote=True)
+            text = md_inline(m.group(1))
+            if not button:
+                button = f'<a class="btn" href="{href}">{text}</a>'
+            else:
+                alt = f'<a class="alt" href="{href}">{text}</a>'
+        elif ln:
+            note.append(ln)
+    out = '<div class="cta"><p class="acts">' + button + alt + "</p>"
+    if note:
+        out += '<p class="note">' + md_inline(" ".join(note)) + "</p>"
+    return out + "</div>"
+
+
+# --------------------------------------------------------------------------
+# /connected: where the installer's last step lands.
+#
+# A board answers the installer's Wi-Fi step with its own address as
+# telnet://<ip>:6400. ESP Web Tools offers that as a link, and a browser
+# cannot open telnet://, so the copy of it vendored here was changed to
+# send a telnet address to /connected#<ip>:<port> instead (see the notice
+# at the top of vendor/esp-web-tools/10.4.0/install-dialog-*.js).
+#
+# The address travels in the fragment on purpose. A fragment never leaves
+# the browser: it is not in the request, not in the server's log, and not
+# in a Referer, so a reader's home network address is never recorded here.
+# That is also why this is the second page on the site with JavaScript and
+# the first with any written here: nothing but the page itself can read a
+# fragment. The script is a dozen lines, reads nothing else, sends nothing
+# anywhere, and writes with textContent only, so a fragment somebody made
+# up cannot put markup on the page. It accepts a dotted IPv4 address and
+# an optional port, which is all the firmware sends (main.cpp sendUrl), and
+# ignores anything else.
+#
+# With no fragment, or no script, the box shows the Markdown inside the
+# block instead: how to find the address another way.
+# --------------------------------------------------------------------------
+CONNECTED_JS = (
+    "<script>(function(){"
+    "var m=/^#((?:\\d{1,3}\\.){3}\\d{1,3})(?::(\\d{1,5}))?$/.exec(location.hash);"
+    "if(!m||m[1].split('.').some(function(o){return +o>255;}))return;"
+    "var v={host:m[1],port:m[2]||'6400'};"
+    "if(+v.port<1||+v.port>65535)return;"
+    "v.url='telnet://'+v.host+':'+v.port;"
+    "document.querySelectorAll('#found [data-c]').forEach(function(e){"
+    "e.textContent=v[e.getAttribute('data-c')];});"
+    "document.getElementById('c-link').href=v.url;"
+    "document.getElementById('found').hidden=false;"
+    "document.getElementById('noaddr').hidden=true;"
+    "})();</script>")
+
+
+def connected_html(lines):
+    """The address box on /connected, and the way to find the address when
+    the page was not given one. Every place the address appears is an empty
+    element marked data-c="host", "port" or "url", which the script fills."""
+    missing = md_render("\n".join(lines)) if any(l.strip() for l in lines) else ""
+    host, port = '<span data-c="host"></span>', '<span data-c="port"></span>'
+    return ('<div class="board-at" id="found" hidden>'
+            '<p class="lbl">Your board is at</p>'
+            f'<p class="where"><code>{host}</code> port <code>{port}</code></p>'
+            "<p>From a command line:</p>"
+            f"<pre>telnet {host} {port}</pre>"
+            '<ul><li><b>As a link</b>: <a id="c-link" href="/dialing" '
+            'data-c="url"></a>, which opens if your computer has a telnet '
+            'program that takes links. <a href="/dialing">Making the dial links '
+            "work</a> sets one up.</li>"
+            f"<li><b>SyncTERM</b>: <code>syncterm telnet://{host}:{port}</code>, "
+            "or a new entry in its dialing directory, type Telnet, with this "
+            "address and port.</li>"
+            f"<li><b>PuTTY</b>: <code>putty -telnet {host} -P {port}</code>, or "
+            "this address and port with the connection type set to Other: "
+            "Telnet, and Window, Translation set to CP437 so the art draws "
+            "right.</li></ul>"
+            '<p class="note">That address came from your own browser, not from '
+            "this site: the part of a link after the # never leaves your "
+            "computer.</p></div>"
+            # Not class "none": that is the board list's empty line, faint
+            # and padded, and it took this box's words with it.
+            '<div class="board-at unknown" id="noaddr">' + missing + "</div>"
+            + CONNECTED_JS)
 
 
 def art_html(lines):
@@ -989,7 +1128,7 @@ def md_cards(kind, lines):
             if ln.startswith("?? "):
                 more, body = (ln[3:].strip(), body[i + 1:]), body[:i]
                 break
-        inner = pix + (f"<h2>{md_inline(head)}</h2>" if head else "")
+        inner = pix + (f'<h2 id="{md_id(head)}">{md_inline(head)}</h2>' if head else "")
         inner += md_render("\n".join(body))
         if more:
             inner += ("<details><summary>" + md_inline(more[0]) + "</summary>"
@@ -1010,13 +1149,56 @@ def md_row(line):
     return cells
 
 
+# --------------------------------------------------------------------------
+# Heading ids, so a page can be linked to part way down: the amber box in
+# the install card points at "#before-you-start", and a troubleshooting
+# section is something people send each other a link to.
+#
+# The slug is the heading's visible text, lower case, with every run of
+# anything but a-z and 0-9 turned into one "-" and the ends trimmed. It is
+# unique per page: a second "Wi-Fi" heading becomes "wi-fi-2". A page is
+# rendered in pieces (a gated block, a card, the column beside the install
+# card are each rendered by a nested md_render), so the set of ids already
+# used lives for the whole of the outermost call rather than for one piece,
+# per thread, because the server answers requests on several at once.
+# --------------------------------------------------------------------------
+_md_ctx = threading.local()
+
+
+def md_id(text):
+    """The id for a heading whose Markdown source is `text`."""
+    seen = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)      # a link's words
+    seen = re.sub(r"[*`]", "", seen)
+    slug = re.sub(r"[^a-z0-9]+", "-", seen.lower()).strip("-") or "section"
+    used = getattr(_md_ctx, "ids", None)
+    if used is None:
+        return slug
+    got, n = slug, 2
+    while got in used:
+        got, n = f"{slug}-{n}", n + 1
+    used.add(got)
+    return got
+
+
 def md_render(text):
     """The small subset of Markdown the pages use."""
+    top = getattr(_md_ctx, "ids", None) is None
+    if top:
+        _md_ctx.ids = set()
+    try:
+        return _md_render(text)
+    finally:
+        if top:
+            _md_ctx.ids = None
+
+
+def _md_render(text):
     out, para, bullets, code = [], [], [], None
     quote = []            # consecutive "> " lines: one warning, not one per line
     steps = []            # "1. " lines: a numbered list, not a paragraph
     first_step = [1]      # its first number, so a list split by a drawing carries on
     gate = None           # "::: from X.Y.Z": [version, depth, lines]
+    beside = None         # "::: install-top": [depth, lines]
     table = None
     card = None           # a "::: cards" block, collected whole
     comment = False       # inside "<!-- ... -->": a note for whoever edits the page
@@ -1044,6 +1226,25 @@ def md_render(text):
         if code is None and card is None and _MD_GATE.match(line):
             want = tuple(int(g) for g in _MD_GATE.match(line).groups())
             gate = [want, 0, []]
+            continue
+
+        # "::: install-top" ... ":::" is the top of /install: the steps in
+        # one column and the install card beside them. It holds drawings
+        # and the "::: installer" block itself, so it counts ":::" pairs
+        # the way the gate does. See install_top_html().
+        if beside is not None:
+            if line.startswith("::: "):
+                beside[0] += 1
+            elif line.strip() == ":::":
+                if beside[0] == 0:
+                    out.append(install_top_html(beside[1]))
+                    beside = None
+                    continue
+                beside[0] -= 1
+            beside[1].append(raw)
+            continue
+        if code is None and card is None and line.strip() == "::: install-top":
+            beside = [0, []]
             continue
 
         # A comment is dropped whole and never reaches the page. It exists
@@ -1121,17 +1322,17 @@ def md_render(text):
             code = []
         elif line.startswith("### "):
             flush()
-            out.append(f"<h3>{md_inline(line[4:])}</h3>")
+            out.append(f'<h3 id="{md_id(line[4:])}">{md_inline(line[4:])}</h3>')
         elif line.startswith("## "):
             flush()
-            out.append(f"<h2>{md_inline(line[3:])}</h2>")
+            out.append(f'<h2 id="{md_id(line[3:])}">{md_inline(line[3:])}</h2>')
         elif line.startswith("> "):
             if para or bullets:
                 flush()
             quote.append(line[2:])            # consecutive lines are one warning
         elif line.startswith("# "):
             flush()
-            out.append(f"<h1>{md_inline(line[2:])}</h1>")
+            out.append(f'<h1 id="{md_id(line[2:])}">{md_inline(line[2:])}</h1>')
         elif line.startswith("- "):
             if para or steps:
                 flush()
@@ -1153,6 +1354,8 @@ def md_render(text):
 
     if table is not None:                           # a table at the very end
         out.append(md_table(table))
+    if beside is not None:                          # unterminated install-top
+        out.append(install_top_html(beside[1]))
     if card is not None:                            # unterminated ::: block
         out.append(md_block(card[0], card[1]))
     if code is not None:                            # unterminated fence
@@ -1226,9 +1429,14 @@ def md_page(name, role="list"):
     # The drawings' stylesheet goes in once, and only on a page that has a
     # drawing, the way DIAGRAM_CSS rides with the manifesto rather than
     # living in PAGE and costing every page on the site.
-    if "::: art" in text:
+    # The install card carries a small drawing of its own, so a page with the
+    # installer on it needs the sheet whether or not it has an "::: art".
+    wants_installer = re.search(r"^::: installer\s*$", text, re.M) is not None
+    if "::: art" in text or wants_installer:
         body = ART_CSS + body
-    # The one script on this site, and the only page that can carry it.
+    # The installer's script, and the only page that can carry it. (The one
+    # other script on the site is the dozen inline lines on /connected, which
+    # ride with the "::: connected" block itself; see CONNECTED_JS.)
     #
     # Both halves of that condition matter. The page has to ask for the
     # installer, and there has to be something for the installer to install:
@@ -1243,7 +1451,7 @@ def md_page(name, role="list"):
     # JavaScript is still true of the manifesto. The script itself comes
     # from this machine; see EWT_SCRIPT.
     head = ""
-    if "::: installer" in text and firmware_releases():
+    if wants_installer and firmware_releases():
         head = ('<script type="module" src="' + html.escape(EWT_SCRIPT, quote=True)
                 + '"></script>')
     return PAGE.format(refresh="", head=head, title=html.escape(title),
@@ -1477,12 +1685,30 @@ def firmware_manifest(version):
     return None
 
 
-def installer_html():
-    """The ::: installer block: the button, or an honest account of why not.
+def board_label(family):
+    """What the picker slot says a build is for. The ESP32 build is laid out
+    for 4 MB of flash, which is the one fact about a board a reader can
+    check against the listing they bought it from."""
+    return family + (", 4 MB flash" if family == "ESP32" else "")
+
+
+def installer_html(lines=()):
+    """The ::: installer block: the install card, or an honest account of
+    why there is no button.
 
     There is deliberately no third state. Either a complete release is on
     disk and the page offers it, or it is not and the page says so; nothing
     here can render a button that fetches a file that does not exist.
+
+    The lines inside the block are the short list of things to have ready,
+    written in the page's own Markdown and shown in the card's amber box, so
+    the words stay in pages/install.md with the rest of the page's words.
+
+    The card is laid out for /install's layout spec
+    (internal/tty-ux-install-page-2026-09-23.md in the firmware repository):
+    a small drawing, the amber box, the picker slot, the button, one version
+    line and the notices link, in that order on a desktop. On a phone the
+    stylesheet reorders it so the button comes first.
     """
     rels = firmware_releases()
     if not rels:
@@ -1502,76 +1728,135 @@ def installer_html():
             "step.</p>"
             "</div>")
 
-    newest = rels[0]
-    out = ['<div class="installer">']
-    out.append('<esp-web-install-button manifest="/install/'
-               + html.escape(newest["version"], quote=True)
-               + '/manifest.json">')
-    # Our own button in the activate slot. The element exports three colour
-    # variables and no ::part(), so anything beyond a colour means supplying
-    # the element, and this page is monospace on black rather than a rounded
-    # blue pill.
-    out.append('<button class="go" slot="activate">Install '
-               + html.escape(newest["version"]) + " on my board</button>")
-    # Both fallbacks are given rather than left to the component's defaults,
-    # which name Firefox first and say nothing about what to do next. The
-    # precedence in their code is insecure-context first, so "not-allowed"
-    # is the one a reader sees over plain http and never the other.
-    out.append('<span class="no" slot="unsupported">This browser cannot talk '
-               "to a serial port. Chrome or Edge on a desktop or laptop can, "
-               "and so can Firefox from version 151; there is more about "
-               "that below.</span>")
-    out.append('<span class="no" slot="not-allowed">This page has to be '
-               "served over https for a browser to allow it near a serial "
-               "port.</span>")
-    out.append("</esp-web-install-button>")
+    out = ['<div class="installer">', INSTALL_MINI]
+    pre = "\n".join(lines).strip()
+    if pre:
+        out.append('<div class="pre">' + md_render(pre) + "</div>")
 
-    meta = "Version " + html.escape(newest["version"])
-    if newest["date"]:
-        meta += ", " + html.escape(newest["date"])
-    chips = ", ".join(b["chipFamily"] for b in newest["builds"])
-    meta += ". " + html.escape(chips) + "."
-    out.append('<p class="meta">' + meta + "</p>")
-    if newest["note"]:
-        out.append('<p class="meta">' + html.escape(newest["note"]) + "</p>")
+    # The picker slot. One board today, so it holds a line saying which one
+    # rather than a radio group of one, which is a control that does
+    # nothing. It keeps its height either way, so nothing moves the day a
+    # second board arrives. A kept older release is the one real choice, and
+    # that gets native radios: no script, the checked one decides which
+    # button, version line and notices link show (the rules are in the
+    # <style> under the card, one set per release).
+    families = []
+    for b in rels[0]["builds"]:
+        if b["chipFamily"] not in families:
+            families.append(b["chipFamily"])
+    out.append('<div class="pick"><p class="meta board">Board: '
+               + html.escape("; ".join(board_label(f) for f in families)) + "</p>")
+    if len(rels) > 1:
+        out.append('<p class="vers" role="radiogroup" aria-label="Version">')
+        # Short labels, so both fit on one line of the card: the line under
+        # the button says the rest. Two lines here put the button under the
+        # fold at 1366 x 768.
+        for i, rel in enumerate(rels):
+            v = html.escape(rel["version"])
+            what = " (newest)" if i == 0 else ""
+            out.append(f'<label><input type="radio" name="fwver" id="fwv{i}"'
+                       + (" checked" if i == 0 else "") + f"> {v}{what}</label>")
+        out.append("</p>")
+    out.append("</div>")
 
-    # The older releases kept on disk get a quieter button each, so "kept"
-    # means something a reader can use: going back a version when the
-    # newest does not suit their board. It used to be a link to the older
-    # manifest, which is JSON and useless to a person. The empty slots stop
-    # each extra element repeating the refusal message the first one shows.
-    older = rels[1:]
-    if older:
-        out.append('<p class="meta">If the newest release has a problem on '
-                   "your board, the one before it is kept here too:</p>")
-        for rel in older:
-            v = html.escape(rel["version"], quote=True)
-            out.append('<esp-web-install-button class="older" manifest="/install/'
-                       + v + '/manifest.json">'
-                       '<button class="older" slot="activate">Install ' + v
-                       + " instead</button>"
-                       '<span slot="unsupported"></span>'
-                       '<span slot="not-allowed"></span>'
-                       "</esp-web-install-button>")
-    lic = []
-    for rel in rels:
+    for i, rel in enumerate(rels):
+        v = html.escape(rel["version"], quote=True)
+        # Our own button in the activate slot. The element exports three
+        # colour variables and no ::part(), so anything beyond a colour
+        # means supplying the element, and this page is monospace on black
+        # rather than a rounded blue pill. The version is not on the button:
+        # the line under it says which, once, rather than the card saying
+        # it three times.
+        out.append(f'<esp-web-install-button class="r{i}" manifest="/install/{v}'
+                   '/manifest.json"><button class="go" slot="activate">Install on '
+                   "my board</button>"
+                   # Both fallbacks are given rather than left to the
+                   # component's defaults, which name Firefox first and say
+                   # nothing about what to do next. The precedence in their
+                   # code is insecure-context first, so "not-allowed" is the
+                   # one a reader sees over plain http and never the other.
+                   '<span class="no" slot="unsupported">This browser cannot talk '
+                   "to a serial port. Chrome or Edge on a desktop or laptop can, "
+                   "and so can Firefox from version 151; there is more about "
+                   'that <a href="#other-browsers">below</a>.</span>'
+                   '<span class="no" slot="not-allowed">This page has to be '
+                   "served over https for a browser to allow it near a serial "
+                   "port.</span></esp-web-install-button>")
+    for i, rel in enumerate(rels):
+        meta = "Version " + html.escape(rel["version"])
+        if rel["date"]:
+            meta += ", released " + html.escape(rel["date"])
+        out.append(f'<p class="meta ver r{i}">' + meta + ".</p>")
+    for i, rel in enumerate(rels):
         if rel["notices"]:
-            lic.append('<a href="/install/' + html.escape(rel["version"], quote=True)
-                       + '/THIRD_PARTY_NOTICES.md">' + html.escape(rel["version"])
-                       + "</a>")
-    if lic:
-        out.append('<p class="meta">What is in the image, and under what '
-                   "terms: " + ", ".join(lic) + ".</p>")
-    # The installer itself is somebody else's code running on this page, so
-    # its terms are linked as plainly as the firmware's are.
-    out.append('<p class="meta">The installer is '
-               '<a href="https://github.com/esphome/esp-web-tools">ESP Web '
-               "Tools</a> " + html.escape(EWT_VERSION) + ", served from this site: "
-               '<a href="' + EWT_BASE + 'LICENSE">its licence</a> and '
-               '<a href="' + EWT_BASE + 'THIRD_PARTY_LICENSES.txt">the '
-               "libraries inside it</a>.</p>")
+            out.append(f'<p class="meta notices r{i}"><a href="/install/'
+                       + html.escape(rel["version"], quote=True)
+                       + '/THIRD_PARTY_NOTICES.md">What is inside it, and under '
+                       "what terms</a></p>")
+    if len(rels) > 1:
+        rules = []
+        for i in range(1, len(rels)):
+            rules.append(f".installer .r{i}{{display:none}}"
+                         f".installer:has(#fwv{i}:checked) .r0{{display:none}}"
+                         f".installer:has(#fwv{i}:checked) .r{i}{{display:block}}")
+        out.append("<style>" + "".join(rules) + "</style>")
     out.append("</div>")
     return "".join(out)
+
+
+def installer_terms_html():
+    """The installer's own terms: somebody else's code, running on this
+    page, with one change made here, so its licence is linked as plainly as
+    the firmware's notices are. It used to sit in the install card, which
+    is for installing; it lives under "Doing it the other way" now. With no
+    release on disk there is no installer on the page, so nothing to say."""
+    if not firmware_releases():
+        return ""
+    return ('<p class="meta terms">The installer on this page is '
+            '<a href="https://github.com/esphome/esp-web-tools">ESP Web '
+            "Tools</a> " + html.escape(EWT_VERSION) + ", served from this site, "
+            "with one change made here: its last step offers the board's telnet "
+            "details instead of trying to open an address a browser cannot. "
+            '<a href="' + EWT_BASE + 'LICENSE">Its licence</a> and '
+            '<a href="' + EWT_BASE + 'THIRD_PARTY_LICENSES.txt">the '
+            "libraries inside it</a>.</p>")
+
+
+def install_top_html(lines):
+    """The top of /install: the page's title and lead, the install card, and
+    the steps, in that order in the markup.
+
+    That order is what a phone and a screen reader get: title, what the page
+    does, the button, then what happens when it is pressed. From 901px up
+    the stylesheet makes it two columns, the title and the steps on the
+    left and the card on the right, spanning both, level with the title and
+    sticky, so the button is on the first screen at 1366 x 768 and stays
+    beside whichever step a reader has got to. A grid rather than a float,
+    because sticky does not work on a float.
+
+    Level with the title rather than with the steps, which is what the spec
+    drew, because the amber box as written is seven lines at the card's
+    width rather than the five the spec allowed for, and that put the
+    button under the fold at 768."""
+    before, after, inside, card = [], [], None, None
+    for raw in lines:
+        s = raw.strip()
+        if inside is not None:
+            if s == ":::":
+                card = installer_html(inside)
+                inside = None
+            else:
+                inside.append(raw)
+            continue
+        if s == "::: installer" and card is None:
+            inside = []
+            continue
+        (before if card is None else after).append(raw)
+    if inside is not None:                          # unterminated installer
+        card = installer_html(inside)
+    return ('<div class="install-top"><div class="intro">'
+            + md_render("\n".join(before)) + "</div>" + (card or "")
+            + '<div class="steps">' + md_render("\n".join(after)) + "</div></div>")
 
 
 def ewt_file(name):
@@ -2629,7 +2914,9 @@ ewt-install-dialog, ewt-no-port-picked-dialog {{
    -------------------------------------------------------------------- */
 article .installer {{ background:#12121a; border:1px solid #2c3a44;
         border-radius:0.5rem; padding:1.125rem 1.25rem; margin:1.5rem 0 1.75rem; }}
-article .installer.none {{ border-color:#3a3a46; }}
+/* --dim, not the --faint the board list's ".none" line would lend it by
+   sharing the class name: these are sentences somebody has to read. */
+article .installer.none {{ border-color:#3a3a46; color:var(--dim); }}
 article .installer h2 {{ margin:0 0 0.5rem; color:var(--struct);
         font-size:1rem; }}
 article .installer p {{ margin:0 0 0.75rem; }}
@@ -2662,6 +2949,83 @@ article .installer button.go:focus-visible {{ outline:3px solid #ffd35c;
 article .installer .no {{ display:block; color:#f0c674; background:#241d10;
         border-left:3px solid #8a6d39; padding:0.625rem 0.875rem;
         border-radius:0.25rem; }}
+/* --------------------------------------------------------------------
+   The install card, laid out to the /install spec
+   (internal/tty-ux-install-page-2026-09-23.md in the firmware repository).
+
+   One column of parts with one gap between them, rather than a margin on
+   each: a small drawing, the amber "before you start" box, the board
+   slot, the button, one version line, the notices link. The button is the
+   full width of the card, because it is the one thing in it to press.
+   -------------------------------------------------------------------- */
+article .installer {{ display:flex; flex-direction:column; gap:0.625rem; }}
+article .installer > *, article .installer .meta {{ margin:0; }}
+article .installer button.go {{ width:100%; text-align:center; }}
+article .installer .pre {{ color:#f0c674; background:#241d10;
+        border-left:3px solid #8a6d39; border-radius:0.25rem;
+        padding:0.625rem 0.875rem; font-size:0.8125rem; }}
+article .installer .pre p {{ margin:0; line-height:1.5; }}
+article .installer .pre b {{ color:#ffd35c; }}
+/* The board slot keeps its height whether it holds one line or a choice,
+   so nothing moves the day a second board or release arrives. */
+article .installer .pick {{ min-height:1.5rem; }}
+article .installer .vers {{ display:flex; flex-wrap:wrap; gap:0.25rem 1rem;
+        margin:0.25rem 0 0; font-size:0.8125rem; color:var(--ink); }}
+article .installer .vers label {{ cursor:pointer; }}
+/* The title, the card and the steps, and from the site's one breakpoint up
+   two columns: title and steps on the left, the card on the right spanning
+   both, level with the title. A grid rather than a float, because sticky
+   does not work on a float; sticky so the button stays beside whichever
+   step a reader has reached. The markup order is title, card, steps, which
+   is the order a phone and a screen reader get. */
+article .install-top > .installer {{ margin:1.25rem 0 1.5rem; }}
+@media (min-width: 901px) {{
+  article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 22rem;
+        grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}
+  article .install-top > .intro {{ grid-column:1; grid-row:1; }}
+  article .install-top > .installer {{ grid-column:2; grid-row:1 / span 2; margin:0;
+        position:sticky; top:1rem; }}
+  article .install-top > .steps {{ grid-column:1; grid-row:2; }}
+  article .install-top .steps svg.art.steps {{ margin:1rem 0 1.25rem; }}
+}}
+/* On a phone the card is one column above the steps, and the button comes
+   first: the menu already takes the top third of the screen, and the
+   "before you start" box ahead of the button would push it under the fold
+   of a smaller phone. Rob's call, from the spec's own disagreement. */
+@media (max-width: 900px) {{
+  article .installer .pick {{ order:1; }}
+  article .installer esp-web-install-button {{ order:2; }}
+  article .installer .ver {{ order:3; }}
+  article .installer .notices {{ order:4; }}
+  article .installer .pre {{ order:5; }}
+  article .installer svg.mini {{ order:6; }}
+}}
+/* A page's one primary action, drawn like the installer's button, with
+   the other way round beside it as a plain link and a note under both. */
+.cta {{ margin:1.25rem 0 1.5rem; }}
+.cta p {{ margin:0; }}
+.cta .acts {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.75rem 1.25rem; }}
+.cta a.btn {{ display:inline-block; font-size:0.9375rem; color:#04212c;
+        background:var(--dial); border:1px solid #9fdfff; border-radius:0.375rem;
+        padding:0.6875rem 1.25rem; text-decoration:none; }}
+.cta a.btn:hover {{ background:#a7e2ff; }}
+.cta a.btn:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.cta .note {{ color:var(--dim); margin:0.75rem 0 0; }}
+/* /connected: the board's address, in the installer card's colours. */
+article .board-at {{ background:#12121a; border:1px solid #2c3a44;
+        border-radius:0.5rem; padding:1.125rem 1.25rem; margin:1.25rem 0 1.5rem; }}
+article .board-at.unknown {{ border-color:#3a3a46; }}
+article .board-at > :last-child {{ margin-bottom:0; }}
+article .board-at .lbl {{ margin:0; color:var(--dim); font-size:0.75rem;
+        letter-spacing:0.0625rem; text-transform:uppercase; }}
+article .board-at .where {{ margin:0.25rem 0 1rem; font-size:1.25rem; }}
+article .board-at .where code {{ color:var(--live); }}
+article .board-at .note {{ color:var(--dim); font-size:0.8125rem; }}
+/* The installer's own terms, under "Doing it the other way" on /install. */
+article p.terms {{ color:var(--dim); font-size:0.8125rem; }}
+/* Donate, in the footer, in the warm colour: the one link there that is
+   an ask rather than a reference. */
+footer a.donate {{ color:var(--warm); }}
 </style>{head}</head><body><main>
 {body}
 <footer>{footer}</footer>
@@ -3244,7 +3608,14 @@ def index_page():
             'Dial one with <a href="/terminals">any telnet client</a>, or click '
             'an address if you have one installed. '
             '<a href="/dialing">Nothing happened?</a> '
-            '<a href="/firstcall">Never called one before?</a></p>')
+            '<a href="/firstcall">Never called one before?</a></p>'
+            # The way to a board of your own, as the page's one button. The
+            # list is dialled by clicking addresses, which are links, so a
+            # button here does not compete with it; and somebody who has
+            # just found out these exist is exactly who is looking for how
+            # to run one. One line tall, so the list moves down by one line.
+            + cta_html(["[Run your own board](/install)",
+                        "[or build it from source](/build)"]))
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>State</th></tr>"
                 + board_rows(rows, now, charts) + "</table>")
@@ -3818,6 +4189,10 @@ article .freedom svg.icon { float:right; width:4.25rem; height:4.25rem;
    phone draws it at 1:1 and the smallest type lands at about 9px. */
 svg.art.steps { width:100%; max-width:34rem; height:auto;
         margin:1.125rem auto 1.5rem; }
+/* The install card's own small drawing. No frame of its own, because the
+   card is the frame: a box in a box reads as two things. */
+svg.art.mini { width:100%; max-width:none; height:auto; background:none;
+        border:0; margin:0; }
 
 /* The machines on /terminals, one strip under each heading. Narrower
    than the first call strip, because there are eight of them on one page
@@ -4791,6 +5166,22 @@ BOOT_BUTTON = _deco(206,
     f'<text x="{_bx(21.2)}" y="152" font-size="8" text-anchor="middle">off:</text>'
     f'<text class="ink" x="{_bx(21.2)}" y="163" font-size="7" text-anchor="middle">abandoned</text>'
     f'<text x="{_bx(11)}" y="190" font-size="8" text-anchor="middle">what letting go of BOOT does, by seconds held</text>')
+
+# The small drawing at the top of the install card: the same hand as the
+# first step's, laptop, cable and board, with no caption and no box of its
+# own, because it sits inside a box already. 354 wide like the others, and
+# only 96 tall, so at the card's 415px it is 1.17 times its own size.
+INSTALL_MINI = (
+    '<svg class="art mini" viewBox="0 0 354 96" aria-hidden="true" '
+    'focusable="false" preserveAspectRatio="xMidYMid meet">'
+    '<rect class="o" x="8" y="10" width="100" height="64" rx="4"/>'
+    '<rect class="g" x="14" y="16" width="88" height="52" rx="2"/>'
+    '<rect class="k" x="28" y="34" width="60" height="16" rx="3"/>'
+    '<text class="ink" x="58" y="45.5" font-size="9" text-anchor="middle">Install</text>'
+    '<path class="o" d="M0 78 H116 L110 84 H6 Z"/>'
+    '<path class="o" d="M116 78 C152 78 162 52 200 52"/>'
+    '<path class="lt" d="M117 81 C153 81 163 55 200 55"/>'
+    + _board(206, 26, "lf") + "</svg>")
 
 SETUP_ALT = (
     "Three steps. A board on a USB cable, flashed from the browser. Wi-Fi "

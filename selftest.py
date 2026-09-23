@@ -37,6 +37,12 @@ BASE = f"http://127.0.0.1:{PORT}"
 passed = failed = 0
 
 
+def has_h(page, level, text):
+    """A heading with this text, carrying the id md_render gives it."""
+    return re.search(rf'<h{level} id="[a-z0-9-]+">{re.escape(text)}</h{level}>',
+                     page) is not None
+
+
 def check(label, ok):
     global passed, failed
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
@@ -1322,11 +1328,11 @@ def main():
         # and the facts it leans on are the firmware's and the tool's own.
         flat_i = " ".join(inst.split())
         check("the page walks through the install in order",
-              "<h2>What happens, in order</h2>" in inst and "<ol>" in inst
+              has_h(inst, 2, "What happens, in order") and "<ol>" in inst
               and "It waits up to 30 seconds." in flat_i
               and "The board tries for up to 30 seconds." in flat_i)
         check("and says how to change the Wi-Fi later",
-              "<h2>Changing the Wi-Fi later</h2>" in inst
+              has_h(inst, 2, "Changing the Wi-Fi later")
               and "<b>Change Wi-Fi</b>" in inst)
         check("and which browsers, checked, and that a phone is untried",
               "Firefox can do it from version 151" in flat_i
@@ -1337,7 +1343,7 @@ def main():
         # The one default password, said plainly, with the limits the
         # firmware puts on it and the honest limit of those limits.
         check("the install page gives the default sysop password plainly",
-              "<h2>The sysop password</h2>" in inst
+              has_h(inst, 2, "The sysop password")
               and "and it is <code>unleashed</code>" in flat_i)
         check("and says it works only from your own network, and only until changed",
               "It only works from your own network" in flat_i
@@ -1437,14 +1443,14 @@ def main():
         check("there is a setup page, under Build one",
               code == 200 and '<a class="here" href="/build">Build one</a>' in setup)
         check("with every core CONFIG page",
-              all(f"<h2>{p}</h2>" in setup
+              all(has_h(setup, 2, p)
                   for p in ("board", "limits", "accounts", "backup", "staff", "wifi")))
         check("and every plugin page",
-              all(f"<h3>{p}</h3>" in setup
+              all(has_h(setup, 3, p)
                   for p in ("chat", "files", "forums", "info", "announce", "sd"))
-              and "<h3>serial and example</h3>" in setup)
+              and has_h(setup, 3, "serial and example"))
         check("it starts with becoming the sysop, and points at the password step",
-              "<h2>First, become the sysop</h2>" in setup
+              has_h(setup, 2, "First, become the sysop")
               and "<code>unleashed</code>" in setup and 'href="/install"' in setup)
         # The screens are the board's own, drawn as the site's art: a grid of
         # text pinned to its columns, not a picture.
@@ -1482,7 +1488,7 @@ def main():
         code, don = get("/donate")
         flat_d = " ".join(don.split())
         check("there is a support page",
-              code == 200 and "<h1>Support the project</h1>" in don)
+              code == 200 and has_h(don, 1, "Support the project"))
         check("described by its first sentence, not by the drawing above it",
               '<meta name="description" content="µnleashed BBS is free software, and it '
               'stays free.' in don)
@@ -1513,7 +1519,7 @@ def main():
         # notes mention, no page on Unleashed HQ: nobody has time to keep
         # those up, and a promise nobody keeps is worse than none.
         check("and how supporters are thanked: lifetime members named, nobody else listed",
-              "<h2>Thank you</h2>" in don and "Lifetime members" in flat_d
+              has_h(don, 2, "Thank you") and "Lifetime members" in flat_d
               and "ABOUT" in flat_d and "Unleashed HQ" not in flat_d
               and "release notes" not in flat_d)
         # The list starts empty, and an empty list says nothing at all.
@@ -1540,8 +1546,8 @@ def main():
               code == 200 and ctype == "image/svg+xml"
               and 'height="310" viewBox="0 0 1600 310"' in cov
               and '<path d="M18,8 H1592 V292 L1582,302 H8 V18 Z"' in cov)
-        check("and every face's footer offers the support page",
-              all(f'<a href="{want}donate">Support</a>' in page
+        check("and every face's footer offers it as Donate, in its own colour",
+              all(f'<a class="donate" href="{want}donate">Donate</a>' in page
                   for page, want in ((get("/")[1], "/"),
                                      (get("/", host="about.example")[1], "https://boards.example/"),
                                      (get("/", host="data.example")[1], "https://boards.example/"))))
@@ -1571,7 +1577,7 @@ def main():
               and '<ol start="7">' in inst2)
         flat_i2 = " ".join(inst2.split())
         check("the reset section: Change Wi-Fi now, a reflash with erase last",
-              "<h2>If something goes wrong, reset rather than reflash</h2>" in inst2
+              has_h(inst2, 2, "If something goes wrong, reset rather than reflash")
               and "works while the board is failing to join one" in flat_i2
               and "nothing on the board is erased" in flat_i2
               and "install again with Erase device ticked" in flat_i2)
@@ -1585,6 +1591,150 @@ def main():
               "This board has not been set up yet" in flat_i2
               and "YOU ARE THE SYSOP" in flat_i2 and "ESC skips it" in flat_i2
               and "The board refuses <code>unleashed</code> here" in flat_i2)
+
+        # ------------------------------------------------------------------
+        # Headings carry ids, so a page can be linked part way down: the
+        # install card's amber box points at #before-you-start.
+        print("Heading ids")
+        ids = S.md_render("## Wi-Fi\n\n## Wi-Fi\n\n### A `b` [c](/d)\n\n# Top!")
+        check("an id is the heading's words, lower case, runs of anything else one -",
+              '<h2 id="wi-fi">Wi-Fi</h2>' in ids
+              and '<h3 id="a-b-c">A <code>b</code> <a href="/d">c</a></h3>' in ids
+              and '<h1 id="top">Top!</h1>' in ids)
+        check("and unique on the page, a second of the same name numbered",
+              '<h2 id="wi-fi-2">Wi-Fi</h2>' in ids)
+        page_ids = re.findall(r'<h[1-3] id="([^"]+)"', inst2)
+        check("including across the pieces a page is rendered in"
+              + ("" if len(page_ids) == len(set(page_ids)) else "  <- duplicate ids"),
+              len(page_ids) > 10 and len(page_ids) == len(set(page_ids))
+              and "before-you-start" in page_ids and "other-browsers" in page_ids)
+
+        # ------------------------------------------------------------------
+        # /install's top: the title, the card and the steps, in that order,
+        # which is what a phone and a screen reader get; the stylesheet puts
+        # the card beside them from 901px up.
+        print("The install card")
+        top = (inst2.split('<div class="install-top">')[1].split('id="before-you-start"')[0]
+               if '<div class="install-top">' in inst2 else "")
+        check("the title, the card, then the steps, inside one block",
+              top.find('<div class="intro"><h1 ') == 0
+              and 0 < top.find('<div class="installer') < top.find('<div class="steps">')
+              and top.find('<div class="steps">') < top.find('id="what-happens-in-order"'))
+        if published:
+            check("the card's amber box is the page's own words, and links down the page",
+                  '<div class="pre"><p><b>Before you start:</b> Chrome or Edge' in top
+                  and '<a href="#before-you-start">more below</a>' in top)
+            check("and it carries its small drawing, the board slot and one version line",
+                  '<svg class="art mini"' in top and "Board: ESP32, 4 MB flash" in top
+                  and top.count('class="meta ver ') == 1)
+            check("the installer's own licence is under Doing it the other way",
+                  S.EWT_BASE + "LICENSE" in inst2.split('id="doing-it-the-other-way"')[1]
+                  and S.EWT_BASE + "LICENSE" not in top)
+        css_i = inst2.split("<style>")[1]
+        check("two columns from 901px, the card sticky and level with the title",
+              "grid-template-columns:minmax(0, 1fr) 22rem" in css_i
+              and "grid-row:1 / span 2" in css_i and "position:sticky" in css_i)
+        check("and on a phone the button comes before the amber box",
+              "article .installer esp-web-install-button { order:2; }" in css_i
+              and "article .installer .pre { order:5; }" in css_i)
+        # The board's Improv answer is telnet://, which a browser cannot open.
+        check("the last step says Telnet details, not Visit Device",
+              "<b>Telnet details</b>" in inst2 and "Visit Device" not in inst2)
+
+        # ------------------------------------------------------------------
+        # One primary action on each entry page, drawn like the installer's
+        # button, with the other way round beside it as a link.
+        print("Calls to action")
+        for path, alt in (("/build", "#getting-it-running"), ("/setup", "/build"),
+                          ("/", "/build")):
+            pg = get(path)[1]
+            body = pg.split("</nav>")[1]
+            check(f"{path} has one button, to the installer, and the other way beside it",
+                  body.count('class="btn"') == 1
+                  and '<div class="cta"><p class="acts"><a class="btn" href="/install">' in body
+                  and f'<a class="alt" href="{alt}">' in body)
+        bld = get("/build")[1].split("</nav>")[1]
+        check("on /build it comes before anything else on the page",
+              bld.index('class="btn"') < bld.index('id="what-you-need"')
+              and 'class="tip"' not in bld)
+        setp = get("/setup")[1].split("</nav>")[1]
+        check("and on /setup before the drawing",
+              setp.index('class="btn"') < setp.index('class="art steps"'))
+        home = get("/")[1]
+        lst = home.find("<table>")
+        lst = lst if lst >= 0 else home.find("No boards listed yet")
+        check("on the board list it sits above the list, under the lead",
+              0 < home.find('<p class="lead">') < home.find('class="btn"') < lst)
+
+        # ------------------------------------------------------------------
+        # Rob could not find the donation page. It is in the menu now, last,
+        # and first in the footer's second row, as well as being served.
+        print("Donate")
+        check("the menu offers Donate on every face",
+              all('>Donate</a></nav>' in p for p in (
+                  get("/")[1], get("/install")[1], get("/", host="about.example")[1],
+                  get("/", host="data.example")[1])))
+        check("and marks it on the page itself",
+              '<a class="here" href="/donate">Donate</a>' in don)
+
+        # ------------------------------------------------------------------
+        # /connected: where the installer's last step lands. The address is
+        # in the fragment, which never reaches this server, so a few inline
+        # lines read it; nothing else on the page runs, and nothing leaves.
+        print("The telnet details page")
+        code, conn = get("/connected")
+        flat_c = " ".join(conn.split())
+        scripts_c = re.findall(r"<script[^>]*>(.*?)</script>", conn, re.S)
+        check("there is a /connected page, under Build one",
+              code == 200 and '<a class="here" href="/build">Build one</a>' in conn)
+        check("its one script is the inline one written here, with no src",
+              len(scripts_c) == 1 and "<script src" not in conn
+              and "<script>" + scripts_c[0] + "</script>" == S.CONNECTED_JS)
+        js_c = scripts_c[0] if scripts_c else ""
+        check("which reads the fragment, writes only text, and sends nothing",
+              "location.hash" in js_c and "textContent" in js_c
+              and not any(w in js_c for w in ("innerHTML", "outerHTML", "insertAdjacent",
+                                              "document.write", "fetch", "XMLHttpRequest",
+                                              "sendBeacon", "WebSocket", "eval", "cookie",
+                                              "localStorage", "location.href")))
+        check("and takes a dotted IPv4 address and a port, and nothing else",
+              r"/^#((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?$/" in js_c
+              and "+o>255" in js_c and "+v.port>65535" in js_c)
+        check("with the address box hidden until it has one",
+              '<div class="board-at" id="found" hidden>' in conn
+              and '<div class="board-at unknown" id="noaddr">' in conn)
+        check("the address box has the command, a link, SyncTERM and PuTTY",
+              '<pre>telnet <span data-c="host"></span> <span data-c="port"></span></pre>' in conn
+              and 'id="c-link"' in conn
+              and '<code>syncterm telnet://<span data-c="host"></span>:' in conn
+              and '<code>putty -telnet <span data-c="host"></span> -P ' in conn)
+        check("with no address, it says where to find one",
+              "115200 baud" in flat_c and "<code>unleashed</code>" in flat_c
+              and "telnet unleashed.local 6400" in flat_c)
+        check("and gives the default sysop password, the warning, and the setup guide",
+              "sysop password is <code>unleashed</code>" in flat_c
+              and "Change it before anything else." in flat_c
+              and 'href="/setup"' in conn and 'href="/install#the-sysop-password"' in conn)
+
+        # The copy of ESP Web Tools sends a telnet:// address there, and says
+        # it was changed, as its licence requires.
+        print("The installer's one change")
+        dlg = [n for n in os.listdir(os.path.join("vendor", "esp-web-tools", S.EWT_VERSION))
+               if n.startswith("install-dialog-")]
+        dlg_src = open(os.path.join("vendor", "esp-web-tools", S.EWT_VERSION, dlg[0]),
+                       encoding="utf-8").read() if len(dlg) == 1 else ""
+        check("the dialog chunk opens with a notice that it was modified, and how",
+              dlg_src.startswith("/*\n * MODIFIED FILE.")
+              and "Apache License 2.0" in dlg_src[:800]
+              and "/connected#<address>:<port>" in dlg_src[:800])
+        check("and in both places, a telnet link goes to /connected as Telnet details",
+              dlg_src.count('?"/connected#"+this._client.nextUrl.slice(9)') == 2
+              and dlg_src.count('?"Telnet details":"Visit Device"') == 2
+              and dlg_src.count("href=${this._client.nextUrl}") == 0)
+        check("and the vendor README records upstream's checksum for the file",
+              "6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5"
+              in open(os.path.join("vendor", "esp-web-tools", "README.md"),
+                      encoding="utf-8").read())
 
         # ------------------------------------------------------------------
         # The footer: two rows, then the colophon, on every face.
@@ -2160,15 +2310,32 @@ def main():
                   'slot="activate"' in shown and 'slot="unsupported"' in shown
                   and 'slot="not-allowed"' in shown)
             # "Kept" means a reader can go back to it, which a link to a
-            # JSON file never let them do.
-            check("the older release is kept with a button of its own",
+            # JSON file never let them do. It is a choice in the card's
+            # board slot now, two native radios and no script: the checked
+            # one decides which button, version line and notices link show.
+            check("the older release is kept as a choice, the newest picked",
                   'manifest="/install/0.19.1/manifest.json"' in shown
-                  and "Install 0.19.1 instead</button>" in shown
+                  and shown.count('name="fwver"') == 2
+                  and '<input type="radio" name="fwver" id="fwv0" checked> 0.19.2' in shown
+                  and ".installer .r1{display:none}" in shown
+                  and ".installer:has(#fwv1:checked) .r1{display:block}" in shown
                   and shown.count('slot="unsupported"') == 2)
+            # The card said the version three times: on the button, in a
+            # line under it, and again as release.txt's first line.
+            check("the card says each version once, not on the button",
+                  shown.count('class="meta ver r0"') == 1
+                  and "Version 0.19.2, released 2026-09-21." in shown
+                  and shown.count(">Install on my board</button>") == 2
+                  and "Install 0.19.2" not in shown and "A short note." not in shown)
+            check("the board slot names the board and its flash",
+                  '<p class="meta board">Board: ESP32, 4 MB flash</p>' in shown)
+            check("the words inside the block are the card's amber box",
+                  '<div class="pre"><p><b>Before you start:</b> x</p></div>'
+                  in S.installer_html(["**Before you start:** x"]))
             check("and the licences of what is being installed are linked",
                   "/install/0.19.2/THIRD_PARTY_NOTICES.md" in shown
-                  and S.EWT_BASE + "LICENSE" in shown
-                  and S.EWT_BASE + "THIRD_PARTY_LICENSES.txt" in shown)
+                  and S.EWT_BASE + "LICENSE" in S.installer_terms_html()
+                  and S.EWT_BASE + "THIRD_PARTY_LICENSES.txt" in S.installer_terms_html())
 
             # The same, end to end, over HTTP: a second server pointed at
             # the scratch releases, so the route, the content types and the

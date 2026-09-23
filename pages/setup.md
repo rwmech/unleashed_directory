@@ -5,12 +5,16 @@ you are logged in as the sysop, with one command: `CONFIG`. Nothing needs a
 laptop, a text editor or a reflash. This page goes through every page CONFIG
 has, and what each setting on it does.
 
+::: cta
+[Install from your browser](/install)
+[or build it from source](/build)
+If the board is not on your network yet, start there: the installer puts the
+BBS on it and sets up its Wi-Fi.
+:::
+
 ::: art
 setup-steps
 :::
-
-If the board is not on your network yet, [put it on the board from your
-browser](/install) first. That page also sets up its Wi-Fi.
 
 ## First, become the sysop
 

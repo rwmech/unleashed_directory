@@ -60,8 +60,18 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - Pages are cached and the cache is dropped only when `settle()` actually
   moved something, so the page is never stale but is also not rebuilt for
   every reader.
-- No JavaScript anywhere on the site, with exactly one exception, and the
-  shape of the exception is the rule. The manifesto's two diagrams are
+- No JavaScript anywhere on the site, with exactly two exceptions, and the
+  shape of the exceptions is the rule.
+  **The second: `/connected` runs a dozen inline lines written here**
+  (`CONNECTED_JS`, 0.19.0). The installer's last step sends a reader to
+  `/connected#<address>:<port>`, and the fragment never reaches a server,
+  which is the point: a reader's LAN address is in no log here. Nothing but
+  the page can read a fragment, so it is script or nothing, the same test
+  the installer passed. The script reads `location.hash`, accepts a dotted
+  IPv4 address and a port only, writes with `textContent` only, and sends
+  nothing; the suite pins it to exactly `CONNECTED_JS` and fails on
+  innerHTML, fetch, XMLHttpRequest, sendBeacon, WebSocket, eval, cookies,
+  storage or navigation in it. The manifesto's two diagrams are
   inline SVG moved by CSS keyframes, the day chart is an SVG, the board
   list reloads with a meta refresh.
   **The exception: `/install` runs ESP Web Tools** (Rob, 2026-09-23: "get
@@ -72,7 +82,7 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   nothing else on the site gets a script without Rob.
   **It is served from this machine, not a CDN** (since 0.15.0; it was a
   pinned unpkg URL before that): `vendor/esp-web-tools/<version>/` is the
-  package's `dist/web` build byte for byte, served at
+  package's `dist/web` build, byte for byte except one file (below), served at
   `/install/esp-web-tools/<version>/` with a JavaScript content type, which
   a module script needs. All its imports are relative, so no other origin
   is involved; its only absolute URLs are links a person can click. Its
@@ -80,6 +90,14 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   links both. `SHA256SUMS` in that directory is checked by the suite, and
   `.gitattributes` keeps the directory binary so no line ending moves.
   `vendor/esp-web-tools/README.md` is how to move to a new version.
+  **One file is modified** (0.19.0, Rob): `install-dialog-*.js`, where the
+  device link the dialog offers after the Wi-Fi step, "Visit Device", goes
+  to `/connected#<address>:<port>` and reads "Telnet details" when the
+  board's Improv answer is `telnet://`, which a browser cannot open. The file
+  opens with a notice saying what changed (Apache-2.0 section 4(b)), the
+  vendor README records upstream's SHA-256 for it, and SHA256SUMS carries
+  the modified file's. A new ESP Web Tools version needs the change made
+  again: search its dialog chunk for `Visit Device`.
   **The script is emitted only when the page carries `::: installer` *and*
   `firmware/` actually holds a release.** Both halves, so the script and
   the widget arrive together or neither does: a page with no button runs
@@ -188,13 +206,36 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   counts openers against closers in every page, because an unclosed one
   swallows the rest of the page.
   **`::: installer` ... `:::`** is the third block and the only one that is
-  not prose: it renders the flasher widget, or an honest account of why
-  there is nothing to flash. It carries **no content of its own**, and that
-  is the point, because what it should say depends on what is in
-  `firmware/` rather than on what somebody typed into the page. `:::`
+  not prose: it renders the install card, or an honest account of why
+  there is nothing to flash. What the card offers (button, version line,
+  notices, the older release as a radio choice) depends on what is in
+  `firmware/` rather than on what somebody typed into the page. Since
+  0.19.0 the Markdown inside the block is the card's amber "before you
+  start" box, so the words stay in the page. `:::`
   blocks dispatch through `md_block()`; an unknown name after `:::` still
   falls through to a paragraph so a typo is visible rather than swallowing
   the rest of the page.
+  **`::: install-top` ... `:::`** (0.19.0) wraps the top of /install: what
+  comes before the `::: installer` inside it is the intro (title and lead),
+  then the card, then the steps. That markup order is what a phone and a
+  screen reader get; from 901px the stylesheet makes it two columns with the
+  card on the right, spanning both rows, sticky. It counts `:::` pairs, so
+  it holds drawings. The card is level with the title, not the steps: the
+  amber box as written is seven lines and anything lower put the button
+  under the fold at 1366 x 768. Re-measure the button after changing the
+  box's words.
+  **`::: cta`** (0.19.0) is a page's one primary action: the first line
+  that is only a link is the button, the second is the quieter way beside
+  it, anything else is the note under both. One per page. /build, /setup
+  and the board list (built in `index_page`, from `cta_html`) have one.
+  **`::: installer-terms`** is ESP Web Tools' licence line, under "Doing it
+  the other way", and nothing when there is no release.
+  **`::: connected`** is the address box on /connected with its script; the
+  Markdown inside it is what shows when there is no address.
+  **Headings carry ids** (0.19.0): the words, lower case, every other run of
+  characters one "-", unique per page across the nested renders (a
+  thread-local set lives for the outermost `md_render`). Link to a section
+  as `/page#its-id`.
   **A form that is not in the dialect does not fail, it renders as a
   paragraph**, which is how 53 numbered steps across the router pages were
   a wall of text for four versions with every word present and in the right
@@ -292,7 +333,10 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `setupshots.sh` at 80 (harness tag `webshots2 --fresh`), then
   `shots2json.py <capture> shots <config|setup> "<source>"`.
 - **/donate, "Support the project"** (0.17.0): written by the copywriter,
-  wired as an ordinary page, linked as "Support" in every face's footer.
+  wired as an ordinary page. Since 0.19.0 it is "Donate", last in the menu
+  and first in the footer's Reference row in the warm colour, because Rob
+  could not find it as "Support" in the middle of the footer. The menu is
+  ten items; measured, the tenth adds no row at 390, 1366 or 1920.
   **Buy Me a Coffee is a plain link and nothing more**: no widget, no
   script, nothing loaded from them, and the page says so in as many words,
   so embedding their button would make the page lie. The suite checks
