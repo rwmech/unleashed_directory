@@ -952,27 +952,32 @@ def md_block(kind, lines):
 
 # --------------------------------------------------------------------------
 # A page's one primary action, as a button, with the other way round beside
-# it as a plain link.
+# it as a quieter, outlined one.
 #
 #     ::: cta
-#     [Install from your browser](/install)
-#     [or build it from source](#getting-it-running)
-#     A line or two under the button, in the page's own words.
+#     [Visit the web installer](/install)
+#     [Build from source](#getting-it-running)
+#     A line or two under the buttons, in the page's own words.
 #     :::
 #
-# The first line that is a link and nothing else is the button, the second
-# such line is the quieter way, and anything else is the note under them.
-# One button a page, which is the point: an entry page with two things
-# shouting at the same size has not decided what it is for, and Rob could
-# not find the browser installer on /build because it was the third
-# sentence of a box.
+# The first line that is a link and nothing else is the filled button, the
+# second such line is the outlined one, and anything else is the note under
+# them. One filled button a page, which is the point: an entry page with two
+# things shouting at the same size has not decided what it is for, and Rob
+# could not find the browser installer on /build because it was the third
+# sentence of a box. On a phone the two stack, filled first, full width.
+#
+# A button that goes somewhere says where it goes. Only the button on
+# /install says "Install", because only that one installs: Rob, on the
+# first version of these, which said "Install from your browser" and then
+# showed another page with another button on it.
 # --------------------------------------------------------------------------
 _MD_LONE_LINK = re.compile(r"^\[([^\]]+)\]\(((?:[^()\s]|\([^()\s]*\))+)\)$")
 
 
 def cta_html(lines):
-    """The ::: cta block: one button, the quieter way beside it, and a note
-    under both. The home page builds one the same way, from a list."""
+    """The ::: cta block: one filled button, an outlined one beside it, and a
+    note under both. The home page builds one the same way, from a list."""
     button, alt, note = "", "", []
     for ln in (l.strip() for l in lines):
         m = _MD_LONE_LINK.match(ln)
@@ -982,7 +987,7 @@ def cta_html(lines):
             if not button:
                 button = f'<a class="btn" href="{href}">{text}</a>'
             else:
-                alt = f'<a class="alt" href="{href}">{text}</a>'
+                alt = f'<a class="btn2" href="{href}">{text}</a>'
         elif ln:
             note.append(ln)
     out = '<div class="cta"><p class="acts">' + button + alt + "</p>"
@@ -3001,16 +3006,26 @@ article .install-top > .installer {{ margin:1.25rem 0 1.5rem; }}
   article .installer svg.mini {{ order:6; }}
 }}
 /* A page's one primary action, drawn like the installer's button, with
-   the other way round beside it as a plain link and a note under both. */
+   the other way round beside it outlined, the way the installer card draws
+   a kept older release, and a note under both. On a phone the two stack,
+   filled first, each the full width of the column. */
 .cta {{ margin:1.25rem 0 1.5rem; }}
 .cta p {{ margin:0; }}
-.cta .acts {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.75rem 1.25rem; }}
-.cta a.btn {{ display:inline-block; font-size:0.9375rem; color:#04212c;
-        background:var(--dial); border:1px solid #9fdfff; border-radius:0.375rem;
-        padding:0.6875rem 1.25rem; text-decoration:none; }}
+.cta .acts {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.75rem 1rem; }}
+.cta a.btn, .cta a.btn2 {{ display:inline-block; font-size:0.9375rem;
+        border-radius:0.375rem; padding:0.6875rem 1.25rem; text-decoration:none;
+        text-align:center; }}
+.cta a.btn {{ color:#04212c; background:var(--dial); border:1px solid #9fdfff; }}
 .cta a.btn:hover {{ background:#a7e2ff; }}
-.cta a.btn:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.cta a.btn2 {{ color:var(--dial); background:transparent; border:1px solid #35566b; }}
+.cta a.btn2:hover {{ border-color:var(--dial); }}
+.cta a.btn:focus-visible, .cta a.btn2:focus-visible {{ outline:3px solid #ffd35c;
+        outline-offset:2px; }}
 .cta .note {{ color:var(--dim); margin:0.75rem 0 0; }}
+@media (max-width: 900px) {{
+  .cta .acts {{ flex-direction:column; align-items:stretch; }}
+  .cta a.btn, .cta a.btn2 {{ display:block; }}
+}}
 /* /connected: the board's address, in the installer card's colours. */
 article .board-at {{ background:#12121a; border:1px solid #2c3a44;
         border-radius:0.5rem; padding:1.125rem 1.25rem; margin:1.25rem 0 1.5rem; }}
@@ -3614,8 +3629,8 @@ def index_page():
             # button here does not compete with it; and somebody who has
             # just found out these exist is exactly who is looking for how
             # to run one. One line tall, so the list moves down by one line.
-            + cta_html(["[Run your own board](/install)",
-                        "[or build it from source](/build)"]))
+            + cta_html(["[Visit the web installer](/install)",
+                        "[Build from source](/build#getting-it-running)"]))
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>State</th></tr>"
                 + board_rows(rows, now, charts) + "</table>")

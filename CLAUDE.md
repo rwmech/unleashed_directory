@@ -225,9 +225,16 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   under the fold at 1366 x 768. Re-measure the button after changing the
   box's words.
   **`::: cta`** (0.19.0) is a page's one primary action: the first line
-  that is only a link is the button, the second is the quieter way beside
-  it, anything else is the note under both. One per page. /build, /setup
-  and the board list (built in `index_page`, from `cta_html`) have one.
+  that is only a link is the filled button, the second is an outlined one
+  beside it (they stack on a phone, filled first), anything else is the
+  note under both. One per page. /build, /setup and the board list (built
+  in `index_page`, from `cta_html`) have one: **Visit the web installer**
+  and **Build from source**.
+  **A button that goes somewhere says where it goes, and only the button
+  on /install says "Install"** (Rob, 0.19.1). 0.19.0 labelled the
+  navigation "Install from your browser", which landed on a page with a
+  second button to press: two presses for one action. The suite fails on
+  any cta button whose label contains Install.
   **`::: installer-terms`** is ESP Web Tools' licence line, under "Doing it
   the other way", and nothing when there is no release.
   **`::: connected`** is the address box on /connected with its script; the

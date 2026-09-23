@@ -3,12 +3,12 @@
 A board of your own, on hardware that costs less than lunch.
 
 ::: cta
-[Install from your browser](/install)
-[or build it from source, below](#getting-it-running)
-Chrome or Edge, a USB cable, about five minutes, and no toolchain. The same
-page sets up the board's Wi-Fi, and [the setup guide](/setup) covers every
-setting after that. Building it yourself is the longer road, and the one you
-want once you start changing things.
+[Visit the web installer](/install)
+[Build from source](#getting-it-running)
+The web installer needs Chrome or Edge, a USB cable and about five minutes,
+and no toolchain. The same page sets up the board's Wi-Fi, and [the setup
+guide](/setup) covers every setting after that. Building from source is the
+longer road, and the one you want once you start changing things.
 :::
 
 Nothing here is a kit and nothing is soldered to anything. If you have an ESP32

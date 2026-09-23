@@ -1643,16 +1643,28 @@ def main():
 
         # ------------------------------------------------------------------
         # One primary action on each entry page, drawn like the installer's
-        # button, with the other way round beside it as a link.
+        # button, with the other way round beside it as an outlined one. A
+        # button that goes somewhere says where it goes: only the button on
+        # /install says Install, because only that one installs.
         print("Calls to action")
-        for path, alt in (("/build", "#getting-it-running"), ("/setup", "/build"),
-                          ("/", "/build")):
+        for path, alt in (("/build", "#getting-it-running"),
+                          ("/setup", "/build#getting-it-running"),
+                          ("/", "/build#getting-it-running")):
             pg = get(path)[1]
             body = pg.split("</nav>")[1]
-            check(f"{path} has one button, to the installer, and the other way beside it",
-                  body.count('class="btn"') == 1
-                  and '<div class="cta"><p class="acts"><a class="btn" href="/install">' in body
-                  and f'<a class="alt" href="{alt}">' in body)
+            check(f"{path}: Visit the web installer, and Build from source beside it",
+                  body.count('class="btn"') == 1 and body.count('class="btn2"') == 1
+                  and '<div class="cta"><p class="acts"><a class="btn" href="/install">'
+                      "Visit the web installer</a>" in body
+                  and f'<a class="btn2" href="{alt}">Build from source</a>' in body)
+            check(f"{path}: and no button there says Install",
+                  not re.search(r'class="btn2?"[^>]*>[^<]*Install', body))
+        check("the from-source button lands on a heading that exists",
+              'id="getting-it-running"' in get("/build")[1])
+        css_c = get("/build")[1].split("<style>")[1]
+        check("on a phone the two stack, the filled one first, full width",
+              ".cta .acts { flex-direction:column; align-items:stretch; }" in css_c
+              and ".cta a.btn, .cta a.btn2 { display:block; }" in css_c)
         bld = get("/build")[1].split("</nav>")[1]
         check("on /build it comes before anything else on the page",
               bld.index('class="btn"') < bld.index('id="what-you-need"')

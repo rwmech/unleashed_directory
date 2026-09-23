@@ -6,10 +6,10 @@ laptop, a text editor or a reflash. This page goes through every page CONFIG
 has, and what each setting on it does.
 
 ::: cta
-[Install from your browser](/install)
-[or build it from source](/build)
-If the board is not on your network yet, start there: the installer puts the
-BBS on it and sets up its Wi-Fi.
+[Visit the web installer](/install)
+[Build from source](/build#getting-it-running)
+If the board is not on your network yet, start with one of those: the web
+installer puts the BBS on it and sets up its Wi-Fi.
 :::
 
 ::: art

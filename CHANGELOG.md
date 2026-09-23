@@ -14,6 +14,21 @@
 
 # Changelog
 
+## 0.19.1, 2026-09-23
+
+- **The entry pages' buttons say where they go** (Rob). 0.19.0's said
+  "Install from your browser" and opened another page with another button on
+  it: two presses and a page change for one action. The rule now is that a
+  button that goes somewhere says where, and only the button on /install
+  says Install, because only that one installs.
+- **Two buttons side by side** on /build, /setup and the board list:
+  **Visit the web installer**, filled, to /install, and **Build from
+  source**, outlined in the style of the installer card's older-release
+  button, to /build#getting-it-running. On a phone they stack, filled
+  first, each the full width. Both are on the first screen of /build at
+  1366 x 768 and 390 x 844.
+- 453 checks, up from 448.
+
 ## 0.19.0, 2026-09-23
 
 For the firmware's 1.0.0 release (Rob): the installer easy to find, the
