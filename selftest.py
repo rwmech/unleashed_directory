@@ -188,6 +188,92 @@ CREATE TABLE hits (
 """
 
 
+# The tables as they stood at site 0.21.1, the last version before the
+# interests: the badge columns and the hourly record are there, interests is
+# not. The live database is one of these now. Exactly what CREATE TABLE made
+# then, copied from 0.21.1's server.py.
+OLD_SCHEMA_0211 = """
+CREATE TABLE boards (
+    id           INTEGER PRIMARY KEY,
+    token        TEXT UNIQUE NOT NULL,
+    name         TEXT NOT NULL,
+    owner        TEXT NOT NULL DEFAULT '',
+    description  TEXT NOT NULL DEFAULT '',
+    software     TEXT NOT NULL DEFAULT '',
+    version      TEXT NOT NULL DEFAULT '',
+    host         TEXT NOT NULL DEFAULT '',
+    address      TEXT NOT NULL DEFAULT '',
+    group_key    TEXT NOT NULL DEFAULT '',
+    port         INTEGER NOT NULL DEFAULT 6400,
+    nodes        INTEGER NOT NULL DEFAULT 0,
+    busy         INTEGER NOT NULL DEFAULT 0,
+    calls24      INTEGER,
+    minutes24    INTEGER,
+    uptime       INTEGER NOT NULL DEFAULT 0,
+    interval_min INTEGER NOT NULL DEFAULT 10,
+    state        TEXT NOT NULL DEFAULT 'pending',
+    first_seen   INTEGER NOT NULL,
+    last_seen    INTEGER NOT NULL,
+    streak_start INTEGER NOT NULL,
+    public_at    INTEGER NOT NULL DEFAULT 0,
+    beats        INTEGER NOT NULL DEFAULT 0,
+    note         TEXT NOT NULL DEFAULT '',
+    tz_offset    INTEGER NOT NULL DEFAULT 0,
+    system       TEXT NOT NULL DEFAULT '',
+    terminals    TEXT NOT NULL DEFAULT '',
+    guests       INTEGER,
+    features     TEXT NOT NULL DEFAULT '',
+    support      TEXT NOT NULL DEFAULT '',
+    tracked_since INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE beathours (
+    board_id INTEGER NOT NULL,
+    hour     INTEGER NOT NULL,
+    beats    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, hour)
+);
+CREATE TABLE activity (
+    board_id INTEGER NOT NULL,
+    hour     INTEGER NOT NULL,
+    beats    INTEGER NOT NULL DEFAULT 0,
+    busy     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, hour)
+);
+CREATE TABLE reports (
+    id       INTEGER PRIMARY KEY,
+    board_id INTEGER NOT NULL,
+    at       INTEGER NOT NULL,
+    address  TEXT NOT NULL DEFAULT '',
+    reason   TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE hits (
+    address TEXT PRIMARY KEY,
+    at      INTEGER NOT NULL
+);
+"""
+
+
+def start_server(db, port):
+    """A directory on its own port and database, its output drained, and
+    whether it came up. The caller terminates it."""
+    env = dict(os.environ, DIRECTORY_PAGE_CACHE="0", DIRECTORY_DB=db,
+               DIRECTORY_PORT=str(port), DIRECTORY_MIN_SECONDS="0")
+    proc = subprocess.Popen([sys.executable, "server.py"], env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out = []
+    threading.Thread(target=lambda: [out.append(l) for l in proc.stdout],
+                     daemon=True).start()
+    base = f"http://127.0.0.1:{port}"
+    for _ in range(60):
+        try:
+            return proc, out, fetch("/health", base)[0] == 200
+        except Exception:
+            if proc.poll() is not None:
+                break
+            time.sleep(0.1)
+    return proc, out, False
+
+
 def post_from(payload, addr, base=None):
     """An announce that arrives from addr, through the trusted loopback
     proxy, so a test can have boards at different addresses."""
@@ -213,6 +299,19 @@ def badges_in(row):
     return re.findall(r'<span class="bd k-(\w+)"[^>]*>([^<]*)</span>', row)
 
 
+def list_rows(page):
+    """Every board row on the list: (name, the badge keys it carries, hidden)."""
+    return [(name, keys.split(), bool(hid)) for keys, hid, name in re.findall(
+        r'<tr data-b="([^"]*)"( hidden)?><td class=\'name\' data-label=\'Board\'>'
+        r"<span class='bname'>([^<]*)</span>", page)]
+
+
+def pane_of(page):
+    """The filter's <details>, from its opening tag to its end."""
+    at = page.find('<details class="filter"')
+    return page[at:page.find("</details>", at) + len("</details>")] if at >= 0 else ""
+
+
 def badge_checks(S, db):
     """Site 0.21.0: the badge fields, the badges, the steady record, the
     legend, the zebra rows and the hover, and a database from before."""
@@ -227,10 +326,13 @@ def badge_checks(S, db):
             "terminals": ["PETSCII", "ansi", "bogus", 7, None, "ansi"],
             "guests": True,
             "features": ["doors", "chat", "Files", "gopher"],
-            "support": ["ham", "lgbtq", "<script>alert(1)</script>", "HAM", "nazis"]}
+            "support": ["ham", "lgbtq", "<script>alert(1)</script>", "HAM", "nazis"],
+            "interests": ["CHIPTUNE", "c64", "<b>x</b>", "nazis", 64, None,
+                          "electronics", "c64"]}
     junk = {"name": "Junk Fields", "port": 6400, "token": "",
             "system": ["not", "a", "string"], "terminals": "petscii",
-            "guests": "yes", "features": {"chat": True}, "support": "lgbtq"}
+            "guests": "yes", "features": {"chat": True}, "support": "lgbtq",
+            "interests": "c64"}
     shut = {"name": "No Guests", "port": 6400, "token": "", "guests": False}
     code, got = post_from(full, "198.51.100.7")
     check("a heartbeat carrying every badge field is accepted", code == 200)
@@ -256,11 +358,34 @@ def badge_checks(S, db):
           bb.get("features") == ["chat", "files", "doors"])
     check("support: known slugs only; a made-up one, markup and all, is dropped",
           bb.get("support") == ["lgbtq", "ham"])
+    check("interests: known slugs only, once each, any case; markup, a number, "
+          "a null and a made-up one dropped",
+          bb.get("interests") == ["c64", "electronics", "chiptune"])
     check("a field of the wrong type counts as not sent, and the board is "
           "still listed",
           jb.get("system") == "" and jb.get("terminals") == []
           and jb.get("guests") is None and jb.get("features") == []
-          and jb.get("support") == [])
+          and jb.get("support") == [] and jb.get("interests") == [])
+    check("only the first 16 interests are read",
+          S.pick(["x"] * 16 + ["c64"], S.INTEREST_SLUGS) == []
+          and S.pick(["x"] * 15 + ["c64"], S.INTEREST_SLUGS) == ["c64"])
+    check("about forty interests, each a plain lower case slug with a drawing, "
+          "a group, a name and a sentence",
+          38 <= len(S.INTERESTS) <= 48
+          and len(set(S.INTEREST_SLUGS)) == len(S.INTEREST_SLUGS)
+          and all(re.fullmatch(r"[a-z0-9][a-z0-9-]{1,23}", s) for s in S.INTEREST_SLUGS)
+          and all(s in S.INTEREST_ART and g in S.INTEREST_GROUPS and n and t.endswith(".")
+                  for s, g, n, t in S.INTERESTS)
+          and set(S.INTEREST_ART) == set(S.INTEREST_SLUGS))
+    check("and none of them is a support cause or another badge's key",
+          not set(S.INTEREST_SLUGS) & (set(S.SUPPORT_SLUGS) | {
+              k for k, *_ in S.LETTER_BADGES} | {a[1] for a in S.AGES})
+          and len(S.FILTER_KEYS) == len(set(S.FILTER_KEYS)))
+    check("the drawings keep to the house style: no ids, no scripts, no text, "
+          "colour from the chip",
+          all(not re.search(r"\sid=|<script|<text|on\w+=|href", a)
+              for a in S.INTEREST_ART.values())
+          and all("stroke=\"#" not in a for a in S.INTEREST_ART.values()))
     check("the JSON carries the directory's own two as well",
           isinstance(bb.get("listed_at"), int) and bb.get("steady") is False)
     check("and still no token and no note, now that it is built field by field",
@@ -283,17 +408,30 @@ def badge_checks(S, db):
     check("the name has a box of its own, the width of the name",
           "<td class='name' data-label='Board'><span class='bname'>Badge Board</span>"
           "<span class=\"badges\">" in page)
-    check("software first, then the machine, then P, G and the features, then N",
-          found == [("soft", "unleashed"), ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;"),
-                    ("term", "P"), ("guest", "G"), ("feat", "C"), ("feat", "Fi"),
-                    ("feat", "D"), ("new", "N")])
+    # Alphabetical by name within each group (0.22.0, Rob): Chat, Doors,
+    # Files, Guests welcome, Machine, PETSCII, Software, then New.
+    check("the board's own badges in alphabetical order by name, then N",
+          found == [("feat", "C"), ("feat", "D"), ("feat", "Fi"), ("guest", "G"),
+                    ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;"), ("term", "P"),
+                    ("soft", "unleashed"), ("new", "N")])
     check("each feature that is not running has no badge",
           ("feat", "F") not in found and ("feat", "M") not in found)
-    check("and the two support symbols, in the list's order, drawn not typed",
+    check("then the two support symbols, alphabetical, drawn not typed",
           row.count('class="bd k-sup"') == 2
-          and row.index('aria-label="Supports LGBTQ+ people.')
-          < row.index('aria-label="Supports amateur radio.')
-          and row.count("<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"") == 2)
+          and row.index('aria-label="Supports amateur radio.')
+          < row.index('aria-label="Supports LGBTQ+ people.')
+          and row.count("<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"") == 5)
+    labels = re.findall(r'class="bd k-int"[^>]*aria-label="Interest: ([^."]+)\.', row)
+    check("then the three interests, in rose, in the page's order: by group, "
+          "then by name",
+          labels == ["Commodore 64", "Electronics", "Chiptune"]
+          and row.rindex('class="bd k-sup"') < row.index('class="bd k-int"'))
+    check("the row carries every badge it has for the filter, in the page's order",
+          re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
+                    r"<span class='bname'>Badge Board</span>", page) is not None
+          and re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
+                        r"<span class='bname'>Badge Board</span>", page).group(1)
+          == "chat doors files guests petscii new ham lgbtq c64 electronics chiptune")
     check("nothing a board sent reaches the page unescaped",
           "<b>&</b>" not in page and "<script>alert" not in page
           and 'data-tip="Runs on: Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;, in the '
@@ -301,7 +439,7 @@ def badge_checks(S, db):
     n = row.count('class="bd ')
     check("every badge carries a tooltip, a name for a screen reader, and a "
           "focus stop for a keyboard or a tap",
-          n == 10 and row.count("data-tip=\"") == n and row.count("aria-label=\"") == n
+          n == 13 and row.count("data-tip=\"") == n and row.count("aria-label=\"") == n
           and row.count('tabindex="0"') == n and row.count('role="img"') == n)
     check("and no title, which would draw the browser's tooltip over ours",
           " title=" not in row.split("<span class='desc'>")[0])
@@ -314,16 +452,18 @@ def badge_checks(S, db):
     check("the tooltip is CSS, drawn from data-tip, on hover and on focus",
           "content:attr(data-tip);" in page
           and ".bd:hover::after, .bd:focus::after { visibility:visible; opacity:1; }"
-          in page and "<script" not in page)
+          in page and "data-tip" not in S.BADGE_JS and "::after" not in S.BADGE_JS)
     check("at the page's own type size, and never wider than a phone",
           "font-size:0.875rem; line-height:1.45;" in page
           and "max-width:min(24rem, calc(100vw - 3rem));" in page)
     check("badges wrap under the name rather than pushing the Dial column",
           ".badges { position:relative; display:flex; flex-wrap:wrap;" in page
           and "main > table { table-layout:fixed; }" in page)
-    check("a small key to them sits right above the table",
-          '<p class="keylink"><a href="/badges">What the badges mean</a></p>'
-          "<table>" in page)
+    keylink = '<p class="keylink"><a href="/badges">What the badges mean</a></p>'
+    check("a small key to them sits right above the table, beside the Filter "
+          "button",
+          keylink in page and page.index('<div class="fbar">') < page.index(keylink)
+          < page.index('<table id="boards">'))
     feet = {"list": page, "about": get("/", host="about.example")[1]}
     check("and the footer links the legend on every face",
           '<a href="/badges">Badges</a>' in feet["list"].split("<footer>")[1]
@@ -332,9 +472,118 @@ def badge_checks(S, db):
     feed = get("/feed.xml")[1]
     check("the feed says it in words, escaped for XML",
           "Runs on: Compaq 486 &amp;lt;b&amp;gt;&amp;amp;&amp;lt;/b&amp;gt;" in feed
-          and "Supports: LGBTQ+ people, amateur radio" in feed
+          and "Supports: amateur radio, LGBTQ+ people" in feed
+          and "Interests: Commodore 64, Electronics, Chiptune" in feed
           and "Speaks: ANSI, PETSCII" in feed and "Guests welcome" in feed
           and "No guests: an account is needed" in feed)
+
+    # ----------------------------------------------------------------------
+    # Site 0.22.0 (Rob): a Filter button over the list, a pane of every
+    # badge that opens with no script, and the server filtering on ?b=.
+    print("The filter over the board list")
+    home = get("/")[1]
+    pane = pane_of(home)
+    check("there is a Filter button, a <details>, closed by default",
+          '<details class="filter" id="filter"><summary>Filter' in home
+          and home.count('<details class="filter"') == 1)
+    check("and every badge's symbol is inside it, none outside",
+          pane.count('class="tile"') == len(S.FILTER_KEYS)
+          and home.count('class="tile"') == pane.count('class="tile"')
+          and home.count('<span class="ts ') == pane.count('<span class="ts '))
+    check("the pane is a GET form of checkboxes, one per badge, in the page's "
+          "order, with all or any beside them",
+          '<form class="fpane" id="fform" method="get" action="/"' in pane
+          and re.findall(r'<input type="checkbox" name="b" value="([^"]+)"', pane)
+          == list(S.FILTER_KEYS)
+          and '<input type="radio" name="m" value="all" checked>' in pane
+          and '<input type="radio" name="m" value="any">' in pane
+          and '<button type="submit">Show boards</button>' in pane)
+    check("grouped as on /badges: the board's own, worked out here, support, "
+          "then each group of interests",
+          re.findall(r"<legend>(.*?)</legend>", pane)
+          == ["Boards with", "Sent by the board", "Worked out here", "Support",
+              "Interests"] + [html.escape(g) for g in S.INTEREST_GROUPS])
+    check("its search is labelled, and hidden until the script can drive it",
+          '<p class="findbar" data-js hidden><label for="fq">Find a badge</label>'
+          '<input type="search" id="fq" data-find="#fgrid"' in pane
+          and 'name="q"' not in pane)
+    rows = list_rows(home)
+    check("with nothing chosen every board is shown, and the line under the "
+          "button is hidden",
+          rows and not any(h for _n, _k, h in rows)
+          and '<p class="factive" id="factive" aria-live="polite" hidden>' in home
+          and '<table id="boards">' in home and '<p class="none" id="fnone" hidden>' in home)
+
+    code, one = get("/?b=PETSCII")
+    rows1 = list_rows(one)
+    shown1 = [n for n, _k, h in rows1 if not h]
+    check("?b=petscii shows only boards carrying it, any case, and hides the rest",
+          code == 200 and "Badge Board" in shown1 and "Junk Fields" not in shown1
+          and all(("petscii" in k) != h for _n, k, h in rows1))
+    check("its tile is ticked, the button counts one, and the line says how "
+          "many of how many",
+          'value="petscii" data-n="PETSCII" checked>' in one
+          and '<span class="fc" id="fcount">1</span>' in one
+          and f'<span data-f="n">{len(shown1)} of {len(rows1)} board' in one
+          and '<span data-f="m">all of</span>: <span data-f="l">PETSCII</span>. '
+              '<a href="/" data-clear>Clear</a>' in one
+          and '<p class="factive" id="factive" aria-live="polite">' in one)
+    check("and the pane stays closed, so the page is the filtered list",
+          '<details class="filter" id="filter"><summary>' in one
+          and '<details class="filter" id="filter" open' not in one)
+    both = list_rows(get("/?b=petscii&b=ham")[1])
+    check("several badges: all of them by default",
+          "Badge Board" in [n for n, _k, h in both if not h]
+          and all(("petscii" in k and "ham" in k) != h for _n, k, h in both))
+    code, none_all = get("/?b=petscii&b=gaming")
+    check("nothing with all of them: the table goes and a sentence says so",
+          code == 200 and all(h for _n, _k, h in list_rows(none_all))
+          and '<table id="boards" hidden>' in none_all
+          and '<p class="none" id="fnone">No board with all of those yet.</p>' in none_all)
+    any_ = get("/?b=petscii&b=gaming&m=any")[1]
+    rows_any = list_rows(any_)
+    check("any of them, with m=any: the same two now find a board",
+          "Badge Board" in [n for n, _k, h in rows_any if not h]
+          and all(("petscii" in k or "gaming" in k) != h for _n, k, h in rows_any)
+          and '<input type="radio" name="m" value="any" checked>' in any_
+          and '<span data-f="m">any of</span>' in any_
+          and '<p class="none" id="fnone" hidden>No board with any of those yet.</p>'
+          in any_)
+    check("a slug this directory does not know is ignored",
+          list_rows(get("/?b=petscii&b=nazis")[1]) == rows1
+          and not any(h for _n, _k, h in list_rows(get("/?b=nazis")[1]))
+          and "checked>" not in pane_of(get("/?b=nazis")[1]).replace(
+              'value="all" checked>', ""))
+    code, evil = get("/?b=%3Cscript%3Ealert(1)%3C%2Fscript%3E&b=%22%3E%3Cimg%20src%3Dx%3E"
+                     "&m=%22%3E%3Cx&b=" + "petscii" * 200)
+    check("and nothing typed into the address is put back on the page",
+          code == 200 and "alert(1)" not in evil and "<img src=x" not in evil
+          and '"><x' not in evil and "petsciipetscii" not in evil
+          and not any(h for _n, _k, h in list_rows(evil)))
+    check("a filtered view is still the board list to a search engine",
+          '<link rel="canonical" href="https://boards.example/">' in one)
+    check("the rows the filter leaves out stay hidden at every width, and the "
+          "stripes count only the rows showing",
+          "main [hidden] { display:none !important; }" in home
+          and "main > table tr:not(:first-child):nth-child(odd of :not([hidden])) "
+              "{ background:#111116; }" in home)
+    css_f = home.split("<style>")[1].split("</style>")[0]
+    check("a chosen tile shows a tick and a brighter frame, not only a colour; "
+          "focus is the yellow ring",
+          ".tile input:checked + .tbox::after { content:\"\";" in css_f
+          and ".tile input:focus-visible + .tbox { outline:3px solid #ffd35c;" in css_f
+          and ".fmode input:checked + span { background:var(--ink);" in css_f)
+    hov = css_f[css_f.index("@media (hover: hover) and (pointer: fine) {\n  details.filter"):]
+    hov = hov[:hov.index("\n}\n")]
+    check("a hovered tile lights only where a pointer hovers",
+          ".tile:hover .tbox" in hov and css_f.count(".tile:hover") == 1)
+    check("the pane settles in only where motion is wanted",
+          css_f.count("animation:panein") == 1
+          and css_f.index("animation:panein") > css_f.index(
+              "@media (prefers-reduced-motion: no-preference) {\n  details.filter[open]"))
+    check("and on a phone the tiles are three or four to a row",
+          ".tiles { grid-template-columns:repeat(auto-fill, minmax(4.5rem, 1fr)); }"
+          in css_f)
 
     # ----------------------------------------------------------------------
     print("Badges the directory works out")
@@ -419,27 +668,90 @@ def badge_checks(S, db):
     check("and the machine, the software and every time-listed step",
           "<b>Machine</b>" in leg and "<b>Software</b>" in leg
           and all(f">{label}</span>" in leg for _d, label, _w in S.AGES))
-    check("each says where it comes from, board or directory",
-          leg.count("Sent by the board:") == 9
-          and leg.count("Worked out here") == 3)
-    check("with the two groups under their own headings",
-          has_h(leg, 2, "Sent by the board") and has_h(leg, 2, "Worked out by the directory")
+    # Site 0.22.0: a searchable table per group, each row the symbol, the
+    # name, the slug and the meaning.
+    trs = re.findall(r'<tr data-k="([^"]*)"><td class="bsym">.*?</tr>', leg, re.S)
+    check("a table per group, each row the badge, its name, its slug and its "
+          "meaning, under four headings",
+          leg.count('<table class="btab ') == 4
+          and leg.count('<th scope="col">Badge</th><th scope="col">Name</th>'
+                        '<th scope="col">Slug</th><th scope="col">Meaning</th>') == 4
+          and all(has_h(leg, 2, t) for _g, t in S.BADGE_GROUPS)
           and has_h(leg, 3, "How steady is worked out")
           and 'href="#how-steady-is-worked-out"' in leg)
+    check("every row is on the page with no script: one per badge, the steps "
+          "of Listed sharing one",
+          len(trs) == len(S.BADGES) - 5 == 65
+          and '<tr data-k="' in leg and " hidden>" not in leg.split("</nav>")[1]
+          .replace("data-js hidden>", ""))
+    check("each says where it comes from: the field a board sends, or worked "
+          "out here",
+          leg.count("none: worked out here") == 3
+          and "<code>petscii</code> <span class='src'>in terminals</span>" in leg
+          and "<code>chat</code> <span class='src'>in features</span>" in leg)
     check("then Show your support: every symbol, its slug and its sentence",
-          has_h(leg, 2, "Show your support")
-          and all(f"<code>{slug}</code>" in leg and html.escape(sentence) in leg
-                  for slug, _a, _n, sentence in S.SUPPORT))
-    check("eleven of them, amateur radio last",
-          len(S.SUPPORT) == 11 and S.SUPPORT[-1][0] == "ham"
-          and leg.count('class="bd k-sup"') == 11)
+          all(f"<code>{slug}</code>" in leg and html.escape(sentence) in leg
+              for slug, _a, _n, sentence in S.SUPPORT)
+          and leg.count('class="bd k-sup"') == 11 and len(S.SUPPORT) == 11)
     check("each support slug is a plain lower case word, so a board can type it",
           all(re.fullmatch(r"[a-z][a-z-]{1,23}", s) for s in S.SUPPORT_SLUGS)
           and len(set(S.SUPPORT_SLUGS)) == len(S.SUPPORT_SLUGS))
     check("every drawing named in the list exists",
           all(art in S.SUPPORT_ART for _s, art, _n, _t in S.SUPPORT))
+    check("then the interests: every one, its slug and its sentence, in rose, "
+          "under its own group",
+          all(f"<code>{slug}</code>" in leg and html.escape(t) in leg
+              for slug, _g, _n, t in S.INTERESTS)
+          and leg.count('class="bd k-int"') == len(S.INTERESTS)
+          and [html.unescape(g) for g in re.findall(
+              r'<tr class="sub"><th colspan="4" scope="rowgroup">([^<]*)</th></tr>', leg)]
+          == list(S.INTEREST_GROUPS)
+          and leg.count("<tbody data-g>") == len(S.INTEREST_GROUPS))
     check("the legend's badges have tooltips too",
-          'data-tip="Supports amateur radio."' in leg and "<script" not in leg)
+          'data-tip="Supports amateur radio."' in leg
+          and 'data-tip="Interest: Commodore 64."' in leg)
+    check("its search is labelled, hidden until the script can drive it, and "
+          "says how many rows it leaves",
+          '<p class="findbar" data-js hidden><label for="bq">Find a badge</label>'
+          '<input type="search" id="bq" data-find="article"' in leg
+          and '<span class="fqn" id="bqn" aria-live="polite"></span>' in leg
+          and all(w == w.lower() for w in trs)
+          and any("amateur radio" in w and "ham" in w for w in trs)
+          and any("commodore 64" in w and "c64" in w for w in trs))
+
+    # One order everywhere (Rob): alphabetical by the name a reader sees,
+    # within each group, a leading digit or symbol set aside, and the three
+    # views read it from the one list rather than each sorting for itself.
+    in_order = True
+    for group, _t in S.BADGE_GROUPS:
+        subs = S.INTEREST_GROUPS if group == "interests" else ("",)
+        for sub in subs:
+            keys = [b["sort"] for b in S.BADGES if b["group"] == group and b["sub"] == sub]
+            in_order = in_order and keys == sorted(keys)
+    check("BADGES is alphabetical by name within every group and sub-group",
+          in_order and S.sort_key("3D printing") == "d printing"
+          and S.sort_key("Listed ten years") == "listed ten years"
+          and [b["name"] for b in S.BADGES if b["group"] == "support"][:2]
+          == ["Amateur radio", "Animal welfare"])
+    want = []
+    for b in S.BADGES:
+        name = "Listed" if b["cls"] == "age" else b["name"]
+        if not want or want[-1] != name:
+            want.append(name)
+    got_leg = [html.unescape(n) for n in re.findall(r'<td class="bn"><b>([^<]*)</b>', leg)]
+    got_tiles = [html.unescape(n) for n in re.findall(r' data-n="([^"]*)"', pane)]
+    check("/badges lists them in that order",
+          got_leg == want)
+    check("the filter's grid lists them in that order",
+          got_tiles == [b["name"] for b in S.BADGES if b["filter"]])
+    rank = {b["key"]: i for i, b in enumerate(S.BADGES)}
+    carried = dict((n, k) for n, k, _h in list_rows(get("/")[1])).get("Badge Board", [])
+    shown = badge_row(get("/")[1], "Badge Board")
+    marks = [m for m in re.findall(r'aria-label="(?:Supports |Interest: )([^."]+)\.', shown)]
+    check("and a board's row carries them in that order too",
+          len(carried) > 5 and carried == sorted(carried, key=rank.get)
+          and marks == ["amateur radio", "LGBTQ+ people", "Commodore 64",
+                        "Electronics", "Chiptune"])
     check("it belongs to Boards in the menu, on the list face",
           '<a class="here" href="/">Boards</a>' in leg)
     about_leg = get("/badges", host="about.example")[1]
@@ -447,7 +759,8 @@ def badge_checks(S, db):
           '<a class="here" href="https://boards.example/">Boards</a>' in about_leg
           and 'class="here" href="/">What this is' not in about_leg)
     check("How to get listed shows the fields and links the legend",
-          'href="/badges"' in get("/how")[1] and '"support":["ham"]' in get("/how")[1])
+          'href="/badges"' in get("/how")[1] and '"support":["ham"]' in get("/how")[1]
+          and '"interests":["c64","electronics","chiptune"]' in get("/how")[1])
 
     # ----------------------------------------------------------------------
     print("Rows: every other one striped, and the hover")
@@ -573,6 +886,95 @@ def badge_checks(S, db):
         except subprocess.TimeoutExpired:
             server4.kill()
         for leftover in (old_db, old_db + "-wal", old_db + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+
+    # ----------------------------------------------------------------------
+    # And from 0.21.1, which is what the live database is now: badges and
+    # all, but no interests. One column added, nothing else touched.
+    print("A database from 0.21.1, before the interests")
+    db_0211 = os.path.join(tempfile.gettempdir(), f"dir0211{os.getpid()}.db")
+    for leftover in (db_0211, db_0211 + "-wal", db_0211 + "-shm"):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    con = sqlite3.connect(db_0211)
+    con.executescript(OLD_SCHEMA_0211)
+    con.execute("INSERT INTO boards(token, name, owner, software, port, nodes, state, "
+                "first_seen, last_seen, streak_start, public_at, beats, system, "
+                "terminals, guests, features, support, tracked_since) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("b" * 32, "Badge Keeper", "Sparks", "unleashed", 6400, 10, "online",
+                 now - 40 * 86400, now, now - 40 * 86400, now - 40 * 86400, 777,
+                 "ESP32-WROOM-32E", "ansi,petscii", 1, "chat,files", "ham", now - 9 * 86400))
+    con.execute("INSERT INTO beathours(board_id, hour, beats) VALUES(1, ?, 6)",
+                (now // 3600,))
+    con.commit()
+    con.close()
+    port5 = PORT + 4
+    base5 = f"http://127.0.0.1:{port5}"
+    server5, out5, up5 = start_server(db_0211, port5)
+    try:
+        home5 = fetch("/", base5) if up5 else (None, "", b"")
+        check("the server starts on it and serves the list"
+              + ("" if up5 else "  <- " + b"".join(out5[-3:]).decode("utf-8", "replace")),
+              up5 and home5[0] == 200 and b"Badge Keeper" in home5[2])
+        con = sqlite3.connect(db_0211)
+        con.row_factory = sqlite3.Row
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(boards)")}
+        fresh = sqlite3.connect(":memory:")
+        fresh.executescript(S.SCHEMA)
+        want = {r[1] for r in fresh.execute("PRAGMA table_info(boards)")}
+        fresh.close()
+        was_mem = sqlite3.connect(":memory:")
+        was_mem.executescript(OLD_SCHEMA_0211)
+        had = {r[1] for r in was_mem.execute("PRAGMA table_info(boards)")}
+        was_mem.close()
+        check("its table gains interests and nothing else, and matches a new one",
+              cols == want and cols - had == {"interests"} and had <= cols)
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("b" * 32,)).fetchone()
+        check("the old row keeps every badge it had, and simply has no interests yet",
+              r["name"] == "Badge Keeper" and r["beats"] == 777 and r["support"] == "ham"
+              and r["features"] == "chat,files" and r["guests"] == 1
+              and r["interests"] == "" and r["tracked_since"] == now - 9 * 86400
+              and con.execute("SELECT beats FROM beathours WHERE board_id=1")
+              .fetchone()[0] == 6)
+        con.close()
+        row5 = badge_row(home5[2].decode("utf-8"), "Badge Keeper")
+        check("its row shows what it had, and the filter can find it by it",
+              ('term', 'P') in badges_in(row5) and 'aria-label="Supports amateur radio.' in row5
+              and "petscii" in dict((n, k) for n, k, _h in list_rows(
+                  fetch("/?b=petscii&b=ham", base5)[2].decode("utf-8"))).get("Badge Keeper", []))
+        listed5 = {b["name"]: b for b in json.loads(
+            fetch("/api/boards.json", base5)[2].decode("utf-8"))["boards"]}
+        check("and the JSON gives its interests as an empty list, not a missing field",
+              listed5.get("Badge Keeper", {}).get("interests") == [])
+        code5, _b = post_from({"name": "Badge Keeper", "port": 6400, "token": "b" * 32,
+                               "software": "unleashed", "support": ["ham"],
+                               "interests": ["c64", "swl"]}, "192.0.2.55", base5)
+        con = sqlite3.connect(db_0211)
+        con.row_factory = sqlite3.Row
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("b" * 32,)).fetchone()
+        con.close()
+        check("its next heartbeat keeps its listing and stores its interests",
+              code5 == 200 and r["interests"] == "c64,swl" and r["beats"] == 778
+              and r["state"] == "online")
+        S.DB_PATH, was = db_0211, S.DB_PATH
+        try:
+            S.setup()
+            again = True
+        except Exception:
+            again = False
+        S.DB_PATH = was
+        check("and starting again on it changes nothing", again)
+    finally:
+        server5.terminate()
+        try:
+            server5.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server5.kill()
+        for leftover in (db_0211, db_0211 + "-wal", db_0211 + "-shm"):
             try:
                 os.remove(leftover)
             except OSError:
@@ -1381,8 +1783,12 @@ def main():
               "class='spark'" in page or 'class="spark"' in page)
         check("and is described by when it is actually busy",
               "busiest 20:00-22:00" in page)
+        # The page carries the badge filter's script since 0.22.0, and the
+        # chart owes it nothing: it is a <details>, and the script never
+        # names it.
         check("the chart expands without any javascript",
-              "<details" in page and "<script" not in page)
+              "<details class='chart'>" in page
+              and "chart" not in S.BADGE_JS and "summary" not in S.BADGE_JS)
         check("and says it is a control before you have clicked it",
               '(click for the day)' in page and '(click to close)' in page)
 
@@ -2171,7 +2577,7 @@ def main():
               in hbody and hbody.count('class="runcard"') == 1)
         check("and neither of its buttons says Install",
               not re.search(r'class="(fill|line)"[^>]*>[^<]*Install', hbody))
-        lst = hbody.find("<table>")
+        lst = hbody.find('<table id="boards"')
         lst = lst if lst >= 0 else hbody.find("No boards listed yet")
         check("the card follows the heading and the lead, and the list follows it",
               0 <= hbody.find("<h1>BBS directory</h1>") < hbody.find('<p class="lead">')
@@ -2193,27 +2599,46 @@ def main():
               ".runcard { position:relative; background:rgba(127, 212, 255, 0.12);"
               in css_h and "border:1px solid rgba(127, 212, 255, 0.6);" in css_h
               and "--dial:#7fd4ff;" in css_h)
-        check("three lamps on its edge, hidden from a screen reader",
-              all(f'<span class="dot d{i}" aria-hidden="true"></span>' in hbody
-                  for i in (1, 2, 3))
-              and hbody.count('class="dot ') == 3)
+        # 0.22.0, to the UX spec: two lamps half a lap apart, each a head and
+        # three beads of tail, instead of three lamps a third of a lap apart,
+        # which looked scattered on a rectangle.
+        check("two lamps on its edge, each a head and three beads, hidden from a "
+              "screen reader",
+              all(f'<span class="dot {lamp}{bead}" aria-hidden="true"></span>' in hbody
+                  for lamp in ("la", "lb") for bead in ("", " t1", " t2", " t3"))
+              and hbody.count('class="dot ') == 8)
         run_moving = css_h[css_h.find("@media (prefers-reduced-motion: no-preference) {\n"
                                       "  @supports (offset-path"):]
         run_moving = run_moving[:run_moving.find("\n}\n")]
-        check("they follow the card's own rounded edge, a third of a lap apart",
+        check("they follow the card's own rounded edge, half a lap apart",
               "offset-path:inset(0 round 0.5rem);" in css_h
-              and ".runcard .d2 { offset-distance:33.333%; }" in css_h
-              and ".runcard .d3 { offset-distance:66.667%; }" in css_h)
-        check("and move only where reduced motion does not stop them",
+              and ".runcard .la { offset-distance:0%; }" in css_h
+              and ".runcard .lb { offset-distance:50%; }" in css_h)
+        check("and move only where reduced motion does not stop them, 20s a lap, "
+              "linear",
               run_moving.startswith("@media (prefers-reduced-motion: no-preference)")
-              and ".runcard .dot { animation:runlap 16s linear infinite; }" in run_moving
+              and ".runcard .dot { animation:runlap 20s linear infinite; }" in run_moving
               and "@keyframes runlap" in run_moving
               and css_h.count("animation:runlap") == 1
               and css_h.count("@keyframes runlap") == 1)
-        check("a browser without offset-path gets three still lamps on the edge",
-              ".runcard .d1 { top:-0.25rem; left:25%; }" in css_h
-              and ".runcard .d2 { top:45%; right:-0.25rem; }" in css_h
-              and ".runcard .d3 { bottom:-0.25rem; left:30%; }" in css_h
+        delays = re.findall(r"\.runcard \.(l[ab](?:\.t\d)?) \{ animation-delay:(-?[\d.]+)s;",
+                            run_moving)
+        got_d = {k: float(v) for k, v in delays}
+        check("every delay at or below zero, so nothing jumps at load, the tails "
+              "0.12s apart behind their heads and B half a lap behind A",
+              len(got_d) == 8 and all(v <= 0 for v in got_d.values())
+              and all(abs(got_d["la"] - got_d[f"la.t{i}"] + 0.12 * i) < 1e-9
+                      for i in (1, 2, 3))
+              and all(abs(got_d[k.replace("la", "lb")] - got_d[k] + 10) < 1e-9
+                      for k in ("la", "la.t1", "la.t2", "la.t3")))
+        check("the beads are invisible outside the motion block",
+              ".runcard .t1, .runcard .t2, .runcard .t3 { opacity:0;" in css_h
+              and not re.search(r"\.runcard \.l[ab]\.t\d \{[^}]*opacity",
+                                css_h.replace(run_moving, ""))
+              and ".runcard .la.t1 { animation-delay:-0.24s; opacity:0.7; }" in run_moving)
+        check("a browser without offset-path gets two still lamps at the corners",
+              ".runcard .la { top:-0.25rem; left:0.5rem; }" in css_h
+              and ".runcard .lb { bottom:-0.25rem; right:0.5rem; }" in css_h
               and "@supports (offset-path: inset(0 round 0.5rem)) {" in css_h)
 
         # ------------------------------------------------------------------
@@ -2486,15 +2911,39 @@ def main():
               and not any("avatar" in n for n in os.listdir("static")))
 
         print("Every other page is still script-free")
-        scripted = [p for p in ("/", "/about", "/data", "/build", "/whofor",
+        scripted = [p for p in ("/about", "/data", "/build", "/whofor",
                                 "/terminals", "/firstcall", "/forward", "/how",
                                 "/rules", "/privacy", "/kids", "/teachers",
                                 "/sdcard", "/dialing", "/author", "/donate",
-                                "/setup", "/badges")
+                                "/setup", "/upgrade")
                     if "<script" in get(p)[1]]
         check("nothing else on the site loads any JavaScript"
               + ("" if not scripted else "  <- " + ", ".join(scripted)),
               not scripted)
+        # The board list and /badges carry the badge filter and search
+        # (0.22.0): one inline script each, this site's own, pinned to the
+        # text in server.py, and doing nothing but reading and hiding.
+        for path in ("/", "/badges", "/?b=petscii&b=ham"):
+            pg = get(path)[1]
+            scr = re.findall(r"<script[^>]*>(.*?)</script>", pg, re.S)
+            check(f"{path}: its one script is the badge script written here, with no src",
+                  len(scr) == 1 and "<script src" not in pg
+                  and "<script>" + scr[0] + "</script>" == S.BADGE_JS)
+        js_b = S.BADGE_JS
+        check("which writes only text and the hidden attribute, sends nothing, "
+              "stores nothing and never navigates",
+              "textContent" in js_b and ".hidden=" in js_b
+              and "history.replaceState" in js_b
+              and not any(w in js_b for w in (
+                  "innerHTML", "outerHTML", "insertAdjacent", "document.write", "fetch",
+                  "XMLHttpRequest", "sendBeacon", "WebSocket", "eval", "Function(",
+                  "cookie", "Storage", "location.href", "location.assign",
+                  "location.replace", "location.reload", "window.open", "setTimeout",
+                  "setInterval", "import(", "src=", "http")))
+        check("and the only things it reads from the address are its path and "
+              "its fragment",
+              sorted(set(re.findall(r"location\.\w+", js_b)))
+              == ["location.hash", "location.pathname"])
 
         # ------------------------------------------------------------------
         # QuantumRob's name on the manifesto goes to a page about him. Every
@@ -2732,8 +3181,12 @@ def main():
         check("the board's own welcome line and licence are among them",
               all(w in labels for w in ("No web", "No cloud", "No browser",
                                         "Real hardware", "GPL v2 or later")))
+        # The board list carries the badge script since 0.22.0; it never
+        # touches the panel, and no other face carries a script at all.
         check("and nothing on any face runs a script to move them",
-              all("<script" not in p for p in faces.values()))
+              all("<script" not in p for k, p in faces.items() if k != "the board list")
+              and "ticker" not in S.BADGE_JS and ".tf" not in S.BADGE_JS
+              and faces["the board list"].count("<script") == 1)
 
         # Motion lives only inside the no-preference block, so the markup
         # is the resting state: the first freedom, its segment lit.

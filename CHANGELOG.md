@@ -14,6 +14,74 @@
 
 # Changelog
 
+## 0.22.0, 2026-09-23
+
+Interests, a badge filter over the board list, /badges as a searchable
+table, one order for every badge, and the card's lamps redrawn (Rob).
+
+- **Interests**, a sixth optional announce field, `interests`, handled
+  exactly like `support`: slugs from a published list, anything else
+  ignored, the first 16 read. Forty-two of them in eight groups: Computing
+  (BBS history, Linux, open source, programming, retrocomputing),
+  Platforms (Amiga, Apple II, Atari, Commodore 64, DOS, ZX Spectrum),
+  Making (3D printing, electronics, robotics, soldering, woodworking),
+  Games (arcade and pinball, board games, gaming, retro gaming, tabletop
+  RPGs), Music and art (ANSI art, chiptune, demoscene, drawing, music,
+  photography), Radio and sky (astronomy, shortwave listening, weather),
+  Outdoors and more (aviation, cars, cooking, cycling, fishing, gardening,
+  hiking, model trains) and Reading and watching (anime, books, movies,
+  science fiction). Each is a small line drawing in rose, a colour nothing
+  else on the page uses, with a one-line meaning. In PROTOCOL.md beside
+  `support`, in the JSON as `interests`, and in the feed as "Interests:".
+  Amateur radio stays in support; the ten support badges and their colours
+  are unchanged.
+- **A filter over the board list.** A small Filter button above the table,
+  with the key to the badges beside it. Pressed, it opens a bento grid of
+  every badge, a box per group and one per group of interests, each badge
+  a tile with its symbol and name, and a search box that narrows the tiles
+  by name or slug. Picking tiles shows the boards carrying all of them, or
+  any of them with the toggle; "N of M boards with all of: ... Clear" says
+  what is chosen, and "No board with all of those yet." says when nothing
+  is. None of the badge symbols is on the page until the pane is opened.
+  **It works with no JavaScript**: the button is a `<details>`, the tiles
+  are checkboxes in a GET form, and the server filters on
+  `?b=petscii&b=ham` (and `&m=any`), so every filtered view is a link to
+  share or bookmark. A badge the directory does not know is ignored, and
+  nothing typed into the address is put back on the page. With the script,
+  a tile filters the moment it is pressed and the address follows. A
+  chosen tile shows a tick and a brighter frame as well as a colour;
+  focus is the yellow ring; three tiles a row on a phone. The pane settles
+  in only where motion is wanted.
+- **/badges is a table per group**, each row the symbol, the name, the
+  slug and what it means, the four groups under their headings and the
+  interests under their own. A search box at the top narrows the rows as
+  you type and says how many are left. Every row is on the page without a
+  script; the search box appears only when the script can drive it.
+- **One order for every badge** (Rob): alphabetical by the name a reader
+  sees within each group, a leading digit or symbol set aside, the groups
+  in their own order, on /badges, in the filter's grid and under a board's
+  name alike. One list in server.py, `BADGES`, carries each badge's sort
+  key, and all three views walk it. So a row now reads C, D, Fi, G, the
+  machine, P, then the software, and amateur radio comes first among the
+  support symbols. The six steps of time listed are one badge, "Listed",
+  kept together and in order.
+- **The third script on the site**, inline and pinned by the suite to its
+  exact text: it reads the page, writes only text and the hidden
+  attribute, sends nothing, stores nothing and never navigates. The board
+  list and /badges carry it; every other page is still script-free.
+- **The "Run your own board" card's lamps**, to the UX spec: two lamps half
+  a lap apart instead of three a third apart, which looked scattered
+  because a rectangle has no three-fold symmetry. Each is the row hover's
+  lamp with a tail of three beads that bends round the corners, 20 seconds
+  a lap. With reduced motion, or without offset-path, two still lamps by
+  opposite corners.
+- **Migration**: one column, `interests`, added with `ALTER TABLE ... ADD
+  COLUMN` when missing. The suite now starts a server on a database made
+  by the 0.21.1 schema as well as the 0.20.2 one, and checks it gains
+  exactly that column, keeps every row and badge, and takes the next
+  heartbeat's interests.
+- 610 checks, up from 563.
+
 ## 0.21.1, 2026-09-23
 
 - **/terminals: "Just tell me what to install" sits under the drawing**

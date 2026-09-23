@@ -42,7 +42,8 @@ that domain serves the board list, with the other two faces under `/about` and
 - Issues each board a token on its first heartbeat, so nobody else can take its listing over.
 - Holds a new listing back until it has sustained heartbeats for three hours.
 - Shows which boards are up, which have gone quiet, and how long each has been running.
-- Shows small badges under each board's name: what it runs on, what terminals it speaks, whether guests are welcome, what is running, the causes its sysop supports, and three the directory works out for itself (new, steady, how long listed). `/badges` explains them all.
+- Shows small badges under each board's name: what it runs on, what terminals it speaks, whether guests are welcome, what is running, the causes its sysop supports, what its sysop is into (about forty interests, from the Commodore 64 to gardening), and three the directory works out for itself (new, steady, how long listed). `/badges` explains them all and can be searched.
+- Filters the board list by badge: a Filter button opens a grid of every badge, and picking some shows the boards carrying all of them, or any. It works without JavaScript, and every filtered view is a link, such as `/?b=petscii&b=ham`.
 - Tells each board the public address its heartbeat arrived from, which is dynamic DNS as a side effect.
 - Publishes new boards as an RSS feed at `/feed.xml`, so people can follow the list without an account, an email address or anything that knows who is reading.
 - Hosts the browser installer at `/install`, which writes the BBS firmware to an ESP32 over USB from a Chrome or Edge tab, with no toolchain to set up. The images it serves live in [firmware/](firmware/README.md), which is empty today; the page says so rather than offering a download that is not there.
@@ -121,7 +122,7 @@ emitted would be correctly rejected. A webhook needs neither.
 python3 selftest.py
 ```
 
-Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, the three faces, the feed and the pages. 39 checks, no network access beyond loopback.
+Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, the three faces, the feed, the pages, the badges and the filter, and databases made by older versions. About 600 checks in well under a minute, no network access beyond loopback.
 
 ## Deploying it
 

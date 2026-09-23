@@ -63,6 +63,7 @@ import sqlite3
 import threading
 import time
 import unicodedata
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # --------------------------------------------------------------------------
@@ -137,10 +138,10 @@ PAGE_CACHE    = int(os.environ.get("DIRECTORY_PAGE_CACHE", "10"))
 # The board list is a live thing: who is on changes minute to minute, so the
 # page reloads itself rather than going stale in a tab somebody left open.
 # A meta refresh, not a script, because a reader should not have to run code
-# to read a list. /install is the only page here that loads any, and it does
-# so only when there is firmware to install; see EWT_SCRIPT. The refresh is
-# cheap: the page is rendered at most once every PAGE_CACHE seconds however
-# many ask for it.
+# to read a list. The list does carry a few inline lines now, the badge
+# filter's (see BADGE_JS), but they only make it quicker to narrow; the list
+# is whole and current without them. The refresh is cheap: the page is
+# rendered at most once every PAGE_CACHE seconds however many ask for it.
 LIST_SECONDS  = int(os.environ.get("DIRECTORY_LIST_REFRESH", "60"))
 LIST_REFRESH  = (f'<meta http-equiv="refresh" content="{LIST_SECONDS}">'
                  if LIST_SECONDS > 0 else "")
@@ -309,7 +310,8 @@ CREATE TABLE IF NOT EXISTS boards (
     guests       INTEGER,
     features     TEXT NOT NULL DEFAULT '',
     support      TEXT NOT NULL DEFAULT '',
-    tracked_since INTEGER NOT NULL DEFAULT 0
+    tracked_since INTEGER NOT NULL DEFAULT 0,
+    interests    TEXT NOT NULL DEFAULT ''
 );
 -- Heartbeats received, one row per board per UTC hour, for the last week
 -- and a bit. The steady badge is worked out from it: see steady_boards().
@@ -597,13 +599,16 @@ def setup():
 
 # The columns the badges added, as ALTER TABLE wants them. A column added
 # here must also be in SCHEMA, so a new database and a migrated one end up
-# with the same table; the self-test compares the two.
+# with the same table; the self-test compares the two, from a database made
+# by the 0.20.2 schema and from one made by the 0.21.1 schema. interests
+# came in site 0.22.0; a 0.21.x database has every column above it.
 BADGE_COLUMNS = (("system",        "TEXT NOT NULL DEFAULT ''"),
                  ("terminals",     "TEXT NOT NULL DEFAULT ''"),
                  ("guests",        "INTEGER"),
                  ("features",      "TEXT NOT NULL DEFAULT ''"),
                  ("support",       "TEXT NOT NULL DEFAULT ''"),
-                 ("tracked_since", "INTEGER NOT NULL DEFAULT 0"))
+                 ("tracked_since", "INTEGER NOT NULL DEFAULT 0"),
+                 ("interests",     "TEXT NOT NULL DEFAULT ''"))
 
 
 def tidy(value, limit):
@@ -1091,11 +1096,13 @@ CARD_BLOCKS = ("cards", "hero")
 # "cta" is a page's one primary action, drawn as a button: see cta_html().
 # "connected" is the box on /connected that shows a board's address, and
 # "installer-terms" is the line naming the installer's code and its licence.
-# "badges" is the key to the board list's badges on /badges, with "board" or
-# "directory" on the line inside it for which group, and "support" is the
-# support list; both are built from the tables the board list draws with.
+# "badges" is one group of the key to the board list's badges on /badges:
+# "board", "directory", "support" or "interests" on the first line inside
+# it, then the Markdown that goes under the group's heading. "badgefind" is
+# the search at the top of that page, with its script. Both are built from
+# the tables the board list draws with.
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
-                             "installer-terms", "badges", "support")
+                             "installer-terms", "badges", "badgefind")
 
 
 # --------------------------------------------------------------------------
@@ -1139,12 +1146,9 @@ def md_block(kind, lines):
     if kind == "connected":
         return connected_html(lines)
     if kind == "badges":
-        which = next((l.strip() for l in lines if l.strip()), "")
-        if which in ("board", "directory"):
-            return badge_key_html(which)
-        return "<p>" + html.escape("badges: " + which) + "</p>"
-    if kind == "support":
-        return support_key_html()
+        return legend_html(lines)
+    if kind == "badgefind":
+        return badge_find_html()
     return md_cards(kind, lines)
 
 
@@ -1229,6 +1233,87 @@ CONNECTED_JS = (
     "document.getElementById('c-link').href=v.url;"
     "document.getElementById('found').hidden=false;"
     "document.getElementById('noaddr').hidden=true;"
+    "})();</script>")
+
+
+# --------------------------------------------------------------------------
+# The badge filter and the badge search: the third script on the site, on
+# two pages, the board list and /badges (site 0.22.0, Rob: "Slick selection
+# and searching"). Written here, inline, and pinned by the suite to exactly
+# this text.
+#
+# Both pages are whole without it. The board list's filter is a <details>
+# holding a GET form, so with no script the pane still opens and "Show
+# boards" asks the server for the filtered list; /badges shows every row.
+# What the script adds is speed, and one control that only it can drive:
+#
+#   - Any input[data-find] narrows the [data-k] items inside the element its
+#     data-find names, as you type, by name and slug (every word typed has
+#     to appear), hides a [data-g] group left with nothing in it, and says
+#     how many are left in the element data-count names. The search boxes
+#     are marked data-js and hidden in the markup, because without the
+#     script they could not do anything; the script shows them.
+#   - On the board list, a tile filters the rows the moment it is pressed:
+#     every row is on the page, carrying its badges in data-b, and the ones
+#     that do not pass get the hidden attribute. The line under the button
+#     is rewritten, the count on the button too, and the URL follows with
+#     history.replaceState, so what is on the screen is always a link that
+#     can be shared. "#filter" is added while the pane is open, so the
+#     list's own refresh, which reloads that URL, opens it again rather than
+#     snapping it shut under somebody who is still choosing.
+#
+# It reads the page and nothing else, writes with textContent and the
+# hidden attribute only, sends nothing anywhere, stores nothing and never
+# navigates. The suite fails it on innerHTML, fetch, XMLHttpRequest,
+# sendBeacon, WebSocket, eval, cookies, storage or navigation.
+# --------------------------------------------------------------------------
+BADGE_JS = (
+    "<script>(function(){"
+    "var d=document;"
+    "function all(s,e){return Array.prototype.slice.call((e||d).querySelectorAll(s));}"
+    "function go(){"
+    "all('[data-js]').forEach(function(e){e.hidden=false;});"
+    "all('input[data-find]').forEach(function(q){"
+    "var box=d.querySelector(q.getAttribute('data-find')),"
+    "out=d.getElementById(q.getAttribute('data-count')),"
+    "items=all('[data-k]',box),noun=' '+q.getAttribute('data-noun');"
+    "function find(){"
+    "var w=q.value.toLowerCase().split(' ').filter(Boolean),n=0;"
+    "items.forEach(function(e){var k=e.getAttribute('data-k'),"
+    "hit=w.every(function(x){return k.indexOf(x)>=0;});e.hidden=!hit;if(hit)n++;});"
+    "all('[data-g]',box).forEach(function(g){"
+    "g.hidden=!g.querySelector('[data-k]:not([hidden])');});"
+    "out.textContent=!w.length?items.length+noun:"
+    "n?n+' of '+items.length+noun:'No badge matches that.';}"
+    "q.addEventListener('input',find);find();});"
+    "var f=d.getElementById('fform');if(!f)return;"
+    "var det=d.getElementById('filter'),rows=all('tr[data-b]'),"
+    "tab=d.getElementById('boards'),none=d.getElementById('fnone'),"
+    "line=d.getElementById('factive');"
+    "function part(k){return line.querySelector('[data-f='+k+']');}"
+    "function apply(){"
+    "var sel=all('input[name=b]:checked',f),any=f.elements.m.value==='any',n=0;"
+    "rows.forEach(function(r){var b=' '+r.getAttribute('data-b')+' ',"
+    "has=function(c){return b.indexOf(' '+c.value+' ')>=0;},"
+    "ok=!sel.length||(any?sel.some(has):sel.every(has));r.hidden=!ok;if(ok)n++;});"
+    "tab.hidden=!n;none.hidden=!!n;line.hidden=!sel.length;"
+    "none.textContent='No board with '+(any?'any':'all')+' of those yet.';"
+    "part('n').textContent=n+' of '+rows.length+' board'+(rows.length===1?'':'s');"
+    "part('m').textContent=(any?'any':'all')+' of';"
+    "part('l').textContent=sel.map(function(c){return c.getAttribute('data-n');}).join(', ');"
+    "d.getElementById('fcount').textContent=sel.length||'';"
+    "var q=sel.map(function(c){return 'b='+encodeURIComponent(c.value);});"
+    "if(any&&q.length)q.push('m=any');"
+    "history.replaceState(null,'',location.pathname+(q.length?'?'+q.join('&'):'')"
+    "+(det.open?'#filter':''));}"
+    "f.addEventListener('change',apply);"
+    "f.addEventListener('submit',function(e){e.preventDefault();det.open=false;});"
+    "det.addEventListener('toggle',apply);"
+    "all('[data-clear]').forEach(function(a){a.addEventListener('click',function(e){"
+    "e.preventDefault();all('input[name=b]',f).forEach(function(c){c.checked=false;});"
+    "apply();});});"
+    "if(location.hash==='#filter')det.open=true;apply();}"
+    "if(d.readyState==='loading')d.addEventListener('DOMContentLoaded',go);else go();"
     "})();</script>")
 
 
@@ -1637,9 +1722,11 @@ def md_page(name, role="list"):
     wants_installer = re.search(r"^::: installer\s*$", text, re.M) is not None
     if "::: art" in text or wants_installer:
         body = ART_CSS + body
-    # The installer's script, and the only page that can carry it. (The one
-    # other script on the site is the dozen inline lines on /connected, which
-    # ride with the "::: connected" block itself; see CONNECTED_JS.)
+    # The installer's script, and the only page that can carry it. (The two
+    # other scripts on the site are written here and ride with a block of
+    # their own: the dozen lines on /connected with "::: connected", see
+    # CONNECTED_JS, and the badge search on /badges with "::: badgefind",
+    # see BADGE_JS, which the board list carries as well.)
     #
     # Both halves of that condition matter. The page has to ask for the
     # installer, and there has to be something for the installer to install:
@@ -2194,6 +2281,9 @@ def announce(payload, address):
     fields["guests"]    = int(guests) if isinstance(guests, bool) else None
     fields["features"]  = ",".join(pick(payload.get("features"), FEATURES))
     fields["support"]   = ",".join(pick(payload.get("support"), SUPPORT_SLUGS))
+    # What the sysop is into (site 0.22.0), exactly as support: slugs from
+    # the published list, anything else ignored, the first 16 read.
+    fields["interests"] = ",".join(pick(payload.get("interests"), INTEREST_SLUGS))
 
     with db() as con:
         if rate_limited(con, address, now):
@@ -2588,30 +2678,49 @@ p.stat .n {{ color:var(--live); }}
 .runcard {{ position:relative; background:rgba(127, 212, 255, 0.12);
         border:1px solid rgba(127, 212, 255, 0.6); border-radius:0.5rem;
         padding:1.125rem 1.25rem; margin:1rem 0 0; }}
-/* Three lamps going slowly round the card's edge, a third of a lap apart,
-   like a marquee's chaser lights. CSS only: each follows the card's own
-   rounded rectangle with offset-path, and the motion is declared only
-   inside the no-preference block below, so standing still they are three
-   lamps a third of the way round from each other. A browser without
-   offset-path gets three still lamps set on the edge by hand. */
+/* Two lamps going slowly round the card's edge, half a lap apart, each
+   with a short tail of three beads (0.22.0, to the UX spec). Three lamps a
+   third of a lap apart looked scattered, because a rectangle has no
+   three-fold symmetry; two half a lap apart are always the reflection of
+   each other through the card's centre, so on any card shape they read as
+   a pair. The head is the row hover's lamp exactly: the same object at a
+   different tempo, 20s a lap and linear, because easing lurches at a
+   loop's seam.
+
+   Each follows the card's own rounded rectangle with offset-path, on the
+   border line. The tail is three beads on the same path rather than a
+   gradient bar, because a bar pokes out past every corner and beads bend
+   round it. All delays are negative, so nothing jumps at load, and the
+   beads are invisible outside the motion block: standing still, with
+   reduced motion or without offset-path, it is two lamps, just past the
+   top left and bottom right corners, like corner marks. */
 .runcard .dot {{ position:absolute; width:0.375rem; height:0.375rem; border-radius:50%;
         background:var(--dial); box-shadow:0 0 0.375rem rgba(127, 212, 255, 0.8);
         pointer-events:none; }}
-.runcard .d1 {{ top:-0.25rem; left:25%; }}
-.runcard .d2 {{ top:45%; right:-0.25rem; }}
-.runcard .d3 {{ bottom:-0.25rem; left:30%; }}
+.runcard .dot.t1 {{ width:0.25rem; height:0.25rem; }}
+.runcard .dot.t2 {{ width:0.1875rem; height:0.1875rem; }}
+.runcard .dot.t3 {{ width:0.125rem; height:0.125rem; }}
+.runcard .t1, .runcard .t2, .runcard .t3 {{ opacity:0;
+        box-shadow:0 0 0.25rem rgba(127, 212, 255, 0.6); }}
+.runcard .la {{ top:-0.25rem; left:0.5rem; }}
+.runcard .lb {{ bottom:-0.25rem; right:0.5rem; }}
 @supports (offset-path: inset(0 round 0.5rem)) {{
   .runcard .dot {{ top:0; left:0; right:auto; bottom:auto;
         offset-path:inset(0 round 0.5rem); offset-anchor:center; offset-rotate:0deg; }}
-  .runcard .d1 {{ offset-distance:0%; }}
-  .runcard .d2 {{ offset-distance:33.333%; }}
-  .runcard .d3 {{ offset-distance:66.667%; }}
+  .runcard .la {{ offset-distance:0%; }}
+  .runcard .lb {{ offset-distance:50%; }}
 }}
 @media (prefers-reduced-motion: no-preference) {{
   @supports (offset-path: inset(0 round 0.5rem)) {{
-    .runcard .dot {{ animation:runlap 16s linear infinite; }}
-    .runcard .d2 {{ animation-delay:-5.333s; }}
-    .runcard .d3 {{ animation-delay:-10.667s; }}
+    .runcard .dot {{ animation:runlap 20s linear infinite; }}
+    .runcard .la {{ animation-delay:-0.36s; }}
+    .runcard .la.t1 {{ animation-delay:-0.24s; opacity:0.7; }}
+    .runcard .la.t2 {{ animation-delay:-0.12s; opacity:0.45; }}
+    .runcard .la.t3 {{ animation-delay:0s; opacity:0.2; }}
+    .runcard .lb {{ animation-delay:-10.36s; }}
+    .runcard .lb.t1 {{ animation-delay:-10.24s; opacity:0.7; }}
+    .runcard .lb.t2 {{ animation-delay:-10.12s; opacity:0.45; }}
+    .runcard .lb.t3 {{ animation-delay:-10s; opacity:0.2; }}
   }}
   @keyframes runlap {{ from {{ offset-distance:0%; }} to {{ offset-distance:100%; }} }}
 }}
@@ -2680,11 +2789,12 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
    The name has a line to itself, in a box exactly as wide as the name
    (width:fit-content), which is what the hover dot below flies along.
    Then the badges, a flex row that wraps, so a board with fifteen of
-   them grows downwards and never pushes the Dial column. The first is
+   them grows downwards and never pushes the Dial column. Among them is
    the software badge, which used to sit beside the name: what a board
    runs, said quietly, because every board is welcome here and a
    directory that only ever shows one name does not look like it means
-   that.
+   that. They come in BADGES order, alphabetical by name within each
+   group (0.22.0, Rob), the same order /badges and the filter use.
 
    One or two letters, or a small drawing, in a colour that says what
    kind of thing it is: purple for what a board speaks, amber for
@@ -2714,10 +2824,14 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
 .k-steady {{ --bc:#4ce0e0; --bb:rgba(76, 224, 224, 0.5); --bt:rgba(76, 224, 224, 0.1); }}
 .k-age {{ --bc:#e2d4ff; --bb:rgba(226, 212, 255, 0.45); --bt:rgba(226, 212, 255, 0.08); }}
 .k-sup {{ --bt:#0d0d12; }}
+/* Interests (0.22.0) are rose, a family nothing else here uses: the
+   drawing is currentColor, so the chip's own colour draws it. */
+.k-int {{ --bc:#f096c4; --bb:rgba(240, 150, 196, 0.5); --bt:rgba(240, 150, 196, 0.1); }}
 .bd.k-soft, .bd.k-sys {{ font-size:0.75rem; letter-spacing:0; }}
-.bd.k-sup {{ padding:0 0.125rem; }}
-.bd.k-sup svg {{ display:block; width:1.0625rem; height:1.0625rem; fill:none;
-        stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
+.bd.k-sup, .bd.k-int {{ padding:0 0.125rem; }}
+.bd.k-sup svg, .bd.k-int svg, .ts svg {{ display:block; width:1.0625rem; height:1.0625rem;
+        fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
+.k-int svg {{ stroke:currentColor; }}
 .bd:focus {{ outline:none; }}
 .bd:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 /* The tooltip, CSS only, from data-tip: on hover for a mouse, and on focus
@@ -2742,25 +2856,190 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
 @media (prefers-reduced-motion: no-preference) {{
   .bd::after {{ transition:opacity 0.12s, visibility 0.12s; }}
 }}
-/* The key to them, small and right above the table. */
-p.keylink {{ margin:-0.5rem 0 0.25rem; text-align:right; font-size:0.75rem; }}
-/* /badges: each badge beside what it means, its colour and where it comes
-   from. Two columns at every width, because the badges are narrow and the
-   words still get the page. The badge column is positioned so that a
-   tooltip below the breakpoint hangs from it rather than from the page. */
-dl.legend {{ display:grid; grid-template-columns:7rem minmax(0, 1fr); gap:1rem 1.25rem;
-        margin:0.75rem 0 1.75rem; }}
-dl.legend dt {{ position:relative; display:flex; flex-wrap:wrap; gap:0.25rem;
-        align-content:flex-start; margin:0.125rem 0 0; }}
-dl.legend dd {{ margin:0; }}
-dl.legend .cn {{ color:var(--bc); font-size:0.75rem; margin-left:0.25rem; }}
-dl.legend .src {{ color:var(--dim); font-size:0.75rem; }}
-dl.legend.support .bd.k-sup svg {{ width:1.75rem; height:1.75rem; }}
-/* On a phone the badge goes above its words instead of beside them: a
-   badge column wide enough for "Compaq 486" left the words 200px. */
+/* Anything the page marks hidden stays hidden, whatever display a rule
+   below gives it: the filter hides rows, the searches hide tiles, rows and
+   groups, and a table row on a phone is display:flex. */
+main [hidden] {{ display:none !important; }}
+/* --------------------------------------------------------------------
+   The filter over the board list (0.22.0; filter_bar_html builds it).
+
+   Closed, it is one small outlined button, "Filter", with the number of
+   badges chosen beside it, the key to the badges at the right of the same
+   line, and, only while something is chosen, one line under them saying
+   how many boards that leaves and which badges, with a way to clear them.
+   None of the badges' symbols is on the page until the pane opens.
+
+   Open, the pane is a bento grid: a box per group, the interests a box per
+   sub-group, each box a grid of tiles. A tile is a checkbox that cannot be
+   seen, over a box that shows its state three ways, so colour is never the
+   only one: chosen is a brighter frame, a tick in the corner and brighter
+   words; focused is the yellow ring every control here gets; hovered is a
+   lighter frame, only where a pointer hovers.
+   -------------------------------------------------------------------- */
+.fbar {{ position:relative; margin:0 0 0.625rem; }}
+.fbar p.keylink {{ position:absolute; top:0; right:0; margin:0; line-height:2rem;
+        font-size:0.75rem; }}
+details.filter > summary {{ display:inline-flex; align-items:center; gap:0.5rem;
+        box-sizing:border-box; min-height:2rem; padding:0.25rem 0.75rem;
+        border:1px solid #35566b; border-radius:0.375rem; color:var(--dial);
+        font-size:0.75rem; letter-spacing:0.0625rem; text-transform:uppercase;
+        list-style:none; cursor:pointer; user-select:none; }}
+details.filter > summary::-webkit-details-marker {{ display:none; }}
+/* A chevron drawn with two borders, pointing down, then up once open. */
+details.filter > summary::after {{ content:""; width:0.375rem; height:0.375rem;
+        border:solid currentColor; border-width:0 0.125rem 0.125rem 0;
+        transform:translateY(-0.125rem) rotate(45deg); }}
+details.filter[open] > summary::after {{ transform:translateY(0.125rem) rotate(-135deg); }}
+details.filter[open] > summary {{ border-color:var(--dial);
+        background:rgba(127, 212, 255, 0.12); }}
+details.filter > summary:focus {{ outline:none; }}
+details.filter > summary:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.fc {{ min-width:1.25rem; padding:0 0.3125rem; border-radius:0.625rem; box-sizing:border-box;
+        background:var(--dial); color:#04212c; font-size:0.6875rem; line-height:1.25rem;
+        text-align:center; letter-spacing:0; }}
+.fc:empty {{ display:none; }}
+p.factive {{ margin:0.5rem 0 0; color:var(--dim); font-size:0.75rem; }}
+p.factive [data-f="n"] {{ color:var(--ink); }}
+.fpane {{ margin:0.625rem 0 0.25rem; padding:0.875rem; background:#0f0f15;
+        border:1px solid #26303a; border-radius:0.5rem; }}
+.ftop {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.625rem 1.5rem;
+        margin:0 0 0.875rem; }}
+.findbar {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.375rem 0.625rem;
+        margin:0; }}
+.fpane .findbar {{ flex:1 1 20rem; }}
+.findbar label {{ color:var(--dim); font-size:0.75rem; }}
+/* 0.875rem is 16px on a phone, where anything smaller makes iOS zoom the
+   page the moment the box is touched. */
+.findbar input {{ flex:1 1 11rem; min-width:0; box-sizing:border-box; font:inherit;
+        font-size:0.875rem; color:var(--ink); background:var(--bg);
+        border:1px solid #35566b; border-radius:0.375rem; padding:0.375rem 0.625rem; }}
+.findbar input::placeholder {{ color:var(--faint); }}
+.findbar input:focus {{ outline:none; border-color:var(--dial); }}
+.findbar input:focus-visible {{ outline:3px solid #ffd35c; outline-offset:1px; }}
+.fqn {{ color:var(--dim); font-size:0.75rem; }}
+/* All of them or any of them, as two small segments. The chosen one is in
+   reverse video, which is a change of fill and not only of colour. */
+.fmode {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.25rem; margin:0;
+        padding:0; border:0; min-width:0; }}
+.fmode legend {{ float:left; margin:0 0.375rem 0 0; padding:0; color:var(--dim);
+        font-size:0.75rem; }}
+.fmode label {{ position:relative; display:block; }}
+.fmode input, .tile input {{ position:absolute; top:0; left:0; width:100%; height:100%;
+        margin:0; opacity:0; cursor:pointer; }}
+.fmode span {{ display:block; padding:0.25rem 0.625rem; border:1px solid #35566b;
+        border-radius:0.375rem; color:var(--dim); font-size:0.75rem; }}
+.fmode input:checked + span {{ background:var(--ink); border-color:var(--ink);
+        color:var(--bg); }}
+.fmode input:focus-visible + span {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.bento {{ display:grid; gap:0.625rem; align-items:start;
+        grid-template-columns:repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); }}
+.fg {{ min-width:0; margin:0; padding:0.625rem 0.625rem 0.75rem; background:#13131b;
+        border:1px solid var(--rule); border-radius:0.5rem; }}
+.fg > legend {{ float:left; width:100%; margin:0 0 0.5rem; padding:0;
+        color:var(--struct); font-size:0.6875rem; letter-spacing:0.0625rem;
+        text-transform:uppercase; }}
+.fg > legend + * {{ clear:both; }}
+/* The interests are one group of sub-groups: no box of their own, a
+   heading over the whole width, and their sub-groups in a grid inside. */
+.fg.wide {{ grid-column:1 / -1; padding:0; background:transparent; border:0; }}
+.fg.wide > legend {{ margin:0.375rem 0 0.625rem; font-size:0.75rem; }}
+.fg.sub > legend {{ color:var(--dim); }}
+/* A sub-group of more than six spans two columns, and its tiles go four a
+   row, so eight make two full rows beside a neighbour of two rows, rather
+   than seven and one left over. */
+@media (min-width: 901px) {{
+  .fg.sub.big {{ grid-column:span 2; }}
+  .fg.sub.big .tiles {{ grid-template-columns:repeat(4, minmax(0, 1fr)); }}
+}}
+.tiles {{ display:grid; gap:0.375rem;
+        grid-template-columns:repeat(auto-fill, minmax(5.5rem, 1fr)); }}
+.tile {{ position:relative; display:block; min-width:0; }}
+.tbox {{ display:flex; flex-direction:column; align-items:center; gap:0.3125rem;
+        box-sizing:border-box; height:100%; min-height:4.25rem;
+        padding:0.5rem 0.25rem 0.4375rem; background:var(--bg);
+        border:1px solid #2c2c38; border-radius:0.375rem; color:var(--dim);
+        font-size:0.6875rem; line-height:1.25; text-align:center; hyphens:manual;
+        overflow-wrap:anywhere; }}
+.ts {{ display:inline-flex; align-items:center; justify-content:center; flex:none;
+        box-sizing:border-box; min-width:1.75rem; height:1.75rem; padding:0 0.25rem;
+        border:1px solid var(--bb); border-radius:0.25rem; background:var(--bt);
+        color:var(--bc); font-size:0.75rem; letter-spacing:0.03125rem; }}
+.ts svg {{ width:1.25rem; height:1.25rem; }}
+.tile input:checked + .tbox {{ background:rgba(127, 212, 255, 0.12); color:var(--ink);
+        border-color:var(--dial); box-shadow:inset 0 0 0 0.0625rem var(--dial); }}
+.tile input:checked + .tbox::after {{ content:""; position:absolute; top:0.3125rem;
+        right:0.4375rem; width:0.25rem; height:0.5rem; border:solid var(--dial);
+        border-width:0 0.125rem 0.125rem 0; transform:rotate(45deg); }}
+.tile input:focus-visible + .tbox {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.fgo {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem 1.25rem;
+        margin:0.875rem 0 0; }}
+.fgo button {{ font:inherit; font-size:0.75rem; color:#04212c; background:var(--dial);
+        border:1px solid #9fdfff; border-radius:0.375rem; padding:0.375rem 0.875rem;
+        cursor:pointer; }}
+.fgo button:focus-visible, .fgo a:focus-visible, p.factive a:focus-visible {{
+        outline:3px solid #ffd35c; outline-offset:2px; }}
+.fgo a {{ font-size:0.75rem; }}
+@media (hover: hover) and (pointer: fine) {{
+  details.filter > summary:hover {{ border-color:var(--dial); }}
+  .tile:hover .tbox {{ border-color:#5a7488; color:var(--ink); }}
+  .fmode label:hover span {{ border-color:var(--dial); }}
+  .fgo button:hover {{ background:#a7e2ff; }}
+}}
+/* The pane settles in rather than appearing; only where motion is
+   wanted, so with reduced motion it simply opens. */
+@media (prefers-reduced-motion: no-preference) {{
+  details.filter[open] > .fpane {{ animation:panein 0.18s ease-out; }}
+  @keyframes panein {{ from {{ opacity:0; transform:translateY(-0.375rem); }}
+        to {{ opacity:1; transform:none; }} }}
+}}
+/* On a phone: three tiles a row with room for a thumb, the pane edge to
+   edge in the column, and the key under the button rather than beside it
+   when a long line of chosen badges needs the room. */
 @media (max-width: 900px) {{
-  dl.legend {{ grid-template-columns:minmax(0, 1fr); gap:0.375rem 0; }}
-  dl.legend dd {{ margin:0 0 0.875rem; }}
+  .fpane {{ padding:0.625rem; }}
+  .fg {{ padding:0.5rem 0.5rem 0.625rem; }}
+  .fg.wide {{ padding:0; }}
+  .tiles {{ grid-template-columns:repeat(auto-fill, minmax(4.5rem, 1fr)); }}
+  .tbox {{ min-height:4.5rem; padding-left:0.1875rem; padding-right:0.1875rem; }}
+}}
+/* --------------------------------------------------------------------
+   /badges: every badge in a table, a table per group, each row the
+   symbol, the name, the slug and what it means (legend_html builds it).
+   A search at the top narrows the rows. On a phone a row becomes a small
+   card, the symbol on the left and the rest stacked beside it.
+   -------------------------------------------------------------------- */
+article .findbar {{ margin:1rem 0 0.5rem; }}
+article table.btab {{ width:100%; margin:0.75rem 0 1.5rem; }}
+table.btab th {{ font-size:0.75rem; }}
+table.btab td {{ vertical-align:top; }}
+table.btab td.bsym {{ position:relative; width:7rem; white-space:normal; }}
+table.btab .chips {{ display:flex; flex-wrap:wrap; gap:0.25rem; }}
+table.btab .bd.k-sup svg, table.btab .bd.k-int svg {{ width:1.5rem; height:1.5rem; }}
+table.btab td.bn {{ color:var(--ink); }}
+table.btab .cn {{ color:var(--bc); font-size:0.75rem; margin-left:0.25rem; }}
+table.btab .src {{ color:var(--dim); font-size:0.75rem; }}
+table.btab code {{ white-space:nowrap; }}
+table.btab tr.sub th {{ padding-top:1rem; color:var(--dim); font-size:0.6875rem;
+        letter-spacing:0.0625rem; text-transform:uppercase; }}
+/* The same columns in every group's table, so Slug and Meaning run
+   straight down the page rather than jumping at each heading. */
+@media (min-width: 901px) {{
+  table.btab {{ table-layout:fixed; }}
+  table.btab thead th:nth-child(1) {{ width:7.5rem; }}
+  table.btab thead th:nth-child(2) {{ width:12rem; }}
+  table.btab thead th:nth-child(3) {{ width:14rem; }}
+  article .findbar input {{ flex:0 1 26rem; }}
+}}
+@media (max-width: 900px) {{
+  table.btab, table.btab > tbody {{ display:block; }}
+  table.btab > thead {{ display:none; }}
+  table.btab tr {{ display:grid; grid-template-columns:4.75rem minmax(0, 1fr);
+        column-gap:0.75rem; padding:0.625rem 0; border-bottom:1px solid #161616; }}
+  table.btab td, table.btab th {{ display:block; padding:0; border:0; }}
+  table.btab td.bsym {{ grid-row:1 / span 3; width:auto; }}
+  table.btab tr.sub {{ display:block; padding:0.875rem 0 0.25rem; }}
+  table.btab tr.sub th {{ padding:0; }}
+  table.btab td.bm {{ margin-top:0.125rem; }}
 }}
 .act {{ color:var(--busy); }}
 .owner {{ color:var(--warm); }}
@@ -3250,6 +3529,13 @@ ewt-install-dialog, ewt-no-port-picked-dialog {{
    were chosen as). On the row, not its cells, so on a phone the whole card
    is striped. */
 main > table tr:nth-child(odd):not(:first-child) {{ background:#111116; }}
+/* With a filter on, the rows it leaves out are still in the table, hidden,
+   and a plain nth-child counts them: two striped boards could end up next
+   to each other. "of" counts only the rows that are showing. A browser that
+   does not know "of" drops these two rules and keeps the one above, which
+   is right whenever nothing is filtered. */
+main > table tr:not(:first-child):nth-child(even of :not([hidden])) {{ background:transparent; }}
+main > table tr:not(:first-child):nth-child(odd of :not([hidden])) {{ background:#111116; }}
 /* Hovering a board: a hairline round the row in --dial at low alpha, as an
    outline, so nothing moves by the width of a border; and one of the
    site's small blue lamps flies once along under the board's name,
@@ -3929,7 +4215,7 @@ AGES = ((3652, "10y", "for ten years"), (1826, "5y", "for five years"),
 # thing it is, and its letters say which one.
 BADGE_COLOURS = {"soft": "grey", "sys": "white", "term": "purple",
                  "guest": "amber", "feat": "blue", "new": "orange",
-                 "steady": "cyan", "age": "lavender"}
+                 "steady": "cyan", "age": "lavender", "int": "rose"}
 
 # The support list: causes a sysop can show support for, one line each, in
 # the order /badges lists them. A board sends the slugs in its "support"
@@ -4058,6 +4344,489 @@ def support_svg(key):
             + SUPPORT_ART[key] + "</svg>")
 
 
+# --------------------------------------------------------------------------
+# Interests (site 0.22.0, Rob): what the sysop is into, the way support is
+# what the sysop stands for. Same rules exactly: a board sends slugs in its
+# "interests" list, anything not in this table is ignored, and only the
+# first 16 are read. The list is wide on purpose, because the people who
+# call BBSes are into all sorts: electronics and gaming, but also bikes,
+# gardens and trains.
+#
+# One line each: slug, group, the name a reader sees, and one plain
+# sentence for /badges. The groups are the headings on /badges and the
+# boxes in the board list's filter, in this order. Within a group the order
+# on the page is alphabetical by name (see sort_key), so the order of the
+# lines here does not matter; they are kept alphabetical anyway so this
+# table reads the way the page does.
+# --------------------------------------------------------------------------
+INTEREST_GROUPS = ("Computing", "Platforms", "Making", "Games", "Music and art",
+                   "Radio and sky", "Outdoors and more", "Reading and watching")
+
+INTERESTS = (
+    ("bbs-history",    "Computing", "BBS history",
+     "Bulletin boards as they were: the software, the scene and the stories."),
+    ("linux",          "Computing", "Linux",
+     "Linux and the other free Unix-like systems."),
+    ("open-source",    "Computing", "Open source",
+     "Free and open source software, and the people who make it."),
+    ("programming",    "Computing", "Programming",
+     "Writing code, in any language, for any machine."),
+    ("retrocomputing", "Computing", "Retrocomputing",
+     "Old computers kept running, restored and put back to work."),
+    ("amiga",          "Platforms", "Amiga",
+     "The Commodore Amiga, from the 1000 to the 4000."),
+    ("apple2",         "Platforms", "Apple II",
+     "The Apple II family, from the first one to the IIGS."),
+    ("atari",          "Platforms", "Atari",
+     "Atari's 8-bit computers, the ST and the consoles."),
+    ("c64",            "Platforms", "Commodore 64",
+     "The Commodore 64 and 128, and the rest of Commodore's 8-bit machines."),
+    ("dos",            "Platforms", "DOS",
+     "MS-DOS, PC-DOS and the IBM PC compatibles that ran them."),
+    ("spectrum",       "Platforms", "ZX Spectrum",
+     "Sinclair's ZX Spectrum, the ZX81 and their clones."),
+    ("3d-printing",    "Making",    "3D printing",
+     "Printing parts, cases and the things nobody sells."),
+    ("electronics",    "Making",    "Electronics",
+     "Circuits, chips and the tools for poking at them."),
+    ("robotics",       "Making",    "Robotics",
+     "Robots of every size, from line followers to arms."),
+    ("soldering",      "Making",    "Soldering",
+     "Kits, repairs and anything else that wants a hot iron."),
+    ("woodworking",    "Making",    "Woodworking",
+     "Making things out of wood, computer cases and desks included."),
+    ("arcade",         "Games",     "Arcade and pinball",
+     "Coin-op cabinets and pinball tables, played or restored."),
+    ("board-games",    "Games",     "Board games",
+     "Games played round a table, from chess to the latest box."),
+    ("gaming",         "Games",     "Gaming",
+     "Video games of any age, on any machine."),
+    ("retro-gaming",   "Games",     "Retro gaming",
+     "Old games on the machines they were made for, or near enough."),
+    ("tabletop-rpg",   "Games",     "Tabletop RPGs",
+     "Dice, character sheets and somebody running the game."),
+    ("ansi-art",       "Music and art", "ANSI art",
+     "Pictures drawn in text: ANSI, ASCII and PETSCII art."),
+    ("chiptune",       "Music and art", "Chiptune",
+     "Music made on old sound chips, or in their sound."),
+    ("demoscene",      "Music and art", "Demoscene",
+     "Demos, intros and the groups that make them."),
+    ("drawing",        "Music and art", "Drawing",
+     "Drawing, painting and illustration, on paper or on a screen."),
+    ("music",          "Music and art", "Music",
+     "Making it, playing it or collecting it."),
+    ("photography",    "Music and art", "Photography",
+     "Taking pictures, on film or not."),
+    ("astronomy",      "Radio and sky", "Astronomy",
+     "Looking up at night, with a telescope or without."),
+    ("swl",            "Radio and sky", "Shortwave listening",
+     "Tuning in to broadcasts and stations from far away."),
+    ("weather",        "Radio and sky", "Weather",
+     "Watching it, measuring it and running a weather station."),
+    ("aviation",       "Outdoors and more", "Aviation",
+     "Flying, planes, and watching them go over."),
+    ("cars",           "Outdoors and more", "Cars",
+     "Driving them, fixing them and keeping old ones on the road."),
+    ("cooking",        "Outdoors and more", "Cooking",
+     "Cooking, baking and feeding people."),
+    ("cycling",        "Outdoors and more", "Cycling",
+     "Riding bikes, fixing them, or both."),
+    ("fishing",        "Outdoors and more", "Fishing",
+     "Rod, line and patience."),
+    ("gardening",      "Outdoors and more", "Gardening",
+     "Growing things, indoors or out."),
+    ("hiking",         "Outdoors and more", "Hiking",
+     "Walking, hiking and getting up hills."),
+    ("model-trains",   "Outdoors and more", "Model trains",
+     "Model railways in any scale, and the layouts they run on."),
+    ("anime",          "Reading and watching", "Anime",
+     "Japanese animation and manga."),
+    ("books",          "Reading and watching", "Books",
+     "Reading, and talking about what you read."),
+    ("movies",         "Reading and watching", "Movies",
+     "Films, and watching them with other people."),
+    ("scifi",          "Reading and watching", "Science fiction",
+     "Science fiction in books, in films and on television."),
+)
+INTEREST_SLUGS = tuple(i[0] for i in INTERESTS)
+
+
+def _dot(x, y, r=1.0):
+    """A filled dot in the drawing's own colour: an eye, a lamp, a pellet."""
+    return f'<circle cx="{x}" cy="{y}" r="{r}" fill="currentColor" stroke="none"/>'
+
+
+# The drawings, keyed by slug, in the same 24 unit square and the same line
+# art as the support symbols, but in one colour, currentColor, which the
+# chip sets: rose, a family nothing else on the page uses. Simple enough to
+# read at a badge's 17px and a filter tile's 30: one outline and a detail or
+# two, never a scene. A dot is the only fill.
+INTEREST_ART = {
+    # Computing
+    "bbs-history": (  # a rotary telephone: how every board was called
+        '<path d="M3.6 8.8 C3.6 6.2 7.4 4.4 12 4.4 C16.6 4.4 20.4 6.2 20.4 8.8'
+        ' L19.6 10 H16.4 L15.8 8.2 C13.6 7.7 10.4 7.7 8.2 8.2 L7.6 10 H4.4 Z"/>'
+        '<path d="M8.6 10.6 H15.4 L19.4 19.2 C19.6 19.8 19.2 20.4 18.6 20.4 H5.4'
+        ' C4.8 20.4 4.4 19.8 4.6 19.2 Z"/>'
+        '<circle cx="12" cy="15.2" r="2.7" stroke-width="1.5"/>'
+        + _dot(12, 15.2, 0.8)),
+    "linux": (  # a penguin: a pale belly, two eyes, a beak and its feet
+        '<path d="M12 2.8 C9.6 2.8 8.6 4.8 8.6 7.2 C8.6 8.6 7.9 9.7 7.1 11.1 '
+        'C5.9 13.1 5.3 15.1 5.7 17.1 C6.1 19.1 7.8 20.2 9.8 20.2 H14.2 C16.2 20.2 '
+        '17.9 19.1 18.3 17.1 C18.7 15.1 18.1 13.1 16.9 11.1 C16.1 9.7 15.4 8.6 '
+        '15.4 7.2 C15.4 4.8 14.4 2.8 12 2.8 Z"/>'
+        '<path d="M9.5 12.3 C10.2 10.9 13.8 10.9 14.5 12.3 C15.5 14.4 15.3 17.6 12'
+        ' 18.2 C8.7 17.6 8.5 14.4 9.5 12.3 Z" fill="currentColor" stroke="none"'
+        ' opacity="0.35"/>'
+        '<path d="M10.9 8.7 L12 9.7 L13.1 8.7" stroke-width="1.4"/>'
+        '<path d="M7 20.8 C7.8 21.8 10 21.9 10.8 20.6 M13.2 20.6 C14 21.9 16.2 21.8'
+        ' 17 20.8" stroke-width="1.6"/>'
+        + _dot(10.7, 6.5, 0.95) + _dot(13.3, 6.5, 0.95)),
+    "open-source": (  # the open source keyhole: a ring with its way in
+        '<path d="M9.3 20.1 A8.5 8.5 0 1 1 14.7 20.1 L13.1 15.4 '
+        'A3.6 3.6 0 1 0 10.9 15.4 Z"/>'),
+    "programming": (  # angle brackets and a slash
+        '<path d="M8.5 7 L3.5 12 L8.5 17 M15.5 7 L20.5 12 L15.5 17 M13.6 4.5 L10.4 19.5"/>'),
+    "retrocomputing": (  # a monitor on a desktop box
+        '<rect x="5.5" y="3.2" width="13" height="10.6" rx="1.4"/>'
+        '<rect x="8" y="5.7" width="8" height="5.6" rx="0.6" stroke-width="1.3"/>'
+        '<path d="M10 13.8 V16.6 M14 13.8 V16.6"/>'
+        '<rect x="3" y="16.6" width="18" height="4.4" rx="1"/>'
+        '<path d="M13.4 18.8 H18.2" stroke-width="1.4"/>'),
+    # Platforms
+    "amiga": (  # the bouncing ball: checked, tilted, with its shadow
+        '<g transform="rotate(-18 12 10.6)">'
+        '<g fill="currentColor" stroke="none" opacity="0.8">'
+        '<path d="M12 6.8 H8.71 A3.8 7.6 0 0 0 8.2 10.6 H12 Z"/>'
+        '<path d="M12 10.6 H15.8 A3.8 7.6 0 0 1 15.29 14.4 H12 Z"/>'
+        '<path d="M15.29 6.8 H18.58 A7.6 7.6 0 0 1 19.6 10.6 H15.8'
+        ' A3.8 7.6 0 0 0 15.29 6.8 Z"/>'
+        '<path d="M8.71 14.4 H5.42 A7.6 7.6 0 0 1 4.4 10.6 H8.2'
+        ' A3.8 7.6 0 0 0 8.71 14.4 Z"/>'
+        '</g>'
+        '<circle cx="12" cy="10.6" r="7.6"/>'
+        '</g>'
+        '<path d="M8.5 21.8 H16.5" stroke-width="1.5" opacity="0.5"/>'),
+    "apple2": (  # an apple, from the tree
+        '<path d="M12 8.4 C10.2 7 5.4 6.8 5.4 12 C5.4 16.4 8.3 20.8 10.4 20.8 '
+        'C11.2 20.8 11.4 20.3 12 20.3 C12.6 20.3 12.8 20.8 13.6 20.8 C15.7 20.8 '
+        '18.6 16.4 18.6 12 C18.6 6.8 13.8 7 12 8.4 Z"/>'
+        '<path d="M12 8.4 C12 6.6 12.5 4.8 13.6 3.6" stroke-width="1.5"/>'
+        '<path d="M13.2 5.6 C14 3.9 15.9 3.3 17.6 3.6 C16.9 5.3 15 6.1 13.2 5.6 Z"'
+        ' stroke-width="1.3"/>'),
+    "atari": (  # the joystick, stick up, fire button in the corner
+        '<rect x="3.8" y="14" width="16.4" height="7" rx="1.6"/>'
+        '<path d="M12 14 V7.4"/>'
+        '<circle cx="12" cy="5.4" r="2.3"/>'
+        '<path d="M5.8 14 V12.2 H9.2 V14" stroke-width="1.5"/>'),
+    "c64": (  # the breadbin: a wedge of keyboard, keys and a space bar
+        '<path d="M3 18 L5.4 9.8 C5.7 8.8 6.4 8.2 7.5 8.2 H16.5 C17.6 8.2 18.3 '
+        '8.8 18.6 9.8 L21 18 V19.4 C21 20.2 20.4 20.8 19.6 20.8 H4.4 C3.6 20.8 '
+        '3 20.2 3 19.4 Z M3 18 H21"/>'
+        '<path d="M7.2 11.1 H16.8 M6.5 13.6 H17.5" stroke-width="1.5"'
+        ' stroke-linecap="butt" stroke-dasharray="1.2 0.9"/>'
+        '<path d="M9.4 16 H14.6" stroke-width="1.5"/>'),
+    "dos": (  # a floppy disk: the Disk in DOS
+        '<path d="M3.6 5 C3.6 4.2 4.2 3.6 5 3.6 H16.4 L20.4 7.6 V19 C20.4 19.8 '
+        '19.8 20.4 19 20.4 H5 C4.2 20.4 3.6 19.8 3.6 19 Z"/>'
+        '<path d="M7.6 3.6 V8.8 H15.4 V3.6"/>'
+        '<path d="M12.9 5.2 V7.2" stroke-width="1.5"/>'
+        '<path d="M6.6 20.4 V14.2 H17.4 V20.4"/>'),
+    "spectrum": (  # a flat rubber-key keyboard with the stripes in its corner
+        '<rect x="2.6" y="6.8" width="18.8" height="10.4" rx="1.2"/>'
+        '<path d="M5.4 9.8 H13.6 M5.4 12.2 H13.6 M5.4 14.6 H12" stroke-width="1.7"'
+        ' stroke-dasharray="0.01 2.05"/>'
+        '<path d="M14.6 17.2 L21.4 10.4 M16.8 17.2 L21.4 12.6 M19 17.2 L21.4 14.8"'
+        ' stroke-width="1.3"/>'),
+    # Making
+    "3d-printing": (  # a nozzle over the layers it has laid
+        '<path d="M9.4 3 H14.6 V6.4 L12 9 L9.4 6.4 Z"/>'
+        + _dot(12, 11.2, 0.85)
+        + '<path d="M6 13.8 H18 M6 17 H18 M6 20.2 H18" stroke-width="1.6"/>'),
+    "electronics": (  # a chip on its pins
+        '<rect x="7" y="4.4" width="10" height="15.2" rx="1"/>'
+        '<path d="M10.6 4.4 A1.4 1.4 0 0 0 13.4 4.4" stroke-width="1.3"/>'
+        '<path d="M3.8 7.8 H7 M3.8 12 H7 M3.8 16.2 H7 M17 7.8 H20.2 M17 12 H20.2'
+        ' M17 16.2 H20.2"/>'),
+    "robotics": (  # a robot's head
+        '<rect x="5" y="8.2" width="14" height="11" rx="2"/>'
+        '<path d="M12 8.2 V5"/>'
+        '<circle cx="12" cy="3.9" r="1.1"/>'
+        '<path d="M3 12 V15.4 M21 12 V15.4 M9.6 16.3 H14.4"/>'
+        + _dot(9.2, 12.6, 1.2) + _dot(14.8, 12.6, 1.2)),
+    "soldering": (  # the iron, and a wisp off its tip
+        '<path d="M3.6 20.4 L8 16" stroke-width="1.5"/>'
+        '<path d="M8 16 L10.4 13.6" stroke-width="2.4"/>'
+        '<path d="M12 14.8 L20 6.8 A2 2 0 0 0 17.2 4 L9.2 12 Z"/>'
+        '<path d="M5.4 12.6 C4.4 11.4 6.4 10.4 5.4 9.2" stroke-width="1.4" opacity="0.7"/>'),
+    "woodworking": (  # a handsaw
+        '<path d="M14 8.6 L3.2 12 V15.4 L4.4 16.9 L5.6 15.4 L6.8 16.9 L8 15.4'
+        ' L9.2 16.9 L10.4 15.4 L11.6 16.9 L12.8 15.4 L14 16.4"/>'
+        '<path d="M14 7 H18.6 C19.9 7 21 8.1 21 9.4 V15.2 C21 16.5 19.9 17.6 18.6'
+        ' 17.6 H14 Z"/>'
+        '<rect x="16" y="9.6" width="2.8" height="4.8" rx="1.2" stroke-width="1.4"/>'),
+    # Games
+    "arcade": (  # a cabinet: screen, stick, two buttons
+        '<path d="M6.6 21 V11.6 L8.4 9.8 V3 H15.6 V9.8 L17.4 11.6 V21 Z"/>'
+        '<rect x="9.8" y="4.6" width="4.4" height="3.8" rx="0.4" stroke-width="1.3"/>'
+        '<path d="M6.6 14 H17.4 M10 14 V12.4" stroke-width="1.5"/>'
+        + _dot(10, 11.8, 1) + _dot(13.3, 12.6, 0.8) + _dot(15.1, 12.6, 0.8)),
+    "board-games": (  # a meeple
+        '<path d="M12 3 C13.7 3 15 4.3 15 6 C15 7 14.6 7.8 14 8.3 C16.5 8.8 20.4'
+        ' 10 20.4 12 C20.4 13.3 18.5 13.5 16.8 13.3 L19 19.4 C19.3 20.4 18.8 21'
+        ' 18 21 H14.2 L12 17.4 L9.8 21 H6 C5.2 21 4.7 20.4 5 19.4 L7.2 13.3 C5.5'
+        ' 13.5 3.6 13.3 3.6 12 C3.6 10 7.5 8.8 10 8.3 C9.4 7.8 9 7 9 6 C9 4.3 10.3'
+        ' 3 12 3 Z"/>'),
+    "gaming": (  # a game pad
+        '<path d="M7 8 H17 C19.9 8 21.5 11 21.5 14.6 C21.5 17 20.2 18.2 18.6 18.2'
+        ' C17.2 18.2 16.4 16.8 15.6 15.4 H8.4 C7.6 16.8 6.8 18.2 5.4 18.2 C3.8 18.2'
+        ' 2.5 17 2.5 14.6 C2.5 11 4.1 8 7 8 Z"/>'
+        '<path d="M7.4 10.6 V14.6 M5.4 12.6 H9.4" stroke-width="1.6"/>'
+        + _dot(15.4, 11.6, 1) + _dot(17.6, 13.6, 1)),
+    "retro-gaming": (  # the chomper, about to eat a pellet
+        '<path d="M17.1 7.9 A7.8 7.8 0 1 0 17.1 16.1 L10.4 12 Z"/>'
+        + _dot(10.2, 7.9, 1.1) + _dot(20.9, 12, 1.3)),
+    "tabletop-rpg": (  # a twenty sided die
+        '<path d="M12 2.5 L20.2 7.25 V16.75 L12 21.5 L3.8 16.75 V7.25 Z"/>'
+        '<path d="M12 7.6 L16.6 15.4 H7.4 Z" stroke-width="1.4"/>'
+        '<path d="M12 7.6 L3.8 7.25 M12 7.6 L20.2 7.25 M7.4 15.4 L3.8 16.75'
+        ' M7.4 15.4 L12 21.5 M16.6 15.4 L20.2 16.75 M16.6 15.4 L12 21.5 M12 2.5'
+        ' V7.6" stroke-width="1.1" opacity="0.8"/>'),
+    # Music and art
+    "ansi-art": (  # the shade blocks, light to full
+        '<path d="M4.6 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"'
+        ' stroke-dasharray="1 2"/>'
+        '<path d="M9.2 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"'
+        ' stroke-dasharray="1.5 1.5"/>'
+        '<path d="M13.8 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"'
+        ' stroke-dasharray="2.2 0.8"/>'
+        '<path d="M18.4 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"/>'),
+    "chiptune": (  # a square wave, the sound of a pulse channel
+        '<path d="M2.5 16 H5.6 V8 H10 V16 H14 V8 H18.4 V16 H21.5"/>'
+        '<path d="M2.5 20 H21.5" stroke-width="1.2" stroke-dasharray="0.01 2.4"/>'),
+    "demoscene": (  # a sine scroller of dots, and a sparkle
+        '<path d="M2.6 13.4 C5 5.8 8.4 5.8 10.8 13.4 S16.6 21 19 13.4"'
+        ' stroke-width="2.3" stroke-dasharray="0.01 2.7"/>'
+        '<path d="M19.2 2.8 V7.8 M16.7 5.3 H21.7" stroke-width="1.5"/>'),
+    "drawing": (  # a pencil
+        '<path d="M4 20 L5 15.6 L15.6 5 C16.4 4.2 17.7 4.2 18.5 5 L19 5.5 C19.8'
+        ' 6.3 19.8 7.6 19 8.4 L8.4 19 Z"/>'
+        '<path d="M14 6.6 L17.4 10 M5 15.6 L8.4 19" stroke-width="1.4"/>'),
+    "music": (  # two beamed quavers
+        '<path d="M9 17.6 V6.4 L19 4.2 V15.6"/>'
+        '<ellipse cx="6.8" cy="17.8" rx="2.4" ry="1.9" transform="rotate(-20 6.8 17.8)"'
+        ' fill="currentColor"/>'
+        '<ellipse cx="16.8" cy="15.8" rx="2.4" ry="1.9" transform="rotate(-20 16.8 15.8)"'
+        ' fill="currentColor"/>'),
+    "photography": (  # a camera
+        '<path d="M3 9 C3 8.2 3.6 7.6 4.4 7.6 H7.4 L9 5 H15 L16.6 7.6 H19.6 C20.4'
+        ' 7.6 21 8.2 21 9 V18 C21 18.8 20.4 19.4 19.6 19.4 H4.4 C3.6 19.4 3 18.8'
+        ' 3 18 Z"/>'
+        '<circle cx="12" cy="13.2" r="3.6"/>'
+        + _dot(18.2, 10.2, 0.8)),
+    # Radio and sky
+    "astronomy": (  # a ringed planet
+        '<circle cx="12" cy="12" r="5"/>'
+        '<path d="M7.2 10.7 C3.8 11.8 2.2 13.5 2.9 14.6 C3.9 16.3 10 15.5 15.8'
+        ' 13.1 C21.2 10.8 22.3 8.5 21 7.7 C20.2 7.2 18.6 7.3 16.7 7.9"/>'
+        '<path d="M5 3.6 V6.4 M3.6 5 H6.4" stroke-width="1.2"/>'),
+    "swl": (  # a portable radio with its aerial up
+        '<rect x="3" y="9.6" width="18" height="11" rx="2"/>'
+        '<circle cx="8.4" cy="15.1" r="3"/>'
+        '<path d="M14 13 H18.4 M14 15.6 H18.4 M14 18.2 H16.6" stroke-width="1.4"/>'
+        '<path d="M16.2 9.6 L20 2.8"/>'),
+    "weather": (  # the sun behind a cloud
+        '<path d="M5.4 11.6 A3.6 3.6 0 1 1 12.1 8.9" stroke-width="1.6"/>'
+        '<path d="M8.6 2.4 V3.8 M3 8.4 H4.4 M4.6 4.4 L5.6 5.4 M12.6 4.4 L11.6 5.4"'
+        ' stroke-width="1.5"/>'
+        '<path d="M8.6 20.4 H17.8 A3.4 3.4 0 0 0 18.2 13.6 A4.8 4.8 0 0 0 9.2 13.8'
+        ' A3.3 3.3 0 0 0 8.6 20.4 Z"/>'),
+    # Outdoors and more
+    "aviation": (  # an aeroplane, from below
+        '<path d="M12 2.5 C12.9 2.5 13.3 3.5 13.3 5 V9.5 L21 14 V16 L13.3 13.6 V18.4'
+        ' L15.6 20 V21.5 L12 20.5 L8.4 21.5 V20 L10.7 18.4 V13.6 L3 16 V14 L10.7'
+        ' 9.5 V5 C10.7 3.5 11.1 2.5 12 2.5 Z"/>'),
+    "cars": (  # a car, side on
+        '<path d="M4.6 16.6 H2.6 V13.7 C2.6 13 3.1 12.5 3.7 12.4 L6.6 11.9 L9'
+        ' 8.4 C9.4 7.9 9.9 7.6 10.6 7.6 H14.6 C15.3 7.6 15.9 7.9 16.3 8.5 L18.4'
+        ' 11.8 L20.5 12.4 C21 12.6 21.4 13.1 21.4 13.6 V16.6 H19.4 M9.4 16.6 H14.6"/>'
+        '<path d="M6.6 11.9 H18.4 M12.4 7.6 V11.9" stroke-width="1.4"/>'
+        '<circle cx="7" cy="16.8" r="2.3"/><circle cx="17" cy="16.8" r="2.3"/>'),
+    "cooking": (  # a chef's hat
+        '<path d="M7 13.2 C4.6 13.2 3 11.2 3 9.1 C3 6.9 4.8 5.1 7 5.1 C7.3 5.1 7.6'
+        ' 5.1 7.9 5.2 C8.7 3.4 10.2 2.6 12 2.6 C13.8 2.6 15.3 3.4 16.1 5.2 C16.4'
+        ' 5.1 16.7 5.1 17 5.1 C19.2 5.1 21 6.9 21 9.1 C21 11.2 19.4 13.2 17 13.2'
+        ' V20.6 H7 Z"/>'
+        '<path d="M7 17 H17" stroke-width="1.4"/>'),
+    "cycling": (  # a bicycle
+        '<circle cx="5.9" cy="16.4" r="3.7"/><circle cx="18.1" cy="16.4" r="3.7"/>'
+        '<path d="M5.9 16.4 H12 L9.8 9.8 Z M9.8 9.8 H16.2 L12 16.4 M16.2 9.8 L18.1'
+        ' 16.4 M9.8 9.8 L9.4 8.2 M8 8.2 H11 M16.2 9.8 L15.6 7.6 H17.8"'
+        ' stroke-width="1.5"/>'),
+    "fishing": (  # a fish
+        '<path d="M2.8 12 C5.8 7 12.5 6.4 16.4 12 C12.5 17.6 5.8 17 2.8 12 Z"/>'
+        '<path d="M16.4 12 L21.2 8.3 V15.7 Z"/>'
+        '<path d="M10.4 9.4 C11.3 10.9 11.3 13.1 10.4 14.6" stroke-width="1.3"/>'
+        + _dot(7.2, 11.1, 1)),
+    "gardening": (  # a seedling
+        '<path d="M12 20.6 V11.4"/>'
+        '<path d="M12 13.4 C12 9.6 9.2 7.4 5.2 7.4 C5.2 11.2 8 13.4 12 13.4 Z"/>'
+        '<path d="M12 11.4 C12 7.4 14.8 4.8 18.8 4.8 C18.8 8.8 16 11.4 12 11.4 Z"/>'
+        '<path d="M6.4 20.6 H17.6"/>'),
+    "hiking": (  # mountains, with snow on the high one
+        '<path d="M2 19.6 L8.6 8.4 L12.6 14.8 L15.6 10.6 L22 19.6 Z"/>'
+        '<path d="M6.7 11.6 L8.1 12.7 L9.6 11.2 L10.6 12.1" stroke-width="1.3"/>'),
+    "model-trains": (  # a little steam engine on its rail
+        '<path d="M3 17 V11 H13.4 V17 M13.4 17 V7 H20.4 V17 M12.6 7 H21.2'
+        ' M5.4 11 V7.6 H8 V11 M2 17 H22"/>'
+        '<rect x="15.3" y="8.8" width="3.2" height="2.8" rx="0.4" stroke-width="1.3"/>'
+        '<circle cx="6.4" cy="19.2" r="1.7" stroke-width="1.5"/>'
+        '<circle cx="10.8" cy="19.2" r="1.7" stroke-width="1.5"/>'
+        '<circle cx="17" cy="19.2" r="1.7" stroke-width="1.5"/>'),
+    # Reading and watching
+    "anime": (  # a big eye with a shine in it
+        '<path d="M2.8 11.2 C6.4 6.6 17.6 6.6 21.2 11.2 L22.4 9.4"/>'
+        '<ellipse cx="12" cy="13.8" rx="4.1" ry="5.2"/>'
+        '<ellipse cx="12" cy="15" rx="2" ry="2.6" fill="currentColor"/>'
+        '<circle cx="13.5" cy="11.7" r="1.15" fill="#ffffff" stroke="none"/>'
+        '<path d="M8.6 20.2 C10.8 20.9 13.2 20.9 15.4 20.2" stroke-width="1.4"/>'),
+    "books": (  # an open book
+        '<path d="M12 6.6 C10 5.1 7 4.6 3 5.1 V18.6 C7 18.1 10 18.6 12 20.1 C14 18.6'
+        ' 17 18.1 21 18.6 V5.1 C17 4.6 14 5.1 12 6.6 Z M12 6.6 V20.1"/>'),
+    "movies": (  # a clapperboard
+        '<rect x="3.4" y="10" width="17.2" height="10.6" rx="1"/>'
+        '<path d="M3.4 10 L2.9 6.9 C2.8 6.3 3.2 5.8 3.8 5.7 L19.4 3.4 C20 3.3 20.5'
+        ' 3.7 20.6 4.3 L21 7.4 L3.4 10"/>'
+        '<path d="M7.6 5.1 L9.6 8.8 M12 4.5 L14 8.2 M16.4 3.8 L18.4 7.6"'
+        ' stroke-width="1.4"/>'),
+    "scifi": (  # a flying saucer
+        '<path d="M2.6 13.6 C2.6 11.7 7 10.2 12 10.2 C17 10.2 21.4 11.7 21.4 13.6'
+        ' C21.4 15.5 17 17 12 17 C7 17 2.6 15.5 2.6 13.6 Z"/>'
+        '<path d="M7.6 10.8 C7.6 7.8 9.6 5.6 12 5.6 C14.4 5.6 16.4 7.8 16.4 10.8"/>'
+        + _dot(7, 13.7, 0.9) + _dot(12, 14.4, 0.9) + _dot(17, 13.7, 0.9)
+        + '<path d="M9 19.4 L8 21.4 M15 19.4 L16 21.4" stroke-width="1.3" opacity="0.6"/>'),
+}
+
+
+def interest_svg(slug):
+    """One interest drawing, in the chip's colour, hidden from a screen
+    reader because the chip it sits in is named already."""
+    return ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            + INTEREST_ART[slug] + "</svg>")
+
+
+# --------------------------------------------------------------------------
+# Every badge, once, in the one order all three views use: /badges, the
+# filter's grid and the badges under a board's name (Rob: alphabetical by
+# the name a reader sees, within each group, the groups in their own
+# order). Each entry carries its own sort key, worked out once, here, so the
+# three views cannot drift apart: they all walk BADGES and none of them
+# sorts anything.
+#
+# A group is "board" (sent by the board), "directory" (worked out here),
+# "support" or "interests"; interests have a sub-group as well. The six
+# steps of how long a board has been listed are one badge, "Listed", that
+# shows its highest step only, so they share its sort key and keep their
+# own order, shortest first, among themselves.
+# --------------------------------------------------------------------------
+BADGE_GROUPS = (("board",     "Sent by the board"),
+                ("directory", "Worked out by the directory"),
+                ("support",   "Show your support"),
+                ("interests", "Interests"))
+
+
+def sort_key(name):
+    """Where a badge sorts in its group: its name as a reader sees it, case
+    folded, with a leading digit or symbol set aside, so "3D printing" files
+    under D and "Listed 10 years" does not jump ahead of the others."""
+    return re.sub(r"^[^a-z]+", "", name.casefold())
+
+
+def _cap(text):
+    return text[0].upper() + text[1:]
+
+
+def _badge_table():
+    """BADGES, built once at start from the tables above."""
+    out = []
+
+    def add(group, key, name, cls, sym, means, sent, sub="", tip="", sort=None,
+            filt=True):
+        out.append({"group": group, "sub": sub, "key": key, "name": name,
+                    "cls": cls, "sym": sym, "means": means, "sent": sent,
+                    "tip": tip or f"{name}: {means[0].lower() + means[1:]}",
+                    "sort": sort_key(name) if sort is None else sort,
+                    "filter": filt})
+
+    # Sent by the board. The software and the machine are the board's own
+    # words, so they have no fixed symbol and nothing to filter on.
+    add("board", "software", "Software", "soft", "unleashed",
+        "What the board runs, and its version in the tooltip.",
+        "<code>software</code> <span class='src'>and <code>version</code></span>",
+        tip="Software: unleashed, as the board reports it.", filt=False)
+    add("board", "system", "Machine", "sys", "Compaq 486",
+        f"What the board runs on, in its own words, up to {SYSTEM_MAX} characters: "
+        "the chip it runs on, or the Compaq 486 in the corner.",
+        "<code>system</code> <span class='src'>its own words</span>",
+        tip="Runs on: Compaq 486, in the board's own words.", filt=False)
+    where = {"petscii": "<code>petscii</code> <span class='src'>in terminals</span>",
+             "guests":  "<code>guests</code> <span class='src'>set to true</span>"}
+    for key, letters, cls, name, means in LETTER_BADGES:
+        if key in ("new", "steady"):
+            add("directory", key, name, cls, letters, _cap(means),
+                "<span class='src'>none: worked out here</span>",
+                tip=f"{name}: {means}")
+        else:
+            add("board", key, name, cls, letters, _cap(means),
+                where.get(key, f"<code>{key}</code> <span class='src'>in features</span>"),
+                tip=f"{name}: {means}")
+    # The six steps of how long a board has been listed are one badge,
+    # "Listed", which shows its highest step only; each step is a tile of
+    # its own in the filter, meaning that long or longer. They share the
+    # badge's sort key, so the family stays together and in its own order.
+    for days, label, words in reversed(AGES):
+        add("directory", label, "Listed " + words[4:], "age", label,
+            f"On this directory {words} or more.",
+            "<span class='src'>none: worked out here</span>",
+            tip=f"Listed {words}.", sort=sort_key("Listed"))
+    for slug, art, name, sentence in SUPPORT:
+        add("support", slug, _cap(name), "sup", art, sentence, f"<code>{slug}</code>",
+            tip=f"Supports {name}.")
+    for slug, sub, name, means in INTERESTS:
+        add("interests", slug, name, "int", slug, means, f"<code>{slug}</code>",
+            sub=sub, tip=f"Interest: {name}.")
+
+    group_at = {g: i for i, (g, _t) in enumerate(BADGE_GROUPS)}
+    sub_at = {s: i for i, s in enumerate(INTEREST_GROUPS)}
+    # sorted() is stable, so badges that share a key keep the order they
+    # were added in: the time-listed steps, shortest first.
+    return tuple(sorted(out, key=lambda b: (group_at[b["group"]],
+                                            sub_at.get(b["sub"], -1), b["sort"])))
+
+
+BADGES = _badge_table()
+BADGE_BY_KEY = {b["key"]: b for b in BADGES}
+# Everything a reader can filter the board list on, in the page's order.
+FILTER_KEYS = tuple(b["key"] for b in BADGES if b["filter"])
+
+
+def badge_symbol(b):
+    """What a badge shows: its letters or its drawing, already markup."""
+    if b["cls"] == "sup":
+        return support_svg(b["sym"])
+    if b["cls"] == "int":
+        return interest_svg(b["sym"])
+    return html.escape(b["sym"])
+
+
+def badge_words(b):
+    """What a search matches a badge on, lower case: its name, its slug with
+    and without hyphens, and its group, so "radio", "ham", "c64", "open
+    source" and "games" all find something."""
+    parts = (b["name"], b["key"], b["key"].replace("-", " "), b["sub"])
+    return " ".join(p for p in parts if p).lower()
+
+
 def badge(cls, content, tip):
     """One badge. content is markup, already escaped; tip is plain text and
     is escaped here, once, for both of the attributes that carry it."""
@@ -4078,101 +4847,138 @@ def listed_at(r):
     return r["public_at"] or r["first_seen"]
 
 
+def row_keys(r, now, steady=False):
+    """Every badge a board carries, as the keys the filter uses: what it
+    sent, what the directory worked out, and every step of time listed it
+    has reached, so "listed a year" finds a board listed for two. A board's
+    row carries these, and the filter matches on them, on the server and in
+    the browser alike."""
+    keys = set(unpick(r["features"]))
+    if "petscii" in unpick(r["terminals"]):
+        keys.add("petscii")
+    if r["guests"] == 1:
+        keys.add("guests")
+    age = now - listed_at(r)
+    if age < NEW_DAYS * 86400:
+        keys.add("new")
+    if steady:
+        keys.add("steady")
+    keys.update(label for days, label, _w in AGES if age >= days * 86400)
+    keys.update(unpick(r["support"]))
+    keys.update(unpick(r["interests"]))
+    return keys
+
+
 def board_badges(r, now, steady=False):
-    """The badges under one board's name, or "" for a board with none."""
-    chips = []
-    if r["software"]:
-        what = r["software"] + (" " + r["version"] if r["version"] else "")
-        chips.append(badge("soft", html.escape(r["software"]),
-                           f"Software: {what}, as the board reports it."))
-    if r["system"]:
-        chips.append(badge("sys", html.escape(r["system"]),
-                           f"Runs on: {r['system']}, in the board's own words."))
+    """The badges under one board's name, or "" for a board with none. In
+    BADGES order, like every other view of them."""
+    keys = row_keys(r, now, steady)
     since = listed_at(r)
     age = now - since
-    lit = set(unpick(r["features"]))
-    if "petscii" in unpick(r["terminals"]):
-        lit.add("petscii")
-    if r["guests"] == 1:
-        lit.add("guests")
-    if age < NEW_DAYS * 86400:
-        lit.add("new")
-    if steady:
-        lit.add("steady")
-    for key, letters, cls, name, means in LETTER_BADGES:
-        if key in lit:
-            chips.append(badge(cls, letters, f"{name}: {means}"))
-    for days, label, words in AGES:
-        if age >= days * 86400:
-            chips.append(badge("age", label, f"Listed {words}: on this directory "
-                                             f"since {day_text(since)}."))
-            break
-    chosen = set(unpick(r["support"]))
-    for slug, art, name, _sentence in SUPPORT:
-        if slug in chosen:
-            chips.append(badge("sup", support_svg(art),
-                               f"Supports {name}. Chosen by the sysop."))
+    chips, aged = [], False
+    for b in BADGES:
+        key = b["key"]
+        if key == "software":
+            if r["software"]:
+                what = r["software"] + (" " + r["version"] if r["version"] else "")
+                chips.append(badge("soft", html.escape(r["software"]),
+                                   f"Software: {what}, as the board reports it."))
+        elif key == "system":
+            if r["system"]:
+                chips.append(badge("sys", html.escape(r["system"]),
+                                   f"Runs on: {r['system']}, in the board's own words."))
+        elif b["cls"] == "age":
+            # One chip for the whole family: the highest step reached.
+            if not aged:
+                aged = True
+                for days, label, words in AGES:
+                    if age >= days * 86400:
+                        chips.append(badge("age", label,
+                                           f"Listed {words}: on this directory "
+                                           f"since {day_text(since)}."))
+                        break
+        elif key in keys:
+            tip = b["tip"]
+            if b["cls"] in ("sup", "int"):
+                tip += " Chosen by the sysop."
+            chips.append(badge(b["cls"], badge_symbol(b), tip))
     return '<span class="badges">' + "".join(chips) + "</span>" if chips else ""
 
 
-def badge_key_html(which):
-    """The legend for one group of badges on /badges: "board" for the ones a
-    board sends, "directory" for the ones worked out here. A definition
-    list, a badge beside what it means, its colour and where it comes from,
-    built from the same tables the board list draws from."""
-    def row(chips, name, cls, means, source):
-        colour = BADGE_COLOURS[cls]
-        return (f'<dt>{chips}</dt><dd><b>{name}</b> <span class="cn k-{cls}">'
-                f"{colour}</span><br>{means}<br>"
-                f'<span class="src">{source}</span></dd>')
+def legend_html(lines):
+    """One group of /badges: its heading, the Markdown under it, and a table
+    of its badges, each row the symbol, the name, the slug and what it
+    means. The first line of the block names the group; the rest is prose.
 
-    out = []
-    if which == "board":
-        out.append(row(badge("soft", "unleashed", "Software: unleashed, as the board reports it."),
-                       "Software", "soft", "What the board runs, and its version in the tooltip.",
-                       "Sent by the board: <code>software</code> and <code>version</code>."))
-        out.append(row(badge("sys", "Compaq 486", "Runs on: Compaq 486, in the board's own words."),
-                       "Machine", "sys",
-                       "What the board runs on, in its own words, up to "
-                       f"{SYSTEM_MAX} characters: the chip it runs on, or the Compaq 486 "
-                       "in the corner.",
-                       "Sent by the board: <code>system</code>."))
-        where = {"petscii": "<code>petscii</code> in <code>terminals</code>",
-                 "guests": "<code>guests</code> set to <code>true</code>"}
-        for key, letters, cls, name, means in LETTER_BADGES:
-            if key in ("new", "steady"):
+    Every row carries what a search matches it on, and the section, like
+    each sub-group of interests, is marked as a group, so the script can
+    hide a group that has nothing left in it. Without the script every row
+    is shown."""
+    lines = list(lines)
+    which = ""
+    while lines and not which:
+        which = lines.pop(0).strip()
+    titles = dict(BADGE_GROUPS)
+    if which not in titles:
+        return "<p>" + html.escape("badges: " + which) + "</p>"
+    prose = md_render("\n".join(lines)) if any(l.strip() for l in lines) else ""
+
+    def row(chips, b, name, means, words):
+        colour = BADGE_COLOURS.get(b["cls"]) if b["cls"] not in ("sup", "int") else ""
+        cn = f' <span class="cn k-{b["cls"]}">{colour}</span>' if colour else ""
+        return (f'<tr data-k="{html.escape(words, quote=True)}">'
+                f'<td class="bsym"><span class="chips">{chips}</span></td>'
+                f'<td class="bn"><b>{html.escape(name)}</b>{cn}</td>'
+                f'<td class="bs">{b["sent"]}</td>'
+                f'<td class="bm">{means}</td></tr>')
+
+    def rows(items):
+        out, ages = [], [b for b in items if b["cls"] == "age"]
+        for b in items:
+            if b["cls"] == "age":
+                if b is not ages[0]:
+                    continue
+                chips = "".join(badge("age", a["sym"], a["tip"]) for a in ages)
+                out.append(row(chips, b, "Listed",
+                               "How long the board has been on this directory: a "
+                               "month, six months, then one, two, five and ten "
+                               "years. Only the highest reached is shown.",
+                               "listed time listed age " + " ".join(a["key"] for a in ages)))
                 continue
-            src = where.get(key, f"<code>{key}</code> in <code>features</code>")
-            out.append(row(badge(cls, letters, f"{name}: {means}"), name, cls,
-                           means[0].upper() + means[1:], f"Sent by the board: {src}."))
+            chips = badge(b["cls"], badge_symbol(b), b["tip"])
+            means = html.escape(b["means"])
+            if b["key"] == "steady":
+                means += ' <a href="#how-steady-is-worked-out">How</a>.'
+            out.append(row(chips, b, b["name"], means, badge_words(b)))
+        return "".join(out)
+
+    head = ('<thead><tr><th scope="col">Badge</th><th scope="col">Name</th>'
+            '<th scope="col">Slug</th><th scope="col">Meaning</th></tr></thead>')
+    items = [b for b in BADGES if b["group"] == which]
+    if which == "interests":
+        body = "".join(
+            f'<tbody data-g><tr class="sub"><th colspan="4" scope="rowgroup">'
+            f"{html.escape(sub)}</th></tr>"
+            + rows([b for b in items if b["sub"] == sub]) + "</tbody>"
+            for sub in INTEREST_GROUPS)
     else:
-        how = {"new": "Worked out here, from the day the board first went public.",
-               "steady": "Worked out here, from the heartbeats the directory recorded, "
-                         "hour by hour, for that week. "
-                         '<a href="#how-steady-is-worked-out">How</a>.'}
-        for key, letters, cls, name, means in LETTER_BADGES:
-            if key in how:
-                out.append(row(badge(cls, letters, f"{name}: {means}"), name, cls,
-                               means[0].upper() + means[1:], how[key]))
-        ages = "".join(badge("age", label, f"Listed {words}.")
-                       for _days, label, words in reversed(AGES))
-        out.append(row(ages, "Time listed", "age",
-                       "How long the board has been on this directory: a month, six "
-                       "months, then one, two, five and ten years. Only the highest "
-                       "reached is shown.",
-                       "Worked out here, from the day the board first went public."))
-    return '<dl class="legend">' + "".join(out) + "</dl>"
+        body = "<tbody>" + rows(items) + "</tbody>"
+    return ('<section class="bgroup" data-g>'
+            + md_render("## " + titles[which]) + prose
+            + f'<table class="btab {html.escape(which)}">' + head + body
+            + "</table></section>")
 
 
-def support_key_html():
-    """The support list on /badges: each symbol, the slug a sysop puts in
-    their board's settings, and one sentence."""
-    out = []
-    for slug, art, name, sentence in SUPPORT:
-        out.append(f"<dt>{badge('sup', support_svg(art), f'Supports {name}.')}</dt>"
-                   f"<dd><b>{html.escape(name[0].upper() + name[1:])}</b> "
-                   f"<code>{html.escape(slug)}</code><br>{html.escape(sentence)}</dd>")
-    return '<dl class="legend support">' + "".join(out) + "</dl>"
+def badge_find_html():
+    """The search at the top of /badges, and the page's script. Hidden until
+    the script shows it: without the script it could not do anything, and
+    every row is on the page anyway."""
+    return ('<p class="findbar" data-js hidden><label for="bq">Find a badge</label>'
+            '<input type="search" id="bq" data-find="article" data-count="bqn"'
+            ' data-noun="badges" autocomplete="off" spellcheck="false"'
+            ' placeholder="c64, radio, chat">'
+            '<span class="fqn" id="bqn" aria-live="polite"></span></p>'
+            + BADGE_JS)
 
 
 TERMINAL_NAMES = {"ansi": "ANSI", "utf8": "UTF-8", "petscii": "PETSCII",
@@ -4194,10 +5000,17 @@ def about_lines(r):
         lines.append("No guests: an account is needed")
     if unpick(r["features"]):
         lines.append("Running: " + ", ".join(unpick(r["features"])))
+    # In the page's order; the words are the ones the tooltip uses.
     chosen = set(unpick(r["support"]))
-    names = [name for slug, _a, name, _s in SUPPORT if slug in chosen]
+    said = {slug: name for slug, _a, name, _s in SUPPORT}
+    names = [said[b["key"]] for b in BADGES
+             if b["group"] == "support" and b["key"] in chosen]
     if names:
         lines.append("Supports: " + ", ".join(names))
+    chosen = set(unpick(r["interests"]))
+    names = [b["name"] for b in BADGES if b["group"] == "interests" and b["key"] in chosen]
+    if names:
+        lines.append("Interests: " + ", ".join(names))
     return lines
 
 
@@ -4216,14 +5029,31 @@ def board_json(r, steady):
     out["guests"]    = None if r["guests"] is None else bool(r["guests"])
     out["features"]  = unpick(r["features"])
     out["support"]   = unpick(r["support"])
+    out["interests"] = unpick(r["interests"])
     out["listed_at"] = listed_at(r)
     out["steady"]    = bool(steady)
     return out
 
 
-def board_rows(rows, now, charts=None, steady=None):
+def board_matches(keys, sel, any_=False):
+    """Whether a board with these badge keys passes the filter: all of the
+    chosen badges, or any of them, and every board when none are chosen."""
+    if not sel:
+        return True
+    return any(k in keys for k in sel) if any_ else all(k in keys for k in sel)
+
+
+def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False):
     out = []
     for r in rows:
+        # The badges this board carries, for the filter, in the page's order.
+        # Every row is sent whatever the filter says, and the ones it leaves
+        # out are hidden: that is what lets the script show them again the
+        # moment a tile is let go, with no trip back here.
+        keys = row_keys(r, now, r["id"] in (steady or ()))
+        carried = " ".join(k for k in FILTER_KEYS if k in keys)
+        tr = (f'<tr data-b="{html.escape(carried, quote=True)}"'
+              + ("" if board_matches(keys, sel, any_) else " hidden") + ">")
         where = r["host"] or r["address"]
         state = r["state"]
         seen = now - r["last_seen"]
@@ -4302,11 +5132,11 @@ def board_rows(rows, now, charts=None, steady=None):
         # name, because that box is what the hover dot flies along. Then the
         # badges, which wrap under it rather than beside it, so however many
         # a board has they grow the row downwards and never push the Dial
-        # column: the software badge that used to sit beside the name is the
-        # first of them.
+        # column: the software badge that used to sit beside the name is one
+        # of them.
         out.append(
-            "<tr>"
-            f"<td class='name' data-label='Board'><span class='bname'>"
+            tr
+            + f"<td class='name' data-label='Board'><span class='bname'>"
             f"{html.escape(r['name'])}</span>"
             + board_badges(r, now, r["id"] in (steady or ()))
             + f"<span class='desc'>{html.escape(r['description'])}</span>"
@@ -4413,15 +5243,145 @@ RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
             '<p class="acts"><a class="fill" href="/install">Web installer</a>'
             '<a class="line" href="/build#getting-it-running">Build from source</a>'
             "</p>"
-            # The three lamps that go round its edge: decoration, so hidden
+            # The two lamps that go round its edge, half a lap apart, each a
+            # head and three beads of tail (site 0.22.0, from the UX spec:
+            # three lamps a third of a lap apart looked scattered, because a
+            # rectangle has no three-fold symmetry, and two half a lap apart
+            # are always a pair through its centre). Decoration, so hidden
             # from a screen reader, and after the words so they come first.
-            '<span class="dot d1" aria-hidden="true"></span>'
-            '<span class="dot d2" aria-hidden="true"></span>'
-            '<span class="dot d3" aria-hidden="true"></span>'
-            "</aside>")
+            + "".join(f'<span class="dot {lamp}{bead}" aria-hidden="true"></span>'
+                      for lamp in ("la", "lb")
+                      for bead in ("", " t1", " t2", " t3"))
+            + "</aside>")
 
 
-def index_page():
+# --------------------------------------------------------------------------
+# The filter over the board list (site 0.22.0, Rob: "allow filtering on the
+# website based on a badge bento grid that you can select and get a filter.
+# I dont want the iconography to show up unless you click a filter button").
+#
+# A small Filter button above the table and, only while something is
+# chosen, one line saying what. The button is a <details>, so the pane
+# opens with no script at all; the pane is a GET form of checkboxes, so
+# with no script "Show boards" asks the server, which filters on ?b=petscii
+# &b=ham and hands back a page that is the filtered list. That makes every
+# filtered view a URL that can be shared or bookmarked.
+#
+# With the script (BADGE_JS) a tile filters the moment it is pressed and the
+# URL follows with history.replaceState. Every row is always sent, the ones
+# left out marked hidden, so letting go of a tile brings rows back without
+# a round trip. The badges' symbols are drawn only inside the pane: closed,
+# the page shows no iconography that it did not show before.
+# --------------------------------------------------------------------------
+# How many query parameters are read at most. There are fewer badges than
+# this; anything past it is somebody seeing what happens.
+FILTER_MAX_PARAMS = 100
+
+
+def filter_query(query):
+    """The badges chosen in a query string, in the page's order, and whether
+    any of them will do rather than all. Anything that is not a badge this
+    directory knows is ignored, so nothing a reader typed into the URL is
+    ever put back on the page."""
+    chosen, any_ = set(), False
+    for part in (query or "").split("&")[:FILTER_MAX_PARAMS]:
+        name, _eq, value = part.partition("=")
+        name = urllib.parse.unquote_plus(name)
+        value = urllib.parse.unquote_plus(value).strip().lower()
+        if name == "b":
+            chosen.add(value)
+        elif name == "m":
+            any_ = value == "any"
+    return tuple(k for k in FILTER_KEYS if k in chosen), any_
+
+
+def filter_tile(b, on):
+    """One tile in the filter's grid: a checkbox, the badge's symbol and its
+    name. The box drawn round it is what shows the state: a tick and a
+    brighter frame when chosen, the yellow ring when focused."""
+    return (f'<label class="tile" data-k="{html.escape(badge_words(b), quote=True)}">'
+            f'<input type="checkbox" name="b" value="{html.escape(b["key"], quote=True)}"'
+            f' data-n="{html.escape(b["name"], quote=True)}"' + (" checked" if on else "")
+            + f'><span class="tbox"><span class="ts k-{b["cls"]}">{badge_symbol(b)}</span>'
+            f'<span class="tn">{tile_name(b["name"])}</span></span></label>')
+
+
+def tile_name(name):
+    """A badge's name for a tile, escaped, with a soft hyphen where a long
+    word may break. A tile is about eleven characters wide at every size,
+    and without one "Neurodiversity" broke as "Neurodiversit" and "y"."""
+    words = []
+    for w in html.escape(name).split(" "):
+        if len(w) > 11 and w[:5] in ("Neuro", "Retro"):
+            w = w[:5] + "&shy;" + w[5:]
+        words.append(w)
+    return " ".join(words)
+
+
+# What the pane calls each group; /badges uses the longer headings.
+FILTER_TITLES = {"board": "Sent by the board", "directory": "Worked out here",
+                 "support": "Support", "interests": "Interests"}
+
+
+def filter_bar_html(sel, any_, shown, total):
+    """The Filter button, its pane, the line saying what is chosen, and the
+    key to the badges, for the top of the board list."""
+    chosen = set(sel)
+    groups = []
+    for group, _heading in BADGE_GROUPS:
+        items = [b for b in BADGES if b["group"] == group and b["filter"]]
+        legend = f"<legend>{FILTER_TITLES[group]}</legend>"
+        if group == "interests":
+            inner = "".join(
+                f'<fieldset class="fg sub{" big" if len(subs) > 6 else ""}" data-g>'
+                f"<legend>{html.escape(sub)}</legend><div class=\"tiles\">"
+                + "".join(filter_tile(b, b["key"] in chosen) for b in subs)
+                + "</div></fieldset>"
+                for sub in INTEREST_GROUPS
+                for subs in ([b for b in items if b["sub"] == sub],))
+            groups.append('<fieldset class="fg wide" data-g>' + legend
+                          + '<div class="bento inner">' + inner + "</div></fieldset>")
+        else:
+            groups.append('<fieldset class="fg" data-g>' + legend + '<div class="tiles">'
+                          + "".join(filter_tile(b, b["key"] in chosen) for b in items)
+                          + "</div></fieldset>")
+    names = ", ".join(BADGE_BY_KEY[k]["name"] for k in sel)
+    plural = "" if total == 1 else "s"
+    mode = ("any" if any_ else "all")
+    radios = "".join(
+        f'<label><input type="radio" name="m" value="{v}"'
+        + (" checked" if v == mode else "") + f"><span>{v} of them</span></label>"
+        for v in ("all", "any"))
+    return ('<div class="fbar">'
+            '<details class="filter" id="filter"><summary>Filter'
+            f'<span class="fc" id="fcount">{len(sel) or ""}</span></summary>'
+            '<form class="fpane" id="fform" method="get" action="/"'
+            ' aria-label="Filter the boards by badge">'
+            '<div class="ftop">'
+            '<p class="findbar" data-js hidden><label for="fq">Find a badge</label>'
+            '<input type="search" id="fq" data-find="#fgrid" data-count="fqn"'
+            ' data-noun="badges" autocomplete="off" spellcheck="false"'
+            ' placeholder="c64, radio, chat">'
+            '<span class="fqn" id="fqn" aria-live="polite"></span></p>'
+            '<fieldset class="fmode"><legend>Boards with</legend>' + radios
+            + "</fieldset></div>"
+            '<div class="bento" id="fgrid">' + "".join(groups) + "</div>"
+            '<p class="fgo"><button type="submit">Show boards</button>'
+            '<a href="/" data-clear>Clear all</a></p>'
+            "</form></details>"
+            '<p class="keylink"><a href="/badges">What the badges mean</a></p>'
+            f'<p class="factive" id="factive" aria-live="polite"{"" if sel else " hidden"}>'
+            f'<span data-f="n">{shown} of {total} board{plural}</span> with '
+            f'<span data-f="m">{mode} of</span>: '
+            f'<span data-f="l">{html.escape(names)}</span>. '
+            '<a href="/" data-clear>Clear</a></p>'
+            "</div>")
+
+
+def index_data():
+    """What the board list is drawn from, read once per PAGE_CACHE seconds
+    however many filtered views are asked for: the rows, their day charts
+    and which of them are steady."""
     now = int(time.time())
     with db() as con:
         settle(con, now)                               # keep the list honest on read
@@ -4429,16 +5389,23 @@ def index_page():
             "SELECT * FROM boards WHERE state IN ('online','offline') "
             "ORDER BY state='online' DESC, "
             "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC").fetchall()
-    live = [r for r in rows if r["state"] == "online"]
-    # The same figure each row's state shows as "N of M on", summed.
-    on = sum(r["busy"] or 0 for r in live)
-    with db() as con:
         charts = {}
         for r in rows:
             hours = hours_for(con, r["id"])
             if hours:
                 charts[r["id"]] = chart_html(hours)
         steady = steady_boards(con, rows, now)
+    return now, rows, charts, steady
+
+
+def index_page(sel=(), any_=False, data=None):
+    """The board list. sel is the badges chosen in the filter, any_ whether
+    one of them is enough; with none chosen it is the whole list, which is
+    the page almost everybody gets and the one that is cached whole."""
+    now, rows, charts, steady = data or index_data()
+    live = [r for r in rows if r["state"] == "online"]
+    # The same figure each row's state shows as "N of M on", summed.
+    on = sum(r["busy"] or 0 for r in live)
 
     # The announcement, when there is one, sits above everything else the
     # page says; then the heading, its figures and the lead, with the small
@@ -4456,12 +5423,20 @@ def index_page():
             '<a href="/firstcall">Never called one before?</a></p></div>'
             + RUN_CARD + "</div>")
     if rows:
-        # The key to the badges, small and right above the table, where
-        # somebody wondering what "Fi" means is already looking. Not in the
-        # table's header row, which a phone does not show.
-        body = ('<p class="keylink"><a href="/badges">What the badges mean</a></p>'
-                "<table><tr><th>Board</th><th>Dial</th><th>State</th></tr>"
-                + board_rows(rows, now, charts, steady) + "</table>")
+        # The filter and the key to the badges, small and right above the
+        # table, where somebody wondering what "Fi" means is already
+        # looking. Not in the table's header row, which a phone does not
+        # show. When nothing passes the filter the table is hidden and a
+        # sentence says so, rather than a header over nothing.
+        shown = sum(1 for r in rows
+                    if board_matches(row_keys(r, now, r["id"] in steady), sel, any_))
+        body = (filter_bar_html(sel, any_, shown, len(rows))
+                + '<table id="boards"' + ("" if shown else " hidden") + ">"
+                "<tr><th>Board</th><th>Dial</th><th>State</th></tr>"
+                + board_rows(rows, now, charts, steady, sel, any_) + "</table>"
+                + '<p class="none" id="fnone"' + (" hidden" if shown else "") + ">"
+                + f"No board with {'any' if any_ else 'all'} of those yet.</p>"
+                + BADGE_JS)
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
     body = head + body
@@ -4560,8 +5535,8 @@ mentioning. It is a list of hobby BBSes.</p>
 <dd>Every listed board: name, owner, description, where to dial it, how many lines it
 has and how many are busy, whether it is up, and how long it has been up. Then what
 the <a href="/badges">badges</a> are made of: what the board said it runs on, speaks,
-allows and supports, when it was first listed, and whether it has been steady this
-past week. Cached for a few seconds.</dd>
+allows, supports and is into, when it was first listed, and whether it has been
+steady this past week. Cached for a few seconds.</dd>
 <dt><code>POST /announce</code></dt>
 <dd>How a board lists itself. One JSON object, about 200 bytes, repeated every few
 minutes. Plain HTTP on purpose: the boards are microcontrollers with no TLS stack.</dd>
@@ -4664,13 +5639,14 @@ back in <code>token</code> on every later heartbeat: that is what stops somebody
 else taking over your entry. Send it whole. It is 32 characters and a fragment of
 one will be refused.</p>
 
-<p><b>Badges, if you want them.</b> Five optional fields put small badges under
+<p><b>Badges, if you want them.</b> Six optional fields put small badges under
 your board's name: what it runs on in your own words, what terminals it speaks,
-whether guests can look around, what is running, and the causes you support.
-Leave them out and nothing changes. In the same JSON:</p>
+whether guests can look around, what is running, the causes you support and what
+you are into. Leave them out and nothing changes. In the same JSON:</p>
 
 <pre>"system":"Compaq 486", "terminals":["ansi","ascii"], "guests":true,
-"features":["chat","files"], "support":["ham"]</pre>
+"features":["chat","files"], "support":["ham"],
+"interests":["c64","electronics","chiptune"]</pre>
 
 <p>What each badge means is on <a href="/badges">the badges page</a>, and the
 exact rules for each field are in the protocol.</p>
@@ -6745,7 +7721,17 @@ class Handler(BaseHTTPRequestHandler):
                                                            data_page(), "data",
                                                            "/", DATA_DESC)))
             else:
-                self.reply(200, cached("index", PAGE_CACHE, index_page))
+                # A filtered view is built for its own request, from the
+                # same cached rows, so a thousand different filters cost a
+                # thousand renders and not a thousand database reads. The
+                # plain list, which is what nearly everybody asks for, is
+                # still cached whole.
+                sel, any_ = filter_query(self.path.partition("?")[2])
+                if sel:
+                    self.reply(200, index_page(sel, any_, cached(
+                        "indexdata", PAGE_CACHE, index_data)))
+                else:
+                    self.reply(200, cached("index", PAGE_CACHE, index_page))
         # The other two faces, under their own paths, so a deployment with
         # one domain has all three. There were no path routes at all: with
         # only DIRECTORY_LIST_DOMAIN set, /about and /data returned 404, two

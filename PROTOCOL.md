@@ -62,12 +62,13 @@ Connection: close
 | `guests` | boolean | no | `true` if a caller can look around without an account, `false` if not |
 | `features` | array of strings | no | what is running right now: any of `chat`, `forums`, `files`, `mail`, `doors` |
 | `support` | array of strings | no | causes the sysop shows support for, as slugs from the directory's published list |
+| `interests` | array of strings | no | what the sysop is into, as slugs from the directory's published list |
 
 **No field identifies a caller, and none ever should.** Not handles, not addresses, not what anybody typed. A directory receiving such a field should drop it.
 
 ## Badges
 
-The last five fields in the table are optional and describe the board rather than its state. A directory may show them as badges beside the board's name; the one at unleashedbbs.com does, and explains each at `/badges`. Old boards send none of them and are listed exactly as before. A directory ignores any field it does not know, so a board may send these to any directory.
+The last six fields in the table are optional and describe the board rather than its state. A directory may show them as badges beside the board's name; the one at unleashedbbs.com does, and explains each at `/badges`. Old boards send none of them and are listed exactly as before. A directory ignores any field it does not know, so a board may send these to any directory.
 
 ```
 {"software":"unleashed","version":"1.0.0",
@@ -79,7 +80,8 @@ The last five fields in the table are optional and describe the board rather tha
  "terminals":["ansi","utf8","petscii","ascii"],
  "guests":true,
  "features":["chat","forums","files","mail"],
- "support":["lgbtq","ham"]}
+ "support":["lgbtq","ham"],
+ "interests":["c64","electronics","chiptune"]}
 ```
 
 | Field | Rules |
@@ -89,14 +91,17 @@ The last five fields in the table are optional and describe the board rather tha
 | `guests` | A JSON `true` or `false` and nothing else. A string such as `"yes"` counts as not sent. |
 | `features` | Only what is running when the heartbeat is sent. A board that switches its file areas off should stop sending `files`. |
 | `support` | Slugs from the list the directory publishes. The one at unleashedbbs.com publishes its list at `/badges`. |
+| `interests` | Slugs from the list the directory publishes, exactly as `support`: hobbies and interests rather than causes, such as `c64`, `electronics`, `gaming` or `gardening`. The one at unleashedbbs.com publishes its list at `/badges`. |
 
-For the three lists: case does not matter, duplicates count once, a word the directory does not know is ignored rather than refused, and only the first 16 entries are read; an entry that is not a string is skipped. A field of the wrong type, a list where a string belongs or a string where a list belongs, counts as not sent. None of this ever makes a heartbeat fail: a board with a bad badge field is listed without that badge.
+For the four lists: case does not matter, duplicates count once, a word the directory does not know is ignored rather than refused, and only the first 16 entries are read; an entry that is not a string is skipped. A field of the wrong type, a list where a string belongs or a string where a list belongs, counts as not sent. None of this ever makes a heartbeat fail: a board with a bad badge field is listed without that badge.
 
-**A directory may drop any value it cannot show.** A word it does not know, a machine name in a script its page cannot draw, a cause it does not carry: the listing stands and the badge does not. That is also why `support` is a list of slugs and not free text: a directory publishes the causes it will show, and nobody can put words of their own on its page.
+**A directory may drop any value it cannot show.** A word it does not know, a machine name in a script its page cannot draw, a cause it does not carry: the listing stands and the badge does not. That is also why `support` and `interests` are lists of slugs and not free text: a directory publishes the causes and interests it will show, and nobody can put words of their own on its page.
 
-**Every heartbeat replaces them.** Send them every time, or the badge goes. That is the point for `features`, which says what is running now, and it costs nothing for the rest: with all five the example above is about 400 bytes, and this directory refuses only a body over 4,096 bytes, with `413`.
+**Every heartbeat replaces them.** Send them every time, or the badge goes. That is the point for `features`, which says what is running now, and it costs nothing for the rest: with all six the example above is about 450 bytes, and this directory refuses only a body over 4,096 bytes, with `413`. Sixteen of each list at the longest slugs still comes in well under it.
 
 A directory works out some badges for itself, from its own records, and a board cannot send them: at unleashedbbs.com, **new** (listed less than a week), **steady** (answered more than 95% of the heartbeats its own `interval` said were due over the last seven days) and **time listed** (one month up to ten years). They appear in `/api/boards.json` as `listed_at` and `steady`.
+
+The board list at unleashedbbs.com can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest slugs, the feature words, `petscii`, `guests`, `new`, `steady`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
 
 ## Response
 

@@ -60,8 +60,20 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - Pages are cached and the cache is dropped only when `settle()` actually
   moved something, so the page is never stale but is also not rebuilt for
   every reader.
-- No JavaScript anywhere on the site, with exactly two exceptions, and the
+- No JavaScript anywhere on the site, with exactly three exceptions, and the
   shape of the exceptions is the rule.
+  **The third: the board list and /badges run `BADGE_JS`** (0.22.0, Rob
+  asked for "slick selection and searching"). Both pages are whole without
+  it: the filter is a `<details>` holding a GET form, so the pane opens and
+  "Show boards" asks the server with no script, and /badges shows every
+  row. The script adds speed and the two search boxes, which are marked
+  `data-js hidden` in the markup and shown by it, because a search box that
+  cannot search is a dead control. It reads the page, writes with
+  `textContent` and the `hidden` attribute only, updates the URL with
+  `history.replaceState`, and reads nothing from `location` but the path
+  and the fragment. The suite pins both pages to exactly `BADGE_JS` and
+  fails it on innerHTML, fetch, XMLHttpRequest, sendBeacon, WebSocket, eval,
+  cookies, storage, timers or navigation.
   **The second: `/connected` runs a dozen inline lines written here**
   (`CONNECTED_JS`, 0.19.0). The installer's last step sends a reader to
   `/connected#<address>:<port>`, and the fragment never reaches a server,
@@ -334,16 +346,15 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   of the callers-on figure each up board shows. `STAT_SUFFIX` goes before
   the full stop and is empty on purpose: "across the globe" was asked for
   and left out, because nothing here knows where a board is.
-  **The card's lamps** (0.20.2, Rob: the card must stand out) are three
-  `span.dot`s, not pseudo-elements, because a box has only two of those.
+  **The card's lamps** (0.20.2, Rob: the card must stand out; redrawn in
+  0.22.0, below) are `span.dot`s, not pseudo-elements, because a box has
+  only two of those: eight now, two lamps of a head and three beads each.
   Each follows `offset-path:inset(0 round 0.5rem)`, the card's own rounded
   rectangle, with the card `position:relative` so it is the containing
-  block. The resting state is three lamps a third of a lap apart
-  (`offset-distance` 0, 33.333, 66.667%); the lap, `runlap` at 16s with
-  negative delays, is declared only inside the no-preference block. Without
-  `offset-path` support the `@supports` block does not apply and each lamp
-  sits where `top`/`left`/`right` put it. Check motion by pausing the
-  animation at chosen negative delays in a test copy and reading each
+  block. The lap, `runlap`, is declared only inside the no-preference
+  block. Without `offset-path` support the `@supports` block does not apply
+  and each lamp sits where `top`/`left`/`right` put it. Check motion by
+  pausing the animation at chosen moments in a test copy and reading each
   lamp's position: a screenshot of the running page proves nothing.
   The wash is `rgba(127, 212, 255, ...)`, which is `--dial` written out,
   because a custom property cannot take an alpha.
@@ -489,7 +500,9 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   badges worked out here (new, steady, time listed). **Everything is in
   tables in server.py and /badges is built from the same tables**:
   `LETTER_BADGES`, `AGES`, `BADGE_COLOURS`, `SUPPORT` (one line per cause:
-  slug, drawing, name, sentence) and `SUPPORT_ART`. Changing the support
+  slug, drawing, name, sentence) and `SUPPORT_ART`, and since 0.22.0
+  `INTERESTS` and `INTEREST_ART`, all gathered into `BADGES` (below).
+  /badges is a searchable table per group since 0.22.0. Changing the support
   list is editing a line of `SUPPORT`; a new cause needs a drawing in
   `SUPPORT_ART` too. Rob reviews that list before it goes live, and it is
   the directory's list, not a board's: an unknown slug is ignored, which is
@@ -520,12 +533,53 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   no-preference block and its resting state is transparent, so reduced
   motion is the outline alone. Check the flight by pausing it at negative
   delays in a test copy (`base href` to the local server, CSS appended).
+- **Interests, one order, and the filter (0.22.0, Rob).** `interests` is a
+  sixth badge field, handled exactly as `support`: slugs from `INTERESTS`
+  (slug, group, name, sentence; 42 of them in eight groups, from Computing
+  to Reading and watching), drawings in `INTEREST_ART` keyed by slug, drawn
+  in `currentColor` so the chip's rose (`k-int`, a family nothing else
+  uses) colours them. One outline and a detail or two each, no ids, no
+  text; check new ones on a contact sheet at 17, 30 and 72px, because a
+  drawing that reads at 72 can be a blob at 17 (the first Amiga ball read as
+  a web globe and the first penguin as a bottle).
+  **`BADGES` is every badge once, in the one order all three views use**:
+  /badges, the filter's grid and a board's row walk it and none of them
+  sorts. Rob: alphabetical by the name a reader sees within each group, a
+  leading digit or symbol set aside (`sort_key`), the groups in their own
+  order. So a row reads C D Fi G, the machine, P, the software, and "3D
+  printing" files under D. The six time-listed steps are one badge,
+  "Listed", sharing one key, so they stay together and in duration order.
+  `FILTER_KEYS` is every badge a reader can filter on; software and machine
+  are free text and are not.
+  **The filter**: `filter_bar_html` draws a small Filter button (a
+  `<details>`), the key to the badges beside it, and, only while something
+  is chosen, one line: "N of M boards with all of: ... Clear". Closed, no
+  badge symbol is on the page that was not there before; the tiles live
+  only inside the pane. Every row is always sent, carrying its keys in
+  `data-b` (`row_keys`, which counts every time-listed step reached), and
+  the ones that fail get `hidden`, so the script can bring them back with
+  no round trip; `main [hidden]` is `display:none !important` because a
+  phone's row is `display:flex`. Stripes use `:nth-child(odd of
+  :not([hidden]))` so they count only rows showing. `?b=` and `m=any` are
+  read by `filter_query`, which keeps only known keys, so nothing typed into
+  the address is echoed. A filtered view renders per request from
+  `cached("indexdata")`; the plain list is still cached whole. While the
+  pane is open the script adds `#filter` to the URL, so the meta refresh
+  reopens it instead of snapping it shut. Tiles are three a row at 390.
+- **The card's lamps (0.22.0, from the UX spec)**: two lamps half a lap
+  apart, each a head and three beads, 20s a lap, linear. Three a third of a
+  lap apart looked scattered because a rectangle has no three-fold
+  symmetry; two half a lap apart always mirror through the centre. Beads
+  are invisible outside the motion block; reduced motion and no
+  offset-path both leave two still lamps by opposite corners. Checked by
+  pausing every `runlap` animation at 2s and 7s in a test copy and reading
+  the positions: A (143,0) and B (272,157) on a 415x157 card.
 - **Migrations are additive and tested from an old file.** `setup()` adds a
   missing column with ALTER TABLE and nothing else; `BADGE_COLUMNS` must
-  match SCHEMA, and the suite builds a database with the 0.20.2 schema
-  (`OLD_SCHEMA` in selftest.py), starts a server on it, and compares its
-  columns with a fresh one's. Add the next migration's old schema the same
-  way.
+  match SCHEMA, and the suite builds databases with the 0.20.2 schema
+  (`OLD_SCHEMA`) and the 0.21.1 schema (`OLD_SCHEMA_0211`, copied from that
+  version's server.py), starts a server on each, and compares its columns
+  with a fresh one's. Add the next migration's old schema the same way.
 
 ## Anti-spam, and why it is shaped this way
 
