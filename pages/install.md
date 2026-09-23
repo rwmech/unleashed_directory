@@ -47,6 +47,10 @@ your browser is the thing to change; nothing else on this page will help.
 
 ## What happens, in order
 
+::: art
+install-cable
+:::
+
 1. **Press the button, and pick the port.** The browser shows a list of the
    serial ports it can see. If you are not sure which is the board, unplug it,
    look at the list, plug it back in, and take the one that appeared.
@@ -59,9 +63,19 @@ your browser is the thing to change; nothing else on this page will help.
 4. **Writing.** A progress bar. The installer itself says this takes about two
    minutes, and asks you to keep the page visible while it works, because a
    browser slows down a tab you are not looking at.
+
+::: art
+install-write
+:::
+
 5. **The first start.** After an erase, the board spends its first few moments
    preparing its own storage before it will answer, and the page shows
    **Wrapping up** while it waits. It waits up to 30 seconds.
+
+::: art
+install-boot
+:::
+
 6. **Wi-Fi.** The page asks the board which networks it can hear and lists
    them. Choose yours, type the password, and press **Connect**. A network
    that hides its name is under **Join other** at the bottom of the list. The
@@ -69,6 +83,11 @@ your browser is the thing to change; nothing else on this page will help.
    the page says **Device connected to the network!** If it cannot, the page
    says **Unable to connect**, the board does not save it, and you can try
    again.
+
+::: art
+install-wifi
+:::
+
 7. **The address.** The page then offers **Visit Device**, which is a link to
    the board's telnet address: `telnet://`, the board's address on your
    network, and `:6400`. If your computer has a telnet program that opens links
@@ -146,6 +165,51 @@ A new router, a new password, or the board moving to somebody else's house:
 Nothing else on the board changes. The board only swaps to the new network if
 it gets on with it; if it cannot, it keeps the one it had.
 
+## If something goes wrong, reset rather than reflash
+
+A mistake while setting a board up does not mean starting again. Most of them
+are put right with a reset, and your accounts and settings stay where they are.
+
+- **The wrong Wi-Fi network, or its password typed wrong.** Plug the board
+  into a computer, open this page, press the button and pick the port. The
+  page offers **Change Wi-Fi**, or **Connect to Wi-Fi** if the board is not on
+  a network right now. This works while the board is failing to join one,
+  because it listens on the cable for as long as it is running, and nothing on
+  the board is erased.
+
+::: from 0.24.0
+- **A network changed in CONFIG that does not work.** If the board cannot get
+  on it within a minute of starting, it goes back to the last network that
+  worked, so a typo in CONFIG does not leave it stranded.
+- **The BOOT button.** For a forgotten sysop password, or a board you want
+  back to how it arrived. The order matters:
+
+1. Press and let go of **RESET**, which many boards label EN or RST.
+2. Then press **BOOT** and keep holding it. Holding BOOT while RESET is let go
+   starts the chip's own flashing mode instead, which is why RESET comes first.
+3. Let go when the activity LED shows the stage you want.
+
+::: art
+boot-button
+:::
+
+- **Under 7 seconds**, the LED blinks slowly, and letting go does nothing.
+- **7 to 15 seconds**, the LED flashes rapidly, as a warning. Letting go puts
+  the sysop password back to the published default. Accounts, forums, mail and
+  settings are kept, and you take the board over again as on the first call.
+- **15 to 20 seconds**, the LED stays on. Letting go is a factory reset: the
+  accounts, the settings, the mail and the logs are wiped, and the screens, the
+  firmware and the SD card are kept. The board starts again like a fresh
+  install, waiting for this page's Wi-Fi step.
+- **At 20 seconds** the LED goes off and the reset is abandoned. Letting go
+  does nothing.
+:::
+
+- **Last of all, install again with Erase device ticked.** That is still
+  there, and it puts the chip back to nothing before the firmware goes on, so
+  it takes the accounts, the settings, the mail and the caller log with it.
+  The section above on what an install does to the chip has the details.
+
 ## When the board does not appear
 
 In the order worth trying.
@@ -213,12 +277,22 @@ itself on this directory.
 
 Taking the board over is part of your first call:
 
+::: art
+install-setup
+:::
+
 1. From a computer on the same network, [call the board](/terminals).
-2. Sign up for an account, or log in if you already have one.
-3. The board asks for the sysop password to set itself up. Type `unleashed`.
-4. It then asks you to choose your own. Choose one you use nowhere else:
-   calls to a BBS are not encrypted, and [the privacy page](/privacy) says
-   what that means in plain terms.
+2. Sign up for an account, or log in if you already have one. The board says
+   **This board has not been set up yet** and asks for the **Sysop
+   password**. Type `unleashed`. A wrong one asks again; ESC skips it, and
+   `BYE unleashed` at the prompt, from the same network, does it later.
+3. A screen headed **YOU ARE THE SYSOP** explains what comes next, and the
+   **staff passwords** form opens by itself. Choose a sysop password of your
+   own and press F1 to save it. The board refuses `unleashed` here. Choose one
+   you use nowhere else: calls to a BBS are not encrypted, and [the privacy
+   page](/privacy) says what that means in plain terms.
+4. A short tour of the other settings follows, and then you are at the sysop's
+   prompt. [Set up your BBS](/setup) is the long version of that tour.
 
 > **Change it before anything else.** Do not [forward the port](/forward) and
 > do not turn on the directory listing until you have. "Only from your own

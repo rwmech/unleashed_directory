@@ -1345,8 +1345,8 @@ def main():
         check("and that the board will not list itself while it is set",
               "the board will not put itself on this directory" in flat_i)
         check("and walks through choosing your own on the first call",
-              "asks for the sysop password to set itself up" in flat_i
-              and "It then asks you to choose your own" in flat_i)
+              "and asks for the <b>Sysop password</b>. Type <code>unleashed</code>" in flat_i
+              and "Choose a sysop password of your own and press F1" in flat_i)
         check("and says local only is a guard, not a wall, and why",
               "is a guard, not a wall" in flat_i
               and "rewrite forwarded traffic" in flat_i
@@ -1449,8 +1449,8 @@ def main():
         # The screens are the board's own, drawn as the site's art: a grid of
         # text pinned to its columns, not a picture.
         shots = re.findall(r'<svg class="art shot"[^>]*role="img"[^>]*aria-label="[^"]+"', setup)
-        check("with four screens captured from the board, each described",
-              len(shots) == 4 and setup.count('lengthAdjust="spacingAndGlyphs"') > 40
+        check("with eight screens captured from the board, each described",
+              len(shots) == 8 and setup.count('lengthAdjust="spacingAndGlyphs"') > 80
               and "<img" not in setup.split("<article>")[1])
         # The prose and the captures cannot disagree about a field's name:
         # every label the board drew on the board and file area forms is a
@@ -1547,6 +1547,154 @@ def main():
                                      (get("/", host="data.example")[1], "https://boards.example/"))))
 
         # The wordmark is the way home, on every page of every face.
+        # The first-boot setup, as 0.23.0 does it, in the board's own words.
+        check("the setup guide shows the first-boot setup as the board draws it",
+              all(f'aria-label="{S.SHOTS[k][1][:30]}' in setup for k in (
+                  "shot-setup-offer", "shot-setup-screen", "shot-config-staff",
+                  "shot-newsysop-1"))
+              and "This board has not been set up yet." in setup
+              and "YOU ARE THE SYSOP" in setup)
+
+        # ------------------------------------------------------------------
+        # /install, drawn: what is about to happen, step by step.
+        print("The install page, drawn")
+        inst2 = get("/install")[1]
+        art_i = re.findall(r'<svg class="art steps" viewBox="[^"]+" aria-hidden="true"', inst2)
+        check("five drawings of what is about to happen, all decoration",
+              len(art_i) == 5
+              and all(S.ART[k] in inst2 for k in ("install-cable", "install-write",
+                                                   "install-boot", "install-wifi",
+                                                   "install-setup")))
+        # The steps are split by the drawings and still count on.
+        check("and the numbered steps carry on across them",
+              '<ol start="5">' in inst2 and '<ol start="6">' in inst2
+              and '<ol start="7">' in inst2)
+        flat_i2 = " ".join(inst2.split())
+        check("the reset section: Change Wi-Fi now, a reflash with erase last",
+              "<h2>If something goes wrong, reset rather than reflash</h2>" in inst2
+              and "works while the board is failing to join one" in flat_i2
+              and "nothing on the board is erased" in flat_i2
+              and "install again with Erase device ticked" in flat_i2)
+        # The BOOT button and the Wi-Fi fallback are 0.24.0's. The repository
+        # carries 0.23.0 at most, so here they must not show; the second
+        # server below proves they do once 0.24.0 is on disk.
+        check("and nothing of 0.24.0's shows while the newest release is older",
+              "The BOOT button" not in inst2 and S.ART["boot-button"] not in inst2
+              and "::: from" not in inst2)
+        check("the setup steps name what the board says",
+              "This board has not been set up yet" in flat_i2
+              and "YOU ARE THE SYSOP" in flat_i2 and "ESC skips it" in flat_i2
+              and "The board refuses <code>unleashed</code> here" in flat_i2)
+
+        # ------------------------------------------------------------------
+        # The footer: two rows, then the colophon, on every face.
+        print("The footer")
+        log = open("CHANGELOG.md", encoding="utf-8").read()
+        newest = re.search(r"^## (\d+\.\d+\.\d+)", log, re.M).group(1)
+        check("the site's version is the changelog's newest heading",
+              S.SITE_VERSION == newest)
+        feet = [p.split("<footer>")[1] for p in (
+            get("/")[1], get("/install")[1], get("/", host="about.example")[1],
+            get("/", host="data.example")[1])]
+        check("every footer has its two rows",
+              all('<span class="lbl">Get started</span>' in f
+                  and '<span class="lbl">Reference</span>' in f
+                  and f.index("Get started") < f.index("Reference") for f in feet))
+        check("and the colophon: version, copyright, and the licence linked",
+              all(f'Site version {newest} &middot; &copy; 2026 Robert Mech' in f
+                  and '<a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
+                      "Free software under the GNU General Public License, version 2 or "
+                      "later</a>" in f
+                  and f.rindex('class="colophon"') > f.rindex('class="lbl"')
+                  for f in feet))
+
+        # ------------------------------------------------------------------
+        # Every page names its own address, on the face it belongs to.
+        print("Canonical addresses")
+        canon = {("/", None): "https://boards.example/",
+                 ("/setup", None): "https://boards.example/setup",
+                 ("/", "about.example"): "https://about.example/",
+                 ("/about", None): "https://about.example/",
+                 ("/", "data.example"): "https://data.example/"}
+        wrong = []
+        for (path, host), want in canon.items():
+            page = get(path, host=host)[1]
+            if (f'<link rel="canonical" href="{want}">' not in page
+                    or f'<meta property="og:url" content="{want}">' not in page):
+                wrong.append(path + " " + (host or "list"))
+        check("each page carries a canonical link and og:url for its own face"
+              + ("" if not wrong else "  <- " + ", ".join(wrong)),
+              not wrong and "@CANONICAL@" not in get("/install")[1])
+
+        # The installer's dialog, dark: Material's own variables, set on the
+        # element from this page (checked by eye in a browser as well).
+        css0 = get("/install")[1].split("<style>")[1]
+        check("the installer's dialog is themed dark from this page",
+              "ewt-install-dialog, ewt-no-port-picked-dialog {" in css0
+              and "--md-sys-color-surface:#14141b" in css0)
+
+        # ------------------------------------------------------------------
+        # The 0.17.0 outage, so it cannot happen again: setup.sh copied only
+        # some of what the server reads, and a server missing shots/ died at
+        # import. First, the server has to start with nothing beside it.
+        print("The server starts with nothing beside it")
+        import shutil
+        bare = tempfile.mkdtemp(prefix="dirbare")
+        shutil.copy("server.py", os.path.join(bare, "server.py"))
+        port3 = PORT + 2
+        env3 = dict(os.environ, DIRECTORY_PAGE_CACHE="0",
+                    DIRECTORY_DB=os.path.join(bare, "d.db"), DIRECTORY_PORT=str(port3))
+        server3 = subprocess.Popen([sys.executable, "server.py"], cwd=bare, env=env3,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        out3 = []
+        threading.Thread(target=lambda: [out3.append(l) for l in server3.stdout],
+                         daemon=True).start()
+        up3 = None
+        try:
+            for _ in range(60):
+                try:
+                    up3 = fetch("/health", f"http://127.0.0.1:{port3}")[0]
+                    break
+                except Exception:
+                    if server3.poll() is not None:
+                        break
+                    time.sleep(0.1)
+            home3 = fetch("/", f"http://127.0.0.1:{port3}")[0] if up3 else None
+            inst3 = fetch("/install", f"http://127.0.0.1:{port3}")[0] if up3 else None
+        finally:
+            server3.terminate()
+            try:
+                server3.wait(timeout=5)
+            except Exception:
+                server3.kill()
+            shutil.rmtree(bare, ignore_errors=True)
+        check("server.py alone, in an empty directory, starts and serves pages"
+              + ("" if up3 else "  <- " + b"".join(out3[-3:]).decode("utf-8", "replace").strip()),
+              up3 == 200 and home3 == 200 and inst3 in (200, 404))
+        # Second, everything it reads beside itself is installed by setup.sh.
+        srv_text = open("server.py", encoding="utf-8").read()
+        read = set()
+        for m in re.finditer(r'Path\(__file__\)\.resolve\(\)\.parent\s*/\s*"([^"]+)"'
+                             r'(?:\s*/\s*"([^"]+)")?', srv_text):
+            read.add(m.group(1) + ("/" + m.group(2) if m.group(2) else ""))
+        setup_sh = open(os.path.join("deploy", "setup.sh"), encoding="utf-8").read()
+        code_part = setup_sh.split('say "Code"')[1].split('say "Service"')[0]
+        loop_dirs = set()
+        for m in re.finditer(r"for dir in ([^;]+);", code_part):
+            loop_dirs.update(m.group(1).split())
+        missing_i = []
+        for name in sorted(read):
+            top = name.split("/")[0]
+            named = (top in loop_dirs
+                     or re.search(r'\$SRC"?/' + re.escape(top) + r'\b', code_part))
+            deep = ("/" not in name or top in loop_dirs
+                    or f'cd "$SRC/{top}" && find' in code_part)
+            if not (named and deep):
+                missing_i.append(name)
+        check("everything the server reads beside itself is installed by setup.sh"
+              + ("" if not missing_i else "  <- " + ", ".join(missing_i)),
+              len(read) >= 8 and not missing_i)
+
         print("The wordmark goes home")
         homes = {"the board list": (get("/")[1], "/"),
                  "a page": (get("/setup")[1], "/"),
@@ -2095,6 +2243,15 @@ def main():
                       and 'href="/setup"' in bn)
                 check("and its drawing is hidden from a screen reader",
                       '<svg viewBox="0 0 120 76" aria-hidden="true"' in bn)
+                # 1.0.0 is on disk now, which is past 0.24.0: the reset
+                # section's BOOT button and its drawing appear by themselves.
+                inst4 = fetch("/install", base2)[2].decode("utf-8")
+                flat4 = " ".join(inst4.split())
+                check("with a release of 0.24.0 or later, the BOOT button shows",
+                      "The BOOT button" in inst4 and S.ART["boot-button"] in inst4
+                      and "Press and let go of <b>RESET</b>" in flat4
+                      and "goes back to the last network that worked" in flat4
+                      and "::: from" not in inst4)
             finally:
                 server2.terminate()
                 try:

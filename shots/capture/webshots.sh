@@ -44,7 +44,10 @@ python3 - "$FW/data/system.cfg.example" "$DATA/user/system.cfg" <<'PY'
 import sys
 src, dst = sys.argv[1], sys.argv[2]
 s = open(src, encoding="utf-8").read()
-s = s.replace("sysop_password =\n", "sysop_password = shots4web\n", 1)
+import re
+# 0.23.0 and later ship the line commented out (no line means the
+# published default); older ones ship it empty. Either way, a real one.
+s = re.sub(r"(?m)^#?[ \t]*sysop_password[ \t]*=.*$", "sysop_password = shots4web", s, count=1)
 extra = """[plugin:files]
 enabled = yes
 area1   = pub/c64 | C64 Downloads

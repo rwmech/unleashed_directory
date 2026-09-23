@@ -14,6 +14,42 @@
 
 # Changelog
 
+## 0.18.0, 2026-09-23
+
+- **A check that would have caught the 0.17.x outage, and does now.** The
+  self-test starts `server.py` alone in an empty directory and requires it to
+  answer, and it reads every path the server opens beside itself and requires
+  `deploy/setup.sh` to install each one. Proved against 0.17.1's `server.py`,
+  which fails it with the outage's own error. Writing it found two more gaps,
+  both fixed in setup.sh: `CHANGELOG.md`, which the footer now reads, and
+  `static/kids/`, because the static copy only took files at the top level.
+- **/install, drawn.** Five line drawings of what is about to happen, in
+  order: the data cable, the installer's Install, erase and progress bar, the
+  first start making its storage, the Wi-Fi step and its thirty seconds, and
+  the first call's setup. Decoration beside steps that say the same in words.
+  A numbered list split by a drawing now carries its numbering on.
+- **"If something goes wrong, reset rather than reflash"** (Rob): Change
+  Wi-Fi over the cable, which works while the board is failing to join, and a
+  reflash with erase as the last resort. The CONFIG Wi-Fi fallback and the
+  BOOT button's hold-to-reset, with a drawing of the buttons and the LED's
+  stages against the seconds, are written for firmware 0.24.0 and appear only
+  once a release of 0.24.0 or later is on disk, the way the announcement
+  banner waits for 1.0.0 (`::: from 0.24.0` in the page).
+- **The first-call setup as 0.23.0 does it**, on /install and /setup: the
+  board asks a local caller for the sysop password after they sign up or log
+  in, then the setup screen, the staff passwords form and the tour. /setup
+  shows all four as captured from 0.23.0, and its CONFIG screens were
+  re-captured from 0.23.0 too.
+- **The footer** has two rows, Get started and Reference, and under them the
+  site's version (the changelog's newest heading, read at start), the
+  copyright and the licence.
+- **Every page names its own address**: a canonical link and `og:url`, on the
+  face the page belongs to.
+- **The installer's dialog is dark and monospace**, through Material's own
+  colour variables set from this page, checked by opening its "No port
+  selected" dialog in a browser.
+- 416 checks, up from 404.
+
 ## 0.17.2, 2026-09-23
 
 - **Fixed the outage the 0.15-0.17 updates caused.** `deploy/setup.sh`

@@ -16,8 +16,31 @@ browser](/install) first. That page also sets up its Wi-Fi.
 
 A new board has one password, the sysop's, and it is `unleashed`. It only works
 from your own network, and only until you change it. The [install
-page](/install) says why, and walks through changing it on your first call.
-Change it before anything else on this page.
+page](/install) says why. On your first call from your own network, the board
+asks for it by itself, once you have signed up or logged in:
+
+::: art
+shot-setup-offer
+:::
+
+The right password makes you the sysop, and the board says so:
+
+::: art
+shot-setup-screen
+:::
+
+Then the staff passwords form opens by itself. Type a sysop password of your
+own and press F1 to save it. The board will not take `unleashed` here.
+
+::: art
+shot-config-staff
+:::
+
+After that, a short tour of the settings, and then the sysop's prompt:
+
+::: art
+shot-newsysop-1
+:::
 
 After that, on any call, you become the sysop by typing `BYE` and your password
 at the prompt. The board moves you to its sysop node, and the prompt starts
@@ -52,9 +75,9 @@ shot-config-board
 - **One sysop at a time.** CONFIG is the sysop's alone: co-sysops do not get it,
   because it can change the staff passwords.
 
-These pages were captured from the board's own software, version 0.22.3,
-running on a test machine, in a terminal 48 columns wide. On a wider terminal
-the lists are wider; the forms are the same.
+These screens were captured from the board's own software, version 0.23.0,
+running on a test machine: the setup at 80 columns and the CONFIG pages at 48.
+On a wider terminal the lists are wider; the forms are the same.
 
 ## board
 

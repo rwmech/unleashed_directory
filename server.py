@@ -325,6 +325,24 @@ CREATE TABLE IF NOT EXISTS hits (
 CLEAN = re.compile(r"[\x00-\x1f\x7f]")
 
 
+# The site's version is the newest heading in CHANGELOG.md, read once at
+# start. Not a constant here as well: two copies of a version number are two
+# chances to disagree, and the changelog is the one that gets written. A
+# deployment without the file (it has to be installed beside this one; see
+# deploy/setup.sh) shows no version rather than failing to start.
+def _site_version():
+    try:
+        text = (pathlib.Path(__file__).resolve().parent / "CHANGELOG.md").read_text(
+            encoding="utf-8")
+    except OSError:
+        return ""
+    m = re.search(r"^## (\d+\.\d+\.\d+)", text, re.M)
+    return m.group(1) if m else ""
+
+
+SITE_VERSION = _site_version()
+
+
 def role_for(host):
     """Which of the three sites a request is asking for."""
     host = (host or "").split(":")[0].lower()
@@ -463,20 +481,32 @@ def foot_html(role, extra=""):
     # happens. It used to be reachable from one sentence at the bottom of
     # /terminals and from a title= attribute on every dial link, and a
     # title is invisible on every touch device and clickable nowhere.
-    links = (f'<a href="{site_url("list", role, "/build")}">Build one</a> &middot; '
-             f'<a href="{site_url("list", role, "/install")}">Install</a> &middot; '
-             f'<a href="{site_url("list", role, "/terminals")}">Terminals</a> &middot; '
-             f'<a href="{site_url("list", role, "/dialing")}">Dial links</a> &middot; '
-             f'<a href="{site_url("list", role, "/forward")}">Go public</a> &middot; '
-             f'<a href="{site_url("list", role, "/how")}">Get listed</a> &middot; '
-             f'<a href="{site_url("list", role, "/rules")}">House rules</a> &middot; '
-             f'<a href="{site_url("list", role, "/donate")}">Support</a> &middot; '
-             f'<a href="{site_url("list", role, "/feed.xml")}">RSS</a> &middot; '
-             f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>')
+    # Two rows, because eleven links in one run read as a list of
+    # everything: the pages somebody works through to get a board going,
+    # and the pages they come back to.
+    start = " &middot; ".join(
+        f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
+            ("/build", "Build one"), ("/install", "Install"), ("/setup", "Set up"),
+            ("/terminals", "Terminals"), ("/dialing", "Dial links"),
+            ("/forward", "Go public"), ("/how", "Get listed")))
+    refer = " &middot; ".join(
+        [f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
+            ("/rules", "House rules"), ("/donate", "Support"), ("/feed.xml", "RSS"))]
+        + [f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>'])
+    links = ('<span class="row"><span class="lbl">Get started</span> ' + start + "</span>"
+             '<br><span class="row"><span class="lbl">Reference</span> ' + refer + "</span>")
     parts = [others, links] if others else [links]
     if extra:
         parts.append(extra)
-    return "<br><br>".join(parts)
+    # The colophon, last and smallest: which version of the site this is,
+    # whose it is, and the terms it is under, on every page.
+    colophon = ('<p class="colophon">'
+                + (f"Site version {SITE_VERSION} &middot; " if SITE_VERSION else "")
+                + "&copy; 2026 Robert Mech &middot; "
+                '<a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">Free '
+                "software under the GNU General Public License, version 2 or "
+                "later</a></p>")
+    return "<br><br>".join(parts) + colophon
 
 
 
@@ -785,6 +815,7 @@ _MD_ITAL   = re.compile(r"(?<!\*)\*([^*\s][^*]*?)\*(?!\*)")
 # joined into a wall of text. Nothing caught it because every word was
 # present and in the right order, which is what a grep checks.
 _MD_STEP   = re.compile(r"^\d{1,2}\. ")
+_MD_GATE   = re.compile(r"^::: from (\d+)\.(\d+)\.(\d+)\s*$")
 
 
 def md_inline(s):
@@ -984,11 +1015,36 @@ def md_render(text):
     out, para, bullets, code = [], [], [], None
     quote = []            # consecutive "> " lines: one warning, not one per line
     steps = []            # "1. " lines: a numbered list, not a paragraph
+    first_step = [1]      # its first number, so a list split by a drawing carries on
+    gate = None           # "::: from X.Y.Z": [version, depth, lines]
     table = None
     card = None           # a "::: cards" block, collected whole
     comment = False       # inside "<!-- ... -->": a note for whoever edits the page
     for raw in text.splitlines():
         line = raw.rstrip()
+
+        # "::: from 0.24.0" ... ":::" is prose for a firmware not yet
+        # released: rendered only once a release at that version or later
+        # is on disk, the way the announcement banner waits for 1.0.0. It
+        # may hold a drawing, so it counts ":::" pairs rather than ending
+        # at the first.
+        if gate is not None:
+            if line.startswith("::: "):
+                gate[1] += 1
+            elif line.strip() == ":::":
+                if gate[1] == 0:
+                    rels = firmware_releases()
+                    if rels and rels[0]["sort"] >= gate[0]:
+                        out.append(md_render("\n".join(gate[2])))
+                    gate = None
+                    continue
+                gate[1] -= 1
+            gate[2].append(raw)
+            continue
+        if code is None and card is None and _MD_GATE.match(line):
+            want = tuple(int(g) for g in _MD_GATE.match(line).groups())
+            gate = [want, 0, []]
+            continue
 
         # A comment is dropped whole and never reaches the page. It exists
         # for notes that belong beside the words they are about, such as a
@@ -1045,8 +1101,9 @@ def md_render(text):
                                             for b in bullets) + "</ul>")
                 bullets.clear()
             if steps:
-                out.append("<ol>" + "".join(f"<li>{md_inline(s)}</li>"
-                                            for s in steps) + "</ol>")
+                start = f' start="{first_step[0]}"' if first_step[0] != 1 else ""
+                out.append(f"<ol{start}>" + "".join(f"<li>{md_inline(s)}</li>"
+                                                     for s in steps) + "</ol>")
                 steps.clear()
             if quote:
                 out.append(md_callout(quote))
@@ -1082,6 +1139,8 @@ def md_render(text):
         elif _MD_STEP.match(line):
             if para or bullets:
                 flush()
+            if not steps:
+                first_step[0] = int(line.split(".", 1)[0])
             steps.append(_MD_STEP.sub("", line, count=1))
         elif not line:
             flush()
@@ -1103,7 +1162,9 @@ def md_render(text):
     if bullets:
         out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>" for b in bullets) + "</ul>")
     if steps:
-        out.append("<ol>" + "".join(f"<li>{md_inline(s)}</li>" for s in steps) + "</ol>")
+        start = f' start="{first_step[0]}"' if first_step[0] != 1 else ""
+        out.append(f"<ol{start}>" + "".join(f"<li>{md_inline(s)}</li>" for s in steps)
+                   + "</ol>")
     if quote:
         out.append(md_callout(quote))
     return "".join(out)
@@ -1765,6 +1826,8 @@ PAGE = """<!doctype html>
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}">
 <meta property="og:type" content="website">
+<meta property="og:url" content="@CANONICAL@">
+<link rel="canonical" href="@CANONICAL@">
 <meta property="og:image" content="@AVATAR_URL@">
 <meta property="og:image:width" content="1024">
 <meta property="og:image:height" content="1024">
@@ -2431,6 +2494,31 @@ dl {{ margin:0 0 0.875rem; }} dt {{ color:var(--warm); margin-top:0.625rem; }} d
    looks like a rendering fault whether or not it is one. The run wraps
    between links now, never inside one. */
 footer a {{ display:inline-block; padding:0.375rem 0; white-space:nowrap; }}
+/* The footer's two rows, each led by what it is, and the colophon under
+   them in small type. The labels are the faint colour: structure, not
+   something to click. */
+footer .lbl {{ color:var(--faint); margin-right:0.5rem; text-transform:uppercase;
+        letter-spacing:0.0625rem; font-size:0.75rem; }}
+footer .colophon {{ margin:1.25rem 0 0; font-size:0.6875rem; color:var(--faint);
+        line-height:1.6; }}
+footer .colophon a {{ display:inline; padding:0; white-space:normal; color:var(--dim); }}
+/* The installer's dialog is somebody else's element, drawn in light
+   Material colours by default. It takes its colours from Material's own
+   custom properties, which a rule on the element from this page overrides,
+   so it is dark and monospace here without touching its code. */
+ewt-install-dialog, ewt-no-port-picked-dialog {{
+  --md-sys-color-surface:#14141b; --md-sys-color-surface-container:#14141b;
+  --md-sys-color-surface-container-high:#1a1a23;
+  --md-sys-color-surface-container-highest:#22222c;
+  --md-sys-color-secondary-container:#22222c;
+  --md-sys-color-on-surface:#c8c8c8; --md-sys-color-on-surface-variant:#8a8a8a;
+  --md-sys-color-outline-variant:#2c2c38; --md-sys-color-scrim:#000;
+  --md-sys-color-primary:#7fd4ff; --md-sys-color-on-primary:#04212c;
+  --text-color:#c8c8c8; --danger-color:#ff7a7a;
+  --md-ref-typeface-brand:ui-monospace,Menlo,Consolas,monospace;
+  --md-ref-typeface-plain:ui-monospace,Menlo,Consolas,monospace;
+  color:#c8c8c8;
+}}
 /* --------------------------------------------------------------------
    The board list, which is the product, at two widths.
 
@@ -3706,6 +3794,10 @@ svg.art .c1 { fill:var(--dial); }
 svg.art .c2 { fill:var(--live); }
 svg.art .c3 { fill:var(--busy); }
 svg.art .c4 { fill:var(--name); }
+svg.art .c5 { fill:var(--warm); }
+svg.art text.warm { fill:var(--warm); }
+svg.art text.busy { fill:var(--busy); }
+svg.art .timer { stroke-dasharray:30 30; }
 /* The calendar's first two readings are hidden at rest, so a still
    drawing reads 365: a year has passed and the lamp is still lit. */
 svg.art .n1, svg.art .n2 { opacity:0; }
@@ -3835,7 +3927,15 @@ svg.art.shot text.cd { fill:#c8a0ff; }  svg.art.shot rect.bd { fill:#c8a0ff; }
 svg.art.shot text.ce { fill:#7fe8e8; }  svg.art.shot rect.be { fill:#7fe8e8; }
 svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
 
+@keyframes artgrow { 0% { transform:scaleX(0.04); } 70%, 100% { transform:scaleX(1); } }
+@keyframes arttimer { from { stroke-dashoffset:30; } to { stroke-dashoffset:0; } }
+
 @media (prefers-reduced-motion: no-preference) {
+  /* /install: a progress bar filling, storage being made, the Wi-Fi timer */
+  svg.art .grow { transform-box:fill-box; transform-origin:left center;
+        animation:artgrow 3.2s ease-in-out infinite; }
+  svg.art .grow.g2 { animation-delay:0.8s; }
+  svg.art .timer { animation:arttimer 6s linear infinite; }
   /* nobody has to say yes: the gate is up and things go through it */
   svg.art.i-gate .go { animation:artpass 3.2s ease-in-out infinite; }
   /* no internet: traffic on the local links, nothing on the cloud */
@@ -4477,8 +4577,9 @@ def shot_svg(name, alt):
                            'lengthAdjust="spacingAndGlyphs" xml:space="preserve">'
                            + html.escape(run) + "</text>")
             c = e
+    caption = doc.get("caption") or ("typed: " + doc.get("typed", ""))
     out.append(f'<text class="cap" x="{x0 + 2}" y="{gh + 32}" font-size="9">'
-               + html.escape("typed: " + doc["typed"]) + "</text>")
+               + html.escape(caption) + "</text>")
     out.append(f'<circle class="lf" cx="{gw + 4}" cy="{gh + 29}" r="2"/>')
     out.append("</svg>")
     return "".join(out)
@@ -4499,11 +4600,197 @@ SHOTS = {
         "CONFIG files: Enabled, Read, Write and Admin, then Area 1 to Area 8 "
         "as buttons. The first two carry the names C64 Downloads and Text "
         "Files; the rest say not set."),
+    "shot-setup-offer": ("setup-offer",
+        "What a new board says to a caller on its own network after they sign "
+        "up: This board has not been set up yet. You are on its own network, "
+        "so you can do it now. The sysop password is on the install page. "
+        "Then: Sysop password (ESC skips)."),
+    "shot-setup-screen": ("setup-screen",
+        "The setup screen, headed YOU ARE THE SYSOP: welcome, the job of "
+        "changing the default password first in the staff passwords form, "
+        "no port forward and no directory listing until that is done, and "
+        "that a short tour follows."),
+    "shot-config-staff": ("config-staff",
+        "The staff passwords form, opened by the setup: Sysop, showing stars, "
+        "and the two co-sysop passwords, blank, with Save and Cancel."),
+    "shot-newsysop-1": ("newsysop-1",
+        "The first page of the tour, SETTING UP YOUR BOARD: what CONFIG does, "
+        "and one line for each settings page, board, limits, accounts, "
+        "backup, staff and wifi, then the plugins."),
     "shot-config-area": ("config-area",
         "Area 1 opened from CONFIG files: a form headed FILE AREA 1 with Path "
         "pub/c64, Name C64 Downloads, and the levels Read all, Upload staff, "
         "Download all and Delete sysop."),
 }
+
+# ----------------------------------------------------------------------
+# /install, drawn step by step (0.18.0). Rob: "the install button looks fine
+# but some of those cool graphics showing what's about to happen is fun."
+# The same hand as the first call strip: --dial outlines, --live for what
+# is alive, 354 units wide so a phone draws them at 1:1. Each is decoration
+# beside a step that says the same thing in words, so each is aria-hidden;
+# nothing a reader needs is only in a drawing. The motion (a lamp, a
+# progress bar, two storage bars and a timer) is in the no-preference
+# block like every other drawing's, so the markup is the resting state.
+# ----------------------------------------------------------------------
+def _deco(height, inner):
+    return (f'<svg class="art steps" viewBox="-5 -6 354 {height}" aria-hidden="true" '
+            'focusable="false" preserveAspectRatio="xMidYMid meet">' + inner + "</svg>")
+
+
+def _board(x, y, lamp_class="lf caret"):
+    """A dev board, 120 x 52, module can, antenna, pins, a USB socket on
+    its left edge and its lamp."""
+    return (f'<rect class="o" x="{x}" y="{y}" width="120" height="52" rx="3"/>'
+            + '<path class="d" d="' + " ".join(
+                f"M{x + 8 + i * 9} {y} V{y - 4} M{x + 8 + i * 9} {y + 52} V{y + 56}"
+                for i in range(12)) + '"/>'
+            f'<rect class="g" x="{x + 36}" y="{y + 8}" width="44" height="34" rx="1.5"/>'
+            f'<path class="d" d="M{x + 40} {y + 14} H{x + 44} V{y + 11} H{x + 49} V{y + 14}'
+            f' H{x + 54} V{y + 11} H{x + 59} V{y + 14} H{x + 64} V{y + 11} H{x + 69}'
+            f' V{y + 14} H{x + 76}"/>'
+            f'<rect class="gb" x="{x - 6}" y="{y + 20}" width="10" height="12" rx="1"/>'
+            f'<circle class="{lamp_class}" cx="{x + 108}" cy="{y + 42}" r="2.5"/>')
+
+
+INSTALL_CABLE = _deco(118,
+    # A laptop with the page open, the button on its screen.
+    '<rect class="o" x="8" y="8" width="112" height="72" rx="4"/>'
+    '<rect class="g" x="14" y="14" width="100" height="58" rx="2"/>'
+    '<rect class="k" x="32" y="34" width="64" height="18" rx="3"/>'
+    '<text class="ink" x="64" y="46.5" font-size="9" text-anchor="middle">Install</text>'
+    '<path class="o" d="M0 84 H128 L122 91 H6 Z"/>'
+    # The cable: two conductors drawn inside the sleeve, because a cable
+    # that carries data is the whole point of the step.
+    '<path class="o" d="M124 84 C160 84 166 64 208 64"/>'
+    '<path class="lt" d="M126 87 C161 87 167 67 208 67"/>'
+    + _board(214, 40) +
+    '<text x="150" y="108" font-size="9" text-anchor="middle">a cable that carries data</text>')
+
+INSTALL_WRITE = _deco(112,
+    # Three moments of the installer's own dialog: Install, the erase
+    # question, the progress bar.
+    '<rect class="o" x="0" y="6" width="104" height="72" rx="4"/>'
+    '<text class="ink" x="8" y="21" font-size="8">unleashed BBS</text>'
+    '<rect class="k" x="8" y="30" width="88" height="16" rx="2"/>'
+    '<text class="ink" x="14" y="41" font-size="8.5">Install</text>'
+    '<text x="14" y="62" font-size="7.5">Logs &amp; Console</text>'
+    '<path class="d" d="M108 38 L112 42 L108 46"/>'
+    '<rect class="o" x="118" y="6" width="104" height="72" rx="4"/>'
+    '<text class="ink" x="126" y="21" font-size="8">Erase device</text>'
+    '<rect class="o" x="128" y="33" width="11" height="11" rx="1.5"/>'
+    '<path class="l" d="M130.5 38.5 L133.5 41.5 L137 35.5"/>'
+    '<text class="ink" x="145" y="42" font-size="8">Erase device</text>'
+    '<text x="126" y="64" font-size="7.5">new board: tick it</text>'
+    '<path class="d" d="M226 38 L230 42 L226 46"/>'
+    '<rect class="o" x="236" y="6" width="108" height="72" rx="4"/>'
+    '<text class="ink" x="244" y="21" font-size="8">Installing</text>'
+    '<rect class="o" x="244" y="32" width="92" height="10" rx="3"/>'
+    '<rect class="lf grow" x="246" y="34" width="60" height="6" rx="2"/>'
+    '<text x="244" y="64" font-size="7.5">about two minutes</text>'
+    '<text x="52" y="98" font-size="9" text-anchor="middle">install</text>'
+    '<text x="170" y="98" font-size="9" text-anchor="middle">erase, the first time</text>'
+    '<text x="290" y="98" font-size="9" text-anchor="middle">writing</text>')
+
+INSTALL_BOOT = _deco(108,
+    _board(6, 28)
+    + '<path class="d" d="M140 54 L148 54 M144 50 L148 54 L144 58"/>'
+    # The flash, three parts: the screens arrive written, the other two
+    # are made on the first start.
+    '<rect class="o" x="160" y="6" width="182" height="86" rx="3"/>'
+    '<text class="ink" x="170" y="21" font-size="8.5">first start</text>'
+    '<rect class="k" x="170" y="30" width="162" height="12" rx="2"/>'
+    '<text class="ink" x="175" y="39" font-size="7.5">screens: installed</text>'
+    '<rect class="o" x="170" y="48" width="162" height="12" rx="2"/>'
+    '<rect class="lf grow g1" x="171" y="49" width="160" height="10" rx="1.5" opacity="0.35"/>'
+    '<text class="ink" x="175" y="57" font-size="7.5">accounts, settings: formatting</text>'
+    '<rect class="o" x="170" y="66" width="162" height="12" rx="2"/>'
+    '<rect class="lf grow g2" x="171" y="67" width="160" height="10" rx="1.5" opacity="0.35"/>'
+    '<text class="ink" x="175" y="75" font-size="7.5">caller log: formatting</text>')
+
+INSTALL_WIFI = _deco(118,
+    '<rect class="o" x="0" y="6" width="210" height="98" rx="4"/>'
+    '<text class="ink" x="10" y="21" font-size="8.5">Configure Wi-Fi</text>'
+    '<rect class="k" x="10" y="28" width="190" height="14" rx="2"/>'
+    + "".join(
+        f'<path class="d" d="M16 {y + 2} A5 5 0 0 1 24 {y + 2} M18 {y + 4.5} A2.5 2.5 0 0 1 22 {y + 4.5}"/>'
+        f'<text class="{cls}" x="30" y="{y + 6}" font-size="8">{name}</text>'
+        for y, name, cls in ((32, "your network", "ink"), (48, "a neighbour", ""),
+                             (64, "Join other...", "")))
+    + '<rect class="o" x="10" y="78" width="120" height="16" rx="2"/>'
+    '<text class="ink" x="16" y="89" font-size="8" letter-spacing="1">&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;</text>'
+    '<rect class="k" x="140" y="78" width="60" height="16" rx="3"/>'
+    '<text class="ink" x="170" y="89" font-size="8" text-anchor="middle">Connect</text>'
+    # The board tries for up to thirty seconds.
+    '<circle class="d" cx="276" cy="48" r="26"/>'
+    '<circle class="l timer" cx="276" cy="48" r="26" pathLength="30"/>'
+    '<text class="ink" x="276" y="52" font-size="11" text-anchor="middle">30 s</text>'
+    '<text x="276" y="94" font-size="8.5" text-anchor="middle">tries for up to</text>'
+    '<text x="276" y="106" font-size="8.5" text-anchor="middle">thirty seconds</text>')
+
+INSTALL_SETUP = _deco(130,
+    _screen(0,
+        '<text class="ink" x="21" y="23" font-size="7">not set up yet</text>'
+        '<text x="21" y="32" font-size="7">you are local</text>'
+        '<text class="dial" x="21" y="43" font-size="7">Sysop password:</text>'
+        '<text class="ink" x="21" y="52" font-size="7">********</text>')
+    + _caption(0, "it asks for", "the password")
+    + '<path class="d" d="M109 35 L113 38.5 L109 42"/>'
+    + _screen(118,
+        '<text class="dial" x="139" y="24" font-size="7">STAFF PASSWORDS</text>'
+        '<path class="d" d="M139 27 H206"/>'
+        '<text class="ink" x="139" y="39" font-size="7">Sysop</text>'
+        '<rect class="k" x="163" y="33" width="42" height="8" rx="1"/>'
+        '<rect class="lf caret" x="165" y="34" width="3" height="6"/>'
+        '<text x="139" y="51" font-size="7">Co-sysop</text>')
+    + _caption(118, "you choose", "your own")
+    + '<path class="d" d="M227 35 L231 38.5 L227 42"/>'
+    + _screen(236,
+        '<text class="dial" x="257" y="24" font-size="7">YOUR BOARD</text>'
+        '<path class="d" d="M257 27 H324 M257 34 H316 M257 40 H320 M257 46 H300"/>'
+        '<text x="257" y="54" font-size="6.5">Page 1 of 2</text>')
+    + _caption(236, "then a short", "tour"))
+
+# The BOOT button, for firmware 0.24.0 and later: the two buttons and the
+# order to press them in, then what the lamp does against the seconds held.
+# Axis 0 to 22 s across x 20 to 340, 14.55 units a second.
+def _bx(sec):
+    return round(20 + sec * 320 / 22, 1)
+
+
+BOOT_BUTTON = _deco(206,
+    '<rect class="o" x="30" y="8" width="284" height="58" rx="3"/>'
+    '<circle class="o" cx="100" cy="36" r="10"/><circle class="k" cx="100" cy="36" r="6"/>'
+    '<text class="ink" x="100" y="20" font-size="8" text-anchor="middle">RESET</text>'
+    '<circle class="o" cx="190" cy="36" r="10"/><circle class="k" cx="190" cy="36" r="6"/>'
+    '<text class="ink" x="190" y="20" font-size="8" text-anchor="middle">BOOT</text>'
+    '<circle class="lf" cx="276" cy="36" r="4"/>'
+    '<text x="276" y="20" font-size="8" text-anchor="middle">LED</text>'
+    '<text class="dial" x="100" y="80" font-size="8.5" text-anchor="middle">1 press, let go</text>'
+    '<text class="dial" x="190" y="80" font-size="8.5" text-anchor="middle">2 press and hold</text>'
+    # The timeline.
+    f'<path class="d" d="M{_bx(0)} 118 H{_bx(22)}"/>'
+    + "".join(f'<path class="d" d="M{_bx(s)} 114 V122"/>'
+              f'<text x="{_bx(s)}" y="133" font-size="8" text-anchor="middle">{s} s</text>'
+              for s in (0, 7, 15, 20))
+    # 0 to 7: slow blink. 7 to 15: rapid. 15 to 20: solid. 20 on: off.
+    + "".join(f'<circle class="lf" cx="{_bx(s)}" cy="104" r="2.2"/>'
+              for s in (0.8, 2.6, 4.4, 6.2))
+    + "".join(f'<circle class="c5" cx="{_bx(7.5 + i * 0.52)}" cy="104" r="1.6"/>'
+              for i in range(15))
+    + f'<rect class="c3" x="{_bx(15)}" y="101" width="{_bx(20) - _bx(15)}" height="6" rx="2"/>'
+    f'<circle class="f" cx="{_bx(21)}" cy="104" r="2.2"/>'
+    + f'<text x="{_bx(3.5)}" y="152" font-size="8" text-anchor="middle">slow blink:</text>'
+    f'<text class="ink" x="{_bx(3.5)}" y="163" font-size="8" text-anchor="middle">nothing</text>'
+    f'<text x="{_bx(11)}" y="152" font-size="8" text-anchor="middle">rapid flash:</text>'
+    f'<text class="warm" x="{_bx(11)}" y="163" font-size="8" text-anchor="middle">sysop password</text>'
+    f'<text class="warm" x="{_bx(11)}" y="174" font-size="8" text-anchor="middle">back to default</text>'
+    f'<text x="{_bx(17.5)}" y="152" font-size="8" text-anchor="middle">solid:</text>'
+    f'<text class="busy" x="{_bx(17.5)}" y="163" font-size="8" text-anchor="middle">factory</text>'
+    f'<text class="busy" x="{_bx(17.5)}" y="174" font-size="8" text-anchor="middle">reset</text>'
+    f'<text x="{_bx(21.2)}" y="152" font-size="8" text-anchor="middle">off:</text>'
+    f'<text class="ink" x="{_bx(21.2)}" y="163" font-size="7" text-anchor="middle">abandoned</text>'
+    f'<text x="{_bx(11)}" y="190" font-size="8" text-anchor="middle">what letting go of BOOT does, by seconds held</text>')
 
 SETUP_ALT = (
     "Three steps. A board on a USB cable, flashed from the browser. Wi-Fi "
@@ -4546,6 +4833,12 @@ SETUP_ART = (
     + "</svg>")
 
 ART = {"firstcall": FIRSTCALL_ART,
+       "install-cable": INSTALL_CABLE,
+       "install-write": INSTALL_WRITE,
+       "install-boot": INSTALL_BOOT,
+       "install-wifi": INSTALL_WIFI,
+       "install-setup": INSTALL_SETUP,
+       "boot-button": BOOT_BUTTON,
        "setup-steps": SETUP_ART,
        "term-modern": MACHINE_MODERN,
        "term-chromebook": MACHINE_CHROMEBOOK,
@@ -5159,7 +5452,26 @@ class Handler(BaseHTTPRequestHandler):
                          head.get("X-Forwarded-For", ""),
                          head.get("X-Real-IP", ""))
 
+    def canonical(self):
+        """This page's own address, absolute, on the face it belongs to.
+
+        Filled in at reply time rather than by every page builder, because
+        only the request knows the path and the host it came in on, and a
+        page is cached once and served on any face. /about and /data are
+        pages of their own faces wherever they are asked for."""
+        role = role_for(self.headers.get("Host", ""))
+        path = self.path.split("?", 1)[0]
+        target, p = {"/about": ("about", "/"), "/data": ("data", "/")}.get(path, (role, path))
+        url = site_url(target, role, p)
+        if url.startswith("http"):
+            return url
+        dom = {"list": LIST_DOMAIN, "about": ABOUT_DOMAIN, "data": DATA_DOMAIN}.get(role, "")
+        base = f"https://{dom}" if dom else SITE_URL.rstrip("/")
+        return base + url
+
     def reply(self, code, body, ctype="text/html; charset=utf-8", extra=None):
+        if isinstance(body, str) and "@CANONICAL@" in body:
+            body = body.replace("@CANONICAL@", html.escape(self.canonical(), quote=True))
         raw = body.encode("utf-8") if isinstance(body, str) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)

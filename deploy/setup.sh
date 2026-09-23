@@ -125,6 +125,10 @@ fi
 say "Code"
 install -m 644 "$SRC/server.py"   "$DEST/server.py"
 install -m 644 "$SRC/selftest.py" "$DEST/selftest.py"
+# The site's version is read from the changelog's newest heading at start,
+# for the footer. Without the file the server still starts; it just cannot
+# say which version it is.
+install -m 644 "$SRC/CHANGELOG.md" "$DEST/CHANGELOG.md"
 
 # Pages are prose in Markdown and are replaced on every install, because the
 # repository is where they get edited.
@@ -138,8 +142,11 @@ done
 # with scp, and an update has no business throwing those away.
 install -d -m 755 "$DEST/static"
 if [ -d "$SRC/static" ]; then
-    for shot in "$SRC"/static/*; do
-        [ -f "$shot" ] && install -m 644 "$shot" "$DEST/static/"
+    # Every file under static/, subfolders included: static/kids/ is the
+    # card art on /kids (PIX_DIR in server.py), and a loop over static/*
+    # alone never reached it.
+    (cd "$SRC/static" && find . -type f) | while IFS= read -r shot; do
+        install -D -m 644 "$SRC/static/$shot" "$DEST/static/$shot"
     done
 fi
 

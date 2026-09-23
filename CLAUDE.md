@@ -262,6 +262,35 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   live early and appears by itself when the release lands. Yellow
   (`#ffd35c`) is used for nothing else on the site: amber is a warning and
   the tip box an invitation. Call it the announcement banner in docs.
+- **Anything the server reads beside itself must be installed by
+  `deploy/setup.sh`, in the same change** (the 0.17.x outage). setup.sh
+  copies into `/srv/unleashed_directory` and the droplet's checkout is
+  elsewhere, so a folder the server opens that setup.sh does not copy is a
+  folder the live server does not have. 0.17.0 read `shots/` at import with
+  no guard and every check on the droplet was a 502. The suite now starts
+  `server.py` alone in an empty directory and requires it to serve, and
+  requires every `Path(__file__).resolve().parent / "..."` in server.py to be
+  named in setup.sh's Code section (nested paths need a recursive copy).
+  Anything read at import must degrade, never raise.
+- **`::: from X.Y.Z` ... `:::`** renders its Markdown only once the newest
+  release on disk is at least that version, for writing about firmware that
+  is not out yet. It may hold drawings (it counts `:::` pairs). A numbered
+  list split by a drawing keeps counting (`<ol start>`).
+- **The footer** is two rows, Get started and Reference, then the colophon:
+  the site version from the newest `## X.Y.Z` in CHANGELOG.md, read once at
+  start (so CHANGELOG.md is installed beside server.py), the copyright and
+  the GPL link. Bumping the site version is writing the changelog entry.
+- **Canonical links** are filled in at reply time (`Handler.canonical`), not
+  by each page builder, because a cached page is served on any face; `/about`
+  and `/data` are canonical on their own faces wherever they are asked for.
+- **The installer's dialog is themed from PAGE's stylesheet**: its Material
+  `--md-sys-color-*` variables set on `ewt-install-dialog` and
+  `ewt-no-port-picked-dialog`, which beat the component's own `:host` values.
+  A new ESP Web Tools version can rename them; check by opening a dialog.
+- **The /setup captures are 0.23.0's** (461cb65): CONFIG pages with
+  `shots/capture/webshots.sh` at 48 columns, the first-boot setup with
+  `setupshots.sh` at 80 (harness tag `webshots2 --fresh`), then
+  `shots2json.py <capture> shots <config|setup> "<source>"`.
 - **/donate, "Support the project"** (0.17.0): written by the copywriter,
   wired as an ordinary page, linked as "Support" in every face's footer.
   **Buy Me a Coffee is a plain link and nothing more**: no widget, no
