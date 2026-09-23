@@ -1738,14 +1738,90 @@ def main():
         check("beside them from 901px as a grid column, not a float",
               ".listtop { display:grid; grid-template-columns:minmax(0, 1fr) 19.5rem;"
               in css_h and not re.search(r"\.runcard[^{]*\{[^}]*float", css_h))
-        check("its buttons are the compact ones, in the installer card's box",
+        check("its buttons are the compact ones, in the installer card's shape",
               ".runcard a.fill, .runcard a.line { display:inline-block; font-size:0.75rem;"
               in css_h
-              and ".runcard { background:#12121a; border:1px solid #2c3a44; "
-                  "border-radius:0.5rem;" in css_h
-              and "padding:1.125rem 1.25rem;" in css_h)
+              and "border-radius:0.5rem;\n        padding:1.125rem 1.25rem;" in css_h)
         check("and on a phone the card is its title and the two buttons",
               ".runcard .say { display:none; }" in css_h)
+        # 0.20.2 (Rob): the card stands out. A wash of --dial over the page
+        # rather than a flat block, its border the same blue, and three
+        # lamps going slowly round the edge, in CSS alone.
+        check("the card is washed in --dial, its border the same blue",
+              ".runcard { position:relative; background:rgba(127, 212, 255, 0.12);"
+              in css_h and "border:1px solid rgba(127, 212, 255, 0.6);" in css_h
+              and "--dial:#7fd4ff;" in css_h)
+        check("three lamps on its edge, hidden from a screen reader",
+              all(f'<span class="dot d{i}" aria-hidden="true"></span>' in hbody
+                  for i in (1, 2, 3))
+              and hbody.count('class="dot ') == 3)
+        run_moving = css_h[css_h.find("@media (prefers-reduced-motion: no-preference) {\n"
+                                      "  @supports (offset-path"):]
+        run_moving = run_moving[:run_moving.find("\n}\n")]
+        check("they follow the card's own rounded edge, a third of a lap apart",
+              "offset-path:inset(0 round 0.5rem);" in css_h
+              and ".runcard .d2 { offset-distance:33.333%; }" in css_h
+              and ".runcard .d3 { offset-distance:66.667%; }" in css_h)
+        check("and move only where reduced motion does not stop them",
+              run_moving.startswith("@media (prefers-reduced-motion: no-preference)")
+              and ".runcard .dot { animation:runlap 16s linear infinite; }" in run_moving
+              and "@keyframes runlap" in run_moving
+              and css_h.count("animation:runlap") == 1
+              and css_h.count("@keyframes runlap") == 1)
+        check("a browser without offset-path gets three still lamps on the edge",
+              ".runcard .d1 { top:-0.25rem; left:25%; }" in css_h
+              and ".runcard .d2 { top:45%; right:-0.25rem; }" in css_h
+              and ".runcard .d3 { bottom:-0.25rem; left:30%; }" in css_h
+              and "@supports (offset-path: inset(0 round 0.5rem)) {" in css_h)
+
+        # ------------------------------------------------------------------
+        # Upgrading a board that already runs the BBS (0.20.2, Rob: "make
+        # sure the website calls out on the flasher page how to upgrade").
+        print("Upgrading")
+        code, upg = get("/upgrade")
+        check("/upgrade is served, under its own heading",
+              code == 200 and has_h(upg, 1, "Upgrade a board"))
+        check("it lights Build one in the menu, the installer's section",
+              '<a class="here" href="/build">Build one</a>' in upg)
+        uflat = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", upg)).split())
+        check("back up first, through the backup window, said to hold what it holds",
+              '<a href="/setup#backup">the backup window</a>' in upg
+              and 'id="backup"' in get("/setup")[1]
+              and "It does not hold the mail or the information pages." in uflat)
+        check("a recognised board is offered the update, with no erase",
+              "Update unleashed BBS" in uflat and "0.22.1 or later" in uflat
+              and "It does not ask about erasing and it does not erase." in uflat)
+        check("what is kept, and the screens that go back to stock",
+              "Kept: the accounts, the settings (Wi-Fi included), the mail" in uflat
+              and "Back to stock: the screens in the board's own flash." in uflat)
+        check("an older board: no erase from 0.17.0 on, an erase before it",
+              "From 0.17.0 on, leave Erase device unticked." in uflat
+              and "Before 0.17.0, the erase cannot be avoided." in uflat
+              and "the page asks for your Wi-Fi at the end" in uflat)
+        inst_now = get("/install")[1]
+        check("and every section it sends a reader to exists",
+              'href="/install#changing-the-wi-fi-later"' in upg
+              and 'id="changing-the-wi-fi-later"' in inst_now
+              and 'href="/install#if-something-goes-wrong-reset-rather-than-reflash"' in upg
+              and 'id="if-something-goes-wrong-reset-rather-than-reflash"' in inst_now)
+        check("Upgrade is in the footer's Get started row on every face",
+              all(re.search(r'<span class="lbl">Get started</span>.*?'
+                            r'>Install</a> &middot; <a href="[^"]*/upgrade">Upgrade</a>'
+                            r' &middot; ', p, re.S)
+                  for p in (home, inst_now, get("/", host="about.example")[1],
+                            get("/", host="data.example")[1])))
+        # The call-out on /install opens the steps column: beside the card
+        # on a desktop, after it on a phone, so the button keeps its place.
+        itop = inst_now.split('<div class="install-top">')[1].split('id="before-you-start"')[0]
+        check("/install calls it out first in the steps, linking /upgrade",
+              '<div class="steps"><p class="aside"><b>Already running µnleashed?</b> '
+              "Plug it in and press <b>Install on my board</b>; it offers an update "
+              'and keeps your accounts. <a href="/upgrade">Upgrading a board</a>' in itop
+              and itop.find('<div class="steps"><p class="aside">')
+                  < itop.find('id="what-happens-in-order"'))
+        check("and it is not indented the way a note inside prose is",
+              "article .install-top > .steps > p.aside:first-child { margin:0 0 1.25rem; }"
+              in inst_now)
 
         # ------------------------------------------------------------------
         # Rob could not find the donation page. It is in the menu now, last,

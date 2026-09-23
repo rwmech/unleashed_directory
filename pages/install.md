@@ -11,6 +11,12 @@ serial port. Your Wi-Fi name and password, exactly
 ([more below](#before-you-start)).
 :::
 
+<!-- The upgrade call-out is the first thing in the steps column, not in the intro: beside the card on a desktop, and after the card on a phone, so it does not push the install button down the first screen. -->
+> [!NOTE]
+> **Already running µnleashed?** Plug it in and press **Install on my
+> board**; it offers an update and keeps your accounts.
+> [Upgrading a board](/upgrade), including one older than 0.22.1.
+
 ## What happens, in order
 
 ::: art

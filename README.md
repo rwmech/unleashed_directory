@@ -186,6 +186,12 @@ GNU General Public License v2 or later, the same terms as
 [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. Every file
 carries an SPDX line. See [LICENSE](LICENSE).
 
+## How it was built
+
+Parts of the code and the site were developed with the help of AI tools,
+including Claude and ChatGPT. The design, the decisions and the copyright
+are Robert Mech's.
+
 ## Protocol
 
 See [PROTOCOL.md](PROTOCOL.md). It is one HTTP POST with a JSON body, about 200 bytes. Any software that sends it gets listed.

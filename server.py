@@ -435,6 +435,9 @@ NAV_SECTION = {
     "/setup":           "/build",
     # Where the installer's last step lands, with the board's address.
     "/connected":       "/build",
+    # Putting a new version on a board that already runs one: the
+    # installer's other job, so the same section.
+    "/upgrade":         "/build",
     "/forward-netgear": "/forward",
     "/forward-tplink":  "/forward",
     "/forward-asus":    "/forward",
@@ -498,7 +501,8 @@ def foot_html(role, extra=""):
     # and the pages they come back to.
     start = " &middot; ".join(
         f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
-            ("/build", "Build one"), ("/install", "Install"), ("/setup", "Set up"),
+            ("/build", "Build one"), ("/install", "Install"), ("/upgrade", "Upgrade"),
+            ("/setup", "Set up"),
             ("/terminals", "Terminals"), ("/dialing", "Dial links"),
             ("/forward", "Go public"), ("/how", "Get listed")))
     # "Donate", first in its row and in the warm colour, as well as last in
@@ -2367,8 +2371,40 @@ p.stat .n {{ color:var(--live); }}
    character against Consolas's 0.55). */
 .listtop {{ margin:0 0 1.25rem; }}
 .listtop p.lead {{ margin:0; }}
-.runcard {{ background:#12121a; border:1px solid #2c3a44; border-radius:0.5rem;
+/* The card stands out in --dial, the colour of things you can act on (Rob,
+   0.20.2): a wash of it over the page rather than a flat bright block, and
+   its border in the same blue. rgba() rather than the variable because a
+   custom property cannot take an alpha; 127, 212, 255 is --dial. */
+.runcard {{ position:relative; background:rgba(127, 212, 255, 0.12);
+        border:1px solid rgba(127, 212, 255, 0.6); border-radius:0.5rem;
         padding:1.125rem 1.25rem; margin:1rem 0 0; }}
+/* Three lamps going slowly round the card's edge, a third of a lap apart,
+   like a marquee's chaser lights. CSS only: each follows the card's own
+   rounded rectangle with offset-path, and the motion is declared only
+   inside the no-preference block below, so standing still they are three
+   lamps a third of the way round from each other. A browser without
+   offset-path gets three still lamps set on the edge by hand. */
+.runcard .dot {{ position:absolute; width:0.375rem; height:0.375rem; border-radius:50%;
+        background:var(--dial); box-shadow:0 0 0.375rem rgba(127, 212, 255, 0.8);
+        pointer-events:none; }}
+.runcard .d1 {{ top:-0.25rem; left:25%; }}
+.runcard .d2 {{ top:45%; right:-0.25rem; }}
+.runcard .d3 {{ bottom:-0.25rem; left:30%; }}
+@supports (offset-path: inset(0 round 0.5rem)) {{
+  .runcard .dot {{ top:0; left:0; right:auto; bottom:auto;
+        offset-path:inset(0 round 0.5rem); offset-anchor:center; offset-rotate:0deg; }}
+  .runcard .d1 {{ offset-distance:0%; }}
+  .runcard .d2 {{ offset-distance:33.333%; }}
+  .runcard .d3 {{ offset-distance:66.667%; }}
+}}
+@media (prefers-reduced-motion: no-preference) {{
+  @supports (offset-path: inset(0 round 0.5rem)) {{
+    .runcard .dot {{ animation:runlap 16s linear infinite; }}
+    .runcard .d2 {{ animation-delay:-5.333s; }}
+    .runcard .d3 {{ animation-delay:-10.667s; }}
+  }}
+  @keyframes runlap {{ from {{ offset-distance:0%; }} to {{ offset-distance:100%; }} }}
+}}
 .runcard h2 {{ color:var(--struct); font-size:0.875rem; font-weight:normal;
         margin:0 0 0.125rem; }}
 .runcard p {{ margin:0; }}
@@ -3026,6 +3062,10 @@ article .installer .vers label {{ cursor:pointer; }}
    step a reader has reached. The markup order is title, card, steps, which
    is the order a phone and a screen reader get. */
 article .install-top > .installer {{ margin:1.25rem 0 1.5rem; }}
+/* The upgrade call-out opens the steps column: beside the card on a
+   desktop, and after it on a phone, where the markup puts it. Not indented
+   the way a note inside prose is, because nothing above it is prose. */
+article .install-top > .steps > p.aside:first-child {{ margin:0 0 1.25rem; }}
 @media (min-width: 901px) {{
   article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 22rem;
         grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}
@@ -3666,7 +3706,13 @@ RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
             '<p class="say">An ESP32, a USB cable, five minutes.</p>'
             '<p class="acts"><a class="fill" href="/install">Web installer</a>'
             '<a class="line" href="/build#getting-it-running">Build from source</a>'
-            "</p></aside>")
+            "</p>"
+            # The three lamps that go round its edge: decoration, so hidden
+            # from a screen reader, and after the words so they come first.
+            '<span class="dot d1" aria-hidden="true"></span>'
+            '<span class="dot d2" aria-hidden="true"></span>'
+            '<span class="dot d3" aria-hidden="true"></span>'
+            "</aside>")
 
 
 def index_page():

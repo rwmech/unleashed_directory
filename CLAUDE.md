@@ -334,6 +334,29 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   of the callers-on figure each up board shows. `STAT_SUFFIX` goes before
   the full stop and is empty on purpose: "across the globe" was asked for
   and left out, because nothing here knows where a board is.
+  **The card's lamps** (0.20.2, Rob: the card must stand out) are three
+  `span.dot`s, not pseudo-elements, because a box has only two of those.
+  Each follows `offset-path:inset(0 round 0.5rem)`, the card's own rounded
+  rectangle, with the card `position:relative` so it is the containing
+  block. The resting state is three lamps a third of a lap apart
+  (`offset-distance` 0, 33.333, 66.667%); the lap, `runlap` at 16s with
+  negative delays, is declared only inside the no-preference block. Without
+  `offset-path` support the `@supports` block does not apply and each lamp
+  sits where `top`/`left`/`right` put it. Check motion by pausing the
+  animation at chosen negative delays in a test copy and reading each
+  lamp's position: a screenshot of the running page proves nothing.
+  The wash is `rgba(127, 212, 255, ...)`, which is `--dial` written out,
+  because a custom property cannot take an alpha.
+- **/upgrade** (0.20.2) is `pages/upgrade.md`, linked from a note that opens
+  /install's steps column and from the footer's Get started row. The note
+  is in the steps, not the intro, on purpose: in the intro it pushed the
+  install button 170px down a phone screen. Every fact on the page was
+  checked against the firmware (partitions.csv unchanged since 0.17.0, the
+  Improv name in `src/main.cpp` since 0.22.1, ziparc's allow list, sd.cpp's
+  `.seeded` record since 0.22.0) and the vendored install dialog (a
+  recognised board gets `_startInstall(false)`, no erase question); the
+  page's opening comment lists them. Re-check it when any of those change,
+  and above all when a release moves a partition.
 - **Anything the server reads beside itself must be installed by
   `deploy/setup.sh`, in the same change** (the 0.17.x outage). setup.sh
   copies into `/srv/unleashed_directory` and the droplet's checkout is

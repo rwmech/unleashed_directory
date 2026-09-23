@@ -14,6 +14,37 @@
 
 # Changelog
 
+## 0.20.2, 2026-09-23
+
+- **The "Run your own board" card stands out** (Rob). A wash of the
+  site's action blue over the page rather than a flat block, its border in
+  the same blue, and three small blue lamps going slowly round its edge, a
+  third of a lap apart, one lap every 16 seconds. CSS only: each lamp
+  follows the card's own rounded rectangle with `offset-path`. With
+  reduced motion asked for they stand still a third of the way round from
+  each other; a browser without `offset-path` gets three still lamps set on
+  the edge by hand. Buttons and layout unchanged: the card is still level
+  with the heading at 1366 and under the lead at 390.
+- **How to upgrade, at the top of /install** (Rob: "make sure the website
+  calls out on the flasher page how to upgrade"). A short note opens the
+  steps column, beside the install card on a desktop and just after it on a
+  phone, so the install button keeps its place: "Already running
+  µnleashed? Plug it in and press Install on my board; it offers an update
+  and keeps your accounts."
+- **/upgrade, a page of its own**: back up first, what a recognised board
+  is offered, what the update writes and what it leaves, the screens on the
+  SD card, a board older than 0.22.1, and what to do when it goes wrong.
+  Each fact was checked against the firmware and the installer rather than
+  written from memory: the partition table has not moved since 0.17.0, the
+  update writes the five parts the manifest names and nothing else, a board
+  running 0.22.1 or later reports "unleashed BBS" over Improv and ESP Web
+  Tools then offers **Update** with no erase, the backup zip takes only the
+  settings, the accounts and the screens, and since 0.22.0 the board
+  refreshes the stock screens it put on a card and leaves edited ones
+  alone. In the footer's Get started row, after Install.
+- The README gains a "How it was built" section.
+- 491 checks, up from 476.
+
 ## 0.20.1, 2026-09-23
 
 The board list's top, redone (Rob, on 0.20.0: "This seems a bit big for a
