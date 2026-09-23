@@ -4433,7 +4433,13 @@ SHOT_CELL, SHOT_LINE, SHOT_PAD = 6, 12, 8
 def shot_svg(name, alt):
     """One captured screen as a drawing, in a monitor's bezel, with what
     was typed to get it written under the glass."""
-    doc = json.loads((SHOTS_DIR / (name + ".json")).read_text(encoding="utf-8"))
+    # A missing or broken capture costs one picture, never the server. This
+    # runs at import, and with no guard a deployment without shots/ died
+    # before it answered anything (the 2026-09-23 outage).
+    try:
+        doc = json.loads((SHOTS_DIR / (name + ".json")).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return f'<p class="shot-missing">{html.escape(alt)}</p>'
     cols, rows, attrs = doc["cols"], doc["rows"], doc["attrs"]
     gw = cols * SHOT_CELL + 2 * SHOT_PAD
     gh = len(rows) * SHOT_LINE + 2 * SHOT_PAD

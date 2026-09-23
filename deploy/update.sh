@@ -106,8 +106,13 @@ fetch_release() {
     [ "$CHECK" -eq 1 ] && return 0
     local q=""
     [ "$QUIET" -eq 1 ] && q="--quiet"
+    # Into the directory the running server reads, which is not this
+    # checkout when the checkout lives elsewhere: setup.sh installs to
+    # /srv/unleashed_directory, and a release left in the checkout's own
+    # firmware/ was never seen by the page.
     # shellcheck disable=SC2086
-    if ! python3 "$SRC/deploy/fetch_release.py" $q; then
+    if ! DIRECTORY_FIRMWARE_DIR="${DIRECTORY_FIRMWARE_DIR:-/srv/unleashed_directory/firmware}" \
+         python3 "$SRC/deploy/fetch_release.py" $q; then
         loud "(the directory itself is unaffected)"
     fi
 }

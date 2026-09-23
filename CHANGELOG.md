@@ -14,6 +14,30 @@
 
 # Changelog
 
+## 0.17.2, 2026-09-23
+
+- **Fixed the outage the 0.15-0.17 updates caused.** `deploy/setup.sh`
+  installs into `/srv/unleashed_directory` and copied only `server.py`,
+  `selftest.py`, `pages/` and `static/`. The server reads `shots/` at import
+  with no guard, so on a droplet whose checkout is not the install
+  directory it died on start and every check failed with a 502. setup.sh
+  now installs `shots/`, `brand/`, `vendor/`, `supporters.txt` and any
+  release in `firmware/`; `shot_svg` costs a picture, not the server, when
+  a capture is missing; and `update.sh` points the release fetcher at the
+  directory the server reads. Found by Rob's first update after 0.14; the
+  web rounds had never run the install end to end, as their reports said.
+
+## 0.17.1, 2026-09-23
+
+- **Firmware 0.23.0 on /install, committed by hand** into `firmware/0.23.0/`
+  (past the ignore rule) while the firmware repository is private and the
+  fetcher cannot reach it. It comes out at 1.0.0, when the fetcher takes
+  over. The self-test checks whichever installer state the checkout is in.
+- **Thank-yous narrowed (Rob):** only lifetime members are named, on the
+  ABOUT screen and on /donate.
+- Membership level cards for Buy Me a Coffee in `brand/`, with
+  `make_tiers.py`.
+
 ## 0.17.0, 2026-09-23
 
 - **/donate, "Support the project"**, the copywriter's page, served like the

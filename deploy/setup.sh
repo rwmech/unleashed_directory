@@ -143,6 +143,39 @@ if [ -d "$SRC/static" ]; then
     done
 fi
 
+# Everything else the server reads from beside itself. Each of these was
+# added after this script was last run end to end, and a server started
+# without shots/ died at import: the 2026-09-23 outage, every check failing
+# with a 502. Replaced on every install, like pages/, because the repository
+# is where they are edited. Copied to a .new and moved into place so a
+# checkout that IS the destination still ends up with its files.
+for dir in shots brand vendor; do
+    if [ -d "$SRC/$dir" ]; then
+        rm -rf "$DEST/$dir.new"
+        cp -r "$SRC/$dir" "$DEST/$dir.new"
+        chmod -R a+rX "$DEST/$dir.new"
+        rm -rf "$DEST/$dir"
+        mv "$DEST/$dir.new" "$DEST/$dir"
+    fi
+done
+if [ -f "$SRC/supporters.txt" ]; then
+    install -m 644 "$SRC/supporters.txt" "$DEST/supporters.txt"
+fi
+
+# Firmware releases: copied in, never removed here (deploy/fetch_release.py
+# decides what is kept). A release committed into firmware/ by hand, as
+# 0.23.0 is while the firmware repository is private, arrives this way.
+install -d -m 755 "$DEST/firmware"
+for rel in "$SRC"/firmware/[0-9]*/; do
+    [ -d "$rel" ] || continue
+    name="$(basename "$rel")"
+    rm -rf "$DEST/firmware/$name.new"
+    cp -r "$rel" "$DEST/firmware/$name.new"
+    chmod -R a+rX "$DEST/firmware/$name.new"
+    rm -rf "$DEST/firmware/$name"
+    mv "$DEST/firmware/$name.new" "$DEST/firmware/$name"
+done
+
 say "Service"
 install -m 644 "$SRC/deploy/unleashed-directory.service" \
     /etc/systemd/system/unleashed-directory.service
