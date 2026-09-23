@@ -1581,10 +1581,14 @@ def main():
               and "works while the board is failing to join one" in flat_i2
               and "nothing on the board is erased" in flat_i2
               and "install again with Erase device ticked" in flat_i2)
-        # The BOOT button and the Wi-Fi fallback are 0.24.0's. The repository
-        # carries 0.23.0 at most, so here they must not show; the second
-        # server below proves they do once 0.24.0 is on disk.
-        check("and nothing of 0.24.0's shows while the newest release is older",
+        # The BOOT button and the Wi-Fi fallback are firmware 1.0.1's, moved
+        # there from 0.24.0; 1.0.0 does not have them. The repository carries
+        # 0.23.0 at most, so here they must not show; the second server below
+        # proves they stay hidden at 1.0.0 and show at 1.0.1.
+        src_gate = open(os.path.join("pages", "install.md"), encoding="utf-8").read()
+        check("the reset section is gated on 1.0.1, and nothing on 0.24.0",
+              "::: from 1.0.1" in src_gate and "0.24" not in src_gate)
+        check("and nothing of 1.0.1's shows while the newest release is older",
               "The BOOT button" not in inst2 and S.ART["boot-button"] not in inst2
               and "::: from" not in inst2)
         check("the setup steps name what the board says",
@@ -1763,12 +1767,14 @@ def main():
                   and '<span class="lbl">Reference</span>' in f
                   and f.index("Get started") < f.index("Reference") for f in feet))
         check("and the colophon: version, copyright, and the licence linked",
-              all(f'Site version {newest} &middot; &copy; 2026 Robert Mech' in f
-                  and '<a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
-                      "Free software under the GNU General Public License, version 2 or "
-                      "later</a>" in f
+              all(f'<span>Site version {newest}</span> &middot; '
+                  '<span>&copy; 2026 Robert Mech</span> &middot; ' in f
+                  and '<span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
+                      "GNU GPL v2 or later</a></span></p>" in f
                   and f.rindex('class="colophon"') > f.rindex('class="lbl"')
                   for f in feet))
+        check("each piece of it kept whole, so a phone wraps between them",
+              "footer .colophon span { white-space:nowrap; }" in get("/")[1])
 
         # ------------------------------------------------------------------
         # Every page names its own address, on the face it belongs to.
@@ -2410,27 +2416,48 @@ def main():
                       'class="banner"' not in home2)
                 check("and none on a directory with no release at all",
                       'class="banner"' not in get("/")[1])
+                check("and the list's own buttons are there instead",
+                      home2.count('class="btn"') == 1
+                      and '<div class="cta"><p class="acts"><a class="btn" href="/install">'
+                          "Visit the web installer</a>" in home2)
                 put("1.0.0", "esp32", whole)
                 home2 = fetch("/", base2)[2].decode("utf-8")
-                bn = home2.split('<div class="banner"')[1].split("</div>")[0] \
+                bn = home2.split('<div class="banner"')[1].split("</main>")[0] \
                     if '<div class="banner"' in home2 else ""
+                bn = bn[:bn.find("<table>")] if "<table>" in bn else bn.split("No boards listed")[0]
                 check("the banner shows once a 1.0.0 release is on disk",
-                      "\u00b5nleashed BBS 1.0.0 is released." in bn)
-                check("above the list, with build, flash and set-up links",
+                      "\u00b5nleashed BBS 1.0.0 is out." in bn)
+                check("above the list, linking to the installer, the source beside it",
                       home2.index('<div class="banner"') < home2.index("No boards listed yet")
-                      and 'href="/build"' in bn and 'href="/install"' in bn
-                      and 'href="/setup"' in bn)
+                      and '<a class="btn" href="/install">Visit the web installer</a>' in bn
+                      and '<a class="btn2" href="/build#getting-it-running">Build from source</a>'
+                          in bn)
+                check("and it carries the page's one pair of buttons, not a second pair",
+                      home2.count('class="btn"') == 1 and home2.count('class="btn2"') == 1)
                 check("and its drawing is hidden from a screen reader",
                       '<svg viewBox="0 0 120 76" aria-hidden="true"' in bn)
-                # 1.0.0 is on disk now, which is past 0.24.0: the reset
-                # section's BOOT button and its drawing appear by themselves.
+                # 1.0.0 sorts above 0.19.2, is served, and is what the card
+                # offers first, with the one before it kept as the choice.
+                rels_1 = S.firmware_releases()
+                code, _ct, man1 = fetch("/install/1.0.0/manifest.json", base2)
                 inst4 = fetch("/install", base2)[2].decode("utf-8")
-                flat4 = " ".join(inst4.split())
-                check("with a release of 0.24.0 or later, the BOOT button shows",
-                      "The BOOT button" in inst4 and S.ART["boot-button"] in inst4
-                      and "Press and let go of <b>RESET</b>" in flat4
-                      and "goes back to the last network that worked" in flat4
+                check("a 1.0.0 release is found, served and offered as the newest",
+                      [r["version"] for r in rels_1] == ["1.0.0", "0.19.2"]
+                      and code == 200 and json.loads(man1.decode())["version"] == "1.0.0"
+                      and 'manifest="/install/1.0.0/manifest.json"' in inst4
+                      and 'id="fwv0" checked> 1.0.0 (newest)' in inst4)
+                # 1.0.0 has no BOOT button reset: that is 1.0.1's.
+                check("with 1.0.0 on disk, the BOOT button section still waits",
+                      "The BOOT button" not in inst4 and S.ART["boot-button"] not in inst4
                       and "::: from" not in inst4)
+                put("1.0.1", "esp32", whole)
+                inst5 = fetch("/install", base2)[2].decode("utf-8")
+                flat5 = " ".join(inst5.split())
+                check("with a release of 1.0.1 or later, the BOOT button shows",
+                      "The BOOT button" in inst5 and S.ART["boot-button"] in inst5
+                      and "Press and let go of <b>RESET</b>" in flat5
+                      and "goes back to the last network that worked" in flat5
+                      and "::: from" not in inst5)
             finally:
                 server2.terminate()
                 try:

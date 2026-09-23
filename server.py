@@ -517,13 +517,15 @@ def foot_html(role, extra=""):
     if extra:
         parts.append(extra)
     # The colophon, last and smallest: which version of the site this is,
-    # whose it is, and the terms it is under, on every page.
+    # whose it is, and the terms it is under, on every page. Each of the
+    # three is one unbreakable piece, so a phone gets two tidy rows rather
+    # than a licence name broken across a line.
     colophon = ('<p class="colophon">'
-                + (f"Site version {SITE_VERSION} &middot; " if SITE_VERSION else "")
-                + "&copy; 2026 Robert Mech &middot; "
-                '<a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">Free '
-                "software under the GNU General Public License, version 2 or "
-                "later</a></p>")
+                + (f'<span>Site version {SITE_VERSION}</span> &middot; '
+                   if SITE_VERSION else "")
+                + "<span>&copy; 2026 Robert Mech</span> &middot; "
+                '<span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
+                "GNU GPL v2 or later</a></span></p>")
     return "<br><br>".join(parts) + colophon
 
 
@@ -1210,7 +1212,7 @@ def _md_render(text):
     for raw in text.splitlines():
         line = raw.rstrip()
 
-        # "::: from 0.24.0" ... ":::" is prose for a firmware not yet
+        # "::: from 1.0.1" ... ":::" is prose for a firmware not yet
         # released: rendered only once a release at that version or later
         # is on disk, the way the announcement banner waits for 1.0.0. It
         # may hold a drawing, so it counts ":::" pairs rather than ending
@@ -2211,7 +2213,9 @@ pre.logo i:nth-child(6) {{ color:#3f6cab; }}
         padding:0.875rem 1.125rem; background:#1f1a08; border:1px solid #ffd35c;
         border-radius:0.5rem; color:#fbe7a1; }}
 .banner svg {{ flex:none; width:7.5rem; height:auto; }}
+.banner .say {{ flex:1; min-width:0; }}
 .banner p {{ margin:0; }}
+.banner .cta {{ margin:0.75rem 0 0; }}
 .banner b {{ display:block; color:#ffd35c; font-weight:normal; font-size:1rem;
         letter-spacing:0.0625rem; margin:0 0 0.25rem; }}
 .banner a {{ color:#ffd35c; }}
@@ -2224,7 +2228,9 @@ pre.logo i:nth-child(6) {{ color:#3f6cab; }}
 .banner .led {{ fill:var(--live); }}
 @media (max-width: 900px) {{
   .banner {{ flex-direction:column; align-items:flex-start; gap:0.75rem; }}
-  .banner svg {{ width:6rem; }}
+  /* The drawing is decoration, and on a phone it cost the buttons their
+     place on the first screen, under a menu that already takes a third. */
+  .banner svg {{ display:none; }}
 }}
 @media (prefers-reduced-motion: no-preference) {{
   .banner .led {{ animation:bannerled 1.6s ease-in-out infinite; }}
@@ -2791,7 +2797,8 @@ footer .lbl {{ color:var(--faint); margin-right:0.5rem; text-transform:uppercase
         letter-spacing:0.0625rem; font-size:0.75rem; }}
 footer .colophon {{ margin:1.25rem 0 0; font-size:0.6875rem; color:var(--faint);
         line-height:1.6; }}
-footer .colophon a {{ display:inline; padding:0; white-space:normal; color:var(--dim); }}
+footer .colophon a {{ display:inline; padding:0; color:var(--dim); }}
+footer .colophon span {{ white-space:nowrap; }}
 /* The installer's dialog is somebody else's element, drawn in light
    Material colours by default. It takes its colours from Material's own
    custom properties, which a rule on the element from this page overrides,
@@ -3582,16 +3589,26 @@ BANNER_ART = (
 def announcement_banner():
     """The announcement banner, or "" until a release of 1.0.0 or later is
     on disk. The version shown is the newest one there, so it stays true
-    after a patch release lands."""
+    after a patch release lands.
+
+    It carries the board list's one button while it shows, rather than
+    sitting under a second button that goes to the same place: the news and
+    the way to act on it are one box (see index_page)."""
     rels = firmware_releases()
     if not rels or rels[0]["sort"] < BANNER_FROM:
         return ""
     ver = html.escape(rels[0]["version"])
     return ('<div class="banner" role="note">' + BANNER_ART
-            + "<p><b>\u00b5nleashed BBS " + ver + " is released.</b>"
-            'A board of your own, with no toolchain: <a href="/build">what '
-            'to buy</a>, <a href="/install">put it on the board from your '
-            'browser</a>, then <a href="/setup">set it up</a>.</p></div>')
+            + '<div class="say"><p><b>\u00b5nleashed BBS ' + ver + " is out.</b>"
+            "A board of your own on an ESP32, installed from your browser in "
+            "about five minutes, with no toolchain.</p>"
+            + cta_html(HOME_BUTTONS) + "</div></div>")
+
+
+# The board list's two buttons, in the banner or on their own. A button that
+# goes somewhere says where it goes; only the one on /install says Install.
+HOME_BUTTONS = ("[Visit the web installer](/install)",
+                "[Build from source](/build#getting-it-running)")
 
 
 def index_page():
@@ -3623,20 +3640,21 @@ def index_page():
             'Dial one with <a href="/terminals">any telnet client</a>, or click '
             'an address if you have one installed. '
             '<a href="/dialing">Nothing happened?</a> '
-            '<a href="/firstcall">Never called one before?</a></p>'
-            # The way to a board of your own, as the page's one button. The
-            # list is dialled by clicking addresses, which are links, so a
-            # button here does not compete with it; and somebody who has
-            # just found out these exist is exactly who is looking for how
-            # to run one. One line tall, so the list moves down by one line.
-            + cta_html(["[Visit the web installer](/install)",
-                        "[Build from source](/build#getting-it-running)"]))
+            '<a href="/firstcall">Never called one before?</a></p>')
+    # The way to a board of your own, as the page's one button. The list is
+    # dialled by clicking addresses, which are links, so a button here does
+    # not compete with it; and somebody who has just found out these exist
+    # is exactly who is looking for how to run one. One line tall, so the
+    # list moves down by one line. While there is a release to announce the
+    # banner carries the same two buttons instead, so the page still has
+    # one of each.
+    action = announcement_banner() or cta_html(HOME_BUTTONS)
     if rows:
         body = ("<table><tr><th>Board</th><th>Dial</th><th>State</th></tr>"
                 + board_rows(rows, now, charts) + "</table>")
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
-    body = head + announcement_banner() + body
+    body = head + action + body
     # Five clauses and sixty words with no break, and it is the only place
     # that says what the 24 hour figures and "up for" mean. Three lines, one
     # idea each.
@@ -5141,7 +5159,7 @@ INSTALL_SETUP = _deco(130,
         '<text x="257" y="54" font-size="6.5">Page 1 of 2</text>')
     + _caption(236, "then a short", "tour"))
 
-# The BOOT button, for firmware 0.24.0 and later: the two buttons and the
+# The BOOT button, for firmware 1.0.1 and later: the two buttons and the
 # order to press them in, then what the lamp does against the seconds held.
 # Axis 0 to 22 s across x 20 to 340, 14.55 units a second.
 def _bx(sec):

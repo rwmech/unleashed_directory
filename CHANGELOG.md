@@ -14,6 +14,28 @@
 
 # Changelog
 
+## 0.20.0, 2026-09-23
+
+- **The BOOT button reset and the CONFIG Wi-Fi fallback wait for firmware
+  1.0.1**, where they moved from 0.24.0. /install's section on them was
+  gated on 0.24.0, which 1.0.0 is past, so it would have promised both the
+  moment 1.0.0 landed. It is gated on 1.0.1 now, and nothing on the site
+  says either is in 1.0.0. The suite checks 1.0.0 on disk hides it and 1.0.1
+  shows it.
+- **The announcement banner says "µnleashed BBS 1.0.0 is out"**, above the
+  board list, only once a 1.0.0 or later release is on disk, and carries the
+  list's two buttons, Visit the web installer and Build from source, rather
+  than sitting under a second pair. On a phone its drawing is left out, so
+  the buttons are on the first screen.
+- **The footer's licence reads "GNU GPL v2 or later"**, linked, and each of
+  version, copyright and licence is kept whole, so a phone gets two tidy rows
+  instead of a licence name broken across three.
+- **Checked for 1.0.0**: a `v1.0.0` tag is fetched into `firmware/1.0.0/`,
+  sorts above the 0.x releases, gets a manifest, and is what the install
+  card offers first, with the one before it as the choice. The suite now
+  says so in one check.
+- 459 checks, up from 453.
+
 ## 0.19.1, 2026-09-23
 
 - **The entry pages' buttons say where they go** (Rob). 0.19.0's said

@@ -304,7 +304,11 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   own because a link whose only content is a picture is announced as the
   picture.
 - **The announcement banner** is the yellow box above the board list
-  saying a release is out, with links to /build, /install and /setup.
+  saying "µnleashed BBS X.Y.Z is out", and while it shows it carries the
+  list's two buttons (`HOME_BUTTONS`: Visit the web installer, Build from
+  source) in place of the standalone pair, so the page has one pair, not
+  two. Its drawing is dropped on a phone so the buttons stay on the first
+  screen.
   `announcement_banner()` renders it only when `firmware_releases()` finds
   a release at or above `BANNER_FROM` (1.0.0) on disk, so it cannot go
   live early and appears by itself when the release lands. Yellow
@@ -323,11 +327,14 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - **`::: from X.Y.Z` ... `:::`** renders its Markdown only once the newest
   release on disk is at least that version, for writing about firmware that
   is not out yet. It may hold drawings (it counts `:::` pairs). A numbered
-  list split by a drawing keeps counting (`<ol start>`).
+  list split by a drawing keeps counting (`<ol start>`). /install's BOOT
+  button reset and CONFIG Wi-Fi fallback are `::: from 1.0.1` (they moved
+  from 0.24.0 to firmware 1.0.1; 1.0.0 does not have them).
 - **The footer** is two rows, Get started and Reference, then the colophon:
   the site version from the newest `## X.Y.Z` in CHANGELOG.md, read once at
   start (so CHANGELOG.md is installed beside server.py), the copyright and
-  the GPL link. Bumping the site version is writing the changelog entry.
+  "GNU GPL v2 or later", linked, each piece a nowrap span so a phone wraps
+  between them. Bumping the site version is writing the changelog entry.
 - **Canonical links** are filled in at reply time (`Handler.canonical`), not
   by each page builder, because a cached page is served on any face; `/about`
   and `/data` are canonical on their own faces wherever they are asked for.
