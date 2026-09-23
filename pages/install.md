@@ -269,8 +269,8 @@ right with a reset, and your accounts and settings stay where they are.
   failing to join one, because it listens on the cable for as long as it is
   running, and nothing on the board is erased.
 
-<!-- The CONFIG Wi-Fi fallback and the BOOT button reset ship in firmware 1.0.1, not 1.0.0: this block shows by itself once a 1.0.1 release is on disk. -->
-::: from 1.0.1
+<!-- The CONFIG Wi-Fi fallback and the BOOT button reset ship in firmware 1.0.2, not 1.0.0 or 1.0.1 (1.0.1 is the badge fields only): this block shows by itself once a 1.0.2 release is on disk. -->
+::: from 1.0.2
 - **A network changed in CONFIG that does not work.** If the board cannot get
   on it within a minute of starting, it goes back to the last network that
   worked, so a typo in CONFIG does not leave it stranded.

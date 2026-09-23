@@ -407,8 +407,10 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   release on disk is at least that version, for writing about firmware that
   is not out yet. It may hold drawings (it counts `:::` pairs). A numbered
   list split by a drawing keeps counting (`<ol start>`). /install's BOOT
-  button reset and CONFIG Wi-Fi fallback are `::: from 1.0.1` (they moved
-  from 0.24.0 to firmware 1.0.1; 1.0.0 does not have them).
+  button reset and CONFIG Wi-Fi fallback are `::: from 1.0.2` (they moved
+  from 0.24.0 to firmware 1.0.1, then to 1.0.2 when 1.0.1 became the badge
+  fields only; 1.0.0 and 1.0.1 do not have them). The gate has to move
+  before the release it would wrongly light up is published.
 - **The footer** is two rows, Get started and Reference, then the colophon:
   the site version from the newest `## X.Y.Z` in CHANGELOG.md, read once at
   start (so CHANGELOG.md is installed beside server.py), the copyright and
@@ -590,7 +592,34 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   the address is echoed. A filtered view renders per request from
   `cached("indexdata")`; the plain list is still cached whole. While the
   pane is open the script adds `#filter` to the URL, so the meta refresh
-  reopens it instead of snapping it shut. Tiles are three a row at 390.
+  reopens it instead of snapping it shut.
+  **The pane is chips in rows since 0.22.2** (Rob: "the filter page is
+  unmanageable, it needs HUGE condensing ... the hover works, just put em
+  in groups"). A chip (`filter_chip`) is the symbol only, 1.625rem, the
+  name its checkbox's `aria-label` and its tooltip; a group is a row
+  (`filter_row`, a `<details open>`), its name a floated 10.5rem column on
+  a desktop and a heading a phone can tap to fold. The interests are a
+  heading and a row per sub-group, two to a line from 901px. Chosen is a
+  ring and a corner notch; the tooltip hangs under the row, not the chip,
+  and is `display:none` until wanted, so no chip at the right edge can
+  widen the page. Measured with the pane open: 1,538px to 460px at 1366,
+  3,256px to 1,130px at 390. **No `aria-pressed`**, though it was asked
+  for: the chips are native checkboxes, which already say checked to a
+  screen reader, and ARIA in HTML does not allow `aria-pressed` on one.
+  A search opens a folded row that has a match.
+- **Support and interests since 0.22.2.** Amateur radio moved to the
+  interests (Radio and sky), slug unchanged; `SUPPORT_MOVED` files a `ham`
+  still sent as support with the interests, and `row_support` /
+  `row_interests` read a row stored before the move the same way, so no
+  migration. Support went from eleven to 24 by volume (Rob: "use volume as
+  your guide"): the ten, then breast cancer (pink ribbon), childhood cancer
+  (gold), dementia (forget-me-not), carers, diabetes (blue circle), heart
+  health, domestic violence (purple ribbon), addiction recovery (purple
+  sunrise), blood and organ donation, foster care and adoption (the triad),
+  homelessness, hunger relief (orange), literacy and first responders (a
+  beacon, deliberately not the thin blue line). Autism is covered by
+  neurodiversity and military families by veterans. HIV's ribbon stays red
+  until Rob decides.
 - **The card's lamps (0.22.0, from the UX spec)**: two lamps half a lap
   apart, each a head and three beads, 20s a lap, linear. Three a third of a
   lap apart looked scattered because a rectangle has no three-fold

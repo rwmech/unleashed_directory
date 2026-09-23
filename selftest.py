@@ -307,9 +307,11 @@ def list_rows(page):
 
 
 def pane_of(page):
-    """The filter's <details>, from its opening tag to its end."""
+    """The filter's <details>, from its opening tag to its end. Its rows are
+    <details> too since 0.22.2, so the end is the one after its form."""
     at = page.find('<details class="filter"')
-    return page[at:page.find("</details>", at) + len("</details>")] if at >= 0 else ""
+    end = "</form></details>"
+    return page[at:page.find(end, at) + len(end)] if at >= 0 else ""
 
 
 def badge_checks(S, db):
@@ -357,10 +359,15 @@ def badge_checks(S, db):
     check("features: known words only, in order",
           bb.get("features") == ["chat", "files", "doors"])
     check("support: known slugs only; a made-up one, markup and all, is dropped",
-          bb.get("support") == ["lgbtq", "ham"])
+          bb.get("support") == ["lgbtq"])
+    # Amateur radio moved from support to the interests (site 0.22.2, Rob:
+    # "Amateur radio is not a support cause"), keeping its slug; a board that
+    # still sends it as support has it filed with its interests, once.
     check("interests: known slugs only, once each, any case; markup, a number, "
-          "a null and a made-up one dropped",
-          bb.get("interests") == ["c64", "electronics", "chiptune"])
+          "a null and a made-up one dropped; ham sent as support filed here",
+          bb.get("interests") == ["c64", "electronics", "chiptune", "ham"]
+          and "ham" not in S.SUPPORT_SLUGS and "ham" in S.INTEREST_SLUGS
+          and S.SUPPORT_MOVED == ("ham",))
     check("a field of the wrong type counts as not sent, and the board is "
           "still listed",
           jb.get("system") == "" and jb.get("terminals") == []
@@ -381,6 +388,25 @@ def badge_checks(S, db):
           not set(S.INTEREST_SLUGS) & (set(S.SUPPORT_SLUGS) | {
               k for k, *_ in S.LETTER_BADGES} | {a[1] for a in S.AGES})
           and len(S.FILTER_KEYS) == len(set(S.FILTER_KEYS)))
+    # Site 0.22.2 (Rob): the support list grows by volume, to about 25, the
+    # first ten unchanged, HIV's ribbon still red while Rob decides.
+    first_ten = ("lgbtq", "trans", "disability", "neurodiversity", "mental-health",
+                 "suicide-prevention", "veterans", "cancer", "hiv", "animals")
+    check("about 25 causes, the first ten unchanged, each with its own drawing "
+          "and a sentence",
+          22 <= len(S.SUPPORT) <= 26 and S.SUPPORT_SLUGS[:10] == first_ten
+          and all(art in S.SUPPORT_ART and name and t.endswith(".")
+                  for _s, art, name, t in S.SUPPORT)
+          and len({art for _s, art, _n, _t in S.SUPPORT}) == len(S.SUPPORT)
+          and 'stroke="#e25a55"' in S.SUPPORT_ART["ribbon-h"]
+          and all(s in S.SUPPORT_SLUGS for s in (
+              "breast-cancer", "childhood-cancer", "dementia", "caregivers",
+              "diabetes", "heart-health", "domestic-violence", "recovery",
+              "donation", "foster-adoption", "homelessness", "hunger",
+              "literacy", "first-responders")))
+    check("and the support drawings keep to the house style too",
+          all(not re.search(r"\sid=|<script|<text|on\w+=|href", a)
+              for a in S.SUPPORT_ART.values()))
     check("the drawings keep to the house style: no ids, no scripts, no text, "
           "colour from the chip",
           all(not re.search(r"\sid=|<script|<text|on\w+=|href", a)
@@ -416,22 +442,22 @@ def badge_checks(S, db):
                     ("soft", "unleashed"), ("new", "N")])
     check("each feature that is not running has no badge",
           ("feat", "F") not in found and ("feat", "M") not in found)
-    check("then the two support symbols, alphabetical, drawn not typed",
-          row.count('class="bd k-sup"') == 2
-          and row.index('aria-label="Supports amateur radio.')
-          < row.index('aria-label="Supports LGBTQ+ people.')
+    check("then its support symbol, drawn not typed; ham is not a cause any more",
+          row.count('class="bd k-sup"') == 1
+          and 'aria-label="Supports LGBTQ+ people.' in row
+          and "Supports amateur radio" not in row
           and row.count("<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"") == 5)
     labels = re.findall(r'class="bd k-int"[^>]*aria-label="Interest: ([^."]+)\.', row)
-    check("then the three interests, in rose, in the page's order: by group, "
-          "then by name",
-          labels == ["Commodore 64", "Electronics", "Chiptune"]
+    check("then the four interests, in rose, in the page's order: by group, "
+          "then by name, amateur radio with the radio and the sky",
+          labels == ["Commodore 64", "Electronics", "Chiptune", "Amateur radio"]
           and row.rindex('class="bd k-sup"') < row.index('class="bd k-int"'))
     check("the row carries every badge it has for the filter, in the page's order",
           re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
                     r"<span class='bname'>Badge Board</span>", page) is not None
           and re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
                         r"<span class='bname'>Badge Board</span>", page).group(1)
-          == "chat doors files guests petscii new ham lgbtq c64 electronics chiptune")
+          == "chat doors files guests petscii new lgbtq c64 electronics chiptune ham")
     check("nothing a board sent reaches the page unescaped",
           "<b>&</b>" not in page and "<script>alert" not in page
           and 'data-tip="Runs on: Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;, in the '
@@ -472,8 +498,8 @@ def badge_checks(S, db):
     feed = get("/feed.xml")[1]
     check("the feed says it in words, escaped for XML",
           "Runs on: Compaq 486 &amp;lt;b&amp;gt;&amp;amp;&amp;lt;/b&amp;gt;" in feed
-          and "Supports: amateur radio, LGBTQ+ people" in feed
-          and "Interests: Commodore 64, Electronics, Chiptune" in feed
+          and "Supports: LGBTQ+ people" in feed
+          and "Interests: Commodore 64, Electronics, Chiptune, Amateur radio" in feed
           and "Speaks: ANSI, PETSCII" in feed and "Guests welcome" in feed
           and "No guests: an account is needed" in feed)
 
@@ -487,9 +513,24 @@ def badge_checks(S, db):
           '<details class="filter" id="filter"><summary>Filter' in home
           and home.count('<details class="filter"') == 1)
     check("and every badge's symbol is inside it, none outside",
-          pane.count('class="tile"') == len(S.FILTER_KEYS)
-          and home.count('class="tile"') == pane.count('class="tile"')
-          and home.count('<span class="ts ') == pane.count('<span class="ts '))
+          pane.count('class="chip"') == len(S.FILTER_KEYS)
+          and home.count('class="chip"') == pane.count('class="chip"')
+          and home.count('<span class="cb ') == pane.count('<span class="cb '))
+    # Site 0.22.2 (Rob: "the filter page is unmanageable, it needs HUGE
+    # condensing ... the hover works, just put em in groups"): a chip is the
+    # symbol and nothing else, its name in the tooltip and as the
+    # checkbox's accessible name, never printed under it.
+    chips = re.findall(r'<label class="chip" data-k="[^"]*"><input type="checkbox" '
+                       r'name="b" value="([^"]+)" data-n="([^"]*)" aria-label="([^"]*)"'
+                       r'(?: checked)?><span class="cb k-\w+" data-tip="([^"]+)">', pane)
+    check("each chip is its symbol only: the name is its accessible name and its "
+          "tooltip, not text under it",
+          len(chips) == len(S.FILTER_KEYS)
+          and all(n == a and t for _k, n, a, t in chips)
+          and 'class="tn"' not in pane and 'class="tile"' not in pane
+          and 'data-tip="PETSCII: a Commodore 64 or 128' in pane
+          and 'data-tip="Listed a month or more."' in pane
+          and 'data-tip="Supports LGBTQ+ people."' in pane)
     check("the pane is a GET form of checkboxes, one per badge, in the page's "
           "order, with all or any beside them",
           '<form class="fpane" id="fform" method="get" action="/"' in pane
@@ -498,11 +539,15 @@ def badge_checks(S, db):
           and '<input type="radio" name="m" value="all" checked>' in pane
           and '<input type="radio" name="m" value="any">' in pane
           and '<button type="submit">Show boards</button>' in pane)
-    check("grouped as on /badges: the board's own, worked out here, support, "
-          "then each group of interests",
-          re.findall(r"<legend>(.*?)</legend>", pane)
-          == ["Boards with", "Sent by the board", "Worked out here", "Support",
-              "Interests"] + [html.escape(g) for g in S.INTEREST_GROUPS])
+    check("grouped as on /badges, a row each: the board's own, worked out here, "
+          "support, then a heading and a row per group of interests",
+          re.findall(r'<details class="fr[^"]*" data-g open><summary>(.*?)</summary>', pane)
+          == ["Sent by the board", "Worked out here", "Support"]
+             + [html.escape(g) for g in S.INTEREST_GROUPS]
+          and re.findall(r"<legend>(.*?)</legend>", pane) == ["Boards with"]
+          and '<div class="fint" data-g><p class="fh">Interests</p><div class="fsub">'
+              in pane
+          and pane.count('<details class="fr sub" data-g open>') == len(S.INTEREST_GROUPS))
     check("its search is labelled, and hidden until the script can drive it",
           '<p class="findbar" data-js hidden><label for="fq">Find a badge</label>'
           '<input type="search" id="fq" data-find="#fgrid"' in pane
@@ -520,9 +565,9 @@ def badge_checks(S, db):
     check("?b=petscii shows only boards carrying it, any case, and hides the rest",
           code == 200 and "Badge Board" in shown1 and "Junk Fields" not in shown1
           and all(("petscii" in k) != h for _n, k, h in rows1))
-    check("its tile is ticked, the button counts one, and the line says how "
+    check("its chip is ticked, the button counts one, and the line says how "
           "many of how many",
-          'value="petscii" data-n="PETSCII" checked>' in one
+          'value="petscii" data-n="PETSCII" aria-label="PETSCII" checked>' in one
           and '<span class="fc" id="fcount">1</span>' in one
           and f'<span data-f="n">{len(shown1)} of {len(rows1)} board' in one
           and '<span data-f="m">all of</span>: <span data-f="l">PETSCII</span>. '
@@ -568,22 +613,42 @@ def badge_checks(S, db):
           and "main > table tr:not(:first-child):nth-child(odd of :not([hidden])) "
               "{ background:#111116; }" in home)
     css_f = home.split("<style>")[1].split("</style>")[0]
-    check("a chosen tile shows a tick and a brighter frame, not only a colour; "
-          "focus is the yellow ring",
-          ".tile input:checked + .tbox::after { content:\"\";" in css_f
-          and ".tile input:focus-visible + .tbox { outline:3px solid #ffd35c;" in css_f
+    check("a chosen chip shows a ring and a notch in its corner, not only a "
+          "colour; focus is the yellow ring",
+          ".chip input:checked + .cb { border-color:var(--dial); box-shadow:0 0 0 "
+          "0.125rem var(--dial);" in css_f
+          and "background-image:linear-gradient(225deg, var(--dial) 0.3125rem, "
+              "transparent 0.3125rem); }" in css_f
+          and ".chip input:focus-visible + .cb { outline:3px solid #ffd35c;" in css_f
           and ".fmode input:checked + span { background:var(--ink);" in css_f)
+    check("a chip is small: the size of a badge on the list, give or take",
+          "min-width:1.625rem; height:1.625rem;" in css_f
+          and ".chips { display:flex; flex-wrap:wrap; gap:0.25rem; }" in css_f)
+    check("its name is the badge tooltip, shown on hover and on focus, hung from "
+          "the row so none can push the page sideways, and not drawn until wanted",
+          ".cb::after { content:attr(data-tip); position:absolute; left:0;" in css_f
+          and "z-index:6; display:none;" in css_f
+          and ".chip:hover .cb::after, .chip input:focus + .cb::after { display:block; }"
+              in css_f
+          and ".fr { position:relative; display:flow-root;" in css_f)
     hov = css_f[css_f.index("@media (hover: hover) and (pointer: fine) {\n  details.filter"):]
     hov = hov[:hov.index("\n}\n")]
-    check("a hovered tile lights only where a pointer hovers",
-          ".tile:hover .tbox" in hov and css_f.count(".tile:hover") == 1)
+    check("a hovered chip lights its edge only where a pointer hovers",
+          ".chip:hover .cb {" in hov and css_f.count(".chip:hover .cb {") == 1)
     check("the pane settles in only where motion is wanted",
           css_f.count("animation:panein") == 1
           and css_f.index("animation:panein") > css_f.index(
               "@media (prefers-reduced-motion: no-preference) {\n  details.filter[open]"))
-    check("and on a phone the tiles are three or four to a row",
-          ".tiles { grid-template-columns:repeat(auto-fill, minmax(4.5rem, 1fr)); }"
-          in css_f)
+    check("on a desktop a row's name is a column and the interests go two rows "
+          "to a line; on a phone the name is a heading to tap",
+          "  .fr > summary { float:left; width:10.5rem; }" in css_f
+          and ".fsub { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));"
+              in css_f
+          and "  .fr > summary { line-height:2rem; }" in css_f
+          and ".fr:not([open]) > summary::after { transform:rotate(-45deg);" in css_f
+          and not any(w in css_f for w in (".tile", ".tbox", ".bento", ".fg ")))
+    check("and a search opens a folded row that has a match",
+          "if(w.length&&!g.hidden&&g.tagName==='DETAILS')g.open=true;" in S.BADGE_JS)
 
     # ----------------------------------------------------------------------
     print("Badges the directory works out")
@@ -681,7 +746,7 @@ def badge_checks(S, db):
           and 'href="#how-steady-is-worked-out"' in leg)
     check("every row is on the page with no script: one per badge, the steps "
           "of Listed sharing one",
-          len(trs) == len(S.BADGES) - 5 == 65
+          len(trs) == len(S.BADGES) - 5 == 79
           and '<tr data-k="' in leg and " hidden>" not in leg.split("</nav>")[1]
           .replace("data-js hidden>", ""))
     check("each says where it comes from: the field a board sends, or worked "
@@ -692,7 +757,7 @@ def badge_checks(S, db):
     check("then Show your support: every symbol, its slug and its sentence",
           all(f"<code>{slug}</code>" in leg and html.escape(sentence) in leg
               for slug, _a, _n, sentence in S.SUPPORT)
-          and leg.count('class="bd k-sup"') == 11 and len(S.SUPPORT) == 11)
+          and leg.count('class="bd k-sup"') == 24 and len(S.SUPPORT) == 24)
     check("each support slug is a plain lower case word, so a board can type it",
           all(re.fullmatch(r"[a-z][a-z-]{1,23}", s) for s in S.SUPPORT_SLUGS)
           and len(set(S.SUPPORT_SLUGS)) == len(S.SUPPORT_SLUGS))
@@ -708,7 +773,8 @@ def badge_checks(S, db):
           == list(S.INTEREST_GROUPS)
           and leg.count("<tbody data-g>") == len(S.INTEREST_GROUPS))
     check("the legend's badges have tooltips too",
-          'data-tip="Supports amateur radio."' in leg
+          'data-tip="Supports LGBTQ+ people."' in leg
+          and 'data-tip="Interest: Amateur radio."' in leg
           and 'data-tip="Interest: Commodore 64."' in leg)
     check("its search is labelled, hidden until the script can drive it, and "
           "says how many rows it leaves",
@@ -732,7 +798,9 @@ def badge_checks(S, db):
           in_order and S.sort_key("3D printing") == "d printing"
           and S.sort_key("Listed ten years") == "listed ten years"
           and [b["name"] for b in S.BADGES if b["group"] == "support"][:2]
-          == ["Amateur radio", "Animal welfare"])
+          == ["Addiction recovery", "Animal welfare"]
+          and [b["name"] for b in S.BADGES if b["sub"] == "Radio and sky"][0]
+          == "Amateur radio")
     want = []
     for b in S.BADGES:
         name = "Listed" if b["cls"] == "age" else b["name"]
@@ -750,8 +818,8 @@ def badge_checks(S, db):
     marks = [m for m in re.findall(r'aria-label="(?:Supports |Interest: )([^."]+)\.', shown)]
     check("and a board's row carries them in that order too",
           len(carried) > 5 and carried == sorted(carried, key=rank.get)
-          and marks == ["amateur radio", "LGBTQ+ people", "Commodore 64",
-                        "Electronics", "Chiptune"])
+          and marks == ["LGBTQ+ people", "Commodore 64", "Electronics", "Chiptune",
+                        "Amateur radio"])
     check("it belongs to Boards in the menu, on the list face",
           '<a class="here" href="/">Boards</a>' in leg)
     about_leg = get("/badges", host="about.example")[1]
@@ -759,8 +827,8 @@ def badge_checks(S, db):
           '<a class="here" href="https://boards.example/">Boards</a>' in about_leg
           and 'class="here" href="/">What this is' not in about_leg)
     check("How to get listed shows the fields and links the legend",
-          'href="/badges"' in get("/how")[1] and '"support":["ham"]' in get("/how")[1]
-          and '"interests":["c64","electronics","chiptune"]' in get("/how")[1])
+          'href="/badges"' in get("/how")[1] and '"support":["literacy"]' in get("/how")[1]
+          and '"interests":["c64","electronics","ham"]' in get("/how")[1])
 
     # ----------------------------------------------------------------------
     print("Rows: every other one striped, and the hover")
@@ -942,14 +1010,22 @@ def badge_checks(S, db):
               .fetchone()[0] == 6)
         con.close()
         row5 = badge_row(home5[2].decode("utf-8"), "Badge Keeper")
-        check("its row shows what it had, and the filter can find it by it",
-              ('term', 'P') in badges_in(row5) and 'aria-label="Supports amateur radio.' in row5
+        # Its support column says "ham", written before amateur radio moved
+        # to the interests (0.22.2). It is read as the interest, with no
+        # migration: the row shows it, the filter finds it, the JSON files it.
+        check("its row shows what it had, ham now as an interest, and the filter "
+              "can find it by it",
+              ('term', 'P') in badges_in(row5)
+              and 'aria-label="Interest: Amateur radio.' in row5
+              and "Supports amateur radio" not in row5
               and "petscii" in dict((n, k) for n, k, _h in list_rows(
                   fetch("/?b=petscii&b=ham", base5)[2].decode("utf-8"))).get("Badge Keeper", []))
         listed5 = {b["name"]: b for b in json.loads(
             fetch("/api/boards.json", base5)[2].decode("utf-8"))["boards"]}
-        check("and the JSON gives its interests as an empty list, not a missing field",
-              listed5.get("Badge Keeper", {}).get("interests") == [])
+        check("and the JSON files an old support ham with its interests, lists "
+              "and never missing fields",
+              listed5.get("Badge Keeper", {}).get("interests") == ["ham"]
+              and listed5.get("Badge Keeper", {}).get("support") == [])
         code5, _b = post_from({"name": "Badge Keeper", "port": 6400, "token": "b" * 32,
                                "software": "unleashed", "support": ["ham"],
                                "interests": ["c64", "swl"]}, "192.0.2.55", base5)
@@ -957,9 +1033,10 @@ def badge_checks(S, db):
         con.row_factory = sqlite3.Row
         r = con.execute("SELECT * FROM boards WHERE token=?", ("b" * 32,)).fetchone()
         con.close()
-        check("its next heartbeat keeps its listing and stores its interests",
-              code5 == 200 and r["interests"] == "c64,swl" and r["beats"] == 778
-              and r["state"] == "online")
+        check("its next heartbeat keeps its listing and stores its interests, the "
+              "ham it still sends as support among them",
+              code5 == 200 and r["interests"] == "c64,ham,swl" and r["support"] == ""
+              and r["beats"] == 778 and r["state"] == "online")
         S.DB_PATH, was = db_0211, S.DB_PATH
         try:
             S.setup()
@@ -2466,14 +2543,17 @@ def main():
               and "nothing on the board is erased" in flat_i2
               and "press Install on a new board and tick Erase everything first"
                   in flat_i2)
-        # The BOOT button and the Wi-Fi fallback are firmware 1.0.1's, moved
-        # there from 0.24.0; 1.0.0 does not have them. The repository carries
-        # 0.23.0 at most, so here they must not show; the second server below
-        # proves they stay hidden at 1.0.0 and show at 1.0.1.
+        # The BOOT button and the Wi-Fi fallback are firmware 1.0.2's. They
+        # moved there from 0.24.0 and then from 1.0.1, which is the badge
+        # fields only; 1.0.0 and 1.0.1 do not have them. The repository
+        # carries 0.23.0 at most, so here they must not show; the second
+        # server below proves they stay hidden at 1.0.0 and 1.0.1 and show
+        # at 1.0.2.
         src_gate = open(os.path.join("pages", "install.md"), encoding="utf-8").read()
-        check("the reset section is gated on 1.0.1, and nothing on 0.24.0",
-              "::: from 1.0.1" in src_gate and "0.24" not in src_gate)
-        check("and nothing of 1.0.1's shows while the newest release is older",
+        check("the reset section is gated on 1.0.2, not 1.0.1 or 0.24.0",
+              "::: from 1.0.2" in src_gate and "::: from 1.0.1" not in src_gate
+              and "0.24" not in src_gate)
+        check("and nothing of 1.0.2's shows while the newest release is older",
               "The BOOT button" not in inst2 and S.ART["boot-button"] not in inst2
               and "::: from" not in inst2)
         check("the setup steps name what the board says",
@@ -3650,14 +3730,23 @@ def main():
                       and code == 200 and json.loads(man1.decode())["version"] == "1.0.0"
                       and 'manifest="/install/1.0.0/manifest.json"' in inst4
                       and 'id="fwv0" checked> 1.0.0 (newest)' in inst4)
-                # 1.0.0 has no BOOT button reset: that is 1.0.1's.
+                # 1.0.0 has no BOOT button reset, and neither has 1.0.1,
+                # which is the badge fields only: it is 1.0.2's.
                 check("with 1.0.0 on disk, the BOOT button section still waits",
                       "The BOOT button" not in inst4 and S.ART["boot-button"] not in inst4
                       and "::: from" not in inst4)
                 put("1.0.1", "esp32", whole)
+                inst41 = fetch("/install", base2)[2].decode("utf-8")
+                check("and with 1.0.1, the badge release, it still waits",
+                      'id="fwv0" checked> 1.0.1 (newest)' in inst41
+                      and "The BOOT button" not in inst41
+                      and S.ART["boot-button"] not in inst41
+                      and "goes back to the last network that worked" not in inst41
+                      and "::: from" not in inst41)
+                put("1.0.2", "esp32", whole)
                 inst5 = fetch("/install", base2)[2].decode("utf-8")
                 flat5 = " ".join(inst5.split())
-                check("with a release of 1.0.1 or later, the BOOT button shows",
+                check("with a release of 1.0.2 or later, the BOOT button shows",
                       "The BOOT button" in inst5 and S.ART["boot-button"] in inst5
                       and "Press and let go of <b>RESET</b>" in flat5
                       and "goes back to the last network that worked" in flat5

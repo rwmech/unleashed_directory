@@ -19,12 +19,12 @@ A board cannot set these. The directory works them out from what it has seen for
 
 ::: badges
 support
-Add these to show what your board stands for. They come from a fixed list, chosen by the directory rather than typed in by a board, which is what stops anybody putting words of their own on the page. Most are the causes shown most often as support badges, ribbons and flair on community sites, picked because they are widely recognised and belong to no political party. Amateur radio is here as this hobby's oldest neighbour.
+Add these to show what your board stands for. They come from a fixed list, chosen by the directory rather than typed in by a board, which is what stops anybody putting words of their own on the page. They are the causes shown most often as support badges, ribbons and flair on community sites, picked because they are widely recognised and belong to no political party, each drawn in the colour it is known by.
 :::
 
 ::: badges
 interests
-What the sysop is into, so a caller can find a board full of people who like the same things. Drawn in rose, a colour nothing else on the list uses. The same rules as support: a fixed list, a slug each, and nothing typed in.
+What the sysop is into, so a caller can find a board full of people who like the same things. Drawn in rose, a colour nothing else on the list uses. The same rules as support: a fixed list, a slug each, and nothing typed in. Amateur radio, this hobby's oldest neighbour, is here with the radio and the sky; it was a support badge until September 2026, and `ham` is still understood in either list.
 :::
 
 ### How steady is worked out

@@ -1259,11 +1259,12 @@ CONNECTED_JS = (
 #
 #   - Any input[data-find] narrows the [data-k] items inside the element its
 #     data-find names, as you type, by name and slug (every word typed has
-#     to appear), hides a [data-g] group left with nothing in it, and says
+#     to appear), hides a [data-g] group left with nothing in it, opens a
+#     folded filter row that has a match (0.22.2), and says
 #     how many are left in the element data-count names. The search boxes
 #     are marked data-js and hidden in the markup, because without the
 #     script they could not do anything; the script shows them.
-#   - On the board list, a tile filters the rows the moment it is pressed:
+#   - On the board list, a chip filters the rows the moment it is pressed:
 #     every row is on the page, carrying its badges in data-b, and the ones
 #     that do not pass get the hidden attribute. The line under the button
 #     is rewritten, the count on the button too, and the URL follows with
@@ -1292,7 +1293,8 @@ BADGE_JS = (
     "items.forEach(function(e){var k=e.getAttribute('data-k'),"
     "hit=w.every(function(x){return k.indexOf(x)>=0;});e.hidden=!hit;if(hit)n++;});"
     "all('[data-g]',box).forEach(function(g){"
-    "g.hidden=!g.querySelector('[data-k]:not([hidden])');});"
+    "g.hidden=!g.querySelector('[data-k]:not([hidden])');"
+    "if(w.length&&!g.hidden&&g.tagName==='DETAILS')g.open=true;});"
     "out.textContent=!w.length?items.length+noun:"
     "n?n+' of '+items.length+noun:'No badge matches that.';}"
     "q.addEventListener('input',find);find();});"
@@ -1503,7 +1505,7 @@ def _md_render(text):
     for raw in text.splitlines():
         line = raw.rstrip()
 
-        # "::: from 1.0.1" ... ":::" is prose for a firmware not yet
+        # "::: from 1.0.2" ... ":::" is prose for a firmware not yet
         # released: rendered only once a release at that version or later
         # is on disk, the way the announcement banner waits for 1.0.0. It
         # may hold a drawing, so it counts ":::" pairs rather than ending
@@ -2326,8 +2328,12 @@ def announce(payload, address):
     fields["features"]  = ",".join(pick(payload.get("features"), FEATURES))
     fields["support"]   = ",".join(pick(payload.get("support"), SUPPORT_SLUGS))
     # What the sysop is into (site 0.22.0), exactly as support: slugs from
-    # the published list, anything else ignored, the first 16 read.
-    fields["interests"] = ",".join(pick(payload.get("interests"), INTEREST_SLUGS))
+    # the published list, anything else ignored, the first 16 read. A slug
+    # that moved from support to the interests (ham, 0.22.2) is still taken
+    # from the support list, and filed here.
+    moved = set(pick(payload.get("support"), SUPPORT_MOVED))
+    got = set(pick(payload.get("interests"), INTEREST_SLUGS)) | moved
+    fields["interests"] = ",".join(s for s in INTEREST_SLUGS if s in got)
 
     with db() as con:
         if rate_limited(con, address, now):
@@ -2873,7 +2879,7 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
 .k-int {{ --bc:#f096c4; --bb:rgba(240, 150, 196, 0.5); --bt:rgba(240, 150, 196, 0.1); }}
 .bd.k-soft, .bd.k-sys {{ font-size:0.75rem; letter-spacing:0; }}
 .bd.k-sup, .bd.k-int {{ padding:0 0.125rem; }}
-.bd.k-sup svg, .bd.k-int svg, .ts svg {{ display:block; width:1.0625rem; height:1.0625rem;
+.bd.k-sup svg, .bd.k-int svg, .cb svg {{ display:block; width:1.0625rem; height:1.0625rem;
         fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
 .k-int svg {{ stroke:currentColor; }}
 .bd:focus {{ outline:none; }}
@@ -2913,12 +2919,15 @@ main [hidden] {{ display:none !important; }}
    how many boards that leaves and which badges, with a way to clear them.
    None of the badges' symbols is on the page until the pane opens.
 
-   Open, the pane is a bento grid: a box per group, the interests a box per
-   sub-group, each box a grid of tiles. A tile is a checkbox that cannot be
-   seen, over a box that shows its state three ways, so colour is never the
-   only one: chosen is a brighter frame, a tick in the corner and brighter
-   words; focused is the yellow ring every control here gets; hovered is a
-   lighter frame, only where a pointer hovers.
+   Open (0.22.2), the pane is a row per group: the group's name, then its
+   chips, small, symbol only, the name in the tooltip on hover and on
+   focus. The interests are a heading and a row per sub-group, two rows to
+   a line on a desktop. A chip is a checkbox that cannot be seen, over the
+   badge's symbol, and shows its state in shapes as well as colour: chosen
+   is a ring round it and a notch in its corner; focused is the yellow ring
+   every control here gets; hovered is a lighter edge, only where a pointer
+   hovers. Every group is a <details>, open: on a phone a tap on its name
+   folds it away.
    -------------------------------------------------------------------- */
 .fbar {{ position:relative; margin:0 0 0.625rem; }}
 .fbar p.keylink {{ position:absolute; top:0; right:0; margin:0; line-height:2rem;
@@ -2944,10 +2953,10 @@ details.filter > summary:focus-visible {{ outline:3px solid #ffd35c; outline-off
 .fc:empty {{ display:none; }}
 p.factive {{ margin:0.5rem 0 0; color:var(--dim); font-size:0.75rem; }}
 p.factive [data-f="n"] {{ color:var(--ink); }}
-.fpane {{ margin:0.625rem 0 0.25rem; padding:0.875rem; background:#0f0f15;
+.fpane {{ margin:0.625rem 0 0.25rem; padding:0.75rem 0.875rem; background:#0f0f15;
         border:1px solid #26303a; border-radius:0.5rem; }}
 .ftop {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.625rem 1.5rem;
-        margin:0 0 0.875rem; }}
+        margin:0 0 0.625rem; }}
 .findbar {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.375rem 0.625rem;
         margin:0; }}
 .fpane .findbar {{ flex:1 1 20rem; }}
@@ -2968,55 +2977,69 @@ p.factive [data-f="n"] {{ color:var(--ink); }}
 .fmode legend {{ float:left; margin:0 0.375rem 0 0; padding:0; color:var(--dim);
         font-size:0.75rem; }}
 .fmode label {{ position:relative; display:block; }}
-.fmode input, .tile input {{ position:absolute; top:0; left:0; width:100%; height:100%;
+.fmode input {{ position:absolute; top:0; left:0; width:100%; height:100%;
         margin:0; opacity:0; cursor:pointer; }}
 .fmode span {{ display:block; padding:0.25rem 0.625rem; border:1px solid #35566b;
         border-radius:0.375rem; color:var(--dim); font-size:0.75rem; }}
 .fmode input:checked + span {{ background:var(--ink); border-color:var(--ink);
         color:var(--bg); }}
 .fmode input:focus-visible + span {{ outline:3px solid #ffd35c; outline-offset:2px; }}
-.bento {{ display:grid; gap:0.625rem; align-items:start;
-        grid-template-columns:repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); }}
-.fg {{ min-width:0; margin:0; padding:0.625rem 0.625rem 0.75rem; background:#13131b;
-        border:1px solid var(--rule); border-radius:0.5rem; }}
-.fg > legend {{ float:left; width:100%; margin:0 0 0.5rem; padding:0;
+/* The rows. A group's name is a column of its own on a desktop and a
+   heading over its chips on a phone; the interests' rows go two to a line
+   on a desktop, where each of them fits on one. */
+.frows {{ display:flex; flex-direction:column; gap:0.3125rem; }}
+.fr {{ position:relative; display:flow-root; margin:0; }}
+.fr > summary {{ list-style:none; cursor:pointer; user-select:none;
         color:var(--struct); font-size:0.6875rem; letter-spacing:0.0625rem;
-        text-transform:uppercase; }}
-.fg > legend + * {{ clear:both; }}
-/* The interests are one group of sub-groups: no box of their own, a
-   heading over the whole width, and their sub-groups in a grid inside. */
-.fg.wide {{ grid-column:1 / -1; padding:0; background:transparent; border:0; }}
-.fg.wide > legend {{ margin:0.375rem 0 0.625rem; font-size:0.75rem; }}
-.fg.sub > legend {{ color:var(--dim); }}
-/* A sub-group of more than six spans two columns, and its tiles go four a
-   row, so eight make two full rows beside a neighbour of two rows, rather
-   than seven and one left over. */
+        text-transform:uppercase; line-height:1.625rem; }}
+.fr > summary::-webkit-details-marker {{ display:none; }}
+/* The Filter button's chevron, smaller: down while the row is open, right
+   once it is folded, so a folded row says it has more in it. */
+.fr > summary::after {{ content:""; display:inline-block; width:0.3125rem;
+        height:0.3125rem; margin:0 0 0.1875rem 0.5rem; border:solid currentColor;
+        border-width:0 0.125rem 0.125rem 0; transform:rotate(45deg); opacity:0.7; }}
+.fr:not([open]) > summary::after {{ transform:rotate(-45deg); margin-bottom:0.0625rem; }}
+.fr > summary:focus {{ outline:none; }}
+.fr > summary:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.fr.sub > summary {{ color:var(--dim); }}
+.fint {{ margin:0.25rem 0 0; }}
+.fh {{ margin:0 0 0.125rem; color:var(--struct); font-size:0.75rem;
+        letter-spacing:0.0625rem; text-transform:uppercase; }}
+.fsub {{ display:flex; flex-direction:column; gap:0.3125rem; }}
+.chips {{ display:flex; flex-wrap:wrap; gap:0.25rem; }}
+.chip {{ display:block; }}
+/* The checkbox, out of sight but still the thing that is focused and
+   ticked; the label round it is what a click or a tap lands on. */
+.chip input {{ position:absolute; width:0.0625rem; height:0.0625rem; margin:0; opacity:0;
+        pointer-events:none; }}
+.cb {{ display:flex; align-items:center; justify-content:center; box-sizing:border-box;
+        min-width:1.625rem; height:1.625rem; padding:0 0.25rem; border:1px solid var(--bb);
+        border-radius:0.25rem; background-color:var(--bt); color:var(--bc);
+        font-size:0.6875rem; letter-spacing:0.03125rem; cursor:pointer; }}
+.chip input:checked + .cb {{ border-color:var(--dial); box-shadow:0 0 0 0.125rem var(--dial);
+        background-color:rgba(127, 212, 255, 0.16);
+        background-image:linear-gradient(225deg, var(--dial) 0.3125rem, transparent 0.3125rem); }}
+.chip input:focus-visible + .cb {{ outline:3px solid #ffd35c; outline-offset:0.25rem; }}
+/* A chip's tooltip is a badge's, hanging under the row the chip is in
+   rather than from the chip, so one near the right edge can never push the
+   page sideways, and not drawn at all until it is wanted, so a hidden one
+   takes up no room either. */
+.cb::after {{ content:attr(data-tip); position:absolute; left:0; top:calc(100% + 0.25rem);
+        z-index:6; display:none; width:max-content; max-width:min(100%, 24rem);
+        box-sizing:border-box; padding:0.375rem 0.625rem; background:#16161e;
+        border:1px solid var(--bc); border-radius:0.25rem; color:var(--ink);
+        font-size:0.8125rem; line-height:1.4; letter-spacing:0; text-transform:none;
+        white-space:normal; box-shadow:0 0.25rem 1rem rgba(0, 0, 0, 0.6);
+        pointer-events:none; }}
+.chip:hover .cb::after, .chip input:focus + .cb::after {{ display:block; }}
 @media (min-width: 901px) {{
-  .fg.sub.big {{ grid-column:span 2; }}
-  .fg.sub.big .tiles {{ grid-template-columns:repeat(4, minmax(0, 1fr)); }}
+  .fr > summary {{ float:left; width:10.5rem; }}
+  .cb::after {{ left:10.5rem; max-width:min(calc(100% - 10.5rem), 24rem); }}
+  .fsub {{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr));
+        gap:0.3125rem 1.5rem; }}
 }}
-.tiles {{ display:grid; gap:0.375rem;
-        grid-template-columns:repeat(auto-fill, minmax(5.5rem, 1fr)); }}
-.tile {{ position:relative; display:block; min-width:0; }}
-.tbox {{ display:flex; flex-direction:column; align-items:center; gap:0.3125rem;
-        box-sizing:border-box; height:100%; min-height:4.25rem;
-        padding:0.5rem 0.25rem 0.4375rem; background:var(--bg);
-        border:1px solid #2c2c38; border-radius:0.375rem; color:var(--dim);
-        font-size:0.6875rem; line-height:1.25; text-align:center; hyphens:manual;
-        overflow-wrap:anywhere; }}
-.ts {{ display:inline-flex; align-items:center; justify-content:center; flex:none;
-        box-sizing:border-box; min-width:1.75rem; height:1.75rem; padding:0 0.25rem;
-        border:1px solid var(--bb); border-radius:0.25rem; background:var(--bt);
-        color:var(--bc); font-size:0.75rem; letter-spacing:0.03125rem; }}
-.ts svg {{ width:1.25rem; height:1.25rem; }}
-.tile input:checked + .tbox {{ background:rgba(127, 212, 255, 0.12); color:var(--ink);
-        border-color:var(--dial); box-shadow:inset 0 0 0 0.0625rem var(--dial); }}
-.tile input:checked + .tbox::after {{ content:""; position:absolute; top:0.3125rem;
-        right:0.4375rem; width:0.25rem; height:0.5rem; border:solid var(--dial);
-        border-width:0 0.125rem 0.125rem 0; transform:rotate(45deg); }}
-.tile input:focus-visible + .tbox {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 .fgo {{ display:flex; flex-wrap:wrap; align-items:center; gap:0.5rem 1.25rem;
-        margin:0.875rem 0 0; }}
+        margin:0.625rem 0 0; }}
 .fgo button {{ font:inherit; font-size:0.75rem; color:#04212c; background:var(--dial);
         border:1px solid #9fdfff; border-radius:0.375rem; padding:0.375rem 0.875rem;
         cursor:pointer; }}
@@ -3025,7 +3048,7 @@ p.factive [data-f="n"] {{ color:var(--ink); }}
 .fgo a {{ font-size:0.75rem; }}
 @media (hover: hover) and (pointer: fine) {{
   details.filter > summary:hover {{ border-color:var(--dial); }}
-  .tile:hover .tbox {{ border-color:#5a7488; color:var(--ink); }}
+  .chip:hover .cb {{ border-color:#7a94a8; }}
   .fmode label:hover span {{ border-color:var(--dial); }}
   .fgo button:hover {{ background:#a7e2ff; }}
 }}
@@ -3036,15 +3059,12 @@ p.factive [data-f="n"] {{ color:var(--ink); }}
   @keyframes panein {{ from {{ opacity:0; transform:translateY(-0.375rem); }}
         to {{ opacity:1; transform:none; }} }}
 }}
-/* On a phone: three tiles a row with room for a thumb, the pane edge to
-   edge in the column, and the key under the button rather than beside it
-   when a long line of chosen badges needs the room. */
+/* On a phone: a group's name is a heading over its chips, tall enough to
+   tap, and a tap folds the group away. The chips wrap under it. */
 @media (max-width: 900px) {{
   .fpane {{ padding:0.625rem; }}
-  .fg {{ padding:0.5rem 0.5rem 0.625rem; }}
-  .fg.wide {{ padding:0; }}
-  .tiles {{ grid-template-columns:repeat(auto-fill, minmax(4.5rem, 1fr)); }}
-  .tbox {{ min-height:4.5rem; padding-left:0.1875rem; padding-right:0.1875rem; }}
+  .fr > summary {{ line-height:2rem; }}
+  .chips {{ gap:0.3125rem; padding:0 0 0.25rem; }}
 }}
 /* --------------------------------------------------------------------
    /badges: every badge in a table, a table per group, each row the
@@ -4278,10 +4298,18 @@ BADGE_COLOURS = {"soft": "grey", "sys": "white", "term": "purple",
 #
 # The first ten are the causes most often shown as support badges, ribbons
 # and flair on community sites and profiles, picked to be broadly
-# recognised and not party political; the eleventh, amateur radio, is here
-# because it is this hobby's oldest neighbour. Changing the list is editing
-# a line: slug, drawing (a key of SUPPORT_ART), what it supports as it reads
-# after "Supports", and one plain sentence for /badges.
+# recognised and not party political. The next fourteen (site 0.22.2, Rob:
+# "elder care, stuff that people do ... use volume as your guide") are the
+# next most common by the same test: the causes with a well-known ribbon,
+# symbol or awareness day, each checked against the organisation that
+# keeps it, and none of them a side in an argument between parties.
+# Autism is not one of them because neurodiversity already names autistic
+# people, and military families not because veterans already names them.
+# Amateur radio was the eleventh until 0.22.2, when it moved to the
+# interests, where a hobby belongs; SUPPORT_MOVED keeps a board that still
+# sends it here working. Changing the list is editing a line: slug, drawing
+# (a key of SUPPORT_ART), what it supports as it reads after "Supports",
+# and one plain sentence for /badges.
 SUPPORT = (
     ("lgbtq",              "rainbow",   "LGBTQ+ people",
      "Lesbian, gay, bisexual, trans and queer callers are welcome here, and the sysop says so."),
@@ -4303,10 +4331,44 @@ SUPPORT = (
      "The red ribbon: solidarity with people living with HIV and AIDS."),
     ("animals",            "paw",       "animal welfare",
      "For animal rescue, adoption and welfare."),
-    ("ham",                "antenna",   "amateur radio",
-     "Hams welcome: the other hobby of talking to strangers over home-made equipment."),
+    ("breast-cancer",      "ribbon-bc", "breast cancer awareness",
+     "The pink ribbon: for people living with breast cancer, the survivors and the research."),
+    ("childhood-cancer",   "ribbon-cc", "children with cancer",
+     "The gold ribbon: for children and teenagers with cancer, and their families."),
+    ("dementia",           "forgetmenot", "people with dementia",
+     "The forget-me-not: for people living with Alzheimer's and other dementias, "
+     "and the people who look after them."),
+    ("caregivers",         "carer",     "carers and caregivers",
+     "For everybody looking after somebody, elder care included, family carers and paid ones alike."),
+    ("diabetes",           "bluecircle", "people with diabetes",
+     "The blue circle: for everybody living with diabetes, of any type."),
+    ("heart-health",       "heartbeat", "heart health",
+     "For heart health, and for people living with heart disease."),
+    ("domestic-violence",  "ribbon-dv", "survivors of domestic violence",
+     "The purple ribbon: for ending domestic violence, and for the people who survive it."),
+    ("recovery",           "sunrise",   "addiction recovery",
+     "For people in recovery from addiction, and the families who stand by them."),
+    ("donation",           "drop",      "blood and organ donation",
+     "For blood donors, organ donors and the people their gifts keep alive."),
+    ("foster-adoption",    "triad",     "foster care and adoption",
+     "For children in foster care and adopted children, and the families who take them in."),
+    ("homelessness",       "house",     "people without a home",
+     "For people without a safe place to live, and the shelters and workers who help."),
+    ("hunger",             "bowl",      "hunger relief",
+     "For food banks, pantries and everybody making sure people get fed."),
+    ("literacy",           "readbook",  "literacy",
+     "For reading and writing, for everybody: libraries, tutors and adult learners."),
+    ("first-responders",   "beacon",    "first responders",
+     "For the people who answer when somebody calls for help: paramedics, "
+     "firefighters, police and dispatchers."),
 )
 SUPPORT_SLUGS = tuple(s[0] for s in SUPPORT)
+# Slugs that were support causes and are interests now, still accepted in a
+# board's "support" list and filed with its interests (site 0.22.2). No
+# firmware sent either list when it moved, so this is courtesy rather than
+# rescue, but it costs one line and keeps any hand-built board listed as it
+# meant to be.
+SUPPORT_MOVED = ("ham",)
 
 # The drawings, in a 24 unit square, line art in the manner of the rest of
 # the site: strokes, round ends, no fill except the dots. Each keeps the
@@ -4380,14 +4442,83 @@ SUPPORT_ART = {
             '<ellipse cx="14.3" cy="7.2" rx="1.7" ry="2.2" stroke="#e3a36b"/>'
             '<ellipse cx="17.8" cy="11" rx="1.6" ry="2.1" transform="rotate(20 17.8 11)"'
             ' stroke="#e3a36b"/>'),
-    # A lattice mast, calling out both ways.
-    "antenna": ('<path d="M12 8.5 L8 21 M12 8.5 L16 21 M9.3 17 H14.7 M10.6 12.8 H13.4'
-                ' M7 21 H17" stroke="#8fb4ff"/>'
-                '<circle cx="12" cy="7" r="1.2" fill="#8fb4ff" stroke="#8fb4ff"'
-                ' stroke-width="0.6"/>'
-                '<path d="M15.2 4.4 A4.2 4.2 0 0 1 15.2 9.6 M8.8 4.4 A4.2 4.2 0 0 0 8.8 9.6'
-                ' M17.6 2.4 A7.25 7.25 0 0 1 17.6 11.6 M6.4 2.4 A7.25 7.25 0 0 0 6.4 11.6"'
-                ' stroke="#8fb4ff" stroke-width="1.4"/>'),
+    # Site 0.22.2. Ribbons in the colour each cause is known by: pink for
+    # breast cancer, gold for childhood cancer, purple for domestic
+    # violence, a deeper purple than cancer's lavender.
+    "ribbon-bc": _ribbon("#f28cb8"),
+    "ribbon-cc": _ribbon("#e8c24a"),
+    "ribbon-dv": _ribbon("#a07ae6"),
+    # The forget-me-not: five blue petals round a yellow eye, the petals
+    # apart so they read as a flower at a badge's size, not a knot.
+    "forgetmenot": ("".join(
+        f'<circle cx="{x}" cy="{y}" r="2.4" stroke="#6fa8f0" stroke-width="1.5"/>'
+        for x, y in ((12, 6.8), (16.95, 10.39), (15.06, 16.21), (8.94, 16.21),
+                     (7.05, 10.39)))
+        + '<circle cx="12" cy="12" r="1.5" fill="#f2d54e" stroke="#f2d54e"'
+          ' stroke-width="0.6"/>'),
+    # Two cupped hands holding a heart, their thumbs turned in over it so
+    # the curve reads as hands and not as a smile.
+    "carer": ('<path d="M12 11.6 C9.5 9.9 8.5 8.6 8.5 7.3 C8.5 6.2 9.3 5.4 10.3 5.4'
+              ' C11 5.4 11.6 5.8 12 6.4 C12.4 5.8 13 5.4 13.7 5.4 C14.7 5.4 15.5 6.2 15.5 7.3'
+              ' C15.5 8.6 14.5 9.9 12 11.6 Z" stroke="#f5a9b8" stroke-width="1.5"/>'
+              '<path d="M3.2 9.8 V12.8 C3.2 17.2 7 20.4 12 20.4 C17 20.4 20.8 17.2'
+              ' 20.8 12.8 V9.8" stroke="#e6e6ea"/>'
+              '<path d="M3.2 9.8 C4.8 10.2 6 11.4 6.6 13.2 M20.8 9.8 C19.2 10.2 18 11.4'
+              ' 17.4 13.2" stroke="#e6e6ea" stroke-width="1.5"/>'),
+    # The International Diabetes Federation's blue circle.
+    "bluecircle": '<circle cx="12" cy="12" r="7.4" stroke="#5b9df0" stroke-width="2.8"/>',
+    # A heart with a beat running through it.
+    "heartbeat": ('<path d="M12 20.2 C6.2 15.8 3.2 12.7 3.2 9 C3.2 6.3 5.2 4.3 7.6 4.3'
+                  ' C9.5 4.3 11 5.5 12 7.1 C13 5.5 14.5 4.3 16.4 4.3 C18.8 4.3 20.8 6.3'
+                  ' 20.8 9 C20.8 12.7 17.8 15.8 12 20.2 Z" stroke="#ef6a5a"/>'
+                  '<path d="M6 11.2 H9.2 L10.6 8.4 L12.6 13.8 L14 11.2 H18" stroke="#eeeef4"'
+                  ' stroke-width="1.4"/>'),
+    # Recovery: a sun coming up over the line, in recovery's purple.
+    "sunrise": ('<path d="M7 17 A5 5 0 0 1 17 17" stroke="#b07ae8"/>'
+                '<path d="M3 17 H21" stroke="#b07ae8"/>'
+                '<path d="M12 10 V8 M16.95 12.05 L18.36 10.64 M7.05 12.05 L5.64 10.64'
+                ' M18.47 14.32 L20.3 13.56 M5.53 14.32 L3.7 13.56" stroke="#b07ae8"'
+                ' stroke-width="1.5"/>'
+                '<path d="M8 20.2 H16" stroke="#b07ae8" stroke-width="1.4" opacity="0.6"/>'),
+    # A drop of blood with a green heart in it: blood donation's drop and
+    # organ donation's green.
+    "drop": ('<path d="M12 3 C12 3 5.5 10.2 5.5 14.4 C5.5 18 8.4 20.8 12 20.8'
+             ' C15.6 20.8 18.5 18 18.5 14.4 C18.5 10.2 12 3 12 3 Z" stroke="#ef6a5a"/>'
+             '<path d="M12 17.6 C10 16.2 9.2 15.1 9.2 14 C9.2 13.1 9.9 12.5 10.7 12.5'
+             ' C11.3 12.5 11.8 12.9 12 13.4 C12.2 12.9 12.7 12.5 13.3 12.5 C14.1 12.5'
+             ' 14.8 13.1 14.8 14 C14.8 15.1 14 16.2 12 17.6 Z" stroke="#5cc478"'
+             ' stroke-width="1.3"/>'),
+    # The adoption triad: a triangle and a heart through it, in foster
+    # care's blue with a pink heart.
+    "triad": ('<path d="M12 3.5 L20.5 18.3 H3.5 Z" stroke="#6fb0ef"/>'
+              '<path d="M12 20.6 C8.3 17.8 6.7 15.8 6.7 13.6 C6.7 11.9 8 10.7 9.5 10.7'
+              ' C10.6 10.7 11.5 11.4 12 12.3 C12.5 11.4 13.4 10.7 14.5 10.7 C16 10.7'
+              ' 17.3 11.9 17.3 13.6 C17.3 15.8 15.7 17.8 12 20.6 Z" stroke="#f5a9b8"'
+              ' stroke-width="1.5"/>'),
+    # A house with its door: somewhere to live.
+    "house": ('<path d="M3.8 11.2 L12 4 L20.2 11.2 M6 9.4 V20.2 H18 V9.4"'
+              ' stroke="#d4a373"/>'
+              '<path d="M10 20.2 V15.2 H14 V20.2" stroke="#d4a373" stroke-width="1.5"/>'),
+    # A bowl, steaming, in hunger relief's orange.
+    "bowl": ('<path d="M3.5 12 H20.5 C20.5 16.6 16.7 19.8 12 19.8 C7.3 19.8 3.5 16.6'
+             ' 3.5 12 Z" stroke="#f39a4a"/>'
+             '<path d="M8.6 9.2 C7.8 8 9.6 7 8.8 5.4 M12.2 9.2 C11.4 8 13.2 7 12.4 5.4'
+             ' M15.8 9.2 C15 8 16.8 7 16 5.4" stroke="#f39a4a" stroke-width="1.3"'
+             ' opacity="0.8"/>'),
+    # An open book with lines of text on its pages.
+    "readbook": ('<path d="M12 6.6 C10 5.1 7 4.6 3 5.1 V18.6 C7 18.1 10 18.6 12 20.1'
+                 ' C14 18.6 17 18.1 21 18.6 V5.1 C17 4.6 14 5.1 12 6.6 Z M12 6.6 V20.1"'
+                 ' stroke="#8fb4ff"/>'
+                 '<path d="M5.6 8.8 H9.6 M5.6 11.6 H9.6 M5.6 14.4 H8.6 M14.4 8.8 H18.4'
+                 ' M14.4 11.6 H18.4 M14.4 14.4 H17.4" stroke="#8fb4ff" stroke-width="1.2"'
+                 ' opacity="0.75"/>'),
+    # An emergency beacon: a red lamp throwing blue light, which is every
+    # service's rather than one side's.
+    "beacon": ('<path d="M7 16.4 V12.4 C7 9.6 9.2 7.4 12 7.4 C14.8 7.4 17 9.6 17 12.4'
+               ' V16.4" stroke="#ef6a5a"/>'
+               '<path d="M5 16.4 H19 V19.8 H5 Z" stroke="#e6e6ea" stroke-width="1.5"/>'
+               '<path d="M12 4.8 V2.8 M6.4 6.6 L5 5.2 M17.6 6.6 L19 5.2 M4 11.4 H2.4'
+               ' M20 11.4 H21.6" stroke="#5b9df0" stroke-width="1.5"/>'),
 }
 
 
@@ -4471,6 +4602,8 @@ INTERESTS = (
      "Making it, playing it or collecting it."),
     ("photography",    "Music and art", "Photography",
      "Taking pictures, on film or not."),
+    ("ham",            "Radio and sky", "Amateur radio",
+     "Hams welcome: the other hobby of talking to strangers over home-made equipment."),
     ("astronomy",      "Radio and sky", "Astronomy",
      "Looking up at night, with a telescope or without."),
     ("swl",            "Radio and sky", "Shortwave listening",
@@ -4513,7 +4646,7 @@ def _dot(x, y, r=1.0):
 # The drawings, keyed by slug, in the same 24 unit square and the same line
 # art as the support symbols, but in one colour, currentColor, which the
 # chip sets: rose, a family nothing else on the page uses. Simple enough to
-# read at a badge's 17px and a filter tile's 30: one outline and a detail or
+# read at a badge's 17px and a filter chip's 22: one outline and a detail or
 # two, never a scene. A dot is the only fill.
 INTEREST_ART = {
     # Computing
@@ -4679,6 +4812,14 @@ INTEREST_ART = {
         '<circle cx="12" cy="13.2" r="3.6"/>'
         + _dot(18.2, 10.2, 0.8)),
     # Radio and sky
+    "ham": (  # a lattice mast, calling out both ways; support's drawing
+        # until 0.22.2, now in the chip's colour like every other interest
+        '<path d="M12 8.5 L8 21 M12 8.5 L16 21 M9.3 17 H14.7 M10.6 12.8 H13.4'
+        ' M7 21 H17"/>'
+        + _dot(12, 7, 1.2)
+        + '<path d="M15.2 4.4 A4.2 4.2 0 0 1 15.2 9.6 M8.8 4.4 A4.2 4.2 0 0 0 8.8 9.6'
+        ' M17.6 2.4 A7.25 7.25 0 0 1 17.6 11.6 M6.4 2.4 A7.25 7.25 0 0 0 6.4 11.6"'
+        ' stroke-width="1.4"/>'),
     "astronomy": (  # a ringed planet
         '<circle cx="12" cy="12" r="5"/>'
         '<path d="M7.2 10.7 C3.8 11.8 2.2 13.5 2.9 14.6 C3.9 16.3 10 15.5 15.8'
@@ -4835,7 +4976,7 @@ def _badge_table():
                 where.get(key, f"<code>{key}</code> <span class='src'>in features</span>"),
                 tip=f"{name}: {means}")
     # The six steps of how long a board has been listed are one badge,
-    # "Listed", which shows its highest step only; each step is a tile of
+    # "Listed", which shows its highest step only; each step is a chip of
     # its own in the filter, meaning that long or longer. They share the
     # badge's sort key, so the family stays together and in its own order.
     for days, label, words in reversed(AGES):
@@ -4918,9 +5059,26 @@ def row_keys(r, now, steady=False):
     if steady:
         keys.add("steady")
     keys.update(label for days, label, _w in AGES if age >= days * 86400)
-    keys.update(unpick(r["support"]))
-    keys.update(unpick(r["interests"]))
+    keys.update(row_support(r))
+    keys.update(row_interests(r))
     return keys
+
+
+def row_support(r):
+    """The causes a board's row carries, as slugs, in the directory's order.
+    A slug stored in the support column before it moved to the interests
+    (ham, site 0.22.2) is left out here and read by row_interests()."""
+    return [s for s in unpick(r["support"]) if s in SUPPORT_SLUGS]
+
+
+def row_interests(r):
+    """The interests a board's row carries, as slugs, in the directory's
+    order, with any slug that moved there from support and was stored
+    before it did. Reading them this way needs no migration: every
+    heartbeat rewrites both columns anyway."""
+    got = set(unpick(r["interests"]))
+    got.update(s for s in unpick(r["support"]) if s in SUPPORT_MOVED)
+    return [s for s in INTEREST_SLUGS if s in got]
 
 
 def board_badges(r, now, steady=False):
@@ -5055,13 +5213,13 @@ def about_lines(r):
     if unpick(r["features"]):
         lines.append("Running: " + ", ".join(unpick(r["features"])))
     # In the page's order; the words are the ones the tooltip uses.
-    chosen = set(unpick(r["support"]))
+    chosen = set(row_support(r))
     said = {slug: name for slug, _a, name, _s in SUPPORT}
     names = [said[b["key"]] for b in BADGES
              if b["group"] == "support" and b["key"] in chosen]
     if names:
         lines.append("Supports: " + ", ".join(names))
-    chosen = set(unpick(r["interests"]))
+    chosen = set(row_interests(r))
     names = [b["name"] for b in BADGES if b["group"] == "interests" and b["key"] in chosen]
     if names:
         lines.append("Interests: " + ", ".join(names))
@@ -5082,8 +5240,8 @@ def board_json(r, steady):
     out["terminals"] = unpick(r["terminals"])
     out["guests"]    = None if r["guests"] is None else bool(r["guests"])
     out["features"]  = unpick(r["features"])
-    out["support"]   = unpick(r["support"])
-    out["interests"] = unpick(r["interests"])
+    out["support"]   = row_support(r)
+    out["interests"] = row_interests(r)
     out["listed_at"] = listed_at(r)
     out["steady"]    = bool(steady)
     return out
@@ -5103,7 +5261,7 @@ def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False):
         # The badges this board carries, for the filter, in the page's order.
         # Every row is sent whatever the filter says, and the ones it leaves
         # out are hidden: that is what lets the script show them again the
-        # moment a tile is let go, with no trip back here.
+        # moment a chip is let go, with no trip back here.
         keys = row_keys(r, now, r["id"] in (steady or ()))
         carried = " ".join(k for k in FILTER_KEYS if k in keys)
         tr = (f'<tr data-b="{html.escape(carried, quote=True)}"'
@@ -5321,11 +5479,17 @@ RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
 # &b=ham and hands back a page that is the filtered list. That makes every
 # filtered view a URL that can be shared or bookmarked.
 #
-# With the script (BADGE_JS) a tile filters the moment it is pressed and the
+# With the script (BADGE_JS) a chip filters the moment it is pressed and the
 # URL follows with history.replaceState. Every row is always sent, the ones
-# left out marked hidden, so letting go of a tile brings rows back without
+# left out marked hidden, so letting go of a chip brings rows back without
 # a round trip. The badges' symbols are drawn only inside the pane: closed,
 # the page shows no iconography that it did not show before.
+#
+# Site 0.22.2 condensed it (Rob: "the filter page is unmanageable, it needs
+# HUGE condensing ... the hover works, just put em in groups"): the bento of
+# labelled tiles became a row per group of small chips, the names in the
+# tooltip, the interests' rows two to a line on a desktop. It went from
+# about two screens at 1366 x 768 to less than one.
 # --------------------------------------------------------------------------
 # How many query parameters are read at most. There are fewer badges than
 # this; anything past it is somebody seeing what happens.
@@ -5349,27 +5513,30 @@ def filter_query(query):
     return tuple(k for k in FILTER_KEYS if k in chosen), any_
 
 
-def filter_tile(b, on):
-    """One tile in the filter's grid: a checkbox, the badge's symbol and its
-    name. The box drawn round it is what shows the state: a tick and a
-    brighter frame when chosen, the yellow ring when focused."""
-    return (f'<label class="tile" data-k="{html.escape(badge_words(b), quote=True)}">'
+def filter_chip(b, on):
+    """One chip in the filter (site 0.22.2): a checkbox nobody sees, over the
+    badge's symbol and nothing else. The name is the checkbox's accessible
+    name and is in the tooltip, on hover and on focus; it is not printed
+    under the symbol, which is what made the 0.22.0 pane a wall of tiles.
+    Chosen is a ring and a notch in the corner, not only a colour; focused
+    is the yellow ring every control here gets."""
+    name = html.escape(b["name"], quote=True)
+    tip = f"{b['name']} or more." if b["cls"] == "age" else b["tip"]
+    return (f'<label class="chip" data-k="{html.escape(badge_words(b), quote=True)}">'
             f'<input type="checkbox" name="b" value="{html.escape(b["key"], quote=True)}"'
-            f' data-n="{html.escape(b["name"], quote=True)}"' + (" checked" if on else "")
-            + f'><span class="tbox"><span class="ts k-{b["cls"]}">{badge_symbol(b)}</span>'
-            f'<span class="tn">{tile_name(b["name"])}</span></span></label>')
+            f' data-n="{name}" aria-label="{name}"' + (" checked" if on else "")
+            + f'><span class="cb k-{b["cls"]}" data-tip="{html.escape(tip, quote=True)}">'
+            f"{badge_symbol(b)}</span></label>")
 
 
-def tile_name(name):
-    """A badge's name for a tile, escaped, with a soft hyphen where a long
-    word may break. A tile is about eleven characters wide at every size,
-    and without one "Neurodiversity" broke as "Neurodiversit" and "y"."""
-    words = []
-    for w in html.escape(name).split(" "):
-        if len(w) > 11 and w[:5] in ("Neuro", "Retro"):
-            w = w[:5] + "&shy;" + w[5:]
-        words.append(w)
-    return " ".join(words)
+def filter_row(title, items, chosen, cls="fr"):
+    """One group of the filter as a row: its name, then its chips. A
+    <details>, open, so a phone can fold a group down to its heading with a
+    tap and no script; checkboxes in a folded group are still in the form."""
+    return (f'<details class="{cls}" data-g open><summary>{html.escape(title)}</summary>'
+            '<div class="chips">'
+            + "".join(filter_chip(b, b["key"] in chosen) for b in items)
+            + "</div></details>")
 
 
 # What the pane calls each group; /badges uses the longer headings.
@@ -5384,21 +5551,19 @@ def filter_bar_html(sel, any_, shown, total):
     groups = []
     for group, _heading in BADGE_GROUPS:
         items = [b for b in BADGES if b["group"] == group and b["filter"]]
-        legend = f"<legend>{FILTER_TITLES[group]}</legend>"
         if group == "interests":
-            inner = "".join(
-                f'<fieldset class="fg sub{" big" if len(subs) > 6 else ""}" data-g>'
-                f"<legend>{html.escape(sub)}</legend><div class=\"tiles\">"
-                + "".join(filter_tile(b, b["key"] in chosen) for b in subs)
-                + "</div></fieldset>"
-                for sub in INTEREST_GROUPS
-                for subs in ([b for b in items if b["sub"] == sub],))
-            groups.append('<fieldset class="fg wide" data-g>' + legend
-                          + '<div class="bento inner">' + inner + "</div></fieldset>")
+            # A heading over the interests' own rows, which sit two to a
+            # line on a desktop. The wrapper is a group too, so a search
+            # that leaves no interest hides the heading with them.
+            groups.append(
+                f'<div class="fint" data-g><p class="fh">{FILTER_TITLES[group]}</p>'
+                '<div class="fsub">'
+                + "".join(filter_row(sub, [b for b in items if b["sub"] == sub],
+                                     chosen, "fr sub")
+                          for sub in INTEREST_GROUPS)
+                + "</div></div>")
         else:
-            groups.append('<fieldset class="fg" data-g>' + legend + '<div class="tiles">'
-                          + "".join(filter_tile(b, b["key"] in chosen) for b in items)
-                          + "</div></fieldset>")
+            groups.append(filter_row(FILTER_TITLES[group], items, chosen))
     names = ", ".join(BADGE_BY_KEY[k]["name"] for k in sel)
     plural = "" if total == 1 else "s"
     mode = ("any" if any_ else "all")
@@ -5419,7 +5584,7 @@ def filter_bar_html(sel, any_, shown, total):
             '<span class="fqn" id="fqn" aria-live="polite"></span></p>'
             '<fieldset class="fmode"><legend>Boards with</legend>' + radios
             + "</fieldset></div>"
-            '<div class="bento" id="fgrid">' + "".join(groups) + "</div>"
+            '<div class="frows" id="fgrid">' + "".join(groups) + "</div>"
             '<p class="fgo"><button type="submit">Show boards</button>'
             '<a href="/" data-clear>Clear all</a></p>'
             "</form></details>"
@@ -5699,8 +5864,8 @@ whether guests can look around, what is running, the causes you support and what
 you are into. Leave them out and nothing changes. In the same JSON:</p>
 
 <pre>"system":"Compaq 486", "terminals":["ansi","ascii"], "guests":true,
-"features":["chat","files"], "support":["ham"],
-"interests":["c64","electronics","chiptune"]</pre>
+"features":["chat","files"], "support":["literacy"],
+"interests":["c64","electronics","ham"]</pre>
 
 <p>What each badge means is on <a href="/badges">the badges page</a>, and the
 exact rules for each field are in the protocol.</p>
@@ -7019,7 +7184,7 @@ INSTALL_SETUP = _deco(130,
         '<text x="257" y="54" font-size="6.5">Page 1 of 2</text>')
     + _caption(236, "then a short", "tour"))
 
-# The BOOT button, for firmware 1.0.1 and later: the two buttons and the
+# The BOOT button, for firmware 1.0.2 and later: the two buttons and the
 # order to press them in, then what the lamp does against the seconds held.
 # Axis 0 to 22 s across x 20 to 340, 14.55 units a second.
 def _bx(sec):

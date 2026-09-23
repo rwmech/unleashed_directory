@@ -14,6 +14,45 @@
 
 # Changelog
 
+## 0.22.2, 2026-09-23
+
+The filter condensed to a screen, amateur radio moved to the interests,
+fourteen more causes to support, and the BOOT reset gated on firmware
+1.0.2.
+
+- **The filter pane is small chips in rows** (Rob: "the filter page is
+  unmanageable, it needs HUGE condensing ... the hover works, just put em
+  in groups"). A chip is the badge's symbol or letters and nothing else;
+  its name is in the tooltip on hover and on focus, and is the checkbox's
+  name for a screen reader. Each group is one row, its name in a column on
+  a desktop, with the interests as a heading and a row per sub-group, two
+  to a line. On a phone a group's name is a heading, and a tap folds the
+  group away; a search opens any folded group that has a match. Chosen is
+  a ring round the chip and a notch in its corner, so colour is never the
+  only sign. Measured with the pane open: 1,538px tall at 1366 x 768 before
+  and 460px after; 3,256px at 390 before and 1,130px after. It still works
+  with no JavaScript, and the chips are still checkboxes in a GET form.
+- **Amateur radio is an interest, not a support cause** (Rob). It sits
+  with the radio and the sky, drawn in the interests' rose, and keeps its
+  slug, `ham`. A board that sends `ham` in its support list has it filed
+  with its interests, and a row stored before the move is read the same
+  way, so nothing needed migrating.
+- **Fourteen more causes to support**, chosen by how often each is worn
+  as a ribbon, badge or profile frame, and kept to causes that belong to
+  no political party: addiction recovery, blood and organ donation, breast
+  cancer awareness, carers and caregivers, children with cancer,
+  dementia, diabetes, domestic violence, first responders, foster care
+  and adoption, heart health, hunger relief, literacy, and people without
+  a home. Each is a line drawing in the colour or symbol it is known by:
+  the pink, gold and purple ribbons, the forget-me-not, the blue circle,
+  the adoption triad. Twenty-four in all. The first ten are unchanged, and
+  HIV's ribbon stays red.
+- **/install's BOOT button reset now waits for firmware 1.0.2.** It moved
+  there from 1.0.1, which is the badge fields only, so a 1.0.1 release on
+  disk no longer shows a reset the board does not have. The CONFIG Wi-Fi
+  fallback in the same block moved with it.
+- 634 checks, up from 627 (which 0.22.1 left out of its changelog entry).
+
 ## 0.22.1, 2026-09-23
 
 An Update button that cannot erase, and an erase question that does not

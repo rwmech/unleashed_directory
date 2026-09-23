@@ -80,8 +80,8 @@ The last six fields in the table are optional and describe the board rather than
  "terminals":["ansi","utf8","petscii","ascii"],
  "guests":true,
  "features":["chat","forums","files","mail"],
- "support":["lgbtq","ham"],
- "interests":["c64","electronics","chiptune"]}
+ "support":["lgbtq","literacy"],
+ "interests":["c64","electronics","ham"]}
 ```
 
 | Field | Rules |
@@ -91,7 +91,7 @@ The last six fields in the table are optional and describe the board rather than
 | `guests` | A JSON `true` or `false` and nothing else. A string such as `"yes"` counts as not sent. |
 | `features` | Only what is running when the heartbeat is sent. A board that switches its file areas off should stop sending `files`. |
 | `support` | Slugs from the list the directory publishes. The one at unleashedbbs.com publishes its list at `/badges`. |
-| `interests` | Slugs from the list the directory publishes, exactly as `support`: hobbies and interests rather than causes, such as `c64`, `electronics`, `gaming` or `gardening`. The one at unleashedbbs.com publishes its list at `/badges`. |
+| `interests` | Slugs from the list the directory publishes, exactly as `support`: hobbies and interests rather than causes, such as `c64`, `electronics`, `gaming` or `gardening`. The one at unleashedbbs.com publishes its list at `/badges`. A slug a directory moves from one list to the other should still be understood in the list it came from: unleashedbbs.com moved `ham` from `support` to `interests` and reads it in either. |
 
 For the four lists: case does not matter, duplicates count once, a word the directory does not know is ignored rather than refused, and only the first 16 entries are read; an entry that is not a string is skipped. A field of the wrong type, a list where a string belongs or a string where a list belongs, counts as not sent. None of this ever makes a heartbeat fail: a board with a bad badge field is listed without that badge.
 
