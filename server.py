@@ -208,7 +208,17 @@ FIRMWARE_CHIP = re.compile(r"^[a-z][a-z0-9]{2,11}$")
 EWT_VERSION = "10.4.0"
 EWT_DIR     = (pathlib.Path(__file__).resolve().parent
                / "vendor" / "esp-web-tools" / EWT_VERSION)
-EWT_BASE    = "/install/esp-web-tools/" + EWT_VERSION + "/"
+# The path it is served under carries a revision of this site's own beside
+# upstream's version, and the revision goes up whenever a file in the
+# directory changes. Every file there is cached for a day, and the chunks
+# import each other by relative name, so a changed dialog under the same URL
+# would reach a browser up to a day late, running beside a page that already
+# expects the new one. A new path is fetched fresh, whole. The bare version
+# is still served, for a tab left open across a deploy, which has the old
+# entry point loaded and fetches the rest of the bundle as it goes.
+EWT_REV     = 2
+EWT_PATH    = EWT_VERSION + "-" + str(EWT_REV)
+EWT_BASE    = "/install/esp-web-tools/" + EWT_PATH + "/"
 EWT_SCRIPT  = EWT_BASE + "install-button.js"
 # A chunk name is the only thing a request can choose, and it is checked as a
 # name, the way static_file() does it: letters, digits, "-" and "_", then
@@ -1945,7 +1955,7 @@ def firmware_releases():
     return found[:FIRMWARE_KEEP]
 
 
-def firmware_manifest(version):
+def firmware_manifest(version, update=False):
     """The ESP Web Tools manifest for one release, or None.
 
     The schema is theirs and the spellings are not negotiable: the top level
@@ -1953,11 +1963,21 @@ def firmware_manifest(version):
     easiest thing here to get wrong. An offset is a JSON number, decimal,
     because their type is `offset: number` and JSON has no hex literal; a
     string would be handed to the flasher unparsed.
+
+    With update=True it is the Update button's manifest: the same in every
+    key, plus "unleashed_update": true, which the copy of the dialog served
+    here reads as "never erase, never ask". It keeps
+    new_install_prompt_erase on purpose. ESP Web Tools erases the whole chip
+    by default unless that key is set, so a manifest that left it out
+    because this one does not ask would erase on any copy of the dialog
+    that does not know the extra key: upstream's, or this site's own from
+    before 0.22.1, still in a browser's cache. With it set, the worst an
+    old copy can do is ask, with the box unticked.
     """
     for rel in firmware_releases():
         if rel["version"] != version:
             continue
-        return {
+        man = {
             "name": "unleashed BBS",
             "version": rel["version"],
             # The user is asked rather than erased by default, and that is
@@ -1972,6 +1992,9 @@ def firmware_manifest(version):
             "new_install_improv_wait_time": EWT_IMPROV_WAIT,
             "builds": rel["builds"],
         }
+        if update:
+            man["unleashed_update"] = True
+        return man
     return None
 
 
@@ -2057,9 +2080,19 @@ def installer_html(lines=()):
         # rather than a rounded blue pill. The version is not on the button:
         # the line under it says which, once, rather than the card saying
         # it three times.
+        #
+        # Two buttons, two manifests (0.22.1, Rob: "just offer an upgrade
+        # button ... then we dont have anyone freaked out"). The first is
+        # the install as it always was, erase question and all. The second
+        # fetches manifest-update.json, whose one extra key makes the copy
+        # of the dialog served here skip the erase question and refuse to
+        # erase on every path; see firmware_manifest() and the notice at the
+        # top of the dialog chunk. It needs no fallback text of its own:
+        # the first button's says it once, and the second hides itself on a
+        # browser that cannot use it.
         out.append(f'<esp-web-install-button class="r{i}" manifest="/install/{v}'
                    '/manifest.json"><button class="go" slot="activate">Install on '
-                   "my board</button>"
+                   "a new board</button>"
                    # Both fallbacks are given rather than left to the
                    # component's defaults, which name Firefox first and say
                    # nothing about what to do next. The precedence in their
@@ -2072,6 +2105,11 @@ def installer_html(lines=()):
                    '<span class="no" slot="not-allowed">This page has to be '
                    "served over https for a browser to allow it near a serial "
                    "port.</span></esp-web-install-button>")
+        out.append(f'<esp-web-install-button class="r{i} upd" manifest="/install/{v}'
+                   '/manifest-update.json"><button class="go upd" slot="activate">'
+                   "Update my board</button>"
+                   '<span slot="unsupported"></span><span slot="not-allowed"></span>'
+                   "</esp-web-install-button>")
     for i, rel in enumerate(rels):
         meta = "Version " + html.escape(rel["version"])
         if rel["date"]:
@@ -2096,7 +2134,7 @@ def installer_html(lines=()):
 
 def installer_terms_html():
     """The installer's own terms: somebody else's code, running on this
-    page, with one change made here, so its licence is linked as plainly as
+    page, with changes made here, so its licence is linked as plainly as
     the firmware's notices are. It used to sit in the install card, which
     is for installing; it lives under "Doing it the other way" now. With no
     release on disk there is no installer on the page, so nothing to say."""
@@ -2105,8 +2143,10 @@ def installer_terms_html():
     return ('<p class="meta terms">The installer on this page is '
             '<a href="https://github.com/esphome/esp-web-tools">ESP Web '
             "Tools</a> " + html.escape(EWT_VERSION) + ", served from this site, "
-            "with one change made here: its last step offers the board's telnet "
-            "details instead of trying to open an address a browser cannot. "
+            "with three changes made here: its last step offers the board's "
+            "telnet details instead of trying to open an address a browser "
+            "cannot, its erase question is worded for somebody updating a "
+            "board they already run, and the Update button never erases. "
             '<a href="' + EWT_BASE + 'LICENSE">Its licence</a> and '
             '<a href="' + EWT_BASE + 'THIRD_PARTY_LICENSES.txt">the '
             "libraries inside it</a>.</p>")
@@ -2174,11 +2214,15 @@ def firmware_file(rest):
     None. `rest` is the path after "/install/".
 
     Names are checked rather than paths, the way static_file() does it, and
-    the shapes accepted are the only three the page ever links:
+    the shapes accepted are the only four the page ever links:
 
         <version>/manifest.json
+        <version>/manifest-update.json    the Update button's, never erases
         <version>/THIRD_PARTY_NOTICES.md
         <version>/<chip>/<one of FLASH_PARTS>
+
+    Both manifests sit in the release's own directory, so the parts they
+    name resolve to the same files.
 
     A binary is served only when its release is one firmware_releases()
     would offer, so a version left on disk past FIRMWARE_KEEP is not
@@ -2192,8 +2236,8 @@ def firmware_file(rest):
         return None
     vdir = FIRMWARE_DIR / bits[0]
 
-    if len(bits) == 2 and bits[1] == "manifest.json":
-        man = firmware_manifest(bits[0])
+    if len(bits) == 2 and bits[1] in ("manifest.json", "manifest-update.json"):
+        man = firmware_manifest(bits[0], update=bits[1] == "manifest-update.json")
         if man is None:
             return None
         return (json.dumps(man, indent=1).encode("utf-8"),
@@ -3682,12 +3726,22 @@ article .installer .no {{ display:block; color:#f0c674; background:#241d10;
 
    One column of parts with one gap between them, rather than a margin on
    each: a small drawing, the amber "before you start" box, the board
-   slot, the button, one version line, the notices link. The button is the
-   full width of the card, because it is the one thing in it to press.
+   slot, the two buttons, one version line, the notices link. The buttons
+   are the full width of the card, because they are the things in it to
+   press.
    -------------------------------------------------------------------- */
 article .installer {{ display:flex; flex-direction:column; gap:0.625rem; }}
 article .installer > *, article .installer .meta {{ margin:0; }}
 article .installer button.go {{ width:100%; text-align:center; }}
+/* Update my board: the same size and shape as the install button, so it
+   reads as the other of two choices rather than as a lesser one, and
+   outlined so the two are told apart at a glance. A browser that cannot
+   use it gets the first button's explanation, once, and not a second
+   empty box. */
+article .installer button.go.upd {{ color:var(--dial); background:transparent;
+        border:1px solid var(--dial); }}
+article .installer button.go.upd:hover {{ background:#102630; }}
+article .installer esp-web-install-button.upd[install-unsupported] {{ display:none; }}
 article .installer .pre {{ color:#f0c674; background:#241d10;
         border-left:3px solid #8a6d39; border-radius:0.25rem;
         padding:0.625rem 0.875rem; font-size:0.8125rem; }}
@@ -6879,19 +6933,22 @@ INSTALL_CABLE = _deco(118,
     '<text x="150" y="108" font-size="9" text-anchor="middle">a cable that carries data</text>')
 
 INSTALL_WRITE = _deco(112,
-    # Three moments of the installer's own dialog: Install, the erase
-    # question, the progress bar.
+    # Three moments of the installer's own dialog, as a new board meets
+    # them: Install, the erase question, the progress bar. The labels are
+    # the dialog's own since 0.22.1: "Install or update", "Start fresh?"
+    # and "Erase everything first", the last on two lines to fit its box.
     '<rect class="o" x="0" y="6" width="104" height="72" rx="4"/>'
     '<text class="ink" x="8" y="21" font-size="8">unleashed BBS</text>'
     '<rect class="k" x="8" y="30" width="88" height="16" rx="2"/>'
-    '<text class="ink" x="14" y="41" font-size="8.5">Install</text>'
+    '<text class="ink" x="13" y="41" font-size="7.5">Install or update</text>'
     '<text x="14" y="62" font-size="7.5">Logs &amp; Console</text>'
     '<path class="d" d="M108 38 L112 42 L108 46"/>'
     '<rect class="o" x="118" y="6" width="104" height="72" rx="4"/>'
-    '<text class="ink" x="126" y="21" font-size="8">Erase device</text>'
+    '<text class="ink" x="126" y="21" font-size="8">Start fresh?</text>'
     '<rect class="o" x="128" y="33" width="11" height="11" rx="1.5"/>'
     '<path class="l" d="M130.5 38.5 L133.5 41.5 L137 35.5"/>'
-    '<text class="ink" x="145" y="42" font-size="8">Erase device</text>'
+    '<text class="ink" x="144" y="41" font-size="7.5">Erase everything</text>'
+    '<text class="ink" x="144" y="50" font-size="7.5">first</text>'
     '<text x="126" y="64" font-size="7.5">new board: tick it</text>'
     '<path class="d" d="M226 38 L230 42 L226 46"/>'
     '<rect class="o" x="236" y="6" width="108" height="72" rx="4"/>'
@@ -7809,7 +7866,7 @@ class Handler(BaseHTTPRequestHandler):
             rest = path[len("/install/"):]
             bits = rest.split("/")
             if (len(bits) == 3 and bits[0] == "esp-web-tools"
-                    and bits[1] == EWT_VERSION):
+                    and bits[1] in (EWT_PATH, EWT_VERSION)):
                 got = ewt_file(bits[2])
             else:
                 got = firmware_file(rest)
@@ -7822,8 +7879,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Length", str(len(blob)))
                 # Immutable, both kinds: a release's bytes never change,
                 # because a change is a new version, and the bundle's path
-                # carries its version too. The manifest names the version it
-                # belongs to and is just as fixed.
+                # carries its version and this site's revision of it
+                # (EWT_REV), which goes up when a file in it changes. The
+                # manifests name the version they belong to and are just as
+                # fixed.
                 self.send_header("Cache-Control", "public, max-age=86400")
                 self.end_headers()
                 self.wfile.write(blob)

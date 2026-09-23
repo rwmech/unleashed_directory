@@ -110,6 +110,26 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   vendor README records upstream's SHA-256 for it, and SHA256SUMS carries
   the modified file's. A new ESP Web Tools version needs the change made
   again: search its dialog chunk for `Visit Device`.
+  **The same file carries two more changes since 0.22.1** (Rob, after his
+  own update from /install offered "Install" and then "Erase device ...
+  All data on the device will be lost"): the erase question reads **Start
+  fresh?** with **Erase everything first**, and a manifest with
+  `"unleashed_update": true` can never erase. That key comes only from
+  `/install/<ver>/manifest-update.json`, behind the card's **Update my
+  board** button. The erase flag has two writes in the file (the
+  constructor and `_startInstall`) and one reader that erases (the argument
+  `_confirmInstall` hands the flasher), and all three are forced false
+  under the key; the suite pins each. **The update manifest keeps
+  `new_install_prompt_erase: true`**: ESP Web Tools erases the whole chip
+  by default without it, so a dialog that ignores the new key must fall
+  back to asking, never to erasing. Nobody can click through the dialog in
+  a test here: prove a change by reading, and by importing the chunk in a
+  page in headless Chrome, constructing `ewt-install-dialog`, setting
+  `_manifest` and calling its methods (the vendor README says how).
+  **The bundle's path carries `EWT_REV`**, this site's own revision, and it
+  goes up whenever a file in the directory changes: everything there is
+  cached for a day, so a changed dialog under the old path reaches a
+  browser a day late. The bare version path still answers.
   **The script is emitted only when the page carries `::: installer` *and*
   `firmware/` actually holds a release.** Both halves, so the script and
   the widget arrive together or neither does: a page with no button runs
@@ -367,7 +387,12 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `.seeded` record since 0.22.0) and the vendored install dialog (a
   recognised board gets `_startInstall(false)`, no erase question); the
   page's opening comment lists them. Re-check it when any of those change,
-  and above all when a release moves a partition.
+  and above all when a release moves a partition. **A 0.22.1 board is not
+  always recognised** (Rob's own was not): the dialog gives Improv 1.5 s
+  when it opens, and opening the port resets an ESP32. So since 0.22.1 the
+  page sends an existing board to **Update my board**, which never asks
+  and never erases whether the board is recognised or not, and never
+  promises recognition.
 - **Anything the server reads beside itself must be installed by
   `deploy/setup.sh`, in the same change** (the 0.17.x outage). setup.sh
   copies into `/srv/unleashed_directory` and the droplet's checkout is

@@ -14,6 +14,52 @@
 
 # Changelog
 
+## 0.22.1, 2026-09-23
+
+An Update button that cannot erase, and an erase question that does not
+frighten somebody updating a board full of accounts (Rob, after updating
+his own board from /install: "clean up the messaging, that an end user
+understands this it would freak me the fuck out").
+
+- **Two buttons in the install card.** **Install on a new board** is the
+  install as it was, erase question and all. **Update my board** fetches
+  `/install/<version>/manifest-update.json`, which is the ordinary manifest
+  plus `"unleashed_update": true`, and the copy of the dialog served here
+  reads that key as "never erase, never ask": `_startInstall()` stores
+  false whatever it is asked for, `_confirmInstall()` hands the flasher
+  false whatever is stored, both dashboards skip the erase question and
+  say **Update unleashed BBS**, and **Erase User Data** is not offered. A
+  board the installer does not recognise is updated the same way. The
+  update manifest keeps `new_install_prompt_erase: true` on purpose: ESP
+  Web Tools erases by default without it, so a copy of the dialog that does
+  not know the new key, upstream's or a cached one, asks with the box
+  unticked rather than erasing.
+- **The erase question in plain words.** "Erase device ... All data on the
+  device will be lost." is now **Start fresh?**: "Updating a board you
+  already run? Leave this unticked: your accounts, settings, mail and
+  forums are kept. Tick it only for a brand-new board, or to wipe this one
+  and start over." The checkbox is **Erase everything first**, "Install
+  unleashed BBS" is **Install or update unleashed BBS**, and the
+  confirmation and **Erase User Data** screens say what an erase takes and
+  that the SD card is not touched. The vendored dialog's notice lists every
+  string, and the vendor README says how each change was proved without
+  clicking.
+- **Why Rob's board was offered Install, as far as it is known**: the
+  dialog gives a board 1.5 seconds to answer over Improv when it opens, and
+  opening the port resets an ESP32, so a board still starting up is not
+  recognised. Not confirmed. The Update button makes it not matter.
+- **The bundle has a new path**, `/install/esp-web-tools/10.4.0-2/`
+  (`EWT_REV` in server.py), because every file in it is cached for a day
+  and a browser holding the old dialog would otherwise run it beside a page
+  offering the Update button. The bare `10.4.0/` path still answers, for a
+  tab left open across the deploy.
+- **/install and /upgrade** say which button to press and what the dialog
+  will show. The note at the top of the steps sends an existing board to
+  **Update my board**. /upgrade no longer promises a 0.22.1 board is always
+  recognised, shows the new erase screen's words for a reader who pressed
+  Install instead, and sends a board from 0.17.0 on to Update. The drawing
+  of the dialog shows the new labels.
+
 ## 0.22.0, 2026-09-23
 
 Interests, a badge filter over the board list, /badges as a searchable

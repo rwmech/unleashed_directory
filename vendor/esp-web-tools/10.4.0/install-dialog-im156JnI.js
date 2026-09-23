@@ -4,12 +4,42 @@
  * directory on 2026-09-23. Upstream SHA-256:
  * 6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5
  *
- * The change, in both places the dialog offers the device's own link after
- * the Wi-Fi step: when the device's URL is telnet://, which a browser cannot
- * open, the link goes to /connected#<address>:<port> on this site instead
- * and is labelled "Telnet details" rather than "Visit Device". Any other URL
- * is left exactly as upstream has it. Nothing else in this file is changed.
- * See vendor/esp-web-tools/README.md.
+ * 1. In both places the dialog offers the device's own link after the Wi-Fi
+ *    step: when the device's URL is telnet://, which a browser cannot open,
+ *    the link goes to /connected#<address>:<port> on this site instead and
+ *    is labelled "Telnet details" rather than "Visit Device". Any other URL
+ *    is left exactly as upstream has it.
+ *
+ * 2. Wording, for somebody updating a board that has accounts on it:
+ *    - the erase question's title, "Erase device", is "Start fresh?";
+ *    - its text, upstream's "Do you want to erase the device before
+ *      installing <name>?" and its warning that all data on the device will
+ *      be lost, is "Updating a board you already run? Leave this unticked:
+ *      your accounts, settings, mail and forums are kept. Tick it only for a
+ *      brand-new board, or to wipe this one and start over.";
+ *    - its checkbox label, "Erase device", is "Erase everything first";
+ *    - "Install <name>", on both dashboards, is "Install or update <name>";
+ *    - on the confirmation, upstream's warning that all data on the device
+ *      will be erased is "Everything on the board is erased first:
+ *      accounts, settings, mail and Wi-Fi. The SD card is not touched.",
+ *      and without an erase it now says "Nothing is erased first: your
+ *      accounts, settings, mail and forums are kept.";
+ *    - "Do you want to reset your device and erase all user data from your
+ *      device?" is "This erases everything on the board first, accounts,
+ *      settings, mail and Wi-Fi included, then installs <name> again. The
+ *      SD card is not touched."
+ *
+ * 3. A manifest carrying "unleashed_update": true (the site's Update
+ *    button) can never erase. _startInstall() stores false whatever it is
+ *    asked for, _confirmInstall() hands the flasher false whatever is
+ *    stored, both dashboards go straight to the confirmation without the
+ *    erase question, their button reads "Update <name>", the confirmation
+ *    says "update to", and "Erase User Data" is not offered. Without that
+ *    key every path is upstream's. The manifest still sets
+ *    new_install_prompt_erase, so an older copy of this file, which ignores
+ *    the key, asks with the box unticked rather than erasing by default.
+ *
+ * Nothing else in this file is changed. See vendor/esp-web-tools/README.md.
  */
 import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c as h,s as p,D as u,d as f,f as m,r as v,g,h as _,j as b,k as y,B as x,l as w,p as E,q as S,u as k,T as A,v as R,w as I,y as C}from"./styles-sT2V1cOw.js";let T;function L(e,t=z){const i=$(e,t);return i&&(i.tabIndex=0,i.focus()),i}function O(e,t=z){const i=M(e,t);return i&&(i.tabIndex=0,i.focus()),i}function D(e,t=z){for(let i=0;i<e.length;i++){const r=e[i];if(0===r.tabIndex&&t(r))return{item:r,index:i}}return null}function $(e,t=z){for(const i of e)if(t(i))return i;return null}function M(e,t=z){for(let i=e.length-1;i>=0;i--){const r=e[i];if(t(r))return r}return null}function P(e,t,i=z,r=!0){if(t){const s=function(e,t,i=z,r=!0){for(let s=1;s<e.length;s++){const o=(s+t)%e.length;if(o<t&&!r)return null;const a=e[o];if(i(a))return a}return e[t]?e[t]:null}(e,t.index,i,r);return s&&(s.tabIndex=0,s.focus()),s}return L(e,i)}function F(e,t,i=z,r=!0){if(t){const s=function(e,t,i=z,r=!0){for(let s=1;s<e.length;s++){const o=(t-s+e.length)%e.length;if(o>t&&!r)return null;const a=e[o];if(i(a))return a}return e[t]?e[t]:null}(e,t.index,i,r);return s&&(s.tabIndex=0,s.focus()),s}return O(e,i)}function z(e){return!e.disabled}const B={ArrowDown:"ArrowDown",ArrowLeft:"ArrowLeft",ArrowUp:"ArrowUp",ArrowRight:"ArrowRight",Home:"Home",End:"End"};class U{constructor(e){this.handleKeydown=e=>{const t=e.key;if(e.defaultPrevented||!this.isNavigableKey(t))return;const i=this.items;if(!i.length)return;const r=D(i,this.isActivatable);e.preventDefault();const s=this.isRtl();let o=null;switch(t){case B.ArrowDown:case s?B.ArrowLeft:B.ArrowRight:o=P(i,r,this.isActivatable,this.wrapNavigation());break;case B.ArrowUp:case s?B.ArrowRight:B.ArrowLeft:o=F(i,r,this.isActivatable,this.wrapNavigation());break;case B.Home:o=L(i,this.isActivatable);break;case B.End:o=O(i,this.isActivatable)}o&&r&&r.item!==o&&(r.item.tabIndex=-1)},this.onDeactivateItems=()=>{const e=this.items;for(const t of e)this.deactivateItem(t)},this.onRequestActivation=e=>{this.onDeactivateItems();const t=e.target;this.activateItem(t),t.focus()},this.onSlotchange=()=>{const e=this.items;let t=!1;for(const i of e){!(!i.disabled&&i.tabIndex>-1)||t?i.tabIndex=-1:(t=!0,i.tabIndex=0)}if(t)return;const i=$(e,this.isActivatable);i&&(i.tabIndex=0)};const{isItem:t,getPossibleItems:i,isRtl:r,deactivateItem:s,activateItem:o,isNavigableKey:a,isActivatable:n,wrapNavigation:l}=e;this.isItem=t,this.getPossibleItems=i,this.isRtl=r,this.deactivateItem=s,this.activateItem=o,this.isNavigableKey=a,this.isActivatable=n,this.wrapNavigation=l??(()=>!0)}get items(){const e=this.getPossibleItems(),t=[];for(const i of e){if(this.isItem(i)){t.push(i);continue}const e=i.item;e&&this.isItem(e)&&t.push(e)}return t}activateNextItem(){const e=this.items,t=D(e,this.isActivatable);return t&&(t.item.tabIndex=-1),P(e,t,this.isActivatable,this.wrapNavigation())}activatePreviousItem(){const e=this.items,t=D(e,this.isActivatable);return t&&(t.item.tabIndex=-1),F(e,t,this.isActivatable,this.wrapNavigation())}}const N=new Set(Object.values(B));class H extends r{get items(){return this.listController.items}constructor(){super(),this.listController=new U({isItem:e=>e.hasAttribute("md-list-item"),getPossibleItems:()=>this.slotItems,isRtl:()=>"rtl"===getComputedStyle(this).direction,deactivateItem:e=>{e.tabIndex=-1},activateItem:e=>{e.tabIndex=0},isNavigableKey:e=>N.has(e),isActivatable:e=>!e.disabled&&"text"!==e.type}),this.internals=this.attachInternals(),this.internals.role="list",this.addEventListener("keydown",this.listController.handleKeydown)}render(){return s`
       <slot
@@ -581,11 +611,11 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
           ${this._isSameVersion?"":s`
                 <ew-list-item
                   type="button"
-                  @click=${()=>{this._isSameFirmware?this._startInstall(!1):this._manifest.new_install_prompt_erase?this._state="ASK_ERASE":this._startInstall(!0)}}
+                  @click=${()=>{this._isSameFirmware||this._manifest.unleashed_update?this._startInstall(!1):this._manifest.new_install_prompt_erase?this._state="ASK_ERASE":this._startInstall(!0)}}
                 >
                   ${oa}
                   <div slot="headline">
-                    ${this._isSameFirmware?`Update ${this._manifest.name}`:`Install ${this._manifest.name}`}
+                    ${this._isSameFirmware||this._manifest.unleashed_update?`Update ${this._manifest.name}`:`Install or update ${this._manifest.name}`}
                   </div>
                 </ew-list-item>
               `}
@@ -635,7 +665,7 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
                   <div slot="headline">Fund Development</div>
                 </ew-list-item>
               `:""}
-          ${this._isSameVersion?s`
+          ${this._isSameVersion&&!this._manifest.unleashed_update?s`
                 <ew-list-item
                   type="button"
                   class="danger"
@@ -652,10 +682,10 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
         <ew-list>
           <ew-list-item
             type="button"
-            @click=${()=>{this._manifest.new_install_prompt_erase?this._state="ASK_ERASE":this._startInstall(!0)}}
+            @click=${()=>{this._manifest.unleashed_update?this._startInstall(!1):this._manifest.new_install_prompt_erase?this._state="ASK_ERASE":this._startInstall(!0)}}
           >
             ${oa}
-            <div slot="headline">${`Install ${this._manifest.name}`}</div>
+            <div slot="headline">${this._manifest.unleashed_update?`Update ${this._manifest.name}`:`Install or update ${this._manifest.name}`}</div>
           </ew-list-item>
           <ew-list-item
             type="button"
@@ -791,15 +821,16 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
                 </ew-text-button>
               </div>
             `}
-      `}return[i,t]}_renderAskErase(){return["Erase device",s`
+      `}return[i,t]}_renderAskErase(){return["Start fresh?",s`
       <div slot="content">
         <div>
-          Do you want to erase the device before installing
-          ${this._manifest.name}? All data on the device will be lost.
+          Updating a board you already run? Leave this unticked: your
+          accounts, settings, mail and forums are kept. Tick it only for a
+          brand-new board, or to wipe this one and start over.
         </div>
         <label class="formfield">
           <ew-checkbox touch-target="wrapper" class="danger"></ew-checkbox>
-          Erase device
+          Erase everything first
         </label>
       </div>
       <div slot="actions">
@@ -814,10 +845,11 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
           Next
         </ew-text-button>
       </div>
-    `]}_renderInstall(){let e,t;const i=!this._installErase&&this._isSameFirmware;if(!this._installConfirmed&&this._isSameVersion)e="Erase User Data",t=s`
+    `]}_renderInstall(){let e,t;const i=!this._installErase&&this._isSameFirmware;if(!this._installConfirmed&&this._isSameVersion&&!this._manifest.unleashed_update)e="Erase User Data",t=s`
         <div slot="content">
-          Do you want to reset your device and erase all user data from your
-          device?
+          This erases everything on the board first, accounts, settings, mail
+          and Wi-Fi included, then installs ${this._manifest.name} again. The
+          SD card is not touched.
         </div>
         <div slot="actions">
           <ew-text-button class="danger" @click=${this._confirmInstall}>
@@ -857,13 +889,13 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
             Back
           </ew-text-button>
         </div>
-      `);else e="Installing",t=this._renderProgress("Preparing installation");else{e="Confirm Installation";const r=i?"update to":"install";t=s`
+      `);else e="Installing",t=this._renderProgress("Preparing installation");else{e="Confirm Installation";const r=i||this._manifest.unleashed_update?"update to":"install";t=s`
         <div slot="content">
           ${i?s`Your device is running
                 ${this._info.firmware}&nbsp;${this._info.version}.<br /><br />`:""}
           Do you want to ${r}
           ${this._manifest.name}&nbsp;${this._manifest.version}?
-          ${this._installErase?s`<br /><br />All data on the device will be erased.`:""}
+          ${this._installErase?s`<br /><br />Everything on the board is erased first: accounts, settings, mail and Wi-Fi. The SD card is not touched.`:s`<br /><br />Nothing is erased first: your accounts, settings, mail and forums are kept.`}
         </div>
         <div slot="actions">
           <ew-text-button
@@ -896,7 +928,7 @@ import{e,_ as t,o as i,i as r,x as s,a as o,n as a,t as n,m as l,b as d,E as c,c
           Back
         </ew-text-button>
       </div>
-    `,["Logs",e]}willUpdate(e){e.has("_state")&&("ERROR"!==this._state&&(this._error=void 0),"PROVISION"===this._state?this._ssids=void 0:this._provisionForce=!1,"INSTALL"===this._state&&(this._installConfirmed=!1,this._installState=void 0))}get _showsProvisionForm(){var e;const t=null===(e=this._client)||void 0===e?void 0:e.state;return void 0!==t&&t!==fa.STOPPED&&(this._provisionForce||t!==fa.PROVISIONED)}_syncScanning(){const e="PROVISION"===this._state&&!this._busy&&this._showsProvisionForm;e!==!!this._unsubSSIDs&&(e?(this._scanGraceTimeout=setTimeout((()=>{this._scanGraceTimeout=void 0,void 0===this._ssids&&(this._ssids=[],this._selectedSsid=null)}),9100),this._unsubSSIDs=this._client.subscribeSSIDs((e=>{void 0===this._ssids&&0===(null==e?void 0:e.length)&&this._scanGraceTimeout||null===e&&this._ssids||(void 0===this._ssids?this._selectedSsid=null===e?null:(e=>e.length?e.reduce(((e,t)=>t.rssi>e.rssi?t:e)).name:null)(e):null===this._selectedSsid||(null==e?void 0:e.some((e=>e.name===this._selectedSsid)))||(this._manualSsid=this._selectedSsid,this._selectedSsid=null),this._ssids=e)}))):this._stopScanning())}async _stopScanning(){clearTimeout(this._scanGraceTimeout),this._scanGraceTimeout=void 0;const e=this._unsubSSIDs;e&&(this._unsubSSIDs=void 0,await e())}firstUpdated(e){super.firstUpdated(e),this._bodyOverflow=document.body.style.overflow,document.body.style.overflow="hidden",this._initialize()}updated(e){super.updated(e),e.has("_state")&&this.setAttribute("state",this._state),this._syncScanning(),"PROVISION"===this._state&&(e.has("_selectedSsid")&&null===this._selectedSsid?this._focusFormElement("ew-filled-text-field[name=ssid]"):e.has("_ssids")&&void 0===e.get("_ssids")&&this._focusFormElement())}_focusFormElement(e="ew-filled-text-field, ew-filled-select"){const t=this.shadowRoot.querySelector(e);t&&t.updateComplete.then((()=>setTimeout((()=>t.focus()),100)))}async _initialize(e=!1){if(null===this.port.readable||null===this.port.writable)return this._state="ERROR",void(this._error="Serial port is not readable/writable. Close any other application using it and try again.");try{this._manifest=await(async e=>{const t=new URL(e,location.toString()).toString(),i=await fetch(t),r=await i.json();return"new_install_skip_erase"in r&&(console.warn('Manifest option "new_install_skip_erase" is deprecated. Use "new_install_prompt_erase" instead.'),r.new_install_skip_erase&&(r.new_install_prompt_erase=!0)),r})(this.manifestPath)}catch(e){return this._state="ERROR",void(this._error="Failed to download manifest")}if(0===this._manifest.new_install_improv_wait_time)return void(this._client=null);const t=new xa(this.port,this.logger);t.addEventListener("state-changed",(()=>{this.requestUpdate()})),t.addEventListener("error-changed",(()=>this.requestUpdate()));try{const i=e?void 0!==this._manifest.new_install_improv_wait_time?1e3*this._manifest.new_install_improv_wait_time:1e4:1500;this._info=await t.initialize(i),this._client=t,t.addEventListener("disconnect",this._handleDisconnect)}catch(e){this._info=void 0,e instanceof va?(this._state="ERROR",this._error="Serial port is not ready. Close any other application using it and try again."):(this._client=null,this.logger.error("Improv initialization failed.",e))}}_startInstall(e){this._state="INSTALL",this._installErase=e,this._installConfirmed=!1}async _confirmInstall(){this._installConfirmed=!0,this._installState=void 0,this._client&&await this._closeClientWithoutEvents(this._client),this._client=void 0,await this.port.close(),(async(e,t,i,r,s)=>{let o,a;const n=t=>e({...t,manifest:r,build:o,chipFamily:a}),l=new qr(t),d=t.getInfo(),c=d&&12346===d.usbVendorId&&void 0!==d.usbProductId&&[4097,4098,4099,2,3].includes(d.usbProductId),h=new Es({transport:l,baudrate:115200,enableTracing:!1});window.esploader=h,n({state:"initializing",message:"Initializing...",details:{done:!1}});try{await h.main(),await h.flashId()}catch(e){return console.error(e),n({state:"error",message:"Failed to initialize. Try resetting your device or holding the BOOT button while clicking INSTALL.",details:{error:"failed_initialize",details:e}}),await wa(l,h),void await l.disconnect()}a=h.chip.CHIP_NAME,n({state:"initializing",message:`Initialized. Found ${a}`,details:{done:!0}});const p=c?"cdc":"uart";if(o=r.builds.find((e=>e.chipFamily===a&&e.serialType===p))||r.builds.find((e=>e.chipFamily===a&&void 0===e.serialType)),!o)return n({state:"error",message:`Your ${a} board is not supported.`,details:{error:"not_supported",details:a}}),await wa(l,h),void await l.disconnect();n({state:"preparing",message:"Preparing installation...",details:{done:!1}});const u=i.startsWith("blob:")||i.startsWith("data:")?location.toString():new URL(i,location.toString()).toString(),f=o.parts.map((async e=>{const t=new URL(e.path,u).toString(),i=await fetch(t);if(!i.ok)throw new Error(`Downloading firmware ${e.path} failed: ${i.status}`);const r=new FileReader,s=await i.blob();return new Promise((e=>{r.addEventListener("load",(()=>e(r.result))),r.readAsArrayBuffer(s)}))})),m=[];let v=0;for(let e=0;e<f.length;e++)try{const t=await f[e],i=new Uint8Array(t,0,t.byteLength);m.push({data:i,address:o.parts[e].offset}),v+=i.length}catch(e){return n({state:"error",message:e.message,details:{error:"failed_firmware_download",details:e.message}}),await wa(l,h),void await l.disconnect()}n({state:"preparing",message:"Installation prepared",details:{done:!0}}),s&&(n({state:"erasing",message:"Erasing device...",details:{done:!1}}),await h.eraseFlash(),n({state:"erasing",message:"Device erased",details:{done:!0}})),n({state:"writing",message:"Writing progress: 0%",details:{bytesTotal:v,bytesWritten:0,percentage:0}});let g=0;try{await h.writeFlash({fileArray:m,flashSize:"keep",flashMode:"keep",flashFreq:"keep",eraseAll:!1,compress:!0,reportProgress:(e,t,i)=>{const r=t/i*m[e].data.length,s=Math.floor((g+r)/v*100);t!==i?n({state:"writing",message:`Writing progress: ${s}%`,details:{bytesTotal:v,bytesWritten:g+t,percentage:s}}):g+=r}})}catch(e){return n({state:"error",message:e.message,details:{error:"write_failed",details:e}}),await wa(l,h),void await l.disconnect()}n({state:"writing",message:"Writing complete",details:{bytesTotal:v,bytesWritten:g,percentage:100}}),await wa(l,h),console.log("DISCONNECT"),await l.disconnect(),n({state:"finished",message:"All done!"})})((e=>{this._installState=e,"finished"===e.state?xe(100).then((()=>this.port.open({baudRate:115200,bufferSize:8192}))).then((()=>this._initialize(!0))).then((()=>this.requestUpdate())):"error"===e.state&&xe(100).then((()=>this.port.open({baudRate:115200,bufferSize:8192})))}),this.port,this.manifestPath,this._manifest,this._installErase)}async _doProvision(){var e;const t=null===this._selectedSsid?this.shadowRoot.querySelector("ew-filled-text-field[name=ssid]").value:this._selectedSsid,i=(null===(e=this.shadowRoot.querySelector("ew-filled-text-field[name=password]"))||void 0===e?void 0:e.value)||"";this._busy=!0,this._wasProvisioned=this._client.state===fa.PROVISIONED,await this._stopScanning();try{await this._client.provision(t,i,45e3)}catch(e){return}finally{this._busy=!1,this._provisionForce=!1}}_closeDialog(){this.shadowRoot.querySelector("ew-dialog").close()}async _handleClose(){this._client&&await this._closeClientWithoutEvents(this._client),((e,t,i,r)=>{r=r||{};const s=new CustomEvent(t,{bubbles:void 0===r.bubbles||r.bubbles,cancelable:Boolean(r.cancelable),composed:void 0===r.composed||r.composed,detail:i});e.dispatchEvent(s)})(this,"closed"),document.body.style.overflow=this._bodyOverflow,this.parentNode.removeChild(this)}get _isSameFirmware(){var e;return!!this._info&&((null===(e=this.overrides)||void 0===e?void 0:e.checkSameFirmware)?this.overrides.checkSameFirmware(this._manifest,this._info):this._info.firmware===this._manifest.name)}get _isSameVersion(){return this._isSameFirmware&&this._info.version===this._manifest.version}async _closeClientWithoutEvents(e){await this._stopScanning(),e.removeEventListener("disconnect",this._handleDisconnect),await e.close()}_preventDefault(e){e.preventDefault()}}ka.styles=[C,o`
+    `,["Logs",e]}willUpdate(e){e.has("_state")&&("ERROR"!==this._state&&(this._error=void 0),"PROVISION"===this._state?this._ssids=void 0:this._provisionForce=!1,"INSTALL"===this._state&&(this._installConfirmed=!1,this._installState=void 0))}get _showsProvisionForm(){var e;const t=null===(e=this._client)||void 0===e?void 0:e.state;return void 0!==t&&t!==fa.STOPPED&&(this._provisionForce||t!==fa.PROVISIONED)}_syncScanning(){const e="PROVISION"===this._state&&!this._busy&&this._showsProvisionForm;e!==!!this._unsubSSIDs&&(e?(this._scanGraceTimeout=setTimeout((()=>{this._scanGraceTimeout=void 0,void 0===this._ssids&&(this._ssids=[],this._selectedSsid=null)}),9100),this._unsubSSIDs=this._client.subscribeSSIDs((e=>{void 0===this._ssids&&0===(null==e?void 0:e.length)&&this._scanGraceTimeout||null===e&&this._ssids||(void 0===this._ssids?this._selectedSsid=null===e?null:(e=>e.length?e.reduce(((e,t)=>t.rssi>e.rssi?t:e)).name:null)(e):null===this._selectedSsid||(null==e?void 0:e.some((e=>e.name===this._selectedSsid)))||(this._manualSsid=this._selectedSsid,this._selectedSsid=null),this._ssids=e)}))):this._stopScanning())}async _stopScanning(){clearTimeout(this._scanGraceTimeout),this._scanGraceTimeout=void 0;const e=this._unsubSSIDs;e&&(this._unsubSSIDs=void 0,await e())}firstUpdated(e){super.firstUpdated(e),this._bodyOverflow=document.body.style.overflow,document.body.style.overflow="hidden",this._initialize()}updated(e){super.updated(e),e.has("_state")&&this.setAttribute("state",this._state),this._syncScanning(),"PROVISION"===this._state&&(e.has("_selectedSsid")&&null===this._selectedSsid?this._focusFormElement("ew-filled-text-field[name=ssid]"):e.has("_ssids")&&void 0===e.get("_ssids")&&this._focusFormElement())}_focusFormElement(e="ew-filled-text-field, ew-filled-select"){const t=this.shadowRoot.querySelector(e);t&&t.updateComplete.then((()=>setTimeout((()=>t.focus()),100)))}async _initialize(e=!1){if(null===this.port.readable||null===this.port.writable)return this._state="ERROR",void(this._error="Serial port is not readable/writable. Close any other application using it and try again.");try{this._manifest=await(async e=>{const t=new URL(e,location.toString()).toString(),i=await fetch(t),r=await i.json();return"new_install_skip_erase"in r&&(console.warn('Manifest option "new_install_skip_erase" is deprecated. Use "new_install_prompt_erase" instead.'),r.new_install_skip_erase&&(r.new_install_prompt_erase=!0)),r})(this.manifestPath)}catch(e){return this._state="ERROR",void(this._error="Failed to download manifest")}if(0===this._manifest.new_install_improv_wait_time)return void(this._client=null);const t=new xa(this.port,this.logger);t.addEventListener("state-changed",(()=>{this.requestUpdate()})),t.addEventListener("error-changed",(()=>this.requestUpdate()));try{const i=e?void 0!==this._manifest.new_install_improv_wait_time?1e3*this._manifest.new_install_improv_wait_time:1e4:1500;this._info=await t.initialize(i),this._client=t,t.addEventListener("disconnect",this._handleDisconnect)}catch(e){this._info=void 0,e instanceof va?(this._state="ERROR",this._error="Serial port is not ready. Close any other application using it and try again."):(this._client=null,this.logger.error("Improv initialization failed.",e))}}_startInstall(e){this._state="INSTALL",this._installErase=!(this._manifest&&this._manifest.unleashed_update)&&e,this._installConfirmed=!1}async _confirmInstall(){this._installConfirmed=!0,this._installState=void 0,this._client&&await this._closeClientWithoutEvents(this._client),this._client=void 0,await this.port.close(),(async(e,t,i,r,s)=>{let o,a;const n=t=>e({...t,manifest:r,build:o,chipFamily:a}),l=new qr(t),d=t.getInfo(),c=d&&12346===d.usbVendorId&&void 0!==d.usbProductId&&[4097,4098,4099,2,3].includes(d.usbProductId),h=new Es({transport:l,baudrate:115200,enableTracing:!1});window.esploader=h,n({state:"initializing",message:"Initializing...",details:{done:!1}});try{await h.main(),await h.flashId()}catch(e){return console.error(e),n({state:"error",message:"Failed to initialize. Try resetting your device or holding the BOOT button while clicking INSTALL.",details:{error:"failed_initialize",details:e}}),await wa(l,h),void await l.disconnect()}a=h.chip.CHIP_NAME,n({state:"initializing",message:`Initialized. Found ${a}`,details:{done:!0}});const p=c?"cdc":"uart";if(o=r.builds.find((e=>e.chipFamily===a&&e.serialType===p))||r.builds.find((e=>e.chipFamily===a&&void 0===e.serialType)),!o)return n({state:"error",message:`Your ${a} board is not supported.`,details:{error:"not_supported",details:a}}),await wa(l,h),void await l.disconnect();n({state:"preparing",message:"Preparing installation...",details:{done:!1}});const u=i.startsWith("blob:")||i.startsWith("data:")?location.toString():new URL(i,location.toString()).toString(),f=o.parts.map((async e=>{const t=new URL(e.path,u).toString(),i=await fetch(t);if(!i.ok)throw new Error(`Downloading firmware ${e.path} failed: ${i.status}`);const r=new FileReader,s=await i.blob();return new Promise((e=>{r.addEventListener("load",(()=>e(r.result))),r.readAsArrayBuffer(s)}))})),m=[];let v=0;for(let e=0;e<f.length;e++)try{const t=await f[e],i=new Uint8Array(t,0,t.byteLength);m.push({data:i,address:o.parts[e].offset}),v+=i.length}catch(e){return n({state:"error",message:e.message,details:{error:"failed_firmware_download",details:e.message}}),await wa(l,h),void await l.disconnect()}n({state:"preparing",message:"Installation prepared",details:{done:!0}}),s&&(n({state:"erasing",message:"Erasing device...",details:{done:!1}}),await h.eraseFlash(),n({state:"erasing",message:"Device erased",details:{done:!0}})),n({state:"writing",message:"Writing progress: 0%",details:{bytesTotal:v,bytesWritten:0,percentage:0}});let g=0;try{await h.writeFlash({fileArray:m,flashSize:"keep",flashMode:"keep",flashFreq:"keep",eraseAll:!1,compress:!0,reportProgress:(e,t,i)=>{const r=t/i*m[e].data.length,s=Math.floor((g+r)/v*100);t!==i?n({state:"writing",message:`Writing progress: ${s}%`,details:{bytesTotal:v,bytesWritten:g+t,percentage:s}}):g+=r}})}catch(e){return n({state:"error",message:e.message,details:{error:"write_failed",details:e}}),await wa(l,h),void await l.disconnect()}n({state:"writing",message:"Writing complete",details:{bytesTotal:v,bytesWritten:g,percentage:100}}),await wa(l,h),console.log("DISCONNECT"),await l.disconnect(),n({state:"finished",message:"All done!"})})((e=>{this._installState=e,"finished"===e.state?xe(100).then((()=>this.port.open({baudRate:115200,bufferSize:8192}))).then((()=>this._initialize(!0))).then((()=>this.requestUpdate())):"error"===e.state&&xe(100).then((()=>this.port.open({baudRate:115200,bufferSize:8192})))}),this.port,this.manifestPath,this._manifest,!this._manifest.unleashed_update&&this._installErase)}async _doProvision(){var e;const t=null===this._selectedSsid?this.shadowRoot.querySelector("ew-filled-text-field[name=ssid]").value:this._selectedSsid,i=(null===(e=this.shadowRoot.querySelector("ew-filled-text-field[name=password]"))||void 0===e?void 0:e.value)||"";this._busy=!0,this._wasProvisioned=this._client.state===fa.PROVISIONED,await this._stopScanning();try{await this._client.provision(t,i,45e3)}catch(e){return}finally{this._busy=!1,this._provisionForce=!1}}_closeDialog(){this.shadowRoot.querySelector("ew-dialog").close()}async _handleClose(){this._client&&await this._closeClientWithoutEvents(this._client),((e,t,i,r)=>{r=r||{};const s=new CustomEvent(t,{bubbles:void 0===r.bubbles||r.bubbles,cancelable:Boolean(r.cancelable),composed:void 0===r.composed||r.composed,detail:i});e.dispatchEvent(s)})(this,"closed"),document.body.style.overflow=this._bodyOverflow,this.parentNode.removeChild(this)}get _isSameFirmware(){var e;return!!this._info&&((null===(e=this.overrides)||void 0===e?void 0:e.checkSameFirmware)?this.overrides.checkSameFirmware(this._manifest,this._info):this._info.firmware===this._manifest.name)}get _isSameVersion(){return this._isSameFirmware&&this._info.version===this._manifest.version}async _closeClientWithoutEvents(e){await this._stopScanning(),e.removeEventListener("disconnect",this._handleDisconnect),await e.close()}_preventDefault(e){e.preventDefault()}}ka.styles=[C,o`
       :host {
         --mdc-dialog-max-width: 390px;
       }

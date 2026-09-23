@@ -1,4 +1,4 @@
-<!-- Every fact on this page was checked against the firmware and the installer, not written from memory: the partition table (unchanged since 0.17.0), the parts the manifest writes (FLASH_PARTS in server.py), the name the board gives the installer (src/main.cpp, since 0.22.1), how ESP Web Tools offers an update (the vendored install dialog), what the backup zip may carry (ziparc.cpp) and how the card's screens are refreshed (sd.cpp, since 0.22.0). Re-check them when any of those change. -->
+<!-- Every fact on this page was checked against the firmware and the installer, not written from memory: the partition table (unchanged since 0.17.0), the parts the manifest writes (FLASH_PARTS in server.py), the name the board gives the installer (src/main.cpp, since 0.22.1), how ESP Web Tools offers an update and what the Update button's manifest makes it do (the vendored install dialog, and firmware_manifest in server.py), what the backup zip may carry (ziparc.cpp) and how the card's screens are refreshed (sd.cpp, since 0.22.0). Re-check them when any of those change. -->
 # Upgrade a board
 
 A board that already runs µnleashed takes a new version from [the installer](/install), over the same USB cable it was installed with, and keeps its accounts. About five minutes, most of it waiting.
@@ -11,12 +11,21 @@ It does not hold the mail or the information pages. The forums and the file area
 
 ## Update
 
-1. **Plug the board in** with a cable that carries data, open [the installer](/install) in Chrome or Edge, press **Install on my board** and pick the port.
-2. **The page recognises the board.** A board running 0.22.1 or later tells the installer its name and version, and the page shows both and offers **Update unleashed BBS**. Press it. It does not ask about erasing and it does not erase.
+1. **Plug the board in** with a cable that carries data, open [the installer](/install) in Chrome or Edge, press **Update my board** and pick the port.
+2. **Press Update unleashed BBS, then Install.** A board running 0.22.1 or later usually tells the installer its name and version, and the page shows both above the button. It may not, if the board is still starting up when the page asks, and that makes no difference here. It does not ask about erasing and it does not erase.
 3. **Writing** takes about two minutes. Keep the tab in view while it works.
 4. **The board starts on the new version**, on the Wi-Fi network it already knew.
 
-If the board already runs the version on offer, there is no update to press. Leave **Erase User Data** alone: it wipes the whole chip.
+If the board already runs the version on offer, there is no update to press, and nothing **Update my board** offers can erase it.
+
+### If you pressed Install on a new board instead
+
+That works too. A board the page recognises is offered **Update unleashed BBS** and not asked anything. One it does not recognise is offered **Install or update unleashed BBS**, which does the same thing as long as you leave the box on the next screen unticked. That screen looks like this:
+
+> [!NOTE]
+> **Start fresh?** Updating a board you already run? Leave this unticked: your accounts, settings, mail and forums are kept. Tick it only for a brand-new board, or to wipe this one and start over. `[ ]` **Erase everything first**
+
+Leave it unticked and press **Next**. If the page shows **Erase User Data**, because the board already runs the version on offer, leave it alone: it wipes the whole chip.
 
 ## What it writes, and what it leaves
 
@@ -31,14 +40,14 @@ The update writes the firmware and the screens, and nothing else.
 
 ## A board older than 0.22.1
 
-Versions before 0.22.1 do not tell the installer who they are, so the page does not recognise the board. It offers **Install unleashed BBS** and then asks whether to erase.
+Versions before 0.22.1 do not tell the installer who they are, so the page never recognises the board.
 
-- **From 0.17.0 on, leave Erase device unticked.** The flash has been laid out the same way since 0.17.0, so the firmware and the screens are rewritten and the accounts stay.
-- **Before 0.17.0, the erase cannot be avoided.** The flash was laid out differently then, and the new layout does not fit over the old one. The erase takes the accounts, the settings and the mail with it. Back up first: afterwards the backup is the only copy.
-- **Either way, the page asks for your Wi-Fi at the end.** Before 0.22.1 the network was built into the firmware, and a release carries none, so the board comes up without one. Choose the network and type the password, as on a first install.
+- **From 0.17.0 on, use Update my board.** The flash has been laid out the same way since 0.17.0, so the firmware and the screens are rewritten and the accounts stay. Through **Install on a new board** it is the same, with **Erase everything first** left unticked.
+- **Before 0.17.0, the erase cannot be avoided.** The flash was laid out differently then, and the new layout does not fit over the old one. Use **Install on a new board** and tick **Erase everything first**. The erase takes the accounts, the settings and the mail with it. Back up first: afterwards the backup is the only copy.
+- **Either way, the board needs your Wi-Fi at the end.** Before 0.22.1 the network was built into the firmware, and a release carries none, so the board comes up without one. When the writing is done, press **Next**, then **Connect to Wi-Fi** if the page has not opened the Wi-Fi step by itself. Choose the network and type the password, as on a first install.
 
 ## If something goes wrong
 
 - **The board is not back on your network.** A board built from source with its network in `secrets.h` has the same gap as an old one: the release does not carry it. Plug the board in, open [the installer](/install), pick the port and use **Connect to Wi-Fi** or **Change Wi-Fi**, as in [Changing the Wi-Fi later](/install#changing-the-wi-fi-later). Nothing else on the board changes.
-- **The update stopped part way**, a cable pulled or the tab closed. Run it again. The chip's own loader is in read-only memory and nothing the page writes can reach it, so a board can always be written again over USB. If the page no longer recognises the board, choose **Install unleashed BBS** and leave **Erase device** unticked.
-- **Last of all**, install with **Erase device** ticked. That puts the chip back to nothing and takes the accounts with it; [the installer's own page](/install#if-something-goes-wrong-reset-rather-than-reflash) has what to try first.
+- **The update stopped part way**, a cable pulled or the tab closed. Run it again. The chip's own loader is in read-only memory and nothing the page writes can reach it, so a board can always be written again over USB. **Update my board** works whether or not the page still recognises the board, and never erases.
+- **Last of all**, **Install on a new board** with **Erase everything first** ticked. That puts the chip back to nothing and takes the accounts with it; [the installer's own page](/install#if-something-goes-wrong-reset-rather-than-reflash) has what to try first.

@@ -1,4 +1,4 @@
-<!-- "::: install-top" is the top of the page: the title, the install card and the steps, side by side on a desktop and one after another on a phone. The words inside "::: installer" are the card's amber box; the rest of the card (button, version, notices) comes from what is in firmware/. -->
+<!-- "::: install-top" is the top of the page: the title, the install card and the steps, side by side on a desktop and one after another on a phone. The words inside "::: installer" are the card's amber box; the rest of the card (the two buttons, version, notices) comes from what is in firmware/. -->
 ::: install-top
 # Put the BBS on your board
 
@@ -13,9 +13,10 @@ serial port. Your Wi-Fi name and password, exactly
 
 <!-- The upgrade call-out is the first thing in the steps column, not in the intro: beside the card on a desktop, and after the card on a phone, so it does not push the install button down the first screen. -->
 > [!NOTE]
-> **Already running µnleashed?** Plug it in and press **Install on my
-> board**; it offers an update and keeps your accounts.
-> [Upgrading a board](/upgrade), including one older than 0.22.1.
+> **Already running µnleashed?** Press **Update my board**, pick the port,
+> then **Update unleashed BBS** and **Install**. It never erases: your
+> accounts, settings, mail and forums stay, and your SD card is never
+> touched. [Upgrading a board](/upgrade), including one older than 0.22.1.
 
 ## What happens, in order
 
@@ -23,16 +24,18 @@ serial port. Your Wi-Fi name and password, exactly
 install-cable
 :::
 
-1. **Press the button and pick the port.** The browser lists the serial ports
-   it can see. If you are not sure which one is the board, unplug it, look at
-   the list, plug it back in, and take the one that appeared.
-2. **The page reads the chip.** A board already running version 0.22.1 or
-   later of this BBS is greeted by name and version and offered an update.
-   Anything else, a new board, other firmware or an older version of this
-   BBS, is offered **Install unleashed BBS**.
-3. **The erase question**, unless the board was recognised. On a new board
-   the answer is to tick it. The section of that name, further down, says why
-   and when not to.
+1. **Press Install on a new board and pick the port.** The browser lists the
+   serial ports it can see. If you are not sure which one is the board,
+   unplug it, look at the list, plug it back in, and take the one that
+   appeared.
+2. **The page reads the chip** and offers **Install or update unleashed
+   BBS**. A board already running version 0.22.1 or later of this BBS may be
+   greeted by name and version and offered **Update unleashed BBS** instead.
+   The page does not always catch a board while it is starting up, and
+   nothing is erased either way unless you ask.
+3. **The erase question**, headed **Start fresh?**, unless the board was
+   recognised. On a new board, tick **Erase everything first**. The section
+   of that name, further down, says why and when not to.
 4. **Writing.** A progress bar. The installer says this takes about two
    minutes, and asks you to keep the page in view while it works, because a
    browser slows down a tab you are not looking at.
@@ -68,9 +71,10 @@ install-wifi
    it.
 
 If the Wi-Fi step never appears, the page stopped waiting before the board was
-ready. Close the box, press the button again and pick the same port. The board
-listens for the page for as long as it is running, so this time the page finds
-it and offers **Connect to Wi-Fi**.
+ready. Close the box, press **Update my board** and pick the same port. The
+board listens for the page for as long as it is running, so this time the page
+finds it and offers **Connect to Wi-Fi**, and nothing that button offers can
+erase the board.
 :::
 
 ## Before you start
@@ -146,27 +150,31 @@ these, with the same drivers linked.
 
 ## The erase question
 
-When the page does not recognise the board, it shows a box headed **Erase
-device**, and the box starts **unticked**. One of the two answers cannot be
-undone, so read this before you press the button.
+When you press **Install on a new board** and the page does not recognise the
+board, it shows a box headed **Start fresh?** with one checkbox, **Erase
+everything first**, and the box starts **unticked**. One of the two answers
+cannot be undone, so read this before you press the button.
 
 - **Tick it if this is a new board**, or one that has been running something
   else. A full erase clears the chip completely: any other firmware, anything
   it had stored, the lot. It also gives the BBS a clean chip to lay its
   partitions out on, which a first install wants.
-- **Leave it unticked only if the board runs an older version of this BBS**,
-  from before 0.22.1, and you are moving it to a newer one. The firmware and
-  the screens are rewritten and nothing else. Your accounts, your settings,
-  your chat mail and your directory listing live on a separate part of the
-  flash that is not written to at all. Neither is the caller log, which has a
-  part of its own because it is the sysop's record of who called.
+- **Leave it unticked if the board already runs this BBS** and you are moving
+  it to a newer version. The firmware and the screens are rewritten and
+  nothing else. Your accounts, your settings, your chat mail and your
+  directory listing live on a separate part of the flash that is not written
+  to at all. Neither is the caller log, which has a part of its own because it
+  is the sysop's record of who called. The SD card is never touched.
 
-A board already running version 0.22.1 or later is not asked. The page
-recognises it, offers **Update unleashed BBS**, and does the second of those
-two things: new firmware and screens, accounts left alone.
+**Update my board** never shows this question and never erases, whether the
+page recognises the board or not: it always does the second of those two
+things, new firmware and screens, accounts left alone. So does **Install on a
+new board** for a board the page recognises, which it offers **Update
+unleashed BBS**.
 
-> The same page shows **Erase User Data** when the board already runs the
-> version on offer. That is not a small reset: it erases the whole chip,
+> When the board already runs the version on offer, **Install on a new board**
+> shows **Erase User Data**. **Update my board** does not offer it. It is not
+> a small reset: it erases the whole chip,
 > accounts, settings, mail and Wi-Fi included, and installs the BBS again from
 > nothing. Nothing on this page can put back what an erase removed. If the
 > board holds something you care about, copy it off first.
@@ -243,7 +251,7 @@ install-setup
 A new router, a new password, or the board moving to somebody else's house:
 
 1. Plug the board into a computer with the same kind of cable.
-2. Open this page and press the button.
+2. Open this page and press **Update my board**, which cannot erase anything.
 3. Pick the port. The page recognises the board and shows **Change Wi-Fi**,
    or **Connect to Wi-Fi** if the board is not on a network right now.
 4. Choose the network and type the password, as before.
@@ -290,7 +298,8 @@ boot-button
   does nothing.
 :::
 
-- **Last of all, install again with Erase device ticked.** That puts the chip
+- **Last of all, press Install on a new board and tick Erase everything
+  first.** That puts the chip
   back to nothing before the firmware goes on, so it takes the accounts, the
   settings, the mail and the caller log with it. **The erase question**,
   above, has the details.

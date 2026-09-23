@@ -2464,7 +2464,8 @@ def main():
               has_h(inst2, 2, "If something goes wrong, reset rather than reflash")
               and "works while the board is failing to join one" in flat_i2
               and "nothing on the board is erased" in flat_i2
-              and "install again with Erase device ticked" in flat_i2)
+              and "press Install on a new board and tick Erase everything first"
+                  in flat_i2)
         # The BOOT button and the Wi-Fi fallback are firmware 1.0.1's, moved
         # there from 0.24.0; 1.0.0 does not have them. The repository carries
         # 0.23.0 at most, so here they must not show; the second server below
@@ -2655,16 +2656,35 @@ def main():
               '<a href="/setup#backup">the backup window</a>' in upg
               and 'id="backup"' in get("/setup")[1]
               and "It does not hold the mail or the information pages." in uflat)
-        check("a recognised board is offered the update, with no erase",
-              "Update unleashed BBS" in uflat and "0.22.1 or later" in uflat
+        # 0.22.1: Rob's own board, on 0.22.1 firmware, was not recognised
+        # and was offered Install, then an erase question that read as
+        # "you are about to lose everything". The page says to press Update
+        # my board, no longer promises the board is always recognised, and
+        # shows the erase screen's new words for a reader who pressed the
+        # other button.
+        check("the update is Update my board, which never asks or erases",
+              "press Update my board and pick the port" in uflat
+              and "Press Update unleashed BBS, then Install." in uflat
               and "It does not ask about erasing and it does not erase." in uflat)
+        check("and it no longer promises that a 0.22.1 board is always recognised",
+              "usually tells the installer its name and version" in uflat
+              and "It may not, if the board is still starting up" in uflat
+              and "the page recognises the board. A board running 0.22.1" not in uflat)
+        check("and shows the erase screen's own words, box unticked, for Install",
+              has_h(upg, 3, "If you pressed Install on a new board instead")
+              and "Install or update unleashed BBS" in uflat
+              and "Start fresh? Updating a board you already run? Leave this "
+                  "unticked: your accounts, settings, mail and forums are kept." in uflat
+              and "[ ] Erase everything first" in uflat
+              and "Erase device" not in uflat)
         check("what is kept, and the screens that go back to stock",
               "Kept: the accounts, the settings (Wi-Fi included), the mail" in uflat
               and "Back to stock: the screens in the board's own flash." in uflat)
-        check("an older board: no erase from 0.17.0 on, an erase before it",
-              "From 0.17.0 on, leave Erase device unticked." in uflat
+        check("an older board: Update from 0.17.0 on, an erase before it",
+              "From 0.17.0 on, use Update my board." in uflat
               and "Before 0.17.0, the erase cannot be avoided." in uflat
-              and "the page asks for your Wi-Fi at the end" in uflat)
+              and "Use Install on a new board and tick Erase everything first" in uflat
+              and "the board needs your Wi-Fi at the end" in uflat)
         inst_now = get("/install")[1]
         check("and every section it sends a reader to exists",
               'href="/install#changing-the-wi-fi-later"' in upg
@@ -2682,10 +2702,22 @@ def main():
         itop = inst_now.split('<div class="install-top">')[1].split('id="before-you-start"')[0]
         check("/install calls it out first in the steps, linking /upgrade",
               '<div class="steps"><p class="aside"><b>Already running µnleashed?</b> '
-              "Plug it in and press <b>Install on my board</b>; it offers an update "
-              'and keeps your accounts. <a href="/upgrade">Upgrading a board</a>' in itop
+              "Press <b>Update my board</b>, pick the port, then <b>Update unleashed "
+              "BBS</b> and <b>Install</b>. It never erases: your accounts, settings, "
+              "mail and forums stay, and your SD card is never touched. "
+              '<a href="/upgrade">Upgrading a board</a>' in itop
               and itop.find('<div class="steps"><p class="aside">')
                   < itop.find('id="what-happens-in-order"'))
+        # The steps no longer promise a recognised board, and name the erase
+        # screen by the words it now shows.
+        flat_top = " ".join(re.sub(r"<[^>]+>", " ", itop).split())
+        check("and the steps name the new buttons and the erase screen's words",
+              "Press Install on a new board and pick the port." in flat_top
+              and "offers Install or update unleashed BBS ." in flat_top
+              and "may be greeted by name and version" in flat_top
+              and "headed Start fresh? , unless the board was recognised" in flat_top
+              and "tick Erase everything first ." in flat_top
+              and "Erase device" not in flat_top)
         check("and it is not indented the way a note inside prose is",
               "article .install-top > .steps > p.aside:first-child { margin:0 0 1.25rem; }"
               in inst_now)
@@ -2742,7 +2774,7 @@ def main():
 
         # The copy of ESP Web Tools sends a telnet:// address there, and says
         # it was changed, as its licence requires.
-        print("The installer's one change")
+        print("The installer's telnet link")
         dlg = [n for n in os.listdir(os.path.join("vendor", "esp-web-tools", S.EWT_VERSION))
                if n.startswith("install-dialog-")]
         dlg_src = open(os.path.join("vendor", "esp-web-tools", S.EWT_VERSION, dlg[0]),
@@ -2759,6 +2791,69 @@ def main():
               "6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5"
               in open(os.path.join("vendor", "esp-web-tools", "README.md"),
                       encoding="utf-8").read())
+
+        # 0.22.1. Rob updated his own board from /install and the dialog
+        # asked "Erase device ... All data on the device will be lost",
+        # which reads as "you are about to lose everything" to somebody with
+        # a board full of accounts. Checked in the chunk as the server hands
+        # it to a browser, at the path the page loads it from.
+        print("The installer's erase question, and the Update button")
+        code, _ct, served = (fetch(S.EWT_BASE + dlg[0]) if len(dlg) == 1
+                             else (0, "", b""))
+        served = served.decode("utf-8") if code == 200 else ""
+        flat_d = " ".join(served.split())
+        check("the served dialog asks Start fresh?, in words that say what is kept",
+              code == 200 and served == dlg_src
+              and '_renderAskErase(){return["Start fresh?",s`' in served
+              and "Updating a board you already run? Leave this unticked: your "
+                  "accounts, settings, mail and forums are kept. Tick it only for a "
+                  "brand-new board, or to wipe this one and start over." in flat_d
+              and "Erase everything first </label>" in flat_d)
+        check("and no longer says all data on the device will be lost",
+              "All data on the device will be lost" not in served
+              and "All data on the device will be erased" not in served
+              and 'return["Erase device"' not in served)
+        check("its Install is Install or update, on both dashboards",
+              served.count("`Install or update ${this._manifest.name}`") == 2
+              and "`Install ${this._manifest.name}`" not in served)
+        # The Update button. Nobody can click through the dialog in a test,
+        # so the proof is the shape of the code: the erase flag is written
+        # in exactly two places, both of which store false under the key,
+        # and the one line that erases reads the argument that is forced
+        # false under the key a second time.
+        check("with unleashed_update, _startInstall stores false whatever it is asked",
+              '_startInstall(e){this._state="INSTALL",this._installErase='
+              '!(this._manifest&&this._manifest.unleashed_update)&&e,' in served
+              and served.count("_installErase=") == 2
+              and "this._installErase=!1," in served)
+        check("and _confirmInstall hands the flasher false, the only thing that erases",
+              "this._manifest,!this._manifest.unleashed_update&&this._installErase)}"
+              in served
+              and served.count(".eraseFlash()") == 2
+              and 's&&(n({state:"erasing"' in served
+              and "!0===this.IS_STUB&&!0===e.eraseAll&&await this.eraseFlash()" in served
+              and served.count("eraseAll:!1") == 1 and "eraseAll:!0" not in served)
+        check("and neither dashboard opens the erase question or offers Erase User Data",
+              "this._isSameFirmware||this._manifest.unleashed_update?this._startInstall(!1)"
+              in served
+              and "this._manifest.unleashed_update?this._startInstall(!1):"
+                  "this._manifest.new_install_prompt_erase" in served
+              and "this._isSameVersion&&!this._manifest.unleashed_update?s`" in served
+              and "this._isSameVersion&&!this._manifest.unleashed_update)"
+                  'e="Erase User Data"' in served)
+        check("and the notice at its top lists the change",
+              "3. A manifest carrying \"unleashed_update\": true" in dlg_src[:4000]
+              and '"Start fresh?"' in dlg_src[:4000]
+              and '"Erase everything first"' in dlg_src[:4000])
+        # A new path for the changed bundle, so a browser holding the old
+        # dialog for its day of cache fetches the new one; the old path
+        # still answers, for a tab left open across a deploy.
+        check("the bundle is served under a path carrying this site's revision",
+              S.EWT_BASE == "/install/esp-web-tools/" + S.EWT_VERSION + "-"
+                            + str(S.EWT_REV) + "/"
+              and S.EWT_REV >= 2
+              and fetch("/install/esp-web-tools/" + S.EWT_VERSION + "/"
+                        + dlg[0])[0] == 200)
 
         # ------------------------------------------------------------------
         # The footer: two rows, then the colophon, on every face.
@@ -3302,6 +3397,25 @@ def main():
                                "new_install_improv_wait_time", "builds"})
             check("the person is asked before the chip is erased, not after",
                   man["new_install_prompt_erase"] is True)
+            # The Update button's manifest (0.22.1): the same in every key,
+            # plus the one the dialog served here reads as "never erase". It
+            # keeps new_install_prompt_erase, because ESP Web Tools erases by
+            # default without it, and a copy of the dialog that does not know
+            # the extra key (upstream's, or a cached one from before 0.22.1)
+            # must fall back to asking, box unticked, rather than to erasing.
+            upd = S.firmware_manifest("0.19.2", update=True)
+            check("the Update manifest is the install one plus unleashed_update",
+                  upd is not None and upd.get("unleashed_update") is True
+                  and {k: v for k, v in upd.items() if k != "unleashed_update"} == man
+                  and "unleashed_update" not in man)
+            check("and it still sets new_install_prompt_erase, so no dialog erases by default",
+                  upd["new_install_prompt_erase"] is True)
+            got = S.firmware_file("0.19.2/manifest-update.json")
+            check("it is served beside the other, as JSON that carries the key",
+                  got is not None and got[1].startswith("application/json")
+                  and json.loads(got[0].decode()).get("unleashed_update") is True
+                  and S.firmware_file("0.18.0/manifest-update.json") is None
+                  and S.firmware_file("0.19.2/manifest-other.json") is None)
             check("only the chip families we know about are in it",
                   [b["chipFamily"] for b in man["builds"]] == ["ESP32"])
 
@@ -3373,14 +3487,28 @@ def main():
                   and '<input type="radio" name="fwver" id="fwv0" checked> 0.19.2' in shown
                   and ".installer .r1{display:none}" in shown
                   and ".installer:has(#fwv1:checked) .r1{display:block}" in shown
-                  and shown.count('slot="unsupported"') == 2)
+                  and shown.count('<span class="no" slot="unsupported">') == 2)
             # The card said the version three times: on the button, in a
             # line under it, and again as release.txt's first line.
             check("the card says each version once, not on the button",
                   shown.count('class="meta ver r0"') == 1
                   and "Version 0.19.2, released 2026-09-21." in shown
-                  and shown.count(">Install on my board</button>") == 2
+                  and shown.count(">Install on a new board</button>") == 2
                   and "Install 0.19.2" not in shown and "A short note." not in shown)
+            # Two buttons per release (0.22.1, Rob): the install as it was,
+            # and Update my board on the manifest that can never erase. The
+            # update one says nothing of its own on a browser that cannot
+            # use it, and hides, so the reason is given once.
+            check("each release has Install on a new board and Update my board",
+                  shown.count(">Update my board</button>") == 2
+                  and '<esp-web-install-button class="r0 upd" manifest="/install/'
+                      '0.19.2/manifest-update.json"><button class="go upd" '
+                      'slot="activate">Update my board</button>' in shown
+                  and 'manifest="/install/0.19.1/manifest-update.json"' in shown
+                  and shown.index('manifest="/install/0.19.2/manifest.json"')
+                      < shown.index('manifest="/install/0.19.2/manifest-update.json"')
+                  and shown.count('<span slot="unsupported"></span>'
+                                  '<span slot="not-allowed"></span>') == 2)
             check("the board slot names the board and its flash",
                   '<p class="meta board">Board: ESP32, 4 MB flash</p>' in shown)
             check("the words inside the block are the card's amber box",
@@ -3441,6 +3569,23 @@ def main():
                 check("while a version past the cap, or not on disk, does not",
                       fetch("/install/0.18.0/manifest.json", base2)[0] == 404
                       and fetch("/install/9.9.9/manifest.json", base2)[0] == 404)
+                # The Update button's manifest, over HTTP, as the dialog
+                # fetches it: the key that forbids the erase, the prompt
+                # kept for any dialog that ignores it, and the same parts.
+                code, ctype, body = fetch("/install/0.19.2/manifest-update.json", base2)
+                u2 = json.loads(body.decode()) if code == 200 else {}
+                check("the Update manifest is served beside it and cannot erase",
+                      code == 200 and ctype.startswith("application/json")
+                      and u2.get("unleashed_update") is True
+                      and u2.get("new_install_prompt_erase") is True
+                      and u2.get("builds") == m2.get("builds")
+                      and fetch("/install/0.18.0/manifest-update.json", base2)[0] == 404)
+                check("and the page offers both buttons, the update one hidden "
+                      "where it cannot work",
+                      ">Install on a new board</button>" in page2
+                      and ">Update my board</button>" in page2
+                      and "article .installer esp-web-install-button.upd"
+                          "[install-unsupported] { display:none; }" in page2)
                 check("and the bundle is served to this server too",
                       fetch(S.EWT_SCRIPT, base2)[0] == 200)
 
@@ -3700,10 +3845,13 @@ def main():
 
         # The code a visitor runs is the code in this repository, at an
         # exact version, and cannot change between one reader and the next.
+        # The path carries this site's revision of the bundle as well
+        # (0.22.1), so a changed file is fetched fresh rather than a day late.
         check("ESP Web Tools is pinned to an exact version, served from here",
               re.match(r"^\d+\.\d+\.\d+$", S.EWT_VERSION) is not None
+              and isinstance(S.EWT_REV, int)
               and S.EWT_SCRIPT == "/install/esp-web-tools/" + S.EWT_VERSION
-                                  + "/install-button.js"
+                                  + "-" + str(S.EWT_REV) + "/install-button.js"
               and "unpkg.com" not in open("server.py", encoding="utf-8").read())
         # A release committed here is published the moment Rob deploys, so
         # the one leak this suite can see is checked on every run: the

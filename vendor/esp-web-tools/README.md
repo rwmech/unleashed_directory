@@ -45,31 +45,78 @@ so they load from this one directory and need nothing from anywhere else. The
 only absolute URLs inside them are links the dialog shows a person (driver
 downloads, the project's own page), never something it fetches.
 
-`server.py` serves them at `/install/esp-web-tools/<version>/<name>` with a
-JavaScript content type, which a module script needs or the browser refuses
-it. Only names shaped like a chunk (`[A-Za-z0-9_-]+.js`) and the two licence
-files are served; `EWT_VERSION` in `server.py` says which directory.
+`server.py` serves them at `/install/esp-web-tools/<version>-<rev>/<name>`
+with a JavaScript content type, which a module script needs or the browser
+refuses it. Only names shaped like a chunk (`[A-Za-z0-9_-]+.js`) and the two
+licence files are served; `EWT_VERSION` in `server.py` says which directory.
+`EWT_REV` is this site's own revision of the directory, and goes up by one
+whenever a file in it changes: every file is cached for a day, and a new
+path is the only way a browser that already has the old dialog fetches the
+new one. The bare `/install/esp-web-tools/<version>/` is still served, for
+a tab left open across a deploy.
 
 ## The one modified file
 
 `10.4.0/install-dialog-im156JnI.js` is changed, and says so in a notice at
-its top, as section 4(b) of the Apache License 2.0 requires. Upstream's
-SHA-256 for it is
+its top, as section 4(b) of the Apache License 2.0 requires. The notice
+lists every changed string. Upstream's SHA-256 for it is
 `6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5`;
-`SHA256SUMS` carries the modified file's.
+`SHA256SUMS` carries the modified file's. Three changes, all in that file.
 
-After the Wi-Fi step the dialog offers the link the device sends over
-Improv, labelled "Visit Device". A µnleashed board sends
-`telnet://<address>:6400`, which no browser opens. So in both places the
-dialog shows that link: when it starts `telnet://`, it goes to
-`/connected#<address>:<port>` on this site and is labelled "Telnet details".
-Any other link is left exactly as upstream has it. The address rides in the
-fragment, which a browser never sends, so it is not in this server's logs.
+**Telnet details (0.19.0 of this site).** After the Wi-Fi step the dialog
+offers the link the device sends over Improv, labelled "Visit Device". A
+µnleashed board sends `telnet://<address>:6400`, which no browser opens. So
+in both places the dialog shows that link: when it starts `telnet://`, it
+goes to `/connected#<address>:<port>` on this site and is labelled "Telnet
+details". Any other link is left exactly as upstream has it. The address
+rides in the fragment, which a browser never sends, so it is not in this
+server's logs. Two expressions, each made twice.
 
-The change is two expressions, each made twice, with a patch that refused
-to run on anything but the upstream file. Moving to a new version means
-making it again by hand in that version's dialog chunk: search for
-`Visit Device`, and check the result by opening the dialog.
+**The erase question's words (0.22.1).** Upstream asks "Erase device", says
+all data on the device will be lost, and labels the checkbox "Erase
+device", which reads to somebody updating a board full of accounts as
+"you are about to lose everything", although with the box unticked nothing
+but the firmware and the screens is written. The title is "Start fresh?",
+the text says to leave it unticked when updating a board you already run,
+the checkbox is "Erase everything first", "Install unleashed BBS" is
+"Install or update unleashed BBS", and the confirmation screen and the
+"Erase User Data" screen say what an erase takes and that the SD card is
+not touched. Strings only; no behaviour changed.
+
+**The Update button (0.22.1).** The page's Update my board button points
+at `manifest-update.json`, which is the ordinary manifest plus
+`"unleashed_update": true`. With that key:
+
+- `_startInstall(e)` stores `!(this._manifest&&this._manifest.unleashed_update)&&e`,
+  so the erase flag is false whatever it is asked to store;
+- `_confirmInstall()` hands the flasher
+  `!this._manifest.unleashed_update&&this._installErase`, so false
+  reaches the one line that erases (`s&&(... h.eraseFlash() ...)`) even if
+  the stored flag were somehow true;
+- both dashboards call `_startInstall(!1)` instead of opening the erase
+  question, and their button reads "Update unleashed BBS";
+- "Erase User Data" is not offered, and the confirmation says "update to".
+
+The flag has exactly two writes in the file, the constructor's `!1` and
+`_startInstall`, and exactly one reader that erases, the argument
+`_confirmInstall` passes. `writeFlash` is always called with
+`eraseAll:!1`. So no path through the dialog can erase with the key set.
+Without the key every path is upstream's.
+
+The update manifest still sets `new_install_prompt_erase: true`.
+ESP Web Tools erases the whole chip by default unless that key is set, so
+an update manifest without it would erase on any copy of the dialog that
+does not know `unleashed_update`: upstream's, or this site's own from
+before 0.22.1 in a browser's cache. With it, the worst an old copy can do
+is ask, with the box unticked.
+
+Moving to a new version means making all three again by hand in that
+version's dialog chunk: search for `Visit Device`, `_renderAskErase`,
+`_startInstall(e)` and `this._manifest,this._installErase)`. Nobody can
+click through the dialog in a test here, so check it the way 0.22.1 was:
+import the chunk in a page in headless Chrome, construct
+`ewt-install-dialog`, set `_manifest` with and without the key, and call
+`_startInstall(true)` and the render methods.
 
 ## How 10.4.0 was fetched and checked
 
