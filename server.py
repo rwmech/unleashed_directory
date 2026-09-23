@@ -136,8 +136,9 @@ PAGE_CACHE    = int(os.environ.get("DIRECTORY_PAGE_CACHE", "10"))
 # page reloads itself rather than going stale in a tab somebody left open.
 # A meta refresh, not a script, because a reader should not have to run code
 # to read a list. /install is the only page here that loads any, and it does
-# so only when there is firmware to install; see EWT_SCRIPT. It is cheap: the page
-# is rendered at most once every PAGE_CACHE seconds however many ask for it.
+# so only when there is firmware to install; see EWT_SCRIPT. The refresh is
+# cheap: the page is rendered at most once every PAGE_CACHE seconds however
+# many ask for it.
 LIST_SECONDS  = int(os.environ.get("DIRECTORY_LIST_REFRESH", "60"))
 LIST_REFRESH  = (f'<meta http-equiv="refresh" content="{LIST_SECONDS}">'
                  if LIST_SECONDS > 0 else "")
@@ -179,19 +180,50 @@ FIRMWARE_KEEP = int(os.environ.get("DIRECTORY_FIRMWARE_KEEP", "2"))
 FIRMWARE_VER  = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})$")
 FIRMWARE_CHIP = re.compile(r"^[a-z][a-z0-9]{2,11}$")
 
-# ESP Web Tools is pinned to an exact version, never to a floating tag.
-# Their own docs tell you to pin to the major (@10) while the docs page
-# itself loads the unpinned URL; a major tag still means the code a visitor
-# runs can change under us between one reader and the next, and this is the
-# only third-party code anybody loads from this site.
+# ESP Web Tools, the one piece of JavaScript on this site, served from this
+# machine rather than from a CDN.
 #
-# The path matters: dist/web/install-button.js is the self-contained web
-# bundle. dist/install-button.js is the NPM entry point and has bare imports
-# a browser cannot resolve. "?module" is unpkg's own flag for the ESM build
-# and is what the project's documentation shows.
+# It used to come from unpkg, pinned to an exact version. Pinning stops the
+# code changing between one reader and the next, but it still hands every
+# visitor's browser to a third party at the moment they are about to let a
+# page write to a device on their desk, and it puts a hole in the claim that
+# nothing a visitor loads comes from anywhere but here. So the bundle is in
+# the repository, byte for byte as published, under vendor/.
+#
+# What is in vendor/esp-web-tools/<version>/ is the package's dist/web
+# directory and nothing else: install-button.js, which is the self-contained
+# browser build, and the chunks it imports. Every import in them is relative
+# ("./install-dialog-....js"), so the chunks load from the same directory and
+# the bundle needs no import map and no other origin. dist/install-button.js
+# is the NPM entry point instead and has bare imports a browser cannot
+# resolve, which is why the web directory is the one vendored.
+#
+# Its licence, and the licences of the libraries built into it, sit beside
+# it and are linked from the page. vendor/esp-web-tools/README.md says where
+# the files came from, how they were checked, and how to move to a newer
+# version.
 EWT_VERSION = "10.4.0"
-EWT_SCRIPT  = ("https://unpkg.com/esp-web-tools@" + EWT_VERSION
-               + "/dist/web/install-button.js?module")
+EWT_DIR     = (pathlib.Path(__file__).resolve().parent
+               / "vendor" / "esp-web-tools" / EWT_VERSION)
+EWT_BASE    = "/install/esp-web-tools/" + EWT_VERSION + "/"
+EWT_SCRIPT  = EWT_BASE + "install-button.js"
+# A chunk name is the only thing a request can choose, and it is checked as a
+# name, the way static_file() does it: letters, digits, "-" and "_", then
+# ".js". The two licence files are the only other things served from there.
+EWT_FILE    = re.compile(r"^[A-Za-z0-9_-]{1,64}\.js$")
+EWT_TEXT    = ("LICENSE", "THIRD_PARTY_LICENSES.txt")
+
+# Seconds ESP Web Tools waits, after writing an image, for the board to
+# answer over Improv Wi-Fi Serial, which is how the browser offers to set
+# up the Wi-Fi. The board speaks Improv from firmware 0.22.1 on, so every
+# release offered here does.
+#
+# Thirty rather than the tool's default ten because the first boot after a
+# full erase formats two filesystems before the board is listening, and a
+# board that answers after the page has stopped asking gets no Wi-Fi step at
+# all: the reader is left with a board that never joined anything and no
+# idea why. Waiting longer than needed costs a spinner.
+EWT_IMPROV_WAIT = 30
 
 # The chip families this can serve, keyed by the directory name a release
 # uses. A second family is a directory drop and an entry here, never a
@@ -214,24 +246,29 @@ FLASH_FAMILIES = {
 # What gets written, and where. Read out of the firmware repository rather
 # than recalled: CONFIG_BOOTLOADER_OFFSET_IN_FLASH and
 # CONFIG_PARTITION_TABLE_OFFSET in its generated sdkconfig.esp32dev, and the
-# ota_0 and storage rows of its partitions.csv.
+# otadata, ota_0 and storage rows of its partitions.csv.
 #
 # None means "this family's bootloader offset", from FLASH_FAMILIES above.
 #
-# littlefs.bin is the storage partition, which is the screens. The other two
-# filesystems are deliberately absent: userdata holds the accounts, the live
-# configuration and each plugin's files, and logs holds the caller log. Not
-# writing them is what lets somebody reinstall over a board they already run
-# without losing it, and it is the same split "pio run -t flashall" respects.
+# ota_data_initial.bin is the otadata partition in its starting state, which
+# says "boot the first application slot". It is written because firmware.bin
+# always goes into that first slot, and a board that had ever switched to
+# the second one would otherwise go on booting whatever was left there.
+# PlatformIO builds it alongside the application.
 #
-# There is no otadata part. With otadata erased the bootloader falls back to
-# the first OTA slot, which is where the application is written. The day OTA
-# updates land, a board that has already flipped to ota_1 will need that
-# thought about again.
-FLASH_PARTS = (("bootloader.bin", None),
-               ("partitions.bin", 0x8000),
-               ("firmware.bin",   0x20000),
-               ("littlefs.bin",   0x3C0000))
+# storage.bin is the storage partition, which is the screens. PlatformIO
+# calls the file littlefs.bin; a release names it after the partition it is
+# written to. The other two filesystems are deliberately absent: userdata
+# holds the accounts, the live configuration and each plugin's files, and
+# logs holds the caller log. Not writing them is what lets somebody
+# reinstall over a board they already run without losing it, and it is the
+# same split "pio run -t flashall" respects. After a full erase the board
+# formats both on its first boot.
+FLASH_PARTS = (("bootloader.bin",       None),
+               ("partitions.bin",       0x8000),
+               ("ota_data_initial.bin", 0xF000),
+               ("firmware.bin",         0x20000),
+               ("storage.bin",          0x3C0000))
 
 # A board is counted offline when it has missed this many of its own
 # intervals. Three lets a board reboot, or ride out a flaky evening,
@@ -917,8 +954,24 @@ def md_render(text):
     steps = []            # "1. " lines: a numbered list, not a paragraph
     table = None
     card = None           # a "::: cards" block, collected whole
+    comment = False       # inside "<!-- ... -->": a note for whoever edits the page
     for raw in text.splitlines():
         line = raw.rstrip()
+
+        # A comment is dropped whole and never reaches the page. It exists
+        # for notes that belong beside the words they are about, such as a
+        # step that must not be written until the firmware can do it. It
+        # has to start a line outside a fenced block or a card: inside those
+        # "<!--" is content and is left alone. An unclosed one would swallow
+        # the rest of the page, so selftest.py counts them in every page.
+        if comment:
+            if "-->" in line:
+                comment = False
+            continue
+        if code is None and card is None and line.lstrip().startswith("<!--"):
+            if "-->" not in line:
+                comment = True
+            continue
 
         # Collected first and raw, so nothing else in the dialect claims a
         # line that belongs to a card. A ":::" at the start of a line closes
@@ -1082,7 +1135,8 @@ def md_page(name, role="list"):
     #
     # Everything else on this site stays exactly as it was: no other caller
     # of PAGE passes anything here, and the manifesto's claim to ship no
-    # JavaScript is still true of the manifesto.
+    # JavaScript is still true of the manifesto. The script itself comes
+    # from this machine; see EWT_SCRIPT.
     head = ""
     if "::: installer" in text and firmware_releases():
         head = ('<script type="module" src="' + html.escape(EWT_SCRIPT, quote=True)
@@ -1261,7 +1315,7 @@ def firmware_releases():
         builds = firmware_builds(vdir)
         if not builds:
             continue
-        date, note, improv = "", "", False
+        date, note = "", ""
         meta = vdir / "release.txt"
         if meta.is_file():
             lines = meta.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -1269,20 +1323,19 @@ def firmware_releases():
                 s = raw.strip()
                 if not s:
                     continue
-                # "improv: yes" says this image speaks Improv Wi-Fi Serial.
-                # It is a property of the firmware in the directory, not of
-                # the site, which is why it is recorded beside the binaries
-                # and not in a constant here. Absent means no, which is the
-                # safe way round: see firmware_manifest().
+                # "improv: yes" used to switch the Wi-Fi step on per
+                # release. Every release now speaks Improv, so the line
+                # means nothing; it is skipped rather than shown as the
+                # release's note, which is what it would otherwise become.
                 if s.lower().startswith("improv:"):
-                    improv = s.split(":", 1)[1].strip().lower() in ("yes", "true", "1")
-                elif i == 0 and re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+                    continue
+                if i == 0 and re.match(r"^\d{4}-\d{2}-\d{2}$", s):
                     date = s
                 elif not note:
                     note = s[:160]
         found.append({"version": vdir.name,
                       "sort": tuple(int(g) for g in m.groups()),
-                      "date": date, "note": note, "improv": improv,
+                      "date": date, "note": note,
                       "notices": (vdir / "THIRD_PARTY_NOTICES.md").is_file(),
                       "builds": builds})
     found.sort(key=lambda r: r["sort"], reverse=True)
@@ -1311,16 +1364,9 @@ def firmware_manifest(version):
             # unticked, so this flips the default from erase to keep, and
             # the page has to say which one a reader wants.
             "new_install_prompt_erase": True,
-            # Seconds ESP Web Tools waits after an install for the board to
-            # announce itself over Improv Wi-Fi Serial, which is how the
-            # browser then offers to set the Wi-Fi up. Zero disables it.
-            #
-            # Zero unless the release says otherwise, because a board that
-            # does not speak Improv makes every install sit on "wrapping up"
-            # for ten seconds and then carry on, which reads as a hang. The
-            # day the firmware implements it, the release says so and this
-            # becomes the default ten.
-            "new_install_improv_wait_time": 10 if rel["improv"] else 0,
+            # Seconds to wait after an install for the board to answer over
+            # Improv Wi-Fi Serial. See EWT_IMPROV_WAIT for why it is thirty.
+            "new_install_improv_wait_time": EWT_IMPROV_WAIT,
             "builds": rel["builds"],
         }
     return None
@@ -1335,23 +1381,25 @@ def installer_html():
     """
     rels = firmware_releases()
     if not rels:
+        # No button, and no element for a button to live in: a control that
+        # cannot do anything is a puzzle, and a reader who presses it learns
+        # nothing about why.
         return (
             '<div class="installer none">'
-            "<h2>Not ready yet</h2>"
-            "<p>There is no firmware image to install from this page today. "
-            "The installer is finished; the images are not, because the "
-            "board's Wi-Fi details are currently built into the firmware "
-            "rather than set from the browser, and an image built that way "
-            "would only ever join the network of whoever built it.</p>"
-            "<p>That is the piece being worked on. When it is done the "
-            "images appear here and this box becomes a button. Until then, "
-            "a board takes about ten minutes to build yourself and the "
-            '<a href="/build">build page</a> has every step.</p>'
+            "<h2>No release published yet</h2>"
+            "<p>There is no firmware image on this site to install yet. "
+            "The installer is ready and the board is ready for it: what is "
+            "missing is the first published release. When one is put here, "
+            "this box becomes a button, and nothing else about this page "
+            "changes.</p>"
+            "<p>Until then, a board takes about ten minutes to build "
+            'yourself, and the <a href="/build">build page</a> has every '
+            "step.</p>"
             "</div>")
 
     newest = rels[0]
     out = ['<div class="installer">']
-    out.append('<esp-web-install-button manifest="/firmware/'
+    out.append('<esp-web-install-button manifest="/install/'
                + html.escape(newest["version"], quote=True)
                + '/manifest.json">')
     # Our own button in the activate slot. The element exports three colour
@@ -1365,8 +1413,9 @@ def installer_html():
     # precedence in their code is insecure-context first, so "not-allowed"
     # is the one a reader sees over plain http and never the other.
     out.append('<span class="no" slot="unsupported">This browser cannot talk '
-               "to a serial port. Chrome or Edge on a desktop or laptop "
-               "can; there is more about that below.</span>")
+               "to a serial port. Chrome or Edge on a desktop or laptop can, "
+               "and so can Firefox from version 151; there is more about "
+               "that below.</span>")
     out.append('<span class="no" slot="not-allowed">This page has to be '
                "served over https for a browser to allow it near a serial "
                "port.</span>")
@@ -1381,30 +1430,68 @@ def installer_html():
     if newest["note"]:
         out.append('<p class="meta">' + html.escape(newest["note"]) + "</p>")
 
+    # The older releases kept on disk get a quieter button each, so "kept"
+    # means something a reader can use: going back a version when the
+    # newest does not suit their board. It used to be a link to the older
+    # manifest, which is JSON and useless to a person. The empty slots stop
+    # each extra element repeating the refusal message the first one shows.
     older = rels[1:]
     if older:
-        bits = []
+        out.append('<p class="meta">If the newest release has a problem on '
+                   "your board, the one before it is kept here too:</p>")
         for rel in older:
-            bits.append('<a href="/firmware/' + html.escape(rel["version"], quote=True)
-                        + '/manifest.json">' + html.escape(rel["version"]) + "</a>")
-        out.append('<p class="meta">Also kept: ' + ", ".join(bits)
-                   + ". Point the installer at one of these only if the "
-                   "newest has a problem on your board.</p>")
+            v = html.escape(rel["version"], quote=True)
+            out.append('<esp-web-install-button class="older" manifest="/install/'
+                       + v + '/manifest.json">'
+                       '<button class="older" slot="activate">Install ' + v
+                       + " instead</button>"
+                       '<span slot="unsupported"></span>'
+                       '<span slot="not-allowed"></span>'
+                       "</esp-web-install-button>")
     lic = []
     for rel in rels:
         if rel["notices"]:
-            lic.append('<a href="/firmware/' + html.escape(rel["version"], quote=True)
+            lic.append('<a href="/install/' + html.escape(rel["version"], quote=True)
                        + '/THIRD_PARTY_NOTICES.md">' + html.escape(rel["version"])
                        + "</a>")
     if lic:
         out.append('<p class="meta">What is in the image, and under what '
                    "terms: " + ", ".join(lic) + ".</p>")
+    # The installer itself is somebody else's code running on this page, so
+    # its terms are linked as plainly as the firmware's are.
+    out.append('<p class="meta">The installer is '
+               '<a href="https://github.com/esphome/esp-web-tools">ESP Web '
+               "Tools</a> " + html.escape(EWT_VERSION) + ", served from this site: "
+               '<a href="' + EWT_BASE + 'LICENSE">its licence</a> and '
+               '<a href="' + EWT_BASE + 'THIRD_PARTY_LICENSES.txt">the '
+               "libraries inside it</a>.</p>")
     out.append("</div>")
     return "".join(out)
 
 
+def ewt_file(name):
+    """One file of the vendored ESP Web Tools bundle, as (bytes, content
+    type), or None. Served whether or not a release is published: it is
+    static code, and a page with no release never asks for it."""
+    if name in EWT_TEXT:
+        f = EWT_DIR / name
+        ctype = "text/plain; charset=utf-8"
+    elif EWT_FILE.match(name):
+        f = EWT_DIR / name
+        # A module script is refused by the browser unless it arrives with
+        # a JavaScript type, which is the one header here that is load
+        # bearing rather than polite.
+        ctype = "text/javascript; charset=utf-8"
+    else:
+        return None
+    if not f.is_file():
+        return None
+    return f.read_bytes(), ctype
+
+
 def firmware_file(rest):
-    """One file under /firmware/, as (bytes, content type), or None.
+    """One file of a release under /install/, as (bytes, content type), or
+    None. `rest` is the path after "/install/".
 
     Names are checked rather than paths, the way static_file() does it, and
     the shapes accepted are the only three the page ever links:
@@ -2387,6 +2474,15 @@ article .installer button.go {{ font:inherit; font-size:0.9375rem;
         border-radius:0.375rem; padding:0.6875rem 1.25rem; cursor:pointer;
         text-align:left; }}
 article .installer button.go:hover {{ background:#a7e2ff; }}
+/* The older release's button: the same element, quieter, because it is the
+   way back rather than the way in. */
+esp-web-install-button.older {{ margin:0.375rem 0 0; }}
+article .installer button.older {{ font:inherit; font-size:0.8125rem;
+        color:var(--dial); background:transparent; border:1px solid #2c3a44;
+        border-radius:0.375rem; padding:0.5rem 0.875rem; cursor:pointer; }}
+article .installer button.older:hover {{ border-color:var(--dial); }}
+article .installer button.older:focus-visible {{ outline:3px solid #ffd35c;
+        outline-offset:2px; }}
 article .installer button.go:focus-visible {{ outline:3px solid #ffd35c;
         outline-offset:2px; }}
 /* The two fallbacks the element shows instead of the button. Amber, the
@@ -4771,25 +4867,37 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "public, max-age=3600")
                 self.end_headers()
                 self.wfile.write(blob)
-        # The firmware images and the manifests that describe them, for the
-        # installer on /install. Ahead of the generic page branch for the
-        # same reason every other real endpoint is: a pages/ file must not
-        # be able to shadow it. Nothing is cached here; a manifest is a few
-        # hundred bytes built from a directory listing, and a binary is
-        # fetched once per install rather than once per reader.
-        elif path.startswith("/firmware/"):
-            got = firmware_file(path[len("/firmware/"):])
+        # Everything the installer on /install fetches, all of it from
+        # here: the vendored ESP Web Tools bundle, and each release's
+        # manifest, notices and images. ESP Web Tools fetches the manifest
+        # and then each part relative to it, so keeping them under the
+        # page's own path and origin is what makes the whole install same
+        # origin, with no CORS headers anywhere.
+        #
+        # Ahead of the generic page branch for the same reason every other
+        # real endpoint is: a pages/ file must not be able to shadow it.
+        # Nothing is cached in memory; a manifest is a few hundred bytes
+        # built from a directory listing, and a binary is fetched once per
+        # install rather than once per reader.
+        elif path.startswith("/install/"):
+            rest = path[len("/install/"):]
+            bits = rest.split("/")
+            if (len(bits) == 3 and bits[0] == "esp-web-tools"
+                    and bits[1] == EWT_VERSION):
+                got = ewt_file(bits[2])
+            else:
+                got = firmware_file(rest)
             if got is None:
-                self.reply(404, "no such firmware file\n",
-                           "text/plain; charset=utf-8")
+                self.reply(404, "no such file\n", "text/plain; charset=utf-8")
             else:
                 blob, ctype = got
                 self.send_response(200)
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(blob)))
-                # An image is immutable: a version's bytes never change,
-                # because a change is a new version. The manifest names the
-                # version it belongs to and is just as fixed.
+                # Immutable, both kinds: a release's bytes never change,
+                # because a change is a new version, and the bundle's path
+                # carries its version too. The manifest names the version it
+                # belongs to and is just as fixed.
                 self.send_header("Cache-Control", "public, max-age=86400")
                 self.end_headers()
                 self.wfile.write(blob)

@@ -6,10 +6,10 @@ Nothing here is a kit and nothing is soldered to anything. If you have an ESP32
 dev board in a drawer, you already have most of it.
 
 > [!TIP]
-> **[A browser installer is on its way](/install)**: Chrome or Edge, a USB
-> cable, about five minutes, and no toolchain. It is waiting on one piece of
-> firmware work before it has anything to install. This page is the longer
-> road, and the one you want once you start changing things.
+> **[Install from the browser](/install).** Chrome or Edge, a USB cable,
+> about five minutes, and no toolchain. The same page sets up the board's
+> Wi-Fi, and says whether there is a release ready to install. This page is
+> the longer road, and the one you want once you start changing things.
 
 ## What you need
 

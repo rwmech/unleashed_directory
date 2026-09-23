@@ -64,25 +64,30 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   shape of the exception is the rule. The manifesto's two diagrams are
   inline SVG moved by CSS keyframes, the day chart is an SVG, the board
   list reloads with a meta refresh.
-  **`/install` loads ESP Web Tools**, pinned at an exact version, from
-  unpkg. A web page cannot reach a serial port without it, which is the
-  kind of reason that clears the bar; convenience is not, and nothing else
-  on the site gets a script without Rob.
+  **The exception: `/install` runs ESP Web Tools** (Rob, 2026-09-23: "get
+  the web flasher running"). **Why it clears the bar, and nothing else
+  does:** a web page cannot reach a serial port without JavaScript. Web
+  Serial is a script API and there is no HTML or CSS route to it, so the
+  installer is script or it is nothing. Convenience is not a reason, and
+  nothing else on the site gets a script without Rob.
+  **It is served from this machine, not a CDN** (since 0.15.0; it was a
+  pinned unpkg URL before that): `vendor/esp-web-tools/<version>/` is the
+  package's `dist/web` build byte for byte, served at
+  `/install/esp-web-tools/<version>/` with a JavaScript content type, which
+  a module script needs. All its imports are relative, so no other origin
+  is involved; its only absolute URLs are links a person can click. Its
+  licence and the bundled libraries' licences sit beside it and the page
+  links both. `SHA256SUMS` in that directory is checked by the suite, and
+  `.gitattributes` keeps the directory binary so no line ending moves.
+  `vendor/esp-web-tools/README.md` is how to move to a new version.
   **The script is emitted only when the page carries `::: installer` *and*
   `firmware/` actually holds a release.** Both halves, so the script and
-  the widget arrive together or neither does: a page with no button cannot
-  ship third-party code, and a button cannot appear without the code that
-  drives it. That is one condition in `md_page()` rather than a flag
-  somebody has to keep in step, and it means a deployment publishing no
-  images loads nothing from anywhere. `selftest.py` walks every other page
-  and fails on a `<script>` in any of them.
-  It also puts a hole in THIRD_PARTY_NOTICES.md's claim that nothing a
-  visitor loads comes from anywhere but this machine. That file now says
-  so, in the section above the claim rather than in a footnote. If the
-  trade ever stops being worth it, the fix is to serve the bundle from
-  here; it is not done today because a pinned URL is auditable in one line
-  and a vendored copy of somebody else's build output is the thing that
-  file exists to say is not here.
+  the widget arrive together or neither does: a page with no button runs
+  no code, and a button cannot appear without the code that drives it.
+  That is one condition in `md_page()` rather than a flag somebody has to
+  keep in step. `selftest.py` walks every other page and fails on a
+  `<script>` in any of them, and fails on a script from any other origin
+  on this one.
 - **The installer's state is the `firmware/` directory and nothing else.**
   `server.py` walks it per render and builds the ESP Web Tools manifest
   from what it finds, so a release cannot be half-published, "nothing
@@ -94,11 +99,43 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   decimal JSON number; their type is `offset: number` and a hex string
   would be handed to the flasher unparsed. Full process in
   `firmware/README.md`.
-  **Nothing can be published there until Improv Wi-Fi Serial lands on the
-  board**, because Wi-Fi credentials are compiled in from
-  `include/secrets.h` and `data/system.cfg` carries `sysop_password` into
-  the filesystem image. Two separate leaks, one release process step each,
-  and the suite fails if a version directory ever appears in `firmware/`.
+  **Where a release goes, for whoever cuts one** (the firmware side does,
+  from a fresh clone):
+
+  ```
+  firmware/<BBS_VERSION>/esp32/bootloader.bin         0x1000    4096
+  firmware/<BBS_VERSION>/esp32/partitions.bin         0x8000    32768
+  firmware/<BBS_VERSION>/esp32/ota_data_initial.bin   0xF000    61440
+  firmware/<BBS_VERSION>/esp32/firmware.bin           0x20000   131072
+  firmware/<BBS_VERSION>/esp32/storage.bin            0x3C0000  3932160
+  firmware/<BBS_VERSION>/THIRD_PARTY_NOTICES.md       from the firmware repo
+  firmware/<BBS_VERSION>/release.txt                  optional: date, one-line note
+  ```
+
+  `storage.bin` is PlatformIO's `littlefs.bin`, renamed for its partition.
+  **No `manifest.json` goes in the folder**: the server builds it from the
+  five files and serves it at `/install/<version>/manifest.json`, with
+  `name` "unleashed BBS", `new_install_prompt_erase` true and
+  `new_install_improv_wait_time` 30. The chip directory is `esp32` so an
+  S3 build is a second directory (`esp32s3`, bootloader at 0x0) and not a
+  code change. A family missing any part, or with an empty part, is not
+  offered. Two releases are offered, newest first; commit the new one and
+  `git rm` the oldest in the same change.
+  **The suite reads every committed `storage.bin`** and fails if a staff
+  password, a Wi-Fi key or a directory token in it has a value, because
+  `data/system.cfg` is built into that image and a developer's copy has
+  all three. `firmware.bin` cannot be checked the same way: a build with a
+  developer's `include/secrets.h` carries their network, and only building
+  from a fresh clone prevents that.
+  **A web-installed board has no sysop password yet**, and no way to set
+  one from the board. `pages/install.md` has a `TODO(sysop password)`
+  comment where the step goes and says nothing about it until the firmware
+  can do it. Do not write that step, or send a reader to CONFIG or the
+  announce plugin from that page, before then.
+  **A board that runs 0.22.1 or later is updated without the erase
+  question**: ESP Web Tools matches the firmware name the board reports
+  over Improv against the manifest `name` and goes straight to Update. A
+  release that moves a partition needs deciding before it is cut.
 - `pages/*.md` are written in a deliberately small Markdown dialect that
   `md_render()` implements in about sixty lines. What exists: `#`, `##`,
   `###`, `- ` bullets, `1. ` ordered lists, `> ` blockquotes (consecutive
@@ -129,6 +166,11 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   year old. Everywhere else it is doing real work because the audience
   recognises it; on that one page it asked a reader to decode an
   unfamiliar visual language before being given a reason to care.
+  **`<!-- ... -->` is a comment and never renders**, for a note that
+  belongs beside the words it is about (the sysop password TODO on
+  /install). It must start a line outside a fence or a card, and the suite
+  counts openers against closers in every page, because an unclosed one
+  swallows the rest of the page.
   **`::: installer` ... `:::`** is the third block and the only one that is
   not prose: it renders the flasher widget, or an honest account of why
   there is nothing to flash. It carries **no content of its own**, and that

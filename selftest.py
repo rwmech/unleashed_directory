@@ -73,6 +73,16 @@ def get(path, host=None, headers=None):
         return e.code, e.read().decode(errors="replace")
 
 
+def fetch(path, base=None):
+    """(status, content type, body bytes) for one GET, with no Host games."""
+    req = urllib.request.Request(f"{base or BASE}{path}")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, r.headers.get("Content-Type", ""), r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.headers.get("Content-Type", ""), e.read()
+
+
 def seen(path="/health", headers=None):
     """What the server thinks the caller's address is, off the response."""
     req = urllib.request.Request(f"{BASE}{path}")
@@ -1265,22 +1275,118 @@ def main():
         # at a scratch tree: it needs no second server and no second port,
         # and nothing that looks like a firmware image ever goes near the
         # repository.
+        S_EWT_VERSION = S.EWT_VERSION
+        S_EWT_BASE = S.EWT_BASE
+        S_EWT_SCRIPT = S.EWT_SCRIPT
         print("The installer page, with nothing published")
         code, inst = get("/install")
         check("there is an install page", code == 200)
-        check("it says plainly that there is nothing to install yet",
-              "Not ready yet" in inst and "no firmware image" in inst)
-        check("and says why, in its own words rather than as an advisory",
-              "only ever join the network of whoever built it" in inst)
+        check("it says plainly that no release is published yet",
+              "No release published yet" in inst
+              and "no firmware image on this site to install yet" in inst)
+        check("and sends a reader to the build page instead",
+              '<div class="installer none">' in inst
+              and 'the <a href="/build">build page</a>' in inst)
         check("it offers no button and no element to press",
-              "<esp-web-install-button" not in inst)
+              "<esp-web-install-button" not in inst and 'slot="activate"' not in inst)
         # The whole point of tying the script to the widget: with nothing
-        # published there is no widget, so there is no third-party code on
-        # the page either. A flag would have had to be remembered.
+        # published there is no widget, so there is no code on the page
+        # either. A flag would have had to be remembered.
         check("and loads no script at all", "<script" not in inst)
-        check("nothing under /firmware/ is served",
-              get("/firmware/0.19.2/manifest.json")[0] == 404
-              and get("/firmware/0.19.2/esp32/firmware.bin")[0] == 404)
+        check("no release path is served when there is no release",
+              get("/install/0.22.1/manifest.json")[0] == 404
+              and get("/install/0.22.1/esp32/firmware.bin")[0] == 404)
+        check("and the old /firmware/ paths are gone",
+              get("/firmware/0.22.1/manifest.json")[0] == 404)
+        # The page tells a reader what the installer shows, step by step,
+        # and the facts it leans on are the firmware's and the tool's own.
+        flat_i = " ".join(inst.split())
+        check("the page walks through the install in order",
+              "<h2>What happens, in order</h2>" in inst and "<ol>" in inst
+              and "It waits up to 30 seconds." in flat_i
+              and "The board tries for up to 30 seconds." in flat_i)
+        check("and says how to change the Wi-Fi later",
+              "<h2>Changing the Wi-Fi later</h2>" in inst
+              and "<b>Change Wi-Fi</b>" in inst)
+        check("and which browsers, checked, and that a phone is untried",
+              "Firefox can do it from version 151" in flat_i
+              and "Chrome on Android has had the same feature since version 148" in flat_i
+              and "untried" in flat_i)
+        check("and points on to calling the board and forwarding the port",
+              'href="/terminals"' in inst and 'href="/forward"' in inst)
+        # The sysop password is the firmware's to solve first. The page
+        # carries the note for whoever writes that step and shows a reader
+        # nothing about it, and above all no instruction it cannot keep.
+        src_i = open(os.path.join("pages", "install.md"), encoding="utf-8").read()
+        check("the sysop step is a marked TODO in the source and nowhere on the page",
+              "TODO(sysop password)" in src_i and "TODO" not in inst
+              and "sysop password" not in inst.lower())
+        # A comment is dropped whole, so one left open would swallow the
+        # rest of its page without a word. Every page opens as many as it
+        # closes.
+        unbalanced = [n for n in sorted(os.listdir("pages")) if n.endswith(".md")
+                      and (open(os.path.join("pages", n), encoding="utf-8").read().count("<!--")
+                           != open(os.path.join("pages", n), encoding="utf-8").read().count("-->"))]
+        check("every page closes the comments it opens"
+              + ("" if not unbalanced else "  <- " + ", ".join(unbalanced)),
+              not unbalanced)
+
+        # The installer's code, served from here. It is served whether or
+        # not a release is published, because it is static; the page with
+        # no release never asks for it.
+        print("ESP Web Tools, from this machine")
+        code, ctype, body = fetch(S_EWT_SCRIPT)
+        check("the entry point is served here, as JavaScript",
+              code == 200 and ctype.startswith("text/javascript")
+              and b"esp-web-install-button" in body)
+        ewt_dir = os.path.join("vendor", "esp-web-tools", S_EWT_VERSION)
+        chunks = sorted(n for n in os.listdir(ewt_dir) if n.endswith(".js"))
+        imported = set()
+        for n in chunks:
+            text = open(os.path.join(ewt_dir, n), encoding="utf-8").read()
+            imported.update(re.findall(r'import\("\./([^"]+)"\)', text))
+            imported.update(re.findall(r'from"\./([^"]+)"', text))
+            imported.update(re.findall(r'from "\./([^"]+)"', text))
+        # Every chunk the bundle can ask for is in the directory and comes
+        # back from the server. A missing one fails in the middle of an
+        # install, for one chip family, on somebody else's board.
+        missing = [n for n in sorted(imported)
+                   if n not in chunks or fetch(S_EWT_BASE + n)[0] != 200]
+        check("every chunk it imports is here and is served"
+              + ("" if not missing else "  <- " + ", ".join(missing)),
+              bool(imported) and not missing)
+        # Anything absolute inside it is a link for a person to click, never
+        # an import: no module is fetched from anywhere but here.
+        remote = [n for n in chunks
+                  if re.search(r'(import\(|from ?)"(https?:)?//',
+                               open(os.path.join(ewt_dir, n), encoding="utf-8").read())]
+        check("and nothing in it imports from another origin",
+              not remote)
+        sums = {}
+        for line in open(os.path.join(ewt_dir, "SHA256SUMS"), encoding="utf-8"):
+            if line.strip():
+                digest, name = line.split(None, 1)
+                sums[name.strip().lstrip("*")] = digest
+        on_disk = sorted(n for n in os.listdir(ewt_dir) if n != "SHA256SUMS")
+        import hashlib
+        changed = [n for n in on_disk
+                   if sums.get(n) != hashlib.sha256(
+                       open(os.path.join(ewt_dir, n), "rb").read()).hexdigest()]
+        # Byte for byte as npm published it: a file edited in place, or one
+        # added without a line here, is not the thing the README says it is.
+        check("and it is byte for byte what SHA256SUMS says, with nothing extra"
+              + ("" if not changed else "  <- " + ", ".join(changed[:3])),
+              bool(on_disk) and not changed and set(sums) == set(on_disk))
+        code, ctype, body = fetch(S_EWT_BASE + "LICENSE")
+        check("its licence is served beside it",
+              code == 200 and b"Apache License" in body
+              and fetch(S_EWT_BASE + "THIRD_PARTY_LICENSES.txt")[0] == 200)
+        # Names, not paths: only a chunk-shaped name or a licence file.
+        check("and nothing else in or above that directory is reachable",
+              fetch(S_EWT_BASE + "SHA256SUMS")[0] == 404
+              and fetch(S_EWT_BASE + "nope.js")[0] == 404
+              and fetch("/install/esp-web-tools/1.0.0/install-button.js")[0] == 404
+              and fetch(S_EWT_BASE + "..%2F..%2F..%2Fserver.py")[0] == 404)
         check("the page is reachable from the build page and the footer",
               "/install" in get("/build")[1] and '/install">Install</a>' in inst)
         # A page off the menu still has to say where it is. Without this the
@@ -1616,14 +1722,15 @@ def main():
                 with open(os.path.join(fwroot, version, n), "w") as fh:
                     fh.write(body)
 
-        whole = ["bootloader.bin", "partitions.bin", "firmware.bin", "littlefs.bin"]
+        whole = ["bootloader.bin", "partitions.bin", "ota_data_initial.bin",
+                 "firmware.bin", "storage.bin"]
         put("0.19.2", "esp32", whole,
             {"release.txt": "2026-09-21\nA short note.\n",
              "THIRD_PARTY_NOTICES.md": "notices\n"})
         put("0.19.1", "esp32", whole,
-            {"release.txt": "2026-09-01\nOlder.\nimprov: yes\n"})
+            {"release.txt": "2026-09-01\nimprov: yes\nOlder.\n"})
         put("0.18.0", "esp32", whole)                  # a third, beyond the cap
-        put("9.9.9", "esp32", whole[:3])               # littlefs.bin missing
+        put("9.9.9", "esp32", whole[:4])               # storage.bin missing
         put("0.19.2", "esp32x9", whole)                # not a chip family we know
         os.makedirs(os.path.join(fwroot, "NOT-A-RELEASE", "esp32"), exist_ok=True)
 
@@ -1658,13 +1765,16 @@ def main():
             # bootloader is at 0x1000 because this is an ESP32; an S3 or a C3
             # would be 0x0, which is why it comes from FLASH_FAMILIES.
             parts = man["builds"][0]["parts"]
-            check("the parts are the bootloader, the table, the app and the screens",
+            check("the parts are the bootloader, the table, otadata, the app and the screens",
                   [p["path"] for p in parts]
                   == ["esp32/bootloader.bin", "esp32/partitions.bin",
-                      "esp32/firmware.bin", "esp32/littlefs.bin"])
+                      "esp32/ota_data_initial.bin", "esp32/firmware.bin",
+                      "esp32/storage.bin"])
             check("at the offsets the partition table actually uses",
                   [p["offset"] for p in parts]
-                  == [0x1000, 0x8000, 0x20000, 0x3C0000])
+                  == [4096, 32768, 61440, 131072, 3932160])
+            check("under the name the board reports over Improv",
+                  man["name"] == "unleashed BBS" and man["version"] == "0.19.2")
             # Their type is `offset: number`, JSON has no hex literal, and a
             # string would be handed to the flasher unparsed. This is the one
             # mistake in the schema that would write a board at the wrong
@@ -1674,22 +1784,24 @@ def main():
             check("nothing that is not a version number is mistaken for one",
                   all(re.match(r"^\d+\.\d+\.\d+$", r["version"]) for r in rels))
 
-            # Improv is a property of the image, so it is read from beside
-            # the image. Absent means off, because a board that cannot answer
-            # makes every install sit for ten seconds and look wedged.
-            check("a release that does not speak Improv switches the wait off",
-                  man["new_install_improv_wait_time"] == 0)
-            check("and one that does gets the ten seconds it needs",
-                  S.firmware_manifest("0.19.1")["new_install_improv_wait_time"] == 10)
+            # Every release speaks Improv now, and the first boot after an
+            # erase formats two filesystems before it answers.
+            check("every release waits thirty seconds for the Wi-Fi step",
+                  man["new_install_improv_wait_time"] == 30
+                  and S.firmware_manifest("0.19.1")["new_install_improv_wait_time"] == 30)
             check("the date and note beside a release are read from it",
                   rels[0]["date"] == "2026-09-21"
                   and rels[0]["note"] == "A short note.")
+            check("and an old improv line is skipped, not shown as the note",
+                  rels[1]["note"] == "Older.")
 
             # Names are checked, not paths, the same way static_file does it.
             climbs = ["../server.py", "0.19.2/../../server.py",
                       "0.19.2/esp32/../../../server.py", "0.19.2/esp32/release.txt",
                       "0.19.2/esp32x9/firmware.bin", "", "manifest.json"]
-            check("no path under /firmware/ climbs out of it",
+            climbs += ["0.19.2/esp32/littlefs.bin", "0.19.2/release.txt",
+                       "0.19.2/manifest.json/x"]
+            check("no path under /install/ climbs out of it, or reaches past the five parts",
                   all(S.firmware_file(c) is None for c in climbs))
             got = S.firmware_file("0.19.2/esp32/firmware.bin")
             check("a real part is served as a binary",
@@ -1702,33 +1814,120 @@ def main():
             shown = S.installer_html()
             check("with an image published the page offers the element",
                   "<esp-web-install-button" in shown
-                  and 'manifest="/firmware/0.19.2/manifest.json"' in shown)
+                  and 'manifest="/install/0.19.2/manifest.json"' in shown)
             check("with our own button and both refusal messages in its slots",
                   'slot="activate"' in shown and 'slot="unsupported"' in shown
                   and 'slot="not-allowed"' in shown)
-            check("the older release is kept and linked, not hidden",
-                  "0.19.1" in shown)
+            # "Kept" means a reader can go back to it, which a link to a
+            # JSON file never let them do.
+            check("the older release is kept with a button of its own",
+                  'manifest="/install/0.19.1/manifest.json"' in shown
+                  and "Install 0.19.1 instead</button>" in shown
+                  and shown.count('slot="unsupported"') == 2)
             check("and the licences of what is being installed are linked",
-                  "THIRD_PARTY_NOTICES.md" in shown)
+                  "/install/0.19.2/THIRD_PARTY_NOTICES.md" in shown
+                  and S.EWT_BASE + "LICENSE" in shown
+                  and S.EWT_BASE + "THIRD_PARTY_LICENSES.txt" in shown)
+
+            # The same, end to end, over HTTP: a second server pointed at
+            # the scratch releases, so the route, the content types and the
+            # page's script tag are tested as a browser meets them.
+            print("The installer page, with a release published")
+            port2 = PORT + 1
+            base2 = f"http://127.0.0.1:{port2}"
+            db2 = os.path.join(tempfile.gettempdir(), f"dirtest{os.getpid()}b.db")
+            env2 = dict(os.environ, DIRECTORY_PAGE_CACHE="0", DIRECTORY_DB=db2,
+                        DIRECTORY_PORT=str(port2), DIRECTORY_FIRMWARE_DIR=fwroot)
+            server2 = subprocess.Popen([sys.executable, "server.py"], env=env2,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT)
+            threading.Thread(target=lambda: [None for _ in server2.stdout],
+                             daemon=True).start()
+            try:
+                for _ in range(50):
+                    try:
+                        fetch("/health", base2)
+                        break
+                    except Exception:
+                        time.sleep(0.1)
+                code, ctype, page2 = fetch("/install", base2)
+                page2 = page2.decode("utf-8")
+                srcs = re.findall(r'<script[^>]*src="([^"]+)"', page2)
+                check("the page offers the button, with the module from here",
+                      code == 200 and "<esp-web-install-button" in page2
+                      and srcs == [S.EWT_SCRIPT])
+                # No script from anywhere else, and none written inline.
+                check("and no script from any other origin, nor any inline",
+                      all(u.startswith("/") and not u.startswith("//") for u in srcs)
+                      and page2.count("<script") == len(srcs)
+                      and "unpkg" not in page2)
+                code, ctype, body = fetch("/install/0.19.2/manifest.json", base2)
+                m2 = json.loads(body.decode()) if code == 200 else {}
+                check("the manifest is served at /install/<version>/, as JSON",
+                      code == 200 and ctype.startswith("application/json")
+                      and m2.get("version") == "0.19.2"
+                      and [p["offset"] for p in m2["builds"][0]["parts"]]
+                          == [4096, 32768, 61440, 131072, 3932160])
+                # Each part fetched the way ESP Web Tools does it: relative to
+                # the manifest's own URL.
+                got = [fetch("/install/0.19.2/" + p["path"], base2)
+                       for p in m2.get("builds", [{}])[0].get("parts", [])]
+                check("and every part it names comes back, as a binary",
+                      len(got) == 5
+                      and all(g[0] == 200 and g[1] == "application/octet-stream"
+                              for g in got))
+                check("while a version past the cap, or not on disk, does not",
+                      fetch("/install/0.18.0/manifest.json", base2)[0] == 404
+                      and fetch("/install/9.9.9/manifest.json", base2)[0] == 404)
+                check("and the bundle is served to this server too",
+                      fetch(S.EWT_SCRIPT, base2)[0] == 200)
+            finally:
+                server2.terminate()
+                try:
+                    server2.wait(timeout=5)
+                except Exception:
+                    server2.kill()
+                for leftover in (db2, db2 + "-wal", db2 + "-shm"):
+                    try:
+                        os.remove(leftover)
+                    except OSError:
+                        pass
         finally:
             S.FIRMWARE_DIR = was_dir
             shutil.rmtree(fwroot, ignore_errors=True)
 
-        # A floating tag means the code a visitor runs can change between one
-        # reader and the next. This is the only third-party code on the site,
-        # so it is pinned to an exact version and the suite says so.
-        check("ESP Web Tools is pinned to an exact version",
-              re.search(r"esp-web-tools@\d+\.\d+\.\d+/", S.EWT_SCRIPT) is not None)
-        check("and loaded from the self-contained web bundle",
-              S.EWT_SCRIPT.endswith("/dist/web/install-button.js?module"))
-        # firmware/ ships with no images in it, and that is the release gate:
-        # nothing goes on the site until the credentials come out of the
-        # build. A binary appearing here by accident would be caught here.
-        shipped = [p for p in os.listdir("firmware")
-                   if re.match(r"^\d+\.\d+\.\d+$", p)]
-        check("and no firmware image is committed to this repository"
-              + ("" if not shipped else "  <- " + ", ".join(shipped)),
-              not shipped)
+        # The code a visitor runs is the code in this repository, at an
+        # exact version, and cannot change between one reader and the next.
+        check("ESP Web Tools is pinned to an exact version, served from here",
+              re.match(r"^\d+\.\d+\.\d+$", S.EWT_VERSION) is not None
+              and S.EWT_SCRIPT == "/install/esp-web-tools/" + S.EWT_VERSION
+                                  + "/install-button.js"
+              and "unpkg.com" not in open("server.py", encoding="utf-8").read())
+        # A release committed here is published the moment Rob deploys, so
+        # the one leak this suite can see is checked on every run: the
+        # screens image carries data/system.cfg, and a developer's copy has
+        # the staff passwords, the Wi-Fi key and the directory token in it.
+        # The keys are there, empty, in every clean build; a value is not.
+        leaky = []
+        secret = re.compile(
+            rb"^[ \t]*(sysop_password|cosysop1_password|cosysop2_password|"
+            rb"wifi_ssid|wifi_password)[ \t]*=[ \t]*[^\r\n \t]"
+            rb"|^[ \t]*token[ \t]*=[ \t]*[^\r\n \t;#]", re.M)
+        for rel in sorted(os.listdir("firmware")):
+            if not re.match(r"^\d+\.\d+\.\d+$", rel):
+                continue
+            for chip in sorted(os.listdir(os.path.join("firmware", rel))):
+                img = os.path.join("firmware", rel, chip, "storage.bin")
+                if os.path.isfile(img) and secret.search(open(img, "rb").read()):
+                    leaky.append(rel + "/" + chip)
+        check("no committed release carries a password, a Wi-Fi key or a token"
+              + ("" if not leaky else "  <- " + ", ".join(leaky)),
+              not leaky)
+        # And the scan finds one when there is one to find.
+        check("and the check finds one when it is there",
+              secret.search(b"x\nsysop_password = hunter2\n") is not None
+              and secret.search(b"token       =              ; only if\n") is None
+              and secret.search(b"wifi_password =\n") is None)
 
         # Last, because it uses up everything one address may hold.
         #

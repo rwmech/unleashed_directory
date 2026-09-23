@@ -14,6 +14,59 @@
 
 # Changelog
 
+## 0.15.0, 2026-09-23
+
+Rob: "Have the website agent get the web flasher running." The firmware
+speaks Improv Wi-Fi Serial from 0.22.1, so the installer page can now do what
+it was built for: flash a board and set its Wi-Fi, from the browser.
+
+- **ESP Web Tools is served from this site, not from unpkg.** 10.4.0, the
+  current release on npm, checked against the registry's SHA-512 and copied
+  into `vendor/esp-web-tools/10.4.0/` byte for byte: the package's `dist/web`
+  build, 26 files, all of whose imports are relative. Served at
+  `/install/esp-web-tools/10.4.0/` as JavaScript. Its Apache 2.0 licence and
+  the licences of the eleven libraries built into it sit beside it and are
+  linked from the page. `SHA256SUMS` is checked on every self-test run, and
+  `.gitattributes` keeps the directory binary so no line ending changes. It is
+  still the only JavaScript on the site, still only on `/install`, and still
+  only emitted when a release is published.
+- **A release is five parts, served same origin under `/install/<version>/`.**
+  `bootloader.bin` at 4096, `partitions.bin` at 32768,
+  `ota_data_initial.bin` at 61440 (new: it points the board at the slot the
+  application is written to), `firmware.bin` at 131072 and `storage.bin` at
+  3932160, read from the firmware's `partitions.csv` and generated
+  `sdkconfig`. The server builds the manifest from the files it finds, with
+  `new_install_prompt_erase` true and `new_install_improv_wait_time` 30 for
+  every release, because every release now speaks Improv and the first boot
+  after an erase formats storage before it answers. Nothing is served from
+  `/firmware/` any more.
+- **With no release published, the page says so and offers no button.** The
+  old reason, the Wi-Fi being compiled in, is gone from the copy because it is
+  no longer true.
+- **`/install` rewritten against the installer's own source**: which browsers
+  (Chrome and Edge on a desktop; Firefox from 151 with its extra prompt;
+  Chrome on Android from 148, said to be untried; nothing on iOS), the cable
+  and the drivers, the steps in order with the words the dialog uses, the
+  30 second waits, what happens to an already-installed board (0.22.1 and
+  later is updated with no erase question, and **Erase User Data** wipes the
+  whole chip), changing the Wi-Fi later, and where to go next.
+- **The sysop password step is a marked TODO in the page source, and nothing
+  on the page.** A web-installed board has no sysop password yet and no way
+  to set one; the page promises nothing until the firmware can do it.
+- **The Markdown dialect gained comments**, `<!-- ... -->`, dropped whole, so
+  that TODO can sit where the step goes. The suite counts them in every page,
+  because an unclosed one would swallow the rest of it.
+- **An older release kept on disk has its own button**, "Install 0.22.0
+  instead", where it used to be a link to a JSON file nobody could use.
+- **The suite reads every committed `storage.bin`** and fails if a staff
+  password, Wi-Fi key or directory token in it has a value. It replaces the
+  check that failed on any release at all, which was the right gate while the
+  Wi-Fi was compiled in and is the wrong one now.
+- 355 checks, up from 335, including a second server started against a
+  scratch release to test the route, the content types, every part the
+  manifest names and the page's script tag end to end. The vendored bundle's
+  checks were proved by deleting a chunk and editing a byte.
+
 ## 0.14.0, 2026-09-22
 
 Rob: "In the header ... of the hero unleashed, put one of those ... line

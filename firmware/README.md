@@ -18,27 +18,38 @@ This directory is what `/install` serves. Drop a release in, and the page
 offers it; take it out, and the page stops. **Nothing here is a list somebody
 maintains.** `server.py` walks this directory on each render and builds the
 ESP Web Tools manifest from what is actually on disk, so a release cannot be
-half-published, and the "no firmware yet" state on the page is the absence of
-files rather than a flag anybody has to remember to flip.
+half-published, and the "no release published yet" state on the page is the
+absence of files rather than a flag anybody has to remember to flip.
 
-Today this directory holds no binaries, and that is correct. See
-[Why there is nothing here yet](#why-there-is-nothing-here-yet).
+**Do not put a `manifest.json` in here.** The server writes it, from the files
+it finds, and serves it at `/install/<version>/manifest.json`. A hand-written
+one would be ignored, and one that could be served would be able to name a
+file that is not there.
 
 ## Layout
 
 ```
 firmware/
   README.md                      this file
-  0.19.2/                        one directory per release, named for the version
+  0.22.1/                        one directory per release, named for the version
     release.txt                  optional: date on line 1, a short note after
     THIRD_PARTY_NOTICES.md       copied from the firmware repo at release time
     esp32/                       one directory per chip family
       bootloader.bin
       partitions.bin
+      ota_data_initial.bin
       firmware.bin
-      littlefs.bin
-  0.19.1/
+      storage.bin
+  0.22.0/
     ...
+```
+
+Served as:
+
+```
+/install/0.22.1/manifest.json            built by server.py, never a file
+/install/0.22.1/esp32/<part>.bin         the five parts, same origin as the page
+/install/0.22.1/THIRD_PARTY_NOTICES.md
 ```
 
 Three rules, all enforced by `server.py` rather than by care:
@@ -46,7 +57,8 @@ Three rules, all enforced by `server.py` rather than by care:
 - **A version directory is named `MAJOR.MINOR.PATCH` and nothing else.** Any
   other name in here is ignored, which is why this README can sit beside the
   releases without being mistaken for one.
-- **A chip directory is offered only when all four of its parts are present.**
+- **A chip directory is offered only when all five of its parts are present**,
+  and none of them is empty.
   A missing or misnamed file means that chip family is not offered, silently
   and safely. It is never offered with a part pointing at a file that is not
   there.
@@ -54,8 +66,9 @@ Three rules, all enforced by `server.py` rather than by care:
   `DIRECTORY_FIRMWARE_KEEP` moves that; the extra ones on disk are simply not
   listed, so a third left behind by accident cannot appear.
 
-The four filenames are exactly what PlatformIO already produces, so cutting a
-release is a copy and never a rename.
+Four of the five filenames are what PlatformIO produces. The fifth is
+`storage.bin`, which PlatformIO calls `littlefs.bin`: a release names it for
+the partition it is written to, so it is renamed as it is copied in.
 
 ## Chip families
 
@@ -85,16 +98,26 @@ Read out of the firmware repo, not out of a tutorial:
 
 | Part | Offset | Source |
 |---|---|---|
-| `bootloader.bin` | `0x1000` | `CONFIG_BOOTLOADER_OFFSET_IN_FLASH` in `sdkconfig.esp32dev` |
-| `partitions.bin` | `0x8000` | `CONFIG_PARTITION_TABLE_OFFSET` in `sdkconfig.esp32dev` |
-| `firmware.bin` | `0x20000` | the `ota_0` row in `partitions.csv` |
-| `littlefs.bin` | `0x3C0000` | the `storage` row in `partitions.csv` |
+| `bootloader.bin` | `0x1000` (4096) | `CONFIG_BOOTLOADER_OFFSET_IN_FLASH` in `sdkconfig.esp32dev` |
+| `partitions.bin` | `0x8000` (32768) | `CONFIG_PARTITION_TABLE_OFFSET` in `sdkconfig.esp32dev` |
+| `ota_data_initial.bin` | `0xF000` (61440) | the `otadata` row in `partitions.csv` |
+| `firmware.bin` | `0x20000` (131072) | the `ota_0` row in `partitions.csv` |
+| `storage.bin` | `0x3C0000` (3932160) | the `storage` row in `partitions.csv` |
+
+The manifest carries them as decimal numbers, which is what ESP Web Tools'
+`offset: number` wants; JSON has no hex literal.
+
+`ota_data_initial.bin` is the `otadata` partition in its starting state, which
+tells the bootloader to run the first application slot. `firmware.bin` is
+always written to that slot, so writing the starting state with it means a
+board that had ever switched to the second slot boots what was just installed
+rather than what was left there.
 
 `0x1000` is the ESP32's bootloader offset and it is **not** universal: an S3 or
 a C3 puts the bootloader at `0x0`. That is why the offset is a property of the
 chip family in `FLASH_FAMILIES` and not a constant.
 
-`littlefs.bin` is the `storage` partition, which is the screens. The other two
+`storage.bin` is the `storage` partition, which is the screens. The other two
 filesystems are deliberately not in the image:
 
 - **`userdata` is never flashed.** It is the accounts, the live configuration
@@ -113,49 +136,51 @@ boot. `syscfg::seed()` copies the shipped `system.cfg` off `storage` onto
 > migration note, and the installer is one of the things that has to be told.
 > A per-release copy of the offsets would let the two drift quietly instead.
 
-## `release.txt`, and the two manifest keys it decides
+## `release.txt`, and the manifest's two settings
 
-Optional. Absent, a release still installs; the page simply has less to say
-about it.
+Optional. Absent, a release still installs; the page has less to say about it.
 
 ```
-2026-09-21
-Mail can be replied to, and uploads need approving.
-improv: yes
+2026-09-23
+Mail is a place of its own, and the Wi-Fi is set from the browser.
 ```
 
 - **Line 1, a date**, `YYYY-MM-DD`, shown beside the version on the page.
 - **A short note**, one line, shown under it. Keep it to a sentence.
-- **`improv: yes`** says this image implements Improv Wi-Fi Serial.
 
-That last line is the one that matters, because it sets
-`new_install_improv_wait_time` in the manifest, and getting it wrong is
-visible to every person who installs:
+An `improv: yes` line was once how a release switched the Wi-Fi step on. Every
+release now speaks Improv Wi-Fi Serial (the firmware has since 0.22.1), so the
+line is ignored, and skipped rather than shown as the note.
 
-- **Absent, or anything but yes, means `0`.** Improv detection is switched off.
-  Without it ESP Web Tools waits ten seconds after every install for a board
-  that is never going to answer, sitting on "wrapping up" and then carrying on,
-  which reads as a hang.
-- **`improv: yes` means `10`**, the tool's own default, and the browser then
-  offers the Wi-Fi setup step after a fresh install.
+`new_install_improv_wait_time` is `30` for every release (`EWT_IMPROV_WAIT` in
+`server.py`). It is how long the installer waits after writing for the board
+to answer over Improv, and the first boot after a full erase formats two
+filesystems before the board is listening. A board that answers after the
+installer has stopped waiting gets no Wi-Fi step, and the reader has a board
+on no network.
 
-It is a property of the firmware in that directory rather than of the site,
-which is why it is recorded beside the binaries. Absent is the safe way round.
-
-The other key, `new_install_prompt_erase`, is `true` for every release and is
-not configurable. It asks the person whether to erase instead of erasing
+`new_install_prompt_erase` is `true` for every release and is not
+configurable. It asks the person whether to erase instead of erasing
 silently, and the checkbox it produces **starts unticked**, so it flips the
 default from erase to keep. That is what lets a sysop reinstall over a board
 they already run without losing their accounts. The trade is that a first-time
 installer has to tick the box, and `pages/install.md` tells them to in as many
 words. Two consequences worth knowing:
 
-- ESP Web Tools only offers the Wi-Fi provisioning screen after an install that
-  **erased**. Leaving the box unticked is an update, and an update is assumed
-  to already know its network.
+- ESP Web Tools goes straight to the Wi-Fi screen only after an install that
+  **erased**. After one that did not, it shows its menu, where **Connect to
+  Wi-Fi** or **Change Wi-Fi** is one item.
 - With the box unticked, only the flash regions named in the manifest are
-  written. `userdata` and `logs` are outside all four parts and survive
+  written. `userdata` and `logs` are outside all five parts and survive
   untouched. With it ticked, the whole chip goes.
+- **A board that already runs 0.22.1 or later is never asked.** ESP Web Tools
+  asks the board over Improv what it is running, and when the answer's
+  firmware name matches the manifest's `name` (`unleashed BBS`) it offers
+  **Update** and writes without erasing, with no question. So a release that
+  moves a partition, which needs the full erase, cannot be delivered as an
+  ordinary update from this page. Decide how before cutting one: changing the
+  manifest `name` for that release makes every board look new and brings the
+  erase question back.
 
 ## Cutting a release
 
@@ -167,21 +192,28 @@ Everything before step 6 happens in the firmware repo.
    tagged source is public is a licence violation and not merely untidy. This
    step is a gate, not a formality.
 
-2. **Build from a clean tree with no private credentials in it.**
+2. **Build from a fresh clone, never from a working tree.** A fresh clone has
+   no private credentials in it; a working tree almost certainly has.
 
    ```sh
-   cp include/secrets.h.example include/secrets.h
+   git clone https://github.com/rwmech/unleashed_BBS esp32-bbs-release
+   cd esp32-bbs-release
+   test ! -e include/secrets.h && echo "no secrets.h, good"
    cp data/system.cfg.example data/system.cfg
-   pio run -t clean
    pio run
    pio run -t buildfs
    ```
 
+   Do not delete `include/secrets.h` from a working tree to get the same
+   effect. It is not in git, so a deleted one is gone.
+
    Both copies matter and they leak different things:
 
-   - `include/secrets.h` is compiled into `firmware.bin`. A build from a
+   - `include/secrets.h` is optional since 0.22.1, and when it is present it
+     is compiled into `firmware.bin` as the fallback network. A build from a
      developer's own tree puts their home SSID and passphrase in the image in
-     plaintext, recoverable with `strings`.
+     plaintext, recoverable with `strings`. A release is built without it, and
+     the board gets its network from the browser.
    - `data/system.cfg` is built into `littlefs.bin`. A developer's own copy
      carries `sysop_password` and, on a board that is listed, its directory
      token.
@@ -192,13 +224,15 @@ Everything before step 6 happens in the firmware repo.
 3. **Prove the image carries no credentials** before it goes anywhere:
 
    ```sh
-   strings .pio/build/esp32dev/firmware.bin | grep -i -e your-ssid -e <your-ssid>
-   strings .pio/build/esp32dev/littlefs.bin | grep -i sysop_password
+   strings .pio/build/esp32dev/firmware.bin | grep -i -e <your-ssid>
+   strings .pio/build/esp32dev/littlefs.bin | grep -i -e _password -e token
    ```
 
-   The first should find the placeholder from `secrets.h.example` and nothing
-   else. If it finds a real network name, throw the build away and start at
-   step 2; do not edit the binary.
+   The first should find nothing. The second should find only the empty keys
+   from `system.cfg.example`. If either finds a real value, throw the build
+   away and start at step 2; do not edit the binary. `selftest.py` repeats the
+   second check on every `storage.bin` committed here, and fails on any
+   password, Wi-Fi or token key that has a value.
 
 4. **Note the version.** It is `BBS_VERSION` in `src/config.h`, and the
    directory you are about to create must be named exactly that.
@@ -211,12 +245,13 @@ Everything before step 6 happens in the firmware repo.
 
    ```sh
    cd unleashed_directory
-   V=0.19.2                                  # BBS_VERSION, exactly
-   S=../esp32-bbs/.pio/build/esp32dev
+   V=0.22.1                                  # BBS_VERSION, exactly
+   S=../esp32-bbs-release/.pio/build/esp32dev
    mkdir -p firmware/$V/esp32
-   cp $S/bootloader.bin $S/partitions.bin $S/firmware.bin firmware/$V/esp32/
-   cp $S/littlefs.bin firmware/$V/esp32/
-   cp ../esp32-bbs/THIRD_PARTY_NOTICES.md firmware/$V/
+   cp $S/bootloader.bin $S/partitions.bin $S/ota_data_initial.bin \
+      $S/firmware.bin firmware/$V/esp32/
+   cp $S/littlefs.bin firmware/$V/esp32/storage.bin
+   cp ../esp32-bbs-release/THIRD_PARTY_NOTICES.md firmware/$V/
    printf '%s\nWhat changed in one sentence.\n' "$(date +%F)" > firmware/$V/release.txt
    ```
 
@@ -224,7 +259,7 @@ Everything before step 6 happens in the firmware repo.
    it anyway, but leaving it on disk grows the repository for no one's benefit.
 
    ```sh
-   git rm -r firmware/0.19.0
+   git rm -r firmware/0.21.9
    ```
 
 8. **Check it locally before it is pushed.** Nothing here talks to the live
@@ -233,13 +268,13 @@ Everything before step 6 happens in the firmware repo.
    ```sh
    python selftest.py
    DIRECTORY_PORT=8937 python3 server.py > /tmp/dir.log 2>&1 &
-   curl -s localhost:8937/firmware/$V/manifest.json | python3 -m json.tool
-   curl -sI localhost:8937/firmware/$V/esp32/firmware.bin
+   curl -s localhost:8937/install/$V/manifest.json | python3 -m json.tool
+   curl -sI localhost:8937/install/$V/esp32/firmware.bin
    ```
 
-   The manifest should name the new version and list four parts, with the
-   offsets `4096`, `32768`, `131072` and `3932160`. Every part should fetch
-   with a 200 and a plausible length.
+   The manifest should name the new version and list five parts, with the
+   offsets `4096`, `32768`, `61440`, `131072` and `3932160`. Every part should
+   fetch with a 200 and a plausible length.
 
    Open `http://127.0.0.1:8937/install` in Chrome and check the button is
    live. `127.0.0.1` and `localhost` count as secure contexts, so Web Serial
@@ -276,7 +311,8 @@ Everything before step 6 happens in the firmware repo.
     > esptool.py --chip esp32 merge_bin -o merged.bin \
     >   --flash_mode dio --flash_freq 40m --flash_size 4MB \
     >   0x1000 bootloader.bin 0x8000 partitions.bin \
-    >   0x20000 firmware.bin 0x3C0000 littlefs.bin
+    >   0xF000 ota_data_initial.bin 0x20000 firmware.bin \
+    >   0x3C0000 storage.bin
     > ```
     >
     > A merged release is one part at offset 0, which `FLASH_PARTS` would have
@@ -294,18 +330,18 @@ volume outside the checkout and point `DIRECTORY_FIRMWARE_DIR` at it. The
 server reads that variable for exactly this reason and nothing else about the
 page changes.
 
-## Why there is nothing here yet
+## What still gates the first release
 
-Wi-Fi credentials are compiled into the firmware from `include/secrets.h`, so
-a binary built from the current tree can only ever try to join the network of
-whoever built it. That makes a published image useless to a stranger, and it
-puts one person's network credentials in a file anybody can download.
+Not the Wi-Fi any more. Since firmware 0.22.1 the network is set from the
+browser over Improv Wi-Fi Serial and kept in `system.cfg` on `userdata`, so an
+image built without `include/secrets.h` joins nobody's network until its owner
+tells it which. The installer page is ready for that.
 
-The fix is Improv Wi-Fi Serial: the credentials move out of the build and into
-`system.cfg` on the `userdata` partition, and the browser sets them over the
-same serial connection it just flashed the board with. It is queued firmware
-work. Until it lands there is nothing worth publishing here, and the page says
-so rather than offering a download that does not exist.
+Two things still stand between a build and this directory, and neither is the
+site's to decide:
 
-Steps 2 and 3 above still apply afterwards. Improv removes the reason the
-credentials are in the image; it does not remove the habit of checking.
+- **Step 1 above: the source.** The firmware repository is private today.
+- **The sysop password.** A board installed from this page has none, and no way
+  to set one from the board, so nobody can administer it. A firmware fix is
+  proposed. `pages/install.md` carries a comment marking where the step goes
+  and says nothing about it until the firmware can do it.

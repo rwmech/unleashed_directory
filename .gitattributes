@@ -13,6 +13,10 @@
 # not boot. Nothing about that failure would point back at this file, so the
 # images are declared binary rather than detected as binary.
 *.bin     binary
+# The vendored browser installer, one directory per version, is kept byte for
+# byte as npm published it, so SHA256SUMS beside it stays checkable. Declared binary: no line ending is
+# ever rewritten in it, and git never tries to show a diff of a minified line.
+vendor/esp-web-tools/*/*  binary
 *.sh      text eol=lf
 *.py      text eol=lf
 *.service text eol=lf

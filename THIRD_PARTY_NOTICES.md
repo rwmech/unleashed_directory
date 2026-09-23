@@ -17,13 +17,25 @@
 
 ## What is in this repository
 
-Nothing but its own code. There is no vendored library, no bundled dependency, no `node_modules`, no lockfile and no build step. Every file here was written for this project and is under the GNU General Public License v2 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
+Its own code, and one other program's browser build, which is described in the next section. There is no `node_modules`, no lockfile and no build step. Every other file here was written for this project and is under the GNU General Public License v2 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
 
 That is a deliberate choice rather than an accident of scale. A directory that anybody can run has to be a directory anybody can read, and a dependency tree is the fastest way to make a small program unauditable.
 
+### ESP Web Tools, in vendor/, served by /install
+
+**[ESP Web Tools](https://github.com/esphome/esp-web-tools) 10.4.0, Apache License 2.0**, in `vendor/esp-web-tools/10.4.0/`. It is what makes the browser installer possible: the part that talks to a serial port from a web page. It is the only JavaScript anywhere on this site.
+
+The directory is the package's `dist/web` build, byte for byte as published on npm, checked against the registry's SHA-512 for the package before it was copied in; `SHA256SUMS` beside the files lets anybody check them again, and `selftest.py` does on every run. The libraries built into that bundle are Espressif's esptool-js, the Improv Wi-Fi serial SDK and Google's Material Web components (all Apache License 2.0), Lit (BSD 3-Clause), tslib (0BSD), pako (MIT and zlib) and atob-lite (MIT). Their licence texts are in `THIRD_PARTY_LICENSES.txt` in the same directory, and the installer page links it and the bundle's own `LICENSE`. `vendor/esp-web-tools/README.md` says where each file came from and how to move to a newer version.
+
+What it costs, exactly:
+
+- **`/install` alone.** Every other page stays HTML and one inline stylesheet, and the server will not emit the script tag for any of them.
+- **Only when there is something to install.** With `firmware/` empty the page explains itself instead of offering a button, and no script tag is emitted at all.
+- **From this machine.** It used to load from unpkg, pinned to an exact version. Serving it from here means nobody else learns that somebody opened the installer, and nothing it runs can change between one reader and the next unless this repository changes.
+
 The exception is `firmware/`, when it has anything in it. Those are compiled images of [µnleashed BBS](https://github.com/rwmech/unleashed_BBS), also GPL v2 or later, and each release directory carries its own `THIRD_PARTY_NOTICES.md` describing the code compiled into it, ESP-IDF and its components among them. That file travels with the binaries rather than pointing at a moving target, and the installer page links it beside each version.
 
-## Two things loaded from somewhere else
+## One thing loaded from somewhere else
 
 ### Photographs on /author, from Wikimedia Commons
 
@@ -37,21 +49,6 @@ The exception is `firmware/`, when it has anything in it. Those are compiled ima
 | [IBM Diskette 1 with envelope](https://commons.wikimedia.org/wiki/File:IBM_Diskette_1_with_envelope.gif) | Crimson Systems | public domain (scan) |
 
 **upload.wikimedia.org sees a request** from anybody who opens `/author`, which is a third party learning that somebody looked at one page. The images are requested with `referrerpolicy="no-referrer"`, so Wikimedia is not told which page asked, and the page says in its own text where the pictures come from. Every other prose page on this site loads nothing from anywhere else.
-
-### ESP Web Tools, on /install
-
-**[ESP Web Tools](https://github.com/esphome/esp-web-tools), Apache License 2.0**, pinned at version `10.4.0` and loaded from `unpkg.com` by `/install`, and by no other page.
-
-It is what makes the browser installer possible: the part that talks to a serial port from a web page. It is the only third-party code anybody loads from this site and the only JavaScript anywhere on it.
-
-Worth being exact about what that costs, because the rest of this file makes a strong claim and this is the thing that qualifies it:
-
-- **`/install` alone.** Every other page stays HTML and one inline stylesheet, and the server will not emit the script tag for any of them.
-- **Only when there is something to install.** With `firmware/` empty the page explains itself instead of offering a button, and no script tag is emitted at all, so a deployment that publishes no images loads no third-party code from anywhere.
-- **An exact version, never a floating tag.** ESP Web Tools' own documentation suggests pinning to the major version, which still means the code a visitor runs can change between one reader and the next. `10.4.0` cannot.
-- **unpkg sees a request** from anybody who opens that page while an image is published. That is a third party learning somebody visited one page, which is the sort of thing the rest of this site refuses to permit, and it is accepted here in exchange for the installer existing at all.
-
-Serving the bundle from this machine would remove the last point, and is the obvious improvement if it starts to matter. It is not done today because a pinned URL is auditable in one line, while a vendored copy of somebody else's build output is the thing this file otherwise exists to say is not here.
 
 ## What it runs on
 
@@ -69,4 +66,4 @@ Caddy is optional. The server speaks plain HTTP on its own and will run behind n
 
 No web framework, no ORM, no template engine, no web fonts, no analytics, no tracking of any kind. A page is HTML and one inline stylesheet.
 
-With two exceptions, and both are named above rather than buried: `/install` loads ESP Web Tools from a CDN when there is a firmware image to install, because a web page cannot reach a serial port without it, and `/author` shows photographs from Wikimedia Commons. On every other page, and on `/install` when no image is published, nothing a visitor loads comes from anywhere but the machine you installed this on.
+Two things qualify that, and both are named above rather than buried: `/install` runs ESP Web Tools, served from this machine, when there is a firmware image to install, because a web page cannot reach a serial port without it; and `/author` shows photographs from Wikimedia Commons. Apart from those photographs, nothing a visitor loads comes from anywhere but the machine you installed this on.
