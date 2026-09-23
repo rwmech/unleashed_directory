@@ -262,6 +262,29 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   live early and appears by itself when the release lands. Yellow
   (`#ffd35c`) is used for nothing else on the site: amber is a warning and
   the tip box an invitation. Call it the announcement banner in docs.
+- **/donate, "Support the project"** (0.17.0): written by the copywriter,
+  wired as an ordinary page, linked as "Support" in every face's footer.
+  **Buy Me a Coffee is a plain link and nothing more**: no widget, no
+  script, nothing loaded from them, and the page says so in as many words,
+  so embedding their button would make the page lie. The suite checks
+  every `src` on the page is this site's. The page's three `<!-- -->`
+  notes are for editors and must stay. Rob's line on what support buys:
+  posts and development news on Buy Me a Coffee, members-only ones
+  included, and never features or priority.
+  **The thanks list** is `supporters.txt`, one name per line, only people
+  who said yes; `::: thanks` renders it, and an empty file renders nothing
+  at all, heading included, which is how it starts.
+  **The cover** at the top of /donate is `brand/unleashed-cover.svg` from
+  `make_cover.py`, laid out for Buy Me a Coffee's crop with an empty lower
+  half on purpose. `/cover.svg` serves it cut to the band that has content
+  (`COVER_H`, 310) with the frame's bottom edge redrawn; if the generator
+  changes the frame or the size, the cut quietly falls back to the whole
+  cover and the suite fails on the height. Not a link preview: at 4:1 it
+  would be cropped by every card that shows it, so the avatar stays the
+  one preview image.
+  `md_meta` skips `:::` blocks and comments when it looks for a page's
+  description, because a page that opens with a drawing was otherwise
+  described as "::: art".
 - **The avatar** is `brand/`: `make_avatar.py` draws the wordmark from
   LOGO_ROWS and the palette in this file into `unleashed-avatar.svg`, and
   the two PNGs are that screenshotted at 1024 and 512. Served at

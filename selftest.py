@@ -1455,6 +1455,73 @@ def main():
               "the board will not list itself while the default password is still set"
               in flat_s)
 
+        # ------------------------------------------------------------------
+        # Supporting the project: a plain link out, and nothing loaded from
+        # the payment company.
+        print("The support page")
+        code, don = get("/donate")
+        flat_d = " ".join(don.split())
+        check("there is a support page",
+              code == 200 and "<h1>Support the project</h1>" in don)
+        check("described by its first sentence, not by the drawing above it",
+              '<meta name="description" content="µnleashed BBS is free software, and it '
+              'stays free.' in don)
+        check("with the cover at the top, as an image with words for a screen reader",
+              re.search(r'<img class="cover" src="/cover\.svg" width="1600" height="310" '
+                        r'alt="[^"]{40,}">', don) is not None
+              and don.split("<article>")[1].index('class="cover"')
+                  < don.split("<article>")[1].index("is free software, and it stays free"))
+        # A plain link, and the page says so: nothing from another origin.
+        srcs_d = re.findall(r'src="([^"]+)"', don)
+        check("Buy Me a Coffee is a plain link, and nothing on the page is loaded from it",
+              '<a href="https://buymeacoffee.com/unleashed_bbs">' in don
+              and "<script" not in don and "<iframe" not in don
+              and all(u.startswith("/") and not u.startswith("//") for u in srcs_d)
+              and "Nothing on this site loads anything from Buy Me a Coffee" in flat_d)
+        src_d = open(os.path.join("pages", "donate.md"), encoding="utf-8").read()
+        check("its three editor notes stay in the source and none reaches the page",
+              src_d.count("<!--") == 3 and "<!--" not in don.split("<article>")[1]
+              and "Re-check when this page is edited" not in don)
+        # Rob's line: supporters get posts and news, never features or
+        # priority, and the page must not say they get nothing.
+        check("it says what support buys and what it never buys",
+              "Supporters get posts and development news on Buy Me a Coffee" in flat_d
+              and "What support never buys is features or priority." in flat_d
+              and "Giving buys no features" not in flat_d)
+        check("and how supporters are thanked, the ABOUT credit for lifetime members only",
+              "<h2>Thank you</h2>" in don and "Unleashed HQ" in flat_d
+              and "release notes of the version that shipped" in flat_d
+              and "that credit is for lifetime members only" in flat_d)
+        # The list starts empty, and an empty list says nothing at all.
+        check("an empty thanks list shows no list and no heading",
+              "The thanks list" not in don and 'class="thanks"' not in don)
+        import pathlib
+        was_sup = S.SUPPORTERS_FILE
+        tmp_sup = os.path.join(tempfile.mkdtemp(prefix="dirsup"), "supporters.txt")
+        with open(tmp_sup, "w", encoding="utf-8") as fh:
+            fh.write("# a comment\n\nAda <Lovelace>\n  Grace Hopper  \n")
+        try:
+            S.SUPPORTERS_FILE = pathlib.Path(tmp_sup)
+            shown_t = S.thanks_html()
+        finally:
+            S.SUPPORTERS_FILE = was_sup
+        check("and a name, once there, is listed and escaped, comments left out",
+              shown_t == '<h3>The thanks list</h3><ul class="thanks">'
+                         '<li>Ada &lt;Lovelace&gt;</li><li>Grace Hopper</li></ul>')
+        code, ctype, cov = fetch("/cover.svg")
+        cov = cov.decode("utf-8", "replace")
+        # Laid out for Buy Me a Coffee's crop, with an empty lower half on
+        # purpose; the site shows the band, with the frame closed round it.
+        check("the cover is served cut to its content, frame redrawn",
+              code == 200 and ctype == "image/svg+xml"
+              and 'height="310" viewBox="0 0 1600 310"' in cov
+              and '<path d="M18,8 H1592 V292 L1582,302 H8 V18 Z"' in cov)
+        check("and every face's footer offers the support page",
+              all(f'<a href="{want}donate">Support</a>' in page
+                  for page, want in ((get("/")[1], "/"),
+                                     (get("/", host="about.example")[1], "https://boards.example/"),
+                                     (get("/", host="data.example")[1], "https://boards.example/"))))
+
         # The wordmark is the way home, on every page of every face.
         print("The wordmark goes home")
         homes = {"the board list": (get("/")[1], "/"),
@@ -1499,7 +1566,8 @@ def main():
         scripted = [p for p in ("/", "/about", "/data", "/build", "/whofor",
                                 "/terminals", "/firstcall", "/forward", "/how",
                                 "/rules", "/privacy", "/kids", "/teachers",
-                                "/sdcard", "/dialing", "/author")
+                                "/sdcard", "/dialing", "/author", "/donate",
+                                "/setup")
                     if "<script" in get(p)[1]]
         check("nothing else on the site loads any JavaScript"
               + ("" if not scripted else "  <- " + ", ".join(scripted)),

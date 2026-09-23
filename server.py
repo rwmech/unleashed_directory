@@ -470,6 +470,7 @@ def foot_html(role, extra=""):
              f'<a href="{site_url("list", role, "/forward")}">Go public</a> &middot; '
              f'<a href="{site_url("list", role, "/how")}">Get listed</a> &middot; '
              f'<a href="{site_url("list", role, "/rules")}">House rules</a> &middot; '
+             f'<a href="{site_url("list", role, "/donate")}">Support</a> &middot; '
              f'<a href="{site_url("list", role, "/feed.xml")}">RSS</a> &middot; '
              f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>')
     parts = [others, links] if others else [links]
@@ -849,13 +850,41 @@ CARD_BLOCKS = ("cards", "hero")
 # ":::" to close. The markup lives in ART in this file rather than in the
 # page, because the dialect has no inline HTML on purpose and an SVG typed
 # into a Markdown file would be the first exception to that.
-BLOCK_NAMES = CARD_BLOCKS + ("installer", "art")
+BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks")
+
+
+# --------------------------------------------------------------------------
+# The thanks list on /donate: supporters who said yes to being named, one
+# per line in supporters.txt beside this file. It is read on each render,
+# so adding a name is editing a text file and nothing else.
+#
+# An empty list renders nothing at all, heading included. A heading over an
+# empty list reads as "nobody has helped", which is not a thing a page
+# should say on anybody's behalf, and the list starts empty.
+# --------------------------------------------------------------------------
+SUPPORTERS_FILE = pathlib.Path(__file__).resolve().parent / "supporters.txt"
+
+
+def thanks_html():
+    try:
+        lines = SUPPORTERS_FILE.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    names = [l.strip() for l in lines if l.strip() and not l.strip().startswith("#")]
+    if not names:
+        return ""
+    return ('<h3>The thanks list</h3><ul class="thanks">'
+            + "".join(f"<li>{html.escape(n[:80])}</li>" for n in names)
+            + "</ul>")
 
 
 def md_block(kind, lines):
-    """A ":::" block, by name. Cards, the installer, or a drawing."""
+    """A ":::" block, by name. Cards, the installer, a drawing, or the
+    thanks list."""
     if kind == "installer":
         return installer_html()
+    if kind == "thanks":
+        return thanks_html()
     if kind == "art":
         return art_html(lines)
     return md_cards(kind, lines)
@@ -1104,9 +1133,21 @@ def md_meta(text):
     if head:
         title = f"{head.group(1).strip()} - {SITE_NAME}"
         # The first ordinary line after the heading, which on every page
-        # here is the sentence that says what the page is for.
+        # here is the sentence that says what the page is for. A drawing or
+        # a comment can come first, and neither is a sentence: without
+        # skipping them, a page opening with its cover was described to
+        # every link preview as "::: art".
+        in_block = False
         for line in text[head.end():].splitlines():
             line = line.strip()
+            if in_block:
+                in_block = line != ":::"
+                continue
+            if line.startswith("::: "):
+                in_block = True
+                continue
+            if line.startswith("<!--"):
+                continue
             if line and not line.startswith(("#", ">", "-", "|", "`", "*")):
                 desc = re.sub(r"[*`]|\[|\]\([^)]*\)", "", line)[:180]
                 break
@@ -2757,6 +2798,33 @@ def _brand(name):
 
 
 AVATAR_PNG = _brand("unleashed-avatar-1024.png")
+
+# The cover, made by brand/make_cover.py. It is laid out for Buy Me a
+# Coffee, which cuts off the top and lays its own cards over the lower
+# half, so the content sits in a band near the top and the bottom is empty
+# on purpose. On this site the empty half would be a black stripe, so the
+# drawing is cut to the band and its frame redrawn to fit: the viewBox ends
+# at 310 and the frame's bottom edge moves up with it. Done by replacing
+# the frame and the size exactly; if make_cover.py ever draws them
+# differently the replace finds nothing and the whole cover is served
+# rather than a broken one, and selftest.py fails on the height.
+COVER_H = 310
+
+
+def _cover(svg):
+    if svg is None:
+        return None
+    frame = '<path d="M18,8 H1592 V382 L1582,392 H8 V18 Z"'
+    size = 'height="400" viewBox="0 0 1600 400"'
+    if frame not in svg or size not in svg:
+        return svg
+    return (svg.replace(frame, f'<path d="M18,8 H1592 V{COVER_H - 18} '
+                               f'L1582,{COVER_H - 8} H8 V18 Z"', 1)
+               .replace(size, f'height="{COVER_H}" viewBox="0 0 1600 {COVER_H}"', 1))
+
+
+_cover_raw = _brand("unleashed-cover.svg")
+COVER_SVG = _cover(_cover_raw.decode("utf-8")) if _cover_raw else None
 TOUCH_PNG = _brand("unleashed-avatar-512.png")
 AVATAR_URL = ((f"https://{LIST_DOMAIN}" if LIST_DOMAIN else SITE_URL).rstrip("/")
               + "/avatar.png")
@@ -3744,6 +3812,9 @@ svg.art .aff { fill:#f0c674; }
    terminal's colours. As wide as a comfortable reading column at most;
    a phone draws them at nearly 1:1. */
 svg.art.shot { width:100%; height:auto; margin:1rem auto 1.5rem; }
+/* The cover on /donate: the full width of the column, never taller than
+   its own proportions. */
+img.cover { display:block; width:100%; height:auto; margin:0.5rem 0 1.5rem; }
 svg.art.shot .scr { fill:#06060a; stroke:var(--dial); stroke-width:1; }
 svg.art.shot text.cap { fill:var(--dial); }
 svg.art.shot text.cz { fill:#06060a; }
@@ -4478,7 +4549,14 @@ ART = {"firstcall": FIRSTCALL_ART,
        "term-others": MACHINE_OTHERS,
        "term-terminals": MACHINE_TERMINALS,
        "term-bridge": MACHINE_BRIDGE,
-       "sd-wiring": SD_WIRING}
+       "sd-wiring": SD_WIRING,
+       # The cover at the top of /donate. An image rather than inline, so
+       # it is fetched once and cached, and it is vector either way.
+       "cover": ('<img class="cover" src="/cover.svg" width="1600" height="310" '
+                 'alt="The \u00b5nleashed wordmark, with the words Electronic '
+                 'freedom and No web. No cloud. No browser., beside a terminal '
+                 'panel reading CONNECT 2400, NODE 1 OF 10, TELNET PETSCII ANSI '
+                 'and ESP32 GPL v2+.">')}
 ART.update({key: shot_svg(name, alt) for key, (name, alt) in SHOTS.items()})
 
 HOW = HOW.replace("@ART_CSS@", ART_CSS).replace("@SKULL@", SKULL)
@@ -5126,6 +5204,12 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/favicon.svg":
             self.reply(200, FAVICON, "image/svg+xml",
                        {"Cache-Control": "public, max-age=86400"})
+        elif path == "/cover.svg":
+            if COVER_SVG is None:
+                self.reply(404, "no such file\n", "text/plain; charset=utf-8")
+            else:
+                self.reply(200, COVER_SVG, "image/svg+xml",
+                           {"Cache-Control": "public, max-age=86400"})
         elif path in ("/avatar.png", "/apple-touch-icon.png"):
             blob = AVATAR_PNG if path == "/avatar.png" else TOUCH_PNG
             if blob is None:

@@ -14,6 +14,26 @@
 
 # Changelog
 
+## 0.17.0, 2026-09-23
+
+- **/donate, "Support the project"**, the copywriter's page, served like the
+  others and linked as Support in every footer. Buy Me a Coffee is a plain
+  link: nothing on the site loads anything from it, and the suite checks
+  every image and script on the page is this site's own.
+- **What support buys, in Rob's words**: posts and development news on Buy Me
+  a Coffee, some for members only, and never features or priority.
+- **Thank you**: supporters who agree are named on a thanks list on the page,
+  in the release notes of the version they supported, and on an information
+  page on Unleashed HQ; lifetime members are also credited on the firmware's
+  ABOUT screen. The list is `supporters.txt` and starts empty, and an empty
+  list shows nothing, heading included.
+- **The cover** heads /donate, from `brand/make_cover.py`. It is laid out for
+  Buy Me a Coffee's crop, so the site serves it cut to the band that has
+  content, with its frame closed round it. The avatar stays the link preview.
+- A page that opens with a drawing is no longer described to link previews
+  as "::: art".
+- 404 checks, up from 393.
+
 ## 0.16.0, 2026-09-23
 
 For the firmware's 1.0.0 release (Rob).
