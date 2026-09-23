@@ -3,11 +3,11 @@
 What you call a board with. Any telnet client works, but some are built for
 this and look a great deal better doing it.
 
-## Just tell me what to install
-
 ::: art
 term-modern
 :::
+
+## Just tell me what to install
 
 **[SyncTERM](https://syncterm.bbsdev.net/)**, on Windows, macOS or Linux. It is
 made for calling boards: it speaks ANSI and CP437 properly, handles file

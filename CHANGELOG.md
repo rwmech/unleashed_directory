@@ -14,6 +14,16 @@
 
 # Changelog
 
+## 0.21.1, 2026-09-23
+
+- **/terminals: "Just tell me what to install" sits under the drawing**
+  (Rob: "it feels like its floating with no direction now"). The laptop
+  and phone drawing follows the page's opening line, and the heading comes
+  after it, directly above the SyncTERM paragraph it introduces. The
+  drawing's labels are inside its frame, so nothing was left behind; the
+  gap above the heading is the heading's own 1.75rem, checked at 1366 and
+  at 390.
+
 ## 0.21.0, 2026-09-23
 
 Badges on the board list (Rob), and the list's rows striped and lit on
