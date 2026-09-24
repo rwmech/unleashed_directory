@@ -16,59 +16,49 @@ dev board in a drawer, you already have most of it.
 
 ## What you need
 
-- **An ESP32 with 4 MB of flash.** The reference board is a bare
-  ESP32-WROOM-32E: 520 KB of SRAM, 4 MB of flash, no PSRAM, Bluetooth off. Not
-  every ESP32 can run it, and the table below says which. A dev board with a
-  USB-serial chip needs nothing but the cable. The one other board with an
-  image of its own is the Waveshare ESP32-S3-LCD-1.47, a USB stick with a
-  screen and a card slot: [Tested boards](/hardware) has both, with
-  pictures.
-- **A USB cable**, and that is the whole bill of materials for a dev board. A
-  bare module also wants 3V3, ground, EN pulled up, GPIO0 to ground while you
-  flash it, and a USB-serial adapter on the console pins.
+- **A board.** [Tested boards](/hardware) has the two this firmware runs on,
+  with pictures, what each costs, and which other ESP32 chips can and cannot
+  run it.
+- **A USB cable that carries data**, and that is the whole bill of materials
+  for a dev board. A bare module also wants 3V3, ground, EN pulled up, GPIO0
+  to ground while you flash it, and a USB-serial adapter on the console pins.
 - **Wi-Fi**, 2.4 GHz. The board scans every channel and joins the strongest
   access point with your SSID, so a mesh needs no special handling.
-- **Power.** It runs from the USB port you flashed it with, a phone charger, or
-  3V3 on a bench supply. It draws about a tenth of an amp while it waits,
-  because the firmware keeps the radio listening rather than letting it doze,
-  and peaks a little under 400 mA for the instant the radio transmits, so anything
-  that can deliver 500 mA is comfortable.
 
-## Which ESP32
+## Adding to it
 
-Plenty of chips are sold under the ESP32 name, and not all of them can run a
-board. It needs two processor cores and Wi-Fi built into the chip. The BBS runs
-on one core while Wi-Fi and the network run on the other, and that split is
-what stops the radio's work from making callers' lines lag.
+The ESP32 dev board takes two additions, each with a page of its own:
 
-| Chip | Runs it? | Why |
-|---|---|---|
-| ESP32-WROOM-32E | **Yes, tested** | The reference board: ten caller lines, a busy line and a hidden sysop line. Every release is tested on it. [Tested boards](/hardware), [SD card wiring diagram](/sdcard) |
-| ESP32-WROVER | Should work, not yet tested | The same original ESP32 chip, and the same goes for other modules built on it. A WROVER adds PSRAM, a second memory chip on the module, which leaves room for more callers, but nobody has measured how many. |
-| ESP32-S3 | **Yes, on one board** | Two cores and Wi-Fi. The Waveshare ESP32-S3-LCD-1.47 has its own image and has been run: a screen, a card slot and a drive light on the board, and still ten caller lines. [Tested boards](/hardware). Another S3 board needs a build of its own, because the image carries the Waveshare's pins. |
-| ESP32-S2 | No | One core. |
-| ESP32-C3 | No | One core. |
-| ESP32-C5 | No | One core, even with dual-band Wi-Fi. |
-| ESP32-C6 | No | One main core. Its second, low-power core cannot run the board. |
-| ESP32-H2 | No | One core, and no Wi-Fi. |
-| ESP32-P4 | No | No Wi-Fi on the chip. It needs a second chip to reach a network. |
+- [An SD card](/sdcard), for file areas, forums and screens of your own: a
+  module that costs about two dollars, and four signal wires plus power.
+- [Lights](/lights), for a board in a case: a drive light that shows the
+  storage at work, and a strip of pixels that shows the callers.
 
-The firmware is built for the original ESP32 and, as a board of its own, for
-the Waveshare S3, and does not run on the others as it stands. A single-core
-chip could be made to run it, but the radio and the callers would take turns
-on one core and callers would feel it, and doing that properly means
-rebuilding the core of the BBS rather than changing a setting.
+The Waveshare S3 needs neither page: its card slot and its drive light are on
+the board.
 
 ## Getting it running
 
-```
+You need [PlatformIO](https://platformio.org/) and git. For the ESP32 dev
+board:
+
+```nowrap
 git clone https://github.com/rwmech/unleashed_BBS
 cd unleashed_BBS
-cp include/secrets.h.example include/secrets.h     # SSID and passphrase
-cp data/system.cfg.example data/system.cfg         # timezone, passwords, limits
+cp data/system.cfg.example data/system.cfg
 pio run -t flashall
 pio device monitor
 ```
+
+`data/system.cfg` holds the timezone, the limits and the rest of the settings.
+For the Waveshare S3, add `-e ws_s3_lcd147` to both `pio` commands. If it will
+not start writing, hold BOOT, tap RESET, let go of BOOT and try again, as [the
+installer page](/install#on-the-waveshare-s3) explains.
+
+A new board has no network yet. Give it one from [the installer](/install):
+press **Update my board**, which never erases anything, and use its Wi-Fi
+step. Or fill in `wifi_ssid` and `wifi_password` in `data/system.cfg` before
+you flash.
 
 The console tells you the address it came up on:
 
@@ -86,62 +76,26 @@ the `hostname` setting doing double duty as the DHCP and mDNS name.
 
 [Any telnet client](/terminals). SyncTERM is the one worth installing if you
 have none. A Commodore 64 with a TeensyROM works too, and so does a VT220 on a
-serial adapter. The board works out what it is talking to on connect: ANSI with
-CP437 or UTF-8, PETSCII at 40 or 80 columns, or plain ASCII, asking a question
-or two if the terminal does not answer its probe, and it draws itself
-accordingly.
+serial adapter. [Your first call](/firstcall) says what happens when you
+connect.
 
 ## Keeping it
 
-Firmware updates do not cost you the board. Accounts, settings, chat mail and
-your directory listing live on their own flash partition, and `pio run -t
-flashall` cannot reach it: the filesystem upload only rewrites the screens.
-
-The backup window is the other half of that. Hold the BOOT button while logged
-in as sysop and the board opens an HTTP server for a few minutes: download a zip
-with the configuration, the accounts and the screens in it, edit them on a real
-keyboard, upload it back. Uploads are staged and applied only after you say yes.
+A new version does not cost you the accounts, the settings or the mail:
+`pio run -t flashall` rewrites the firmware and the screens and cannot reach
+them. [Upgrading a board](/upgrade) says the same for the browser, and how to
+take a backup first.
 
 ## Putting it on the internet
 
-Forwarding port 6400 from your router is what makes a board callable from
-outside, and it is a decision to make deliberately rather than by accident.
-This is plain telnet: passwords cross the wire in the clear, and anybody
-sharing a network with a caller can read everything they type. The board tells
-new callers that before they choose a password, and so should you.
-
-If that is fine with you, it was fine with everybody in 1985 too.
-
-[How to forward a port on your router](/forward), with step by step pages for
-NETGEAR, TP-Link, ASUS, Xfinity gateways, eero and Google Nest Wifi, and an
-honest list of the things that will stop it working.
+Forwarding a port on your router is what lets callers from outside reach the
+board. Calls are not encrypted, so read [what opening a port does](/forward)
+first, and [the privacy page](/privacy) for what that means to your callers.
 
 ## Listing it here
 
-Turn on the `announce` plugin and the board sends a small heartbeat every ten
-minutes saying it exists. Nothing about any caller is ever in it. What it
-carries is the board's name, who runs it, how to reach it, and how many lines
-are busy.
-
-```
-CONFIG announce
-```
-
-A listing is earned by three hours of sustained heartbeats, not by asking, and
-it disappears when the heartbeats stop. `ANNOUNCE TEST` prints the exact
-message the board would send and sends nothing, so you can read it before you
-trust it.
-
-You do not have to use this directory. The protocol is documented, the server
-is a single Python file, and a board can post to several directories at once.
-A directory nobody can replace would contradict the whole point.
-
-## Adding an SD card
-
-Optional, four wires, about two dollars. It is what gets you file areas, forums
-and screens of your own. Without one the board is still a board. The pin map,
-a wiring diagram and what the card's error messages mean are on the
-[SD card page](/sdcard).
+Switch on the `announce` plugin with `CONFIG announce`, and the board is listed
+after three hours of heartbeats. [Getting listed](/how) has the rest.
 
 ## The source
 

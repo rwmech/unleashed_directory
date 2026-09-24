@@ -23,3 +23,7 @@ id_*
 /firmware/[0-9]*/
 # The avatar generator writes an HTML page beside its SVG for screenshotting.
 /brand/*.html
+# deploy/setup.sh's record of the commit it installed, which lands in the
+# checkout when the checkout is the install directory.
+/.installed
+/.installed.new

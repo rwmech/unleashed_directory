@@ -7,7 +7,8 @@ The installer's last step sends you here with the board's address, and this is h
 This page was opened without the board's address. That happens when the
 installer read the board before it had joined your Wi-Fi, so it had no
 address to hand over yet. It joins a few seconds later, and there are three
-ways to find it:
+ways to find it, four on the Waveshare S3, whose screen shows the address to
+dial once it is on your network:
 
 1. **By name.** The board gives itself a name on your network, the
    **Hostname** in its settings, which is `unleashed` unless you changed it.

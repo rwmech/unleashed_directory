@@ -14,6 +14,76 @@
 
 # Changelog
 
+## 1.2.1, 2026-09-24
+
+The pages say each thing once, a lights page joins the SD card page, the
+wordmark is a drawing, and a failed install on the droplet is no longer
+stuck. From the site review of 2026-09-24 and its fact-check.
+
+- **One home per fact.** Facts that were on three to five pages now live on
+  one, and the others give a line and a link:
+  - which ESP32 chips run a board: /hardware, as a list, with the dev
+    board's memory and power moved beside it (/build keeps the bare-module
+    notes);
+  - how the board detects a terminal: /firstcall;
+  - taking a new board over with the default password: /setup (/install
+    keeps the password, the local-only rule and the warning);
+  - what an update keeps: /upgrade;
+  - getting listed: /how;
+  - the Chromebook admin setting: /terminals;
+  - double NAT and CGNAT: /forward (each router page keeps what is
+    particular to its vendor);
+  - the freedoms: /about (/whofor keeps its point about decentralisation).
+  /about keeps the privacy framing and drops the sentence it shared word for
+  word with /privacy. The pages that were here before say about 480 words
+  fewer between them (30,319 to 29,838 as a reader sees them), after
+  /hardware took on the chips, the spectrum and the dev board's facts.
+- **/hardware opens with a spectrum**, Rob's: a bare ESP32, the same board
+  with an SD card, and the Waveshare S3, on one line in the site's line art,
+  "functional, lowest cost", "economical and usable", "most expandable", with
+  an estimated cost and setup time under each. Every figure says "about";
+  it is a choice, not a ranking.
+- **/lights, a build page for the drive light and the strip**, in the shape
+  of /sdcard: a wiring drawing for each, the pins, a 330 to 470 ohm resistor
+  and 100 nF at the pixel, a 5 V supply of its own for the strip, the
+  effects, and what goes wrong. It lights up Build one. /sdcard and /lights
+  both open by saying the Waveshare S3 needs neither, and /hardware's S3
+  section says the same the other way round.
+- **SD card and lights linked where they are mentioned**: /build, /hardware,
+  /setup, /teachers, /install, /donate. The SD card's wires are "four signal
+  wires plus power" everywhere a count is given.
+- **Two contradictions settled from primary sources.** CS stays on GPIO5:
+  Espressif's datasheet gives GPIO5 one job at power-on, the timing of an
+  SDIO interface the board does not use, so /setup no longer says to move it
+  to 4 to get the board to start. And the card module starts on 3V3, moving
+  to VIN only for a module with an AMS1117 regulator, which needs about a
+  volt more in than it gives out: /teachers no longer says "not VIN".
+- **Wrong or stale:** /donate said the S3 was untested, and now also sends
+  firmware bugs to the firmware's issue tracker. /teachers installs from
+  /install rather than building from source, and says plainly that nobody
+  has installed a board from a Chromebook here yet. /build's source steps
+  lose `secrets.h`, which is only a fallback now, and give the S3's
+  `-e ws_s3_lcd147`. "The newest part" is gone from the forums on /kids and
+  /about. /connected mentions the S3's screen. /how links the house rules,
+  as /setup said it did.
+- **Hardware in the footer**, after Build one. The footer's separators are
+  drawn rather than typed, so a phone no longer ends a wrapped row on a
+  dangling dot.
+- **The wordmark is an SVG**, made at start from the same `LOGO_ROWS`, so
+  there is still one source. On a phone the text version showed the font's
+  line gaps as stripes; the drawing has none, is sharp at any density, and
+  keeps its name for a screen reader.
+- **/build's commands scroll sideways on a phone** instead of breaking
+  `unleashed_BBS` over two lines: a fenced block written ```` ```nowrap ````
+  keeps its lines whole.
+- **Deploy: a failed install is retried.** update.sh installed only on the
+  run whose pull moved HEAD, so when setup.sh failed on that run, every
+  later run said "Already up to date" and the site stayed on the old
+  version, which is what happened to 1.2.0 on the droplet. setup.sh now
+  writes the commit it installed to `/srv/unleashed_directory/.installed`
+  once it has finished, and update.sh installs whenever that is missing or
+  is not HEAD, saying "Installing <hash>: the last install did not finish".
+
 ## 1.2.0, 2026-09-24
 
 A second board: /install asks which board you have, with a picture of each,

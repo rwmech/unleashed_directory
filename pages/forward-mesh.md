@@ -84,14 +84,12 @@ one **Network settings**. Both reach **Advanced Networking**.
 
 ## When it does not work
 
-- **Double NAT.** If the mesh sits behind an ISP modem or router, your forward
-  lands on the mesh's private WAN address and nothing from outside reaches it.
-  Check the WAN address in the app: `192.168.` or `10.` means a second router.
-  Bridge the ISP box. Do not bridge the mesh: eero loses forwarding entirely,
-  and a Google mesh with more than one unit cannot be bridged at all.
-- **CGNAT.** Neither vendor publishes anything on this. If the WAN address is
-  in `100.64.0.0/10`, or does not match an external "what is my IP", the ISP is
-  sharing one address between many customers and no setting will help.
+Double NAT and CGNAT stop any router's forward, and [the main
+page](/forward#two-things-that-will-stop-it-working) explains both. What a mesh adds:
+
+- **Double NAT.** The WAN address is in the app. If it is private, bridge the
+  ISP box, not the mesh: eero loses forwarding entirely in bridge mode, and a
+  Google mesh with more than one unit cannot be bridged at all.
 - **IPv4 and IPv6 are separate.** An IPv4 forward does nothing for IPv6. On
   eero that is a rule under **IPv6 Firewall Rules**; on Google it is the
   **IPv6** tab, and Google calls it port opening rather than forwarding because

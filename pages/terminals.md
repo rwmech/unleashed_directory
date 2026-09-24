@@ -211,10 +211,7 @@ dollars. A real modem and a real phone line also still work, if you have both.
 
 ## What the board does with all this
 
-It works out what it is talking to when you connect: ANSI with CP437 or UTF-8,
-PETSCII at 40 or 80 columns, or plain ASCII, and draws itself accordingly. A
-modern terminal answers the board's probe and is never asked anything. A
-terminal that stays silent is asked to press DEL or BACKSPACE, which tells the
-board whether it is a Commodore or plain ASCII, and a Commodore is then asked
-for 40 or 80 columns. A C64 and a modern laptop can be in the same chat room and
-both see something that looks right to them.
+It works out what it is talking to when you connect and draws itself to
+suit, so a C64 and a modern laptop can be in the same chat room and both see
+something that looks right to them. [Your first
+call](/firstcall#it-works-out-what-you-are) says how, and what it may ask.

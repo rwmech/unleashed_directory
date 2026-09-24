@@ -1754,7 +1754,11 @@ def main():
         # which makes them the most expensive kind of wrong there is here.
         # Doors are not started, so they stay in the future tense.
         check("doors are named as coming, not as something the board has",
-              "doors come after" in page.lower() and ", doors," not in page)
+              "doors are still to come" in page.lower() and ", doors," not in page)
+        # F8, site 1.2.1: the forums are not the newest part any more (the
+        # information pages and mail as a place came after them).
+        check("and the forums are not called the newest part",
+              "newest part" not in page)
         check("and the features it does list are ones that exist",
               "mail between callers" in page and "file areas on an SD card" in page)
         # Forums shipped in firmware 0.21: FORUMS in COMMANDS.md, PF_SD in
@@ -2069,8 +2073,9 @@ def main():
         # and not on every board, because a reader who calls a board without
         # them should blame the board's setup rather than the software.
         check("forums are described as present, and as not on every board",
-              "now forums" in kids.lower()
-              and "not every board has them" in kids.lower())
+              "files and forums" in kids.lower()
+              and "not every board has them" in kids.lower()
+              and "newest part" not in kids.lower())
         # The honest privacy line. This is the one claim on this site with
         # the potential to actually harm somebody, so it is pinned: the safe
         # room is the board they host, and a board on the internet is not a
@@ -2254,14 +2259,63 @@ def main():
         code, page = get("/build")
         check("and build links to it", 'href="/sdcard"' in page)
 
+        # Site 1.2.1: /lights, /sdcard's twin for the drive light and the
+        # strip, with the same shape: a drawing beside a pin table, and
+        # what goes wrong. Reached from /build, /hardware, /teachers.
+        print("The lights page")
+        code, lp = get("/lights")
+        flat_l = " ".join(lp.split())
+        check("/lights renders, with a drawing of each light",
+              code == 200 and has_h(lp, 1, "Lights")
+              and S.ART["lights-drive"] in lp and S.ART["lights-strip"] in lp
+              and lp.count('<svg class="art wiring lights"') == 2
+              and 'role="img"' in S.ART["lights-drive"].split(">")[0])
+        check("with the pins, the resistor, the capacitor and a supply of its own",
+              "<code>D13</code> / GPIO13" in lp and "<code>D14</code> / GPIO14" in lp
+              and "330 to 470 ohm" in flat_l and "100 nF" in flat_l
+              and "a 5 V supply of its own" in flat_l
+              and "about 600 mA" in flat_l)
+        check("and never tells a reader they need a level shifter",
+              "level shifter" not in flat_l.lower())
+        check("it lights up Build one, like /sdcard",
+              S.NAV_SECTION.get("/lights") == "/build"
+              and '<a class="here" href="/build">' in lp)
+        for pg in ("/sdcard", "/lights"):
+            _, sp = get(pg)
+            body = sp.split("<article>")[1]
+            check(f"{pg} opens by saying the Waveshare S3 needs none of it",
+                  body.index("The Waveshare S3 needs none of this.") < body.index("<h2")
+                  and 'href="/hardware#waveshare-esp32-s3-lcd-1-47"' in body)
+        check("the SD card's wires are counted the same way everywhere",
+              all("six wires" not in get(pg)[1] and "six jumper wires" not in get(pg)[1]
+                  for pg in ("/sdcard", "/hardware", "/teachers", "/build"))
+              and "four signal wires plus power" in " ".join(get("/sdcard")[1].split()))
+        # NEW-2 and NEW-3 of the 1.2.1 review: one answer for the card's
+        # power and one for CS on GPIO5, on every page that says either.
+        check("no page says the card module never goes on VIN",
+              "goes on 3V3 and not VIN" not in get("/teachers")[1])
+        check("and none moves CS off GPIO5 to get the board to start",
+              "will not start with a card" not in get("/setup")[1]
+              and "does not stop the board booting" in " ".join(get("/sdcard")[1].split()))
+        # NEW-5: the clone command keeps its words whole on a phone.
+        check("/build's commands scroll on a phone rather than break inside a word",
+              '<pre class="nowrap">git clone https://github.com/rwmech/unleashed_BBS' in page
+              and "article pre.nowrap { white-space:pre; overflow-wrap:normal; }" in page
+              and "include/secrets.h" not in page
+              and "-e ws_s3_lcd147" in page)
+        # NEW-1: /how links the rules it was said to cover.
+        check("/how links the house rules, as /setup says it does",
+              'href="/rules"' in get("/how")[1]
+              and "[the house rules](/rules)" in
+                  open(os.path.join("pages", "setup.md"), encoding="utf-8").read())
+
         # Site 1.2.0: the tested boards page, a picture and the facts for
         # each board from the same table the installer's picker draws, and
         # the build page's table of chips says the S3 has run.
-        check("build's table says the S3 has run, on one board, and links the "
-              "tested boards",
-              "<td>ESP32-S3</td><td><b>Yes, on one board</b></td>" in page
-              and 'href="/hardware"' in page and "Should work, not yet tested</td><td>"
-              "Two cores and Wi-Fi, with or without PSRAM" not in page)
+        # Site 1.2.1: the chips live on /hardware, and /build points there.
+        check("build links the tested boards, and the chips are said there",
+              'href="/hardware"' in page
+              and "<b>ESP32-S3: yes, on one board.</b>" in get("/hardware")[1])
         code, page = get("/hardware")
         body = page.split("<article>")[1].split("</article>")[0] if "<article>" in page else ""
         check("the tested boards page draws each board, its build and where to buy it",
@@ -2770,9 +2824,12 @@ def main():
               and "only until you change it" in flat_i)
         check("and that the board will not list itself while it is set",
               "the board will not put itself on this directory" in flat_i)
-        check("and walks through choosing your own on the first call",
-              "and asks for the <b>Sysop password</b>. Type <code>unleashed</code>" in flat_i
-              and "Choose a sysop password of your own and press F1" in flat_i)
+        # R6, site 1.2.1: the steps with their pictures are /setup's; the
+        # install page says what happens and links them.
+        check("and sends the reader to the first-call steps on /setup",
+              "the board asks for this password by itself, then for one of your own" in flat_i
+              and 'href="/setup#first-become-the-sysop"' in inst
+              and "<b>This board has not been set up yet</b>" not in flat_i)
         check("and says local only is a guard, not a wall, and why",
               "is a guard, not a wall" in flat_i
               and "rewrite forwarded traffic" in flat_i
@@ -2925,8 +2982,8 @@ def main():
               and all(u.startswith("/") and not u.startswith("//") for u in srcs_d)
               and "Nothing on this site loads anything from Buy Me a Coffee" in flat_d)
         src_d = open(os.path.join("pages", "donate.md"), encoding="utf-8").read()
-        check("its three editor notes stay in the source and none reaches the page",
-              src_d.count("<!--") == 3 and "<!--" not in don.split("<article>")[1]
+        check("its editor note stays in the source and does not reach the page",
+              src_d.count("<!--") == 1 and "<!--" not in don.split("<article>")[1]
               and "Re-check when this page is edited" not in don)
         # Rob's line: supporters get posts and news, never features or
         # priority, and the page must not say they get nothing.
@@ -2986,11 +3043,10 @@ def main():
         print("The install page, drawn")
         inst2 = get("/install")[1]
         art_i = re.findall(r'<svg class="art steps" viewBox="[^"]+" aria-hidden="true"', inst2)
-        check("five drawings of what is about to happen, all decoration",
-              len(art_i) == 5
+        check("four drawings of what is about to happen, all decoration",
+              len(art_i) == 4
               and all(S.ART[k] in inst2 for k in ("install-cable", "install-write",
-                                                   "install-boot", "install-wifi",
-                                                   "install-setup")))
+                                                   "install-boot", "install-wifi")))
         # The steps are split by the drawings and still count on.
         check("and the numbered steps carry on across them",
               '<ol start="5">' in inst2 and '<ol start="6">' in inst2
@@ -3034,10 +3090,10 @@ def main():
               and "<b>Outside</b>" not in set2
               and "if you forwarded a different one to the" in flat_s2
               and "::: until" not in set2 and "::: from" not in set2)
-        check("the setup steps name what the board says",
-              "This board has not been set up yet" in flat_i2
-              and "YOU ARE THE SYSOP" in flat_i2 and "ESC skips it" in flat_i2
-              and "The board refuses <code>unleashed</code> here" in flat_i2)
+        check("the setup steps name what the board says, on /setup",
+              "This board has not been set up yet." in set2
+              and "YOU ARE THE SYSOP" in set2
+              and "The board will not take <code>unleashed</code> here." in set2)
 
         # ------------------------------------------------------------------
         # Headings carry ids, so a page can be linked part way down: the
@@ -3295,8 +3351,13 @@ def main():
               and 'id="if-something-goes-wrong-reset-rather-than-reflash"' in inst_now)
         check("Upgrade is in the footer's Get started row on every face",
               all(re.search(r'<span class="lbl">Get started</span>.*?'
-                            r'>Install</a> &middot; <a href="[^"]*/upgrade">Upgrade</a>'
-                            r' &middot; ', p, re.S)
+                            r'>Install</a><a href="[^"]*/upgrade">Upgrade</a><a ', p, re.S)
+                  for p in (home, inst_now, get("/", host="about.example")[1],
+                            get("/", host="data.example")[1])))
+        # N1, site 1.2.1: /hardware is in the footer, after Build one.
+        check("and Hardware is in it, after Build one, on every face",
+              all(re.search(r'<span class="lbl">Get started</span><a href="[^"]*/build">'
+                            r'Build one</a><a href="[^"]*/hardware">Hardware</a>', p)
                   for p in (home, inst_now, get("/", host="about.example")[1],
                             get("/", host="data.example")[1])))
         # The call-out on /install opens the steps column: beside the card
@@ -3517,14 +3578,29 @@ def main():
                   and '<span class="lbl">Reference</span>' in f
                   and f.index("Get started") < f.index("Reference") for f in feet))
         check("and the colophon: version, copyright, and the licence linked",
-              all(f'<span>Site version {newest}</span> &middot; '
-                  '<span>&copy; 2026 Robert Mech</span> &middot; ' in f
+              all(f'<span>Site version {newest}</span>'
+                  '<span>&copy; 2026 Robert Mech</span>' in f
                   and '<span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
                       "GNU GPL v2 or later</a></span></p>" in f
                   and f.rindex('class="colophon"') > f.rindex('class="lbl"')
                   for f in feet))
         check("each piece of it kept whole, so a phone wraps between them",
-              "footer .colophon span { white-space:nowrap; }" in get("/")[1])
+              "footer .colophon span { white-space:nowrap; display:inline-block;"
+              in get("/")[1])
+        # L3, site 1.2.1: no separator is text any more. A dot is drawn in
+        # front of every link but the first, and a row that wraps drops the
+        # dot of the link that starts the new line, so no line of the
+        # footer ends (or starts) on one.
+        css_f = get("/")[1]
+        check("the footer's separators are drawn, never text that can dangle",
+              all('<span class="row">' in f
+                  and "&middot;" not in f[f.index('<span class="row">'):f.index("</footer>")]
+                  for f in feet)
+              and "footer .row { display:block; overflow:hidden; }" in css_f
+              and "footer .row a::before, footer .colophon span + span::before" in css_f
+              and "margin-left:-1.5ch" in css_f
+              and "footer .row .lbl + a::before { content:none; }" in css_f
+              and "line-height:1.6; overflow:hidden; }" in css_f)
 
         # ------------------------------------------------------------------
         # Every page names its own address, on the face it belongs to.
@@ -3620,8 +3696,22 @@ def main():
                  "the data face": (get("/", host="data.example")[1], "https://boards.example/")}
         check("the wordmark links to the board list on every face",
               all(f'<a class="home" href="{want}" aria-label="' in page
-                  and '<pre class="logo"' in page.split('<a class="home"')[1].split("</a>")[0]
+                  and '<svg class="logo"' in page.split('<a class="home"')[1].split("</a>")[0]
                   for page, want in homes.values()))
+        # Site 1.2.1: the wordmark is a drawing made from LOGO_ROWS, named
+        # for a screen reader, sized by the stylesheet, and the <pre> is gone.
+        mark = S.LOGO_SVG
+        rows_on = sum(sum(1 for ch in r if ch in "\u2588\u2580\u2584") for r in S.LOGO_ROWS)
+        check("the wordmark is an SVG drawn from LOGO_ROWS, with a name",
+              mark.startswith('<svg class="logo" viewBox="0 0 %d %d" role="img" '
+                              'aria-label="\u00b5nleashed"'
+                              % (6 * max(len(r) for r in S.LOGO_ROWS), 10 * len(S.LOGO_ROWS)))
+              and "<title>\u00b5nleashed</title>" in mark
+              and mark.count("<g fill=") == len(S.LOGO_ROWS)
+              and sum(int(w) for w in re.findall(r'width="(\d+)"', mark)) == 6 * rows_on
+              and '<pre class="logo"' not in homes["a page"][0]
+              and "svg.logo { display:block; width:min(35rem, calc(100vw - 2.5rem));"
+                  in homes["a page"][0])
 
         # The avatar: link previews and the home-screen icon.
         print("The avatar")
@@ -3848,8 +3938,8 @@ def main():
               "svg.art.wiring .p-cs { animation:" in
               sd.split("svg.art { display:block;")[1]
                   .split("@media (prefers-reduced-motion: no-preference) {")[1])
-        check("the build page's board table links to it",
-              '<a href="/sdcard">SD card wiring diagram</a>' in get("/build")[1])
+        check("the build page links to it",
+              '<a href="/sdcard">An SD card</a>' in get("/build")[1])
 
         # A Chromebook, as it is: one you control usually can, a managed one
         # usually cannot without its administrator, Chrome alone never can.
@@ -3870,13 +3960,54 @@ def main():
         # true of a C3 with 4 MB of flash and it will not run the board.
         _, build = get("/build")
         flat_b = " ".join(build.split())
-        check("the build page says which ESP32s run it",
-              "<td>ESP32-WROOM-32E</td><td><b>Yes, tested</b></td>" in build
-              and "<td>ESP32-C3</td><td>No</td>" in build
-              and "<td>ESP32-P4</td><td>No</td>" in build
-              and "Should work, not yet tested" in build)
+        _, hwp = get("/hardware")
+        flat_h = " ".join(hwp.split())
+        # Site 1.2.1 (R1, L1): the chips moved to /hardware as a list, which
+        # reads on a phone where the three-column table broke "ESP32-WROOM-32E"
+        # over three lines. /build keeps a link and no table of its own.
+        check("the tested boards page says which ESP32s run it",
+              "<b>ESP32-WROOM-32E: yes, tested.</b>" in hwp
+              and "<b>ESP32-S2, ESP32-C3 and ESP32-C5: no.</b>" in hwp
+              and "<b>ESP32-P4: no.</b>" in hwp
+              and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hwp
+              and has_h(hwp, 2, "Other chips"))
         check("and gives no caller count for a part nobody has measured",
-              "nobody has measured how many" in flat_b)
+              "which that image does not use" in flat_h
+              and "room for more callers" not in flat_h)
+        check("the build page has no chip table and links the tested boards",
+              "<table" not in build.split("<article>")[1]
+              and "ESP32-C3" not in build and "ESP32-P4" not in build
+              and 'href="/hardware"' in build)
+        check("the build page links the SD card and the lights pages",
+              'href="/sdcard"' in build and 'href="/lights"' in build)
+        # The dev board's facts moved with the chips (R2): memory and power
+        # on /hardware, and the bare-module notes stay with the build.
+        check("the dev board's memory and power are on the tested boards page",
+              "520 KB of SRAM and 4 MB of flash" in flat_h
+              and "a little under 400 mA" in flat_h
+              and "520 KB" not in flat_b and "400 mA" not in flat_b
+              and "EN pulled up" in flat_b)
+        # H1, Rob's spectrum: three stops, each with the words the drawing
+        # shows said again in the page, with links, because the drawing is
+        # aria-hidden.
+        spec = S.ART["hardware-spectrum"]
+        check("the tested boards page opens with the spectrum",
+              spec in hwp
+              and hwp.index(spec) < hwp.index('id="esp32-dev-board"')
+              and spec.startswith('<svg class="art spectrum" viewBox="-4 -2 362 144"')
+              and 'aria-hidden="true"' in spec.split(">")[0]
+              and all(f">{s[1]}</text>" in spec and f">{s[3]}</text>" in spec
+                      and f">{s[4]}</text>" in spec for s in S.SPECTRUM_STOPS))
+        check("and says it in words too, every figure an estimate",
+              "functional, and the lowest cost. About $10" in flat_h
+              and "economical and usable. About $15" in flat_h
+              and "the most expandable. About $15" in flat_h
+              and all(s[3].startswith("about ") and s[4].startswith("about ")
+                      for s in S.SPECTRUM_STOPS))
+        s3sec = hwp.split('id="waveshare-esp32-s3-lcd-1-47"')[1].split('id="other-chips"')[0]
+        check("the S3's section says it needs no wiring, and no build pages",
+              "No wiring, and none of the build pages" in " ".join(s3sec.split())
+              and 'href="/sdcard"' in s3sec and 'href="/lights"' in s3sec)
         check("no page says any 4 MB module will do",
               "Any module with the same flash will do" not in flat_b
               and "Any module with 4 MB of flash works" not in
@@ -3903,7 +4034,7 @@ def main():
         resting = head_css[at:mv]
         moving = head_css[mv:head_css.index("\n}\n", mv)]
         check("every face carries the panel beside the wordmark",
-              all(re.search(r'<div class="masthead"><a class="home" [^>]*><pre class="logo"', p)
+              all(re.search(r'<div class="masthead"><a class="home" [^>]*><svg class="logo"', p)
                   and ticker_of(p) for p in faces.values()))
         check("with all eight freedoms, each with the line saying what it means",
               len(wanted) == 8
@@ -3967,17 +4098,15 @@ def main():
         # padding each side, the gap and the panel, at the 133% root.
         # Measured in headless Chrome as well: nothing past the right edge
         # at 390, 901, 1100, 1168, 1280, 1366 or 1920.
-        cap = float(re.search(
-            r"pre\.logo \{[^}]*font-size:clamp\([^,]+,[^,]+,\s*([\d.]+)rem\)",
-            head_css).group(1))
+        cap_w = float(re.search(r"svg\.logo \{[^}]*width:min\(([\d.]+)rem,",
+                                head_css).group(1))
         panel = float(re.search(r"\.ticker \{ display:block;[^}]*width:([\d.]+)rem",
                                 head_css).group(1))
         gap = float(re.search(r"\.masthead \{[^}]*gap:0 ([\d.]+)rem",
                               head_css).group(1))
         shows = float(re.search(r"@media \(min-width: ([\d.]+)em\) \{\s*\.ticker",
                                 head_css).group(1))
-        cols = max(len(r) for r in S.LOGO_ROWS)
-        need = (cols * 0.602 * cap + 2 * 1 + gap + panel) * 1.33
+        need = (cap_w + 2 * 1 + gap + panel) * 1.33
         check("it only appears at a width where it fits beside the wordmark",
               ".ticker { display:none; }" in resting and need <= shows)
         # And the words fit the panel: the text column is the panel less the
@@ -4672,8 +4801,27 @@ def main():
         upd = open(os.path.join("deploy", "update.sh"), encoding="utf-8").read()
         check("update.sh runs the fetcher whether or not the site changed",
               "deploy/fetch_release.py" in upd
-              and upd.count("\n    fetch_release\n") == 1
-              and upd.count("\nfetch_release\n") == 1)
+              and len(re.findall(r"\n +fetch_release\n", upd)) == 3)
+        # Site 1.2.1: the 1.2.0 deploy stuck on the droplet. The pull moved
+        # HEAD, setup.sh failed, and every later run found nothing to pull
+        # and never installed. setup.sh now records the commit it installed,
+        # last, and update.sh installs whenever that record is not HEAD.
+        # The behaviour is exercised in a sandbox by hand (git, stubs for
+        # id, systemctl and curl); these pin the shape of it.
+        setup_sh2 = open(os.path.join("deploy", "setup.sh"), encoding="utf-8").read()
+        check("setup.sh records the commit it installed, after everything else",
+              '> "$DEST/.installed.new"' in setup_sh2
+              and 'mv "$DEST/.installed.new" "$DEST/.installed"' in setup_sh2
+              and setup_sh2.index(".installed.new") > setup_sh2.index('say "Firewall"')
+              and setup_sh2.index(".installed.new") > setup_sh2.index("systemctl restart"))
+        check("update.sh installs when the last install did not finish",
+              'INSTALLED="$(cat "$INSTALLED_FILE" 2>/dev/null || true)"' in upd
+              and 'if [ "$INSTALLED" = "$OLD" ]; then' in upd
+              and "the last install did not finish" in upd
+              and upd.index("the last install did not finish") < upd.index('loud "Installing..."')
+              and "/srv/unleashed_directory/.installed" in upd)
+        check("and the record is never committed",
+              "/.installed" in open(".gitignore", encoding="utf-8").read())
         import hashlib
         import http.server
         relroot = tempfile.mkdtemp(prefix="dirrel")

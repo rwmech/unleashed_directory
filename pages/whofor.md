@@ -134,28 +134,18 @@ You decide what the board is called, what it is for, who is welcome, what is
 allowed, and what happens to anybody who ignores that. Not a policy team. Not a
 moderation contractor. Not an appeals process somebody else designed. You.
 
-- **Host whatever topics you want.** There is no provider whose terms you are
-  operating under, because there is no provider. Nobody is reviewing your
-  content because nobody is hosting it but you.
-- **Nobody can deplatform you.** There is no account to suspend, no host to
-  complain to, no payment processor to lean on, no app store to be delisted
-  from. The only person who can switch it off is the person holding the plug.
-- **It is decentralized in the way that matters.** Every board is
-  independent. There is no central server, no company, no network anybody
-  owns. Boards do not talk to each other today, and that is the honest
-  version: what there is instead of a network is that nobody needs one. The
-  directory you are reading this on is optional, the protocol behind it is
-  published, and you are welcome to run your own. That is the
-  intended outcome, not a grudging permission.
-- **It can be almost off grid.** A board needs power and a network. It does not
-  need the internet: on a local network it serves a building, a site, a club
-  room or a house, and it carries on doing that when the line goes down. Solar,
-  a battery and a Wi-Fi access point make a working board in a place with no
-  service at all.
-- **It outlives the people who made it.** No certificate to renew, no API to be
-  deprecated, no subscription to lapse, no company to be acquired and shut
-  down. Leave it in a drawer for a year, plug it in, and it answers, because
-  there is nothing at the other end that has to still exist.
+Host whatever topics you want: there is no provider, so there are no
+provider's terms. Nobody can deplatform you, it can run almost off grid on a
+local network and a battery, and it keeps answering after the company that
+made it is gone. [The freedoms on What this is](/about#freedoms-gained) go
+through each one.
+
+**It is decentralized in the way that matters.** Every board is independent.
+There is no central server, no company, no network anybody owns. Boards do not
+talk to each other today, and that is the honest version: what there is
+instead of a network is that nobody needs one. The directory you are reading
+this on is optional, the protocol behind it is published, and you are welcome
+to run your own. That is the intended outcome, not a grudging permission.
 
 ## So set one up
 

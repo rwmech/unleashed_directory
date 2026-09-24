@@ -25,7 +25,7 @@ trust.
 | Client and server | One board, many callers. The words are roles, not machines: the same laptop is a client here and a server in the next lesson |
 | Addresses and ports | The board answers on port 6400. Change it and nothing connects until the caller is told. Ports stop being magic |
 | Text encoding | The board detects ANSI with CP437 or UTF-8, PETSCII, or plain ASCII, and draws itself differently for each. Text is bytes, and bytes need an agreement |
-| Serial protocols | Four wires to the card, and XMODEM and YMODEM for transfers: blocks, checksums, acknowledgments and retries, small enough to trace on paper |
+| Serial protocols | Four signal wires to the card, and XMODEM and YMODEM for transfers: blocks, checksums, acknowledgments and retries, small enough to trace on paper |
 | Filesystems | FAT32 on the card because a laptop can read it, LittleFS on the chip because it survives losing power mid-write |
 | Owning versus renting | The user list is a text file on a chip in the room. Compare that with any service the school pays for |
 | Version control | The whole project is public and under the GPL. Students can read it, change it, and keep their changes |
@@ -33,16 +33,18 @@ trust.
 ## What you need
 
 - **One ESP32 dev board per group.** A few dollars each. A board built on the
-  ESP32-WROOM-32E is the tested one, and [the build page](/build) says which
+  ESP32-WROOM-32E is the tested one, and [Tested boards](/hardware) says which
   other ESP32s will and will not run it. Check before you order a class set.
 - **A USB cable per group.** Often already in a drawer.
-- **One computer per group** to build and flash from, and a terminal program.
+- **One computer per group** to install the board from, in Chrome or Edge,
+  and a terminal program.
   [The terminals page](/terminals) lists free ones for Windows, macOS, Linux,
   Android and iOS. **If your machines are Chromebooks, read the next section
   before you plan anything**, because a Chromebook needs a setting turned on
   first and it may not be yours to turn on.
-- **Optional, for file areas and forums:** a micro SD card module, about two dollars, and
-  a card of 32 GB or less. Plus six jumper wires.
+- **Optional, for file areas and forums:** a micro SD card module, about two
+  dollars, a card of 32 GB or less, and jumper wires for four signal wires plus
+  power. [Adding an SD card](/sdcard) has the parts.
 - **Optional, for the enclosure:** a 3D printer, or a print service, and a
   browser for TinkerCAD.
 
@@ -67,21 +69,21 @@ those are administrator settings that are usually off.
 **Linux development environment** row with a **Set up** button, your fleet is
 fine, and [the terminals page](/terminals) has the steps from there.
 
-If the row is missing or the button refuses, ask for it by name. The request
-is small, specific, and can be granted to one group of users rather than to
-the whole school:
-
-- In the Google Admin console, under **Devices > Chrome > Settings**, on the **User & browser settings** page, in the section **Virtual machines (VMs) and developers**.
-- The setting is **Linux virtual machines (BETA)**. The value to ask for is **Allow usage for virtual machines needed to support Linux apps for users**.
-- It starts a sandboxed Debian container. It is not developer mode, it does not unenrol the device, and by Google's own description a bad Linux app can affect other Linux apps and nothing outside them. That is usually the question underneath the question.
+If the row is missing or the button refuses, it is an administrator setting,
+and a small, specific request that can be granted to one group of users rather
+than to the whole school. [The terminals page](/terminals#if-linux-is-blocked)
+names the setting and the value to ask for.
 
 If the answer is no, find that out early rather than improvising in front of
 a class. A board on the classroom network is still reachable from any Windows,
 Mac or Linux machine in the room, and one machine on the projector with the
 chat room open is a perfectly good version of session 1 with the class taking
-turns at the keyboard. Sessions 2 and 3 need a computer that can flash a board
-over USB in any case, which is a larger job on a Chromebook than calling one
-is.
+turns at the keyboard.
+
+Session 2 installs the board from a web page over a USB cable. Chrome on a
+Chromebook has what that needs unless an administrator has switched it off,
+but nobody has installed a board from a Chromebook here yet, so try one
+before the lesson.
 
 ## Five sessions
 
@@ -109,12 +111,14 @@ than as a definition.
 
 ### Session 2: Flash a board
 
-**50 to 90 minutes. Needs:** an ESP32 and USB cable per group, and the build
-instructions from [the build page](/build).
+**50 to 90 minutes. Needs:** an ESP32 and USB cable per group, and [the web
+installer](/install) in Chrome or Edge. No toolchain.
 
-Each group builds the firmware and flashes it, gives the board the classroom
-Wi-Fi, and watches the console print the address it came up on. Then they call
-their own board from the machine next to them.
+Each group installs the firmware, gives the board the classroom Wi-Fi from the
+same page, and reads the address the board came up on. Then they call their
+own board from the machine next to them. A group that wants to see the source
+turned into firmware can [build it themselves](/build#getting-it-running)
+afterwards.
 
 The moment a group calls their own board for the first time is the lesson. Do
 not rush past it.
@@ -125,13 +129,14 @@ usual first-lesson time sink. Do it before the period, not during it.
 ### Session 3: Wire the card
 
 **50 minutes. Needs:** an SD card module, a card of 32 GB or less formatted as
-FAT32, and six jumper wires per group.
+FAT32, and jumper wires per group.
 
-Four wires carry the data and two carry the power. Students wire it against
-[the pin map](/sdcard), mount the card, and set up a file area.
+Four signal wires plus power. Students wire it against [the pin
+map](/sdcard), mount the card, and set up a file area.
 
-Two things are worth stopping on. The module goes on 3V3 and not VIN, and the
-page explains what happens if you get that wrong. And the card is FAT32
+Two things are worth stopping on. The module starts on 3V3, not VIN, and the
+page explains why, and the one kind of module that needs VIN instead. And the
+card is FAT32
 specifically so that a laptop can read it afterwards, which students can prove
 by pulling the card and plugging it into a computer.
 
@@ -148,7 +153,8 @@ This is the session that turns a circuit board into a thing somebody owns.
 
 Students measure their board, model a case in TinkerCAD, and deal with the
 constraints that make it a real design problem rather than a box: a slot for
-the USB connector, a window or a light pipe for the LED, somewhere for the
+the USB connector, a window or a light pipe for the LED, or for [a drive
+light and a strip](/lights) if they are fitting some, somewhere for the
 card to go in and out, and a way for the two halves to hold together without
 glue.
 
@@ -205,9 +211,10 @@ eleven upwards, covering the same ground in their own terms:
 
 ## Where to go next
 
-[Build one](/build) is the full instructions, including flashing and
-configuration. [Adding an SD card](/sdcard) has the pin map, a wiring diagram
-and what the card's error messages mean. [Terminal software](/terminals) covers what to
+[The web installer](/install) puts the firmware on a board, and [Set up your
+BBS](/setup) covers configuration. [Adding an SD card](/sdcard) has the pin
+map, a wiring diagram and what the card's error messages mean, and [Build
+one](/build) is the road from source. [Terminal software](/terminals) covers what to
 call a board with, on every platform a classroom is likely to have, including
 Chromebooks and what to ask for when one is locked down.
 

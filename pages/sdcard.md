@@ -1,17 +1,22 @@
 # Adding an SD card
 
-Optional. A board with no card is a complete board: chat, mail, accounts,
-screens, the caller log, a directory listing, the serial bridge. The card is
-what you add when you want file areas, forums and screens of your own.
+> [!NOTE]
+> **The Waveshare S3 needs none of this.** Its card slot is on the board:
+> [the S3](/hardware#waveshare-esp32-s3-lcd-1-47).
 
-Four wires and a module that costs about two dollars.
+Optional, and for the ESP32 dev board. A board with no card is a complete
+board: chat, mail, accounts, screens, the caller log, a directory listing, the
+serial bridge. The card is what you add when you want file areas, forums and
+screens of your own.
+
+A module that costs about two dollars, and four signal wires plus power.
 
 ## What you need
 
 - A micro SD card module with an SPI breakout. The pin names below are the
   ones the common modules print on the board.
 - A micro SD card, 32 GB or smaller, formatted **FAT32**.
-- Four jumper wires, plus two for power.
+- Jumper wires: four signal wires plus power.
 
 > Cards larger than 32 GB ship formatted as exFAT, which this does not read.
 > Reformat as FAT32 or use a smaller card. Windows will not offer FAT32 above
@@ -39,17 +44,20 @@ sd-wiring
 > a module with no regulator on it needs 3.3 V, and 5 V on one of those goes
 > straight to the card and can reach the ESP32's pins, which are not built for
 > it. The common blue module with a small three-legged regulator on it, often
-> marked AMS1117, is the exception: it is designed for 5 V on VCC, and from 3V3
-> its card can end up short of the voltage it needs and fail to mount. If that
-> is your module and it will not mount on 3V3, move VCC to the 5 V pin, which is
-> VIN on most dev boards. Its regulator and level shifter keep the card and the
-> signals at 3.3 V. Only do that if you can see the regulator on the module.
+> marked AMS1117, is the exception: it is designed for 5 V on VCC. That
+> regulator needs about a volt more going in than it gives out, so from 3V3
+> its card gets well under the 2.7 V a card is made to run from, and may fail
+> to mount. If that is your module and it will not mount on 3V3, move VCC to
+> the 5 V pin, which is VIN on most dev boards. Its regulator and level shifter
+> keep the card and the signals at 3.3 V. Only do that if you can see the
+> regulator on the module.
 
-GPIO5 is one of the ESP32's strapping pins, but the only thing it sets at
-power-on is the timing of an SDIO interface this board does not use, so a card
-module on it does not stop the board booting. If you would rather CS were on a
-pin with no strapping role at all, move it to `D4` and set `cs = 4` in the
-config. Nothing else needs to change.
+GPIO5 is one of the ESP32's strapping pins, but Espressif's datasheet gives it
+one job at power-on, with GPIO15: the timing of an SDIO interface this board
+does not use. So a card module on it does not stop the board booting, and the
+shipped `cs = 5` is right. If you would rather CS were on a pin with no
+strapping role at all, move it to `D4` and set `cs = 4` in the config. Nothing
+else needs to change.
 
 ## Telling the board about it
 

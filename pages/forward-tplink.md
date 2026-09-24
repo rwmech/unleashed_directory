@@ -63,11 +63,12 @@ rules.
 
 ## When it does not work
 
-- **Double NAT.** Check **Advanced > Status > Internet**, or on Deco
-  **More > Internet Connection > IPv4**. A private WAN address means another
-  router upstream: forward the same port there too, or bridge the ISP modem.
-- **CGNAT.** A WAN address in `100.64.0.0` to `100.127.255.255` looks public
-  and is not. Common on 4G and 5G. Nothing on the router fixes it.
+Double NAT and CGNAT stop any router's forward, and [the main
+page](/forward#two-things-that-will-stop-it-working) explains both. What TP-Link adds:
+
+- **Where the WAN address is.** **Advanced > Status > Internet**, or on Deco
+  **More > Internet Connection > IPv4**. A private one means another router
+  upstream: forward the same port there too, or bridge the ISP modem.
 - **The host firewall.** A blocked listener, or a network profile set to
   Public, looks exactly like a broken router rule.
 - **IPv4 only.** Virtual Servers and Port Forwarding are IPv4 NAT features.

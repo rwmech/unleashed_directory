@@ -33,6 +33,9 @@ set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOMAINS_FILE=/etc/unleashed-directory/domains
+# setup.sh writes the commit it installed here once it has finished. The
+# variable is for testing this script away from a real droplet.
+INSTALLED_FILE="${DIRECTORY_INSTALLED_FILE:-/srv/unleashed_directory/.installed}"
 QUIET=0
 CHECK=0
 
@@ -123,45 +126,62 @@ OLD="$(git rev-parse HEAD)"
 git fetch --quiet origin
 NEW="$(git rev-parse '@{u}')"
 
+# The commit the last finished install put live, if any (site 1.2.1). A pull
+# that moved HEAD and then an install that failed leaves the checkout newer
+# than the site, and without this the next run would find nothing to pull
+# and never install it: the checkout said 1.2.0 while the site stayed old.
+INSTALLED="$(cat "$INSTALLED_FILE" 2>/dev/null || true)"
+
 if [ "$OLD" = "$NEW" ]; then
-    say "Already up to date at $(git log -1 --format='%h %s')"
+    if [ "$INSTALLED" = "$OLD" ]; then
+        say "Already up to date at $(git log -1 --format='%h %s')"
+        fetch_release
+        exit 0
+    fi
+    if [ "$CHECK" -eq 1 ]; then
+        loud "The checkout is at $(git log -1 --format='%h %s'), which was never installed."
+        exit 2
+    fi
+    # Nothing to pull, but the last install did not finish: install what
+    # is here, and run every check after it as usual.
+    loud "Installing $(git log -1 --format='%h'): the last install did not finish"
+    loud ""
     fetch_release
-    exit 0
-fi
-
-if [ "$CHECK" -eq 1 ]; then
-    loud "An update is available:"
-    git log --oneline "$OLD..$NEW" | sed 's/^/  /'
-    exit 2
-fi
-
-# --ff-only rather than a merge: if the checkout has been edited on the box,
-# stop and say so instead of inventing a merge commit nobody asked for.
-if ! git merge --ff-only "$NEW" >/dev/null 2>&1; then
-    loud "Cannot update: this checkout has local changes or has diverged."
-    loud "Look at it with: cd $SRC && git status"
-    exit 1
-fi
-
-loud "Updated $(git log -1 --format='%h' "$OLD") -> $(git log -1 --format='%h %s')"
-
-# After the pull, so a change to the fetcher itself is the one that runs.
-loud ""
-fetch_release
-
-# ---------------------------------------------------------------------------
-# What changed, in words rather than commit subjects. The changelog is the
-# thing worth reading on a machine you have not looked at in a month.
-# ---------------------------------------------------------------------------
-if git diff --quiet "$OLD" "$NEW" -- CHANGELOG.md; then
-    loud ""
-    loud "Commits:"
-    git log --oneline "$OLD..$NEW" | sed 's/^/  /'
 else
+    if [ "$CHECK" -eq 1 ]; then
+        loud "An update is available:"
+        git log --oneline "$OLD..$NEW" | sed 's/^/  /'
+        exit 2
+    fi
+
+    # --ff-only rather than a merge: if the checkout has been edited on the
+    # box, stop and say so instead of inventing a merge commit nobody asked for.
+    if ! git merge --ff-only "$NEW" >/dev/null 2>&1; then
+        loud "Cannot update: this checkout has local changes or has diverged."
+        loud "Look at it with: cd $SRC && git status"
+        exit 1
+    fi
+
+    loud "Updated $(git log -1 --format='%h' "$OLD") -> $(git log -1 --format='%h %s')"
+
+    # After the pull, so a change to the fetcher itself is the one that runs.
     loud ""
-    loud "From the changelog:"
-    git diff --unified=0 "$OLD" "$NEW" -- CHANGELOG.md \
-        | grep -E '^\+' | grep -v '^+++' | sed 's/^+//' | sed 's/^/  /'
+    fetch_release
+
+    # -----------------------------------------------------------------------
+    # What changed, in words rather than commit subjects. The changelog is the
+    # thing worth reading on a machine you have not looked at in a month.
+    # -----------------------------------------------------------------------
+    if git diff --quiet "$OLD" "$NEW" -- CHANGELOG.md; then
+        loud ""
+        loud "Commits:"
+        git log --oneline "$OLD..$NEW" | sed 's/^/  /'
+    else
+        loud ""
+        loud "From the changelog:"
+        git diff --unified=0 "$OLD" "$NEW" -- CHANGELOG.md \
+            | grep -E '^\+' | grep -v '^+++' | sed 's/^+//' | sed 's/^/  /'
+    fi
 fi
 
 # ---------------------------------------------------------------------------

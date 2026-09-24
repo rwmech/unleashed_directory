@@ -73,11 +73,12 @@ Triggering, use that.
 
 ## When it does not work
 
+Double NAT and CGNAT stop any router's forward, and [the main
+page](/forward#two-things-that-will-stop-it-working) explains both. What NETGEAR adds:
+
 - **Double NAT.** NETGEAR lists port forwarding among the things it breaks. If
   the NETGEAR sits behind an ISP gateway that is also routing, bridge the
   gateway or forward on it instead.
-- **CGNAT.** If the WAN address does not match an external "what is my IP", or
-  sits in `100.64.0.0/10`, no setting will help. NETGEAR has no article on this.
 - **Testing from inside.** Many routers do not loop back, so your own public
   address may fail from your own network while working fine from outside. Test
   from a phone on mobile data. NETGEAR also notes its anti-port-scan feature can

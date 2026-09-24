@@ -411,15 +411,17 @@ are into, as badges under the board's name: the codes on [the badges
 page](/badges), separated by commas, in any case.
 :::
 
-[Getting listed](/how) has the rest, including the house rules.
+[Getting listed](/how) has the rest, and [the house rules](/rules) are four
+lines.
 
 ### sd
 
 The SD card. On as shipped, and the sysop's alone. With no card it tries once at
 start and then costs nothing.
 
-- **CS pin**: Chip select. Move it to 4 if the board will not start with a card
-  fitted. Takes 0 to 33; as shipped, `5`.
+- **CS pin**: Chip select. GPIO5 does not stop the board starting with a card
+  fitted; 4 is there if you would rather use a pin with no job at boot. Takes
+  0 to 33; as shipped, `5`.
 - **MOSI pin**: Data to the card. Takes 0 to 33; as shipped, `23`.
 - **CLK pin**: The clock. Takes 0 to 33; as shipped, `18`.
 - **MISO pin**: Data from the card. Takes 0 to 39; as shipped, `19`.
@@ -430,7 +432,17 @@ start and then costs nothing.
 
 The card holds file areas, the forums and your own screens. The accounts, the
 settings and the caller log stay on the board, so a card that fails loses none
-of them. [The SD card page](/sdcard) has the wiring.
+of them. On the ESP32 dev board, [Adding an SD card](/sdcard) has the wiring;
+the Waveshare S3 has a slot.
+
+<!-- Only a pointer until the 1.1.0 setup copy is written (review item F7, held): the lights plugin ships in firmware 1.1.0. -->
+::: from 1.1.0
+### lights
+
+The drive light and the strip. **Off** as shipped on the ESP32 dev board, and
+the sysop's alone. [Lights](/lights) has the wiring, the pins and what each
+effect shows.
+:::
 
 ### serial and example
 

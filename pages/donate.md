@@ -28,11 +28,10 @@ The software costs nothing to use. Making it costs something every month.
   out.
 - **This directory.** The server it runs on, around the clock whether anybody
   visits or not, and the three domain names it answers to.
-- **Hardware to test on.** ESP32 boards, SD cards, LEDs, and a newer ESP32-S3
-  board. [Build one](/build) says the S3 should work and has not been tested
-  yet. A board on the bench is what changes that.
-
-<!-- When the ESP32-S3 row on build.md stops saying "not yet tested", change the S3 bullet above with it. -->
+- **Hardware to test on.** ESP32 boards, SD cards, [LEDs](/lights), and
+  other ESP32-S3 boards. The Waveshare S3 runs the BBS because one was on the
+  bench, and a board goes on [Tested boards](/hardware) only once a build has
+  run on it.
 
 ## The software of the future
 
@@ -81,16 +80,16 @@ more than a coffee does.
   [Getting listed](/how) is switching the board's announce plugin on and
   waiting three hours. A board running Synchronet, Mystic or something you
   wrote yourself is welcome too.
-- **Report what breaks.** Problems with this site or the installer go on
-  [its issue tracker](https://github.com/rwmech/unleashed_directory/issues).
-  What you did, what you expected and what happened instead is most of the
-  work of fixing it.
+- **Report what breaks.** Problems with the board's software go on [the
+  firmware's issue tracker](https://github.com/rwmech/unleashed_BBS/issues),
+  and problems with this site or the installer on
+  [its own](https://github.com/rwmech/unleashed_directory/issues). What you
+  did, what you expected and what happened instead is most of the work of
+  fixing it.
 - **Tell somebody.** A friend who still has a Commodore 64 in the loft, a club
   that wants somewhere to be between meetings, a teacher who would like a
   network the class can hold. [Who it's for](/whofor) is the page to send
   them.
-
-<!-- Firmware bugs have no public place to go while github.com/rwmech/unleashed_BBS is private. Add it to "Report what breaks" once it is public. -->
 
 ## About Buy Me a Coffee
 

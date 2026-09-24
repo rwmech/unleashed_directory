@@ -303,6 +303,19 @@ echo
 curl -fsS http://127.0.0.1:8080/health >/dev/null && echo "directory answering on 8080"
 systemctl is-active --quiet caddy && echo "caddy running on 80 and 443"
 
+# The commit this run installed, written last, when every step above has
+# worked: set -e has already stopped the script at any that did not. It is
+# how deploy/update.sh tells a checkout that was pulled and installed from
+# one that was pulled and then failed to install (site 1.2.1). Before that,
+# a failed install was never retried: the pull had already moved HEAD, so
+# every later run said "Already up to date" and the site stayed on the old
+# version. Written through a .new and a rename, so it is never half there.
+if INSTALLED_REV="$(git -C "$SRC" rev-parse HEAD 2>/dev/null)"; then
+    printf '%s\n' "$INSTALLED_REV" > "$DEST/.installed.new"
+    mv "$DEST/.installed.new" "$DEST/.installed"
+    echo "installed $INSTALLED_REV"
+fi
+
 if [ ${#DOMAINS[@]} -gt 0 ]; then
     echo
     echo "Point a board at:  http://${DOMAINS[0]}/announce"

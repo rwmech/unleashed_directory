@@ -67,12 +67,14 @@ It makes no difference which unit the board is associated with.
 
 ## When it does not work
 
+Double NAT and CGNAT stop any router's forward, and [the main
+page](/forward#two-things-that-will-stop-it-working) explains both. What ASUS adds:
+
 - **Double NAT.** ASUS states that port forwarding needs a public WAN address
-  and will not work properly behind another router. If the WAN address starts
-  `192.168.`, `10.` or `172.16`-`172.31`, put the ISP device into bridge or IP
-  passthrough mode, or forward the port on both.
+  and will not work properly behind another router. Put the ISP device into
+  bridge or IP passthrough mode, or forward the port on both.
 - **CGNAT.** ASUS names the range explicitly: `100.64.0.0` to
-  `100.127.255.255`. No router setting fixes it.
+  `100.127.255.255`.
 - **IPv6.** ASUS states port forwarding is not supported for IPv6 and that
   there are no plans to support it. Inbound IPv6 is the **IPv6 Firewall**,
   switched on and given its own rules under **Firewall > General**.

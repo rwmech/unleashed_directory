@@ -133,8 +133,8 @@ your computer that has to be right.
   module and a USB socket works, for about the price of a sandwich. Or a
   Waveshare ESP32-S3-LCD-1.47, the USB stick with a screen. [Tested
   boards](/hardware) has a picture of each. A name with letters after it,
-  such as ESP32-C3 or ESP32-S2, is a different chip: [the build
-  page](/build) has a table of which ones can run a board.
+  such as ESP32-C3 or ESP32-S2, is a different chip: [the same
+  page](/hardware#other-chips) says which ones can run a board.
 - **Chrome or Edge, on a desktop or laptop.** Other browsers are below this
   list.
 - **A USB cable that carries data.** This is the most common reason the board
@@ -210,10 +210,8 @@ cannot be undone, so read this before you press the button.
   partitions out on, which a first install wants.
 - **Leave it unticked if the board already runs this BBS** and you are moving
   it to a newer version. The firmware and the screens are rewritten and
-  nothing else. Your accounts, your settings, your chat mail and your
-  directory listing live on a separate part of the flash that is not written
-  to at all. Neither is the caller log, which has a part of its own because it
-  is the sysop's record of who called. The SD card is never touched.
+  nothing else: [Upgrading a
+  board](/upgrade#what-it-writes-and-what-it-leaves) lists what is kept.
 
 **Update my board** never shows this question and never erases, whether the
 page recognises the board or not: it always does the second of those two
@@ -252,11 +250,8 @@ LED holds on for a second once it is listening; the Waveshare S3 has no
 activity LED, and shows the address to dial on its screen instead. In your
 router's list of connected devices it is called `unleashed`.
 
-[Call it with any telnet client](/terminals). The board works out what it is
-talking to when you connect, so SyncTERM, PuTTY, a Commodore 64 through a
-TeensyROM and a VT220 on a serial adapter each get a screen drawn for them. If
-this is your first time, [what to expect on a first call](/firstcall) takes two
-minutes to read.
+[Call it with any telnet client](/terminals). If this is your first time,
+[what to expect on a first call](/firstcall) takes two minutes to read.
 
 ## The sysop password
 
@@ -269,24 +264,11 @@ own network, from a computer on the same Wi-Fi or wired network as the board,
 and only until you change it. While it is still set, the board will not put
 itself on this directory.
 
-You take the board over on your first call:
-
-::: art
-install-setup
-:::
-
-1. From a computer on the same network, [call the board](/terminals).
-2. Sign up for an account, or log in if you already have one. The board says
-   **This board has not been set up yet** and asks for the **Sysop
-   password**. Type `unleashed`. A wrong one asks again; ESC skips it, and
-   `BYE unleashed` at the prompt, from the same network, does it later.
-3. A screen headed **YOU ARE THE SYSOP** explains what comes next, and the
-   **staff passwords** form opens by itself. Choose a sysop password of your
-   own and press F1 to save it. The board refuses `unleashed` here. Choose one
-   you use nowhere else: calls to a BBS are not encrypted, and [the privacy
-   page](/privacy) says what that means in plain terms.
-4. A short tour of the other settings follows, and then you are at the sysop's
-   prompt. [Set up your BBS](/setup) is the long version of that tour.
+You take the board over on your first call from your own network: sign up or
+log in, and the board asks for this password by itself, then for one of your
+own. Choose one you use nowhere else, because calls to a BBS are not encrypted.
+[First, become the sysop](/setup#first-become-the-sysop) shows each screen of
+it.
 
 > **Change it before anything else.** Do not [forward the port](/forward) and
 > do not turn on the directory listing until you have. "Only from your own
@@ -372,8 +354,9 @@ The LED, on a board that has one:
 
 The browser is the short path, not the only one. The same firmware is a
 `git clone` and a `pio run -t flashall` away, which is the route you want once
-you start changing things. [The build page](/build) has it, along with the
-hardware, the SD card and how to put the board on the internet.
+you start changing things. [The build page](/build) has it, and [Tested
+boards](/hardware) has the hardware. A dev board can take [an SD
+card](/sdcard) and [lights](/lights) as well.
 
 The source is at
 [github.com/rwmech/unleashed_BBS](https://github.com/rwmech/unleashed_BBS),

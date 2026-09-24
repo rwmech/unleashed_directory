@@ -11,6 +11,17 @@ README.md for what it is. This file is the process and the design history.
 
 Not preferences. The process. Getting these wrong wastes Rob's time.
 
+- **A deploy that fails is retried** (1.2.1). setup.sh writes the commit it
+  installed to `/srv/unleashed_directory/.installed` as its last step, and
+  update.sh reinstalls whenever that is missing or is not HEAD, even with
+  nothing to pull. Before this, a setup.sh that failed on the run whose pull
+  moved HEAD was never run again, which is how 1.2.0 sat in the checkout
+  while the site stayed old. A setup.sh that keeps failing is therefore
+  retried on every update.sh run, apt-get included.
+- **The wordmark is `LOGO_SVG`**, drawn at start from `LOGO_ROWS` (1.2.1), a
+  cell 6 by 10 units, one rect a run. `LOGO_ROWS` stays the one source:
+  brand/make_avatar.py and make_cover.py parse it out of this file, so its
+  shape (`LOGO_ROWS = (` ... `)`) must not change.
 - **Rob deploys. I never do.** The change goes in this repo and gets pushed;
   Rob runs `sudo /srv/unleashed_directory/deploy/update.sh` on the droplet.
   I have no SSH access and am not to go looking for a way in. "Get it on the
@@ -337,6 +348,11 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   the other way", and nothing when there is no release.
   **`::: connected`** is the address box on /connected with its script; the
   Markdown inside it is what shows when there is no address.
+  **A fenced block written ```` ```nowrap ```` keeps its lines whole on a
+  phone** (1.2.1): every other `<pre>` wraps anywhere at the 900px breakpoint,
+  which broke `git clone .../unleashed_BBS` into two lines that each read as
+  a command. Use it for short commands whose words must not break, not for
+  long ones, which should still wrap.
   **Headings carry ids** (0.19.0): the words, lower case, every other run of
   characters one "-", unique per page across the nested renders (a
   thread-local set lives for the outermost `md_render`). Link to a section

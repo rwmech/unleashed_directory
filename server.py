@@ -471,6 +471,8 @@ NAV_SECTION = {
     "/kids":            "/whofor",
     "/teachers":        "/whofor",
     "/sdcard":          "/build",
+    # The lights build page, /sdcard's twin (site 1.2.1).
+    "/lights":          "/build",
     # Putting the firmware on a board is a step of building one, so it
     # lights up the section a reader came from. Not in the menu itself:
     # ten items is already the edge of what a phone can carry, and this is
@@ -562,9 +564,15 @@ def foot_html(role, extra=""):
     # Two rows, because eleven links in one run read as a list of
     # everything: the pages somebody works through to get a board going,
     # and the pages they come back to.
-    start = " &middot; ".join(
+    # No separator text between the links (site 1.2.1). Each link after the
+    # first draws its own dot in front of itself (footer .row a::before), in
+    # the space its neighbour's margin leaves, and a row that wraps puts
+    # that dot outside the row's box, where overflow:hidden drops it. At 390
+    # every wrapped row used to end in a dangling " ·".
+    start = "".join(
         f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
-            ("/build", "Build one"), ("/install", "Install"), ("/upgrade", "Upgrade"),
+            ("/build", "Build one"), ("/hardware", "Hardware"),
+            ("/install", "Install"), ("/upgrade", "Upgrade"),
             ("/setup", "Set up"),
             ("/terminals", "Terminals"), ("/dialing", "Dial links"),
             ("/forward", "Go public"), ("/how", "Get listed")))
@@ -573,13 +581,13 @@ def foot_html(role, extra=""):
     # "Support", in the middle of the row, the same colour as everything
     # round it, and "Support" reads as help with a problem as often as it
     # reads as money. The word people scan for is the one on the link now.
-    refer = " &middot; ".join(
+    refer = "".join(
         [f'<a class="donate" href="{site_url("list", role, "/donate")}">Donate</a>']
         + [f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
             ("/rules", "House rules"), ("/badges", "Badges"), ("/feed.xml", "RSS"))]
         + [f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>'])
-    links = ('<span class="row"><span class="lbl">Get started</span> ' + start + "</span>"
-             '<br><span class="row"><span class="lbl">Reference</span> ' + refer + "</span>")
+    links = ('<span class="row"><span class="lbl">Get started</span>' + start + "</span>"
+             '<span class="row"><span class="lbl">Reference</span>' + refer + "</span>")
     parts = [others, links] if others else [links]
     if extra:
         parts.append(extra)
@@ -587,10 +595,12 @@ def foot_html(role, extra=""):
     # whose it is, and the terms it is under, on every page. Each of the
     # three is one unbreakable piece, so a phone gets two tidy rows rather
     # than a licence name broken across a line.
+    # Its pieces are separated the same way as the rows' links, so a phone
+    # never ends a line of it on a dot either.
     colophon = ('<p class="colophon">'
-                + (f'<span>Site version {SITE_VERSION}</span> &middot; '
+                + (f'<span>Site version {SITE_VERSION}</span>'
                    if SITE_VERSION else "")
-                + "<span>&copy; 2026 Robert Mech</span> &middot; "
+                + "<span>&copy; 2026 Robert Mech</span>"
                 '<span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
                 "GNU GPL v2 or later</a></span></p>")
     return "<br><br>".join(parts) + colophon
@@ -1645,7 +1655,11 @@ def _md_render(text):
 
         if code is not None:                       # inside a fenced block
             if line.startswith("```"):
-                out.append("<pre>" + html.escape("\n".join(code)) + "</pre>")
+                # "```nowrap" (site 1.2.1): lines that must not break inside
+                # a word, such as a URL to clone, scroll sideways on a phone
+                # instead of wrapping. Everything else still wraps there.
+                cls = ' class="nowrap"' if code_nowrap else ""
+                out.append(f"<pre{cls}>" + html.escape("\n".join(code)) + "</pre>")
                 code = None
             else:
                 code.append(raw)
@@ -1672,6 +1686,7 @@ def _md_render(text):
         elif line.startswith("```"):
             flush()
             code = []
+            code_nowrap = line[3:].strip() == "nowrap"
         elif line.startswith("### "):
             flush()
             out.append(f'<h3 id="{md_id(line[4:])}">{md_inline(line[4:])}</h3>')
@@ -2914,25 +2929,21 @@ PAGE = """<!doctype html>
 body {{ background:var(--bg); color:var(--ink); font:0.875rem/1.5 ui-monospace,Menlo,Consolas,monospace;
        margin:0; padding:1rem; }}
 main {{ max-width:67.5rem; margin:0 auto; }}
-/* The wordmark is 62 columns of half-block art. Monospace cells are about
-   0.6em wide, so the type scales with the viewport and never overflows a
-   phone, instead of scrolling sideways or being cut off. */
-pre.logo {{ background:none; border:0; padding:0; margin:0 0 0.375rem; overflow:visible;
-       line-height:1; font-size:clamp(5px, calc((100vw - 2.75rem) / 38), 0.9375rem); }}
-pre.logo i {{ font-style:normal; display:block; }}
-pre.logo i:nth-child(1) {{ color:#e2d4ff; }}
-pre.logo i:nth-child(2) {{ color:#b48ef0; }}
-pre.logo i:nth-child(3) {{ color:#8f7ae8; }}
-pre.logo i:nth-child(4) {{ color:#6f84e0; }}
-pre.logo i:nth-child(5) {{ color:#4a7fc8; }}
-pre.logo i:nth-child(6) {{ color:#3f6cab; }}
+/* The wordmark, drawn from LOGO_ROWS as an SVG (site 1.2.1). It was the
+   same rows as half-block text in a <pre>, and on a phone the font's line
+   gaps showed through as stripes and its size was the font's guess. As a
+   drawing it has no gaps, is sharp at any density, and its width is set
+   here: the width 62 cells of 0.6em at 0.9375rem made, 35rem, and never
+   more than the column on a phone. */
+svg.logo {{ display:block; width:min(35rem, calc(100vw - 2.5rem)); height:auto;
+       margin:0 0 0.375rem; }}
 /* The wordmark and the freedoms panel share one row. flex-wrap is the
    safety net rather than the plan: the panel only appears at a width where
    it fits (below), so it should never need to wrap, and if some font the
    stack lands on is wider than measured, wrapping is what happens instead
    of the header running off the side of the page. */
 .masthead {{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:0 1.5rem; }}
-.masthead pre.logo {{ flex:none; }}
+.masthead svg.logo {{ flex:none; }}
 /* The wordmark is the way home. No underline and no colour change, because
    it is already the most recognisable thing on the page; the focus ring is
    the one thing a link has to show, for somebody moving by keyboard. */
@@ -3736,6 +3747,10 @@ article .tip a:focus-visible::after {{ outline:3px solid #ffd35c;
      ASCII comparison diagram wore, because wrapping would have destroyed
      it; that diagram is an SVG now and the exception went with it. */
   article pre {{ white-space:pre-wrap; overflow-wrap:anywhere; }}
+  /* Except a block marked "```nowrap": commands whose tokens must stay
+     whole, where a short sideways scroll beats "unleashed_" and "BBS" on
+     two lines reading as two broken commands (site 1.2.1). */
+  article pre.nowrap {{ white-space:pre; overflow-wrap:normal; }}
 }}
 /* The stop box: .tip's shape in .warn's colours, with a drawing where the
    tip has its arrow. Full width, framed on all four sides and rounded,
@@ -3905,15 +3920,28 @@ dl {{ margin:0 0 0.875rem; }} dt {{ color:var(--warm); margin-top:0.625rem; }} d
    looks like a rendering fault whether or not it is one. The run wraps
    between links now, never inside one. */
 footer a {{ display:inline-block; padding:0.375rem 0; white-space:nowrap; }}
+/* The separators (site 1.2.1). Each link after the first carries a dot in
+   the 1.5ch its neighbour's margin leaves, drawn outside its own box by a
+   negative margin. A link that starts a wrapped line starts at the row's
+   edge, so its dot lands outside the row and overflow:hidden drops it: no
+   row ends on a dangling dot, and none starts on one. The dot is an
+   inline-block, so the link's underline does not run under it. */
+footer .row {{ display:block; overflow:hidden; }}
+footer .row a {{ margin-right:1.5ch; }}
+footer .row a::before, footer .colophon span + span::before {{ content:"\u00b7";
+        display:inline-block; width:1.5ch; margin-left:-1.5ch; text-align:center;
+        color:var(--faint); }}
+footer .row .lbl + a::before {{ content:none; }}
+footer .row a:focus-visible {{ outline-offset:-0.125rem; }}
 /* The footer's two rows, each led by what it is, and the colophon under
    them in small type. The labels are the faint colour: structure, not
    something to click. */
 footer .lbl {{ color:var(--faint); margin-right:0.5rem; text-transform:uppercase;
         letter-spacing:0.0625rem; font-size:0.75rem; }}
 footer .colophon {{ margin:1.25rem 0 0; font-size:0.6875rem; color:var(--faint);
-        line-height:1.6; }}
+        line-height:1.6; overflow:hidden; }}
 footer .colophon a {{ display:inline; padding:0; color:var(--dim); }}
-footer .colophon span {{ white-space:nowrap; }}
+footer .colophon span {{ white-space:nowrap; display:inline-block; margin-right:1.5ch; }}
 /* The installer's dialog is somebody else's element, drawn in light
    Material colours by default. It takes its colours from Material's own
    custom properties, which a rule on the element from this page overrides,
@@ -4330,20 +4358,56 @@ LOGO_ROWS = (
 )
 
 
+# The wordmark as a drawing, made once at start from LOGO_ROWS, so the rows
+# stay the one source (brand/make_avatar.py and make_cover.py read them too).
+# A cell is 6 units wide and 10 tall, which is the 0.6em by 1em a monospace
+# cell had in the <pre>: a full block is one rect the height of a cell, and
+# a half block one half as tall, at the top or the bottom. A run of equal
+# cells is one rect, so the whole mark is a few dozen. One colour per row,
+# the six the <pre> swept down it. crispEdges, so two rects that meet leave
+# no hairline between them at any zoom.
+LOGO_COLOURS = ("#e2d4ff", "#b48ef0", "#8f7ae8", "#6f84e0", "#4a7fc8", "#3f6cab")
+
+
+def _logo_svg():
+    cols = max(len(r) for r in LOGO_ROWS)
+    kinds = {"\u2588": (0, 10), "\u2580": (0, 5), "\u2584": (5, 5)}
+    out = []
+    for i, row in enumerate(LOGO_ROWS):
+        rects, x = [], 0
+        while x < len(row):
+            kind = kinds.get(row[x])
+            if kind is None:
+                x += 1
+                continue
+            end = x
+            while end < len(row) and kinds.get(row[end]) == kind:
+                end += 1
+            dy, h = kind
+            rects.append(f'<rect x="{x * 6}" y="{i * 10 + dy}" width="{(end - x) * 6}" '
+                         f'height="{h}"/>')
+            x = end
+        out.append(f'<g fill="{LOGO_COLOURS[i % len(LOGO_COLOURS)]}">'
+                   + "".join(rects) + "</g>")
+    return (f'<svg class="logo" viewBox="0 0 {cols * 6} {len(LOGO_ROWS) * 10}" '
+            'role="img" aria-label="\u00b5nleashed" shape-rendering="crispEdges">'
+            "<title>\u00b5nleashed</title>" + "".join(out) + "</svg>")
+
+
+LOGO_SVG = _logo_svg()
+
+
 def logo_html(home="/"):
-    """The wordmark, one <i> per row, as a link to the board list: the home
-    page of the site, on every page and every face. No newlines inside the
-    <pre>, because each row is a block element, so nothing depends on
-    source whitespace.
+    """The wordmark as a link to the board list: the home page of the site,
+    on every page and every face.
 
     The link carries its own name, because a link whose only content is a
     picture is announced by a screen reader as the picture, and "µnleashed"
-    says nothing about where it goes."""
+    says nothing about where it goes. The drawing inside keeps its own,
+    role="img" with the name, for anything that reads the picture alone."""
     return ('<a class="home" href="' + html.escape(home, quote=True)
             + '" aria-label="\u00b5nleashed: the board list">'
-            + '<pre class="logo" role="img" aria-label="\u00b5nleashed">'
-            + "".join(f"<i>{row}</i>" for row in LOGO_ROWS)
-            + "</pre></a>")
+            + LOGO_SVG + "</a>")
 
 
 # --------------------------------------------------------------------------
@@ -6447,6 +6511,9 @@ directory to spam and the address it came from is banned from it for good. That
 is this directory's policy rather than something the software does: nothing here
 detects spam by itself. The ban is applied by hand, by the person who runs the
 directory, and it does not expire. It is not worth it.</p></aside>
+
+<p>What a listing may say is in <a href="/rules">the house rules</a>: four of
+them, and short.</p>
 <h2>Running something else</h2>
 
 <p>Synchronet, Mystic, WWIV, ENiGMA, Citadel, something you wrote yourself in a
@@ -6892,6 +6959,12 @@ svg.art .f-miso { fill:var(--live); }
 svg.art .f-mosi { fill:var(--dial); }
 svg.art .f-sck { fill:var(--warm); }
 svg.art .f-cs { fill:var(--name); }
+/* The lights diagrams on /lights: the data line is --live. */
+svg.art .s-dat { stroke:var(--live); }
+svg.art .f-dat { fill:var(--live); }
+/* The spectrum at the top of /hardware, as wide as the wiring diagrams. */
+svg.art.spectrum { width:100%; max-width:30rem; height:auto;
+        margin:0.75rem auto 1rem; }
 
 /* The skull is drawn in the warning box's own amber, on its background,
    so it belongs to the box it sits in rather than to the page. */
@@ -7030,6 +7103,11 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
   svg.art.wiring .p-cs { animation:artspiout 3.2s linear infinite backwards; }
   svg.art.wiring .p-out { animation:artspiout 3.2s linear 0.4s infinite backwards; }
   svg.art.wiring .p-in { animation:artspiin 3.2s linear 1.2s infinite backwards; }
+  /* the lights: the drive light pulses, and two of the strip's callers
+     have traffic */
+  svg.art.lights .glow { animation:artpulse 2.4s ease-in-out infinite; }
+  svg.art.lights .px2 { animation:artpulse 0.9s ease-in-out infinite; }
+  svg.art.lights .px3 { animation:artpulse 1.3s ease-in-out 0.4s infinite backwards; }
 }
 </style>"""
 
@@ -7470,7 +7548,8 @@ _SD_ROWS = (  # y, colour, ESP32 pin, wire label, module pin
 _SD_PULSE = {"cs": "p-cs", "sck": "p-out", "mosi": "p-out", "miso": "p-in"}
 
 SD_WIRING_ALT = (
-    "Wiring an SD card module to an ESP32 dev board, six wires. Ground to GND. "
+    "Wiring an SD card module to an ESP32 dev board, four signal wires plus "
+    "power. Ground to GND. "
     "Power from the 3V3 pin to VCC. GPIO19, printed D19, to MISO. GPIO23, D23, "
     "to MOSI. GPIO18, D18, to SCK. GPIO5, D5, to CS. The module carries a "
     "regulator, a level shifter and a micro SD card in its socket. Start the "
@@ -7478,23 +7557,46 @@ SD_WIRING_ALT = (
     "pins in different orders.")
 
 
+# The dev board, as the wiring diagrams draw it: the module's can with its
+# antenna, a header down the side, two buttons and the USB socket, in the
+# box x 8 to 106, y 8 to 234. The wires leave its right edge at x 106.
+DEVBOARD_ART = (
+    '<rect class="o" x="8" y="8" width="98" height="222" rx="4"/>'
+    '<rect class="d" x="20" y="14" width="74" height="16" rx="1"/>'
+    '<path class="d" d="M26 22 H34 V18 H40 V26 H46 V18 H52 V26 H58 V18 '
+    'H64 V26 H70 V22 H86"/>'
+    '<rect class="o" x="20" y="30" width="74" height="58" rx="2"/>'
+    '<text x="57" y="63" font-size="10" text-anchor="middle">ESP32</text>'
+    + "".join(f'<rect class="k" x="11" y="{y}" width="4" height="4" rx="0.5"/>'
+              for y in range(100, 212, 11))
+    + '<rect class="d" x="20" y="213" width="8" height="6" rx="1"/>'
+    '<rect class="d" x="86" y="213" width="8" height="6" rx="1"/>'
+    '<rect class="o" x="44" y="222" width="26" height="12" rx="2"/>')
+
+
+def _wire_row(y, c, pin, wire, far, far_x=234, label_x=171, gap=None):
+    """One wire of a diagram: from the board's edge at 106 to far_x, with a
+    pin at each end, the board's pin name, the wire's name over its middle
+    and the far end's pin name. gap is (x1, x2), a stretch left open for a
+    part drawn on the wire, such as a resistor."""
+    path = (f"M108 {y} H{far_x}" if gap is None
+            else f"M108 {y} H{gap[0]} M{gap[1]} {y} H{far_x}")
+    return (f'<path class="ww s-{c}" d="{path}"/>'
+            f'<rect class="f-{c}" x="101" y="{y - 2.5}" width="5" height="5" rx="1"/>'
+            f'<rect class="f-{c}" x="{far_x}" y="{y - 2.5}" width="5" height="5" rx="1"/>'
+            f'<text class="f-{c}" x="97" y="{y + 3}" font-size="10" '
+            f'text-anchor="end">{pin}</text>'
+            f'<text class="f-{c}" x="{label_x}" y="{y - 5}" font-size="10" '
+            f'text-anchor="middle">{wire}</text>'
+            + (f'<text class="f-{c}" x="{far_x + 11}" y="{y + 3}" font-size="10">{far}</text>'
+               if far else ""))
+
+
 def _sd_wiring():
     out = ['<svg class="art wiring" viewBox="-5 -6 354 308" role="img" '
            'preserveAspectRatio="xMidYMid meet" aria-label="'
            + html.escape(SD_WIRING_ALT, quote=True) + '">']
-    # The dev board: module can with its antenna, two headers, buttons, USB.
-    out.append(
-        '<rect class="o" x="8" y="8" width="98" height="222" rx="4"/>'
-        '<rect class="d" x="20" y="14" width="74" height="16" rx="1"/>'
-        '<path class="d" d="M26 22 H34 V18 H40 V26 H46 V18 H52 V26 H58 V18 '
-        'H64 V26 H70 V22 H86"/>'
-        '<rect class="o" x="20" y="30" width="74" height="58" rx="2"/>'
-        '<text x="57" y="63" font-size="10" text-anchor="middle">ESP32</text>'
-        + "".join(f'<rect class="k" x="11" y="{y}" width="4" height="4" rx="0.5"/>'
-                  for y in range(100, 212, 11))
-        + '<rect class="d" x="20" y="213" width="8" height="6" rx="1"/>'
-        '<rect class="d" x="86" y="213" width="8" height="6" rx="1"/>'
-        '<rect class="o" x="44" y="222" width="26" height="12" rx="2"/>')
+    out.append(DEVBOARD_ART)
     # The module: its PCB, a three legged regulator, a level shifter, the
     # socket, and the card sitting in it.
     out.append(
@@ -7512,15 +7614,7 @@ def _sd_wiring():
     # The six wires, each with its pins, its names and, on the data lines,
     # a pulse. The pulse sits mid-wire at rest, under the wire's label.
     for y, c, pin, wire, mod in _SD_ROWS:
-        out.append(
-            f'<path class="ww s-{c}" d="M108 {y} H234"/>'
-            f'<rect class="f-{c}" x="101" y="{y - 2.5}" width="5" height="5" rx="1"/>'
-            f'<rect class="f-{c}" x="234" y="{y - 2.5}" width="5" height="5" rx="1"/>'
-            f'<text class="f-{c}" x="97" y="{y + 3}" font-size="10" '
-            f'text-anchor="end">{pin}</text>'
-            f'<text class="f-{c}" x="171" y="{y - 5}" font-size="10" '
-            f'text-anchor="middle">{wire}</text>'
-            f'<text class="f-{c}" x="245" y="{y + 3}" font-size="10">{mod}</text>')
+        out.append(_wire_row(y, c, pin, wire, mod))
         if c in _SD_PULSE:
             out.append(f'<circle class="f-{c} spi {_SD_PULSE[c]}" '
                        f'cx="171" cy="{y}" r="2.2"/>')
@@ -7537,6 +7631,185 @@ def _sd_wiring():
 
 
 SD_WIRING = _sd_wiring()
+
+
+# ----------------------------------------------------------------------
+# The lights on /lights (site 1.2.1), drawn the way the SD card is: the dev
+# board on the left, each wire one colour end to end. Power is --busy and
+# ground --faint, as on the SD diagram, and the data line --live.
+#
+# The facts are the firmware's (src/plugins/lights.cpp, COMMANDS.md
+# "lights"): GPIO13 for the drive light, which has no job at boot, and 14
+# for the strip, the pin COMMANDS.md's example gives it. The resistor, the
+# capacitor and the separate supply for the strip are Rob's, settled in the
+# firmware's CLAUDE.md. No level shifter, on purpose: 5 V pixels take their
+# data from the 3.3 V pin.
+# ----------------------------------------------------------------------
+LIGHTS_DRIVE_ALT = (
+    "Wiring one WS2812B pixel to an ESP32 dev board as the drive light. VIN, "
+    "the 5 V from USB, to the pixel's 5V. Ground to GND. GPIO13, printed D13, "
+    "through a 330 to 470 ohm resistor to the pixel's DIN. A 100 nF capacitor "
+    "across the pixel's 5V and GND, at the pixel.")
+
+
+def _lights_drive():
+    out = ['<svg class="art wiring lights" viewBox="-5 -6 354 308" role="img" '
+           'preserveAspectRatio="xMidYMid meet" aria-label="'
+           + html.escape(LIGHTS_DRIVE_ALT, quote=True) + '">', DEVBOARD_ART]
+    # The pixel on its little board, lit.
+    out.append(
+        '<rect class="o" x="252" y="100" width="84" height="100" rx="4"/>'
+        '<rect class="gb" x="296" y="128" width="28" height="28" rx="2"/>'
+        '<circle class="halo" cx="310" cy="142" r="11"/>'
+        '<circle class="lf glow" cx="310" cy="142" r="5"/>')
+    out.append(_wire_row(124, "pwr", "VIN", "VIN, 5 V", "5V", far_x=250, label_x=150)
+               + _wire_row(144, "gnd", "GND", "GND", "GND", far_x=250, label_x=150)
+               + _wire_row(164, "dat", "D13", "GPIO13", "DIN", far_x=250, label_x=150,
+                           gap=(190, 216)))
+    # The resistor in the data line, and the capacitor across the supply.
+    out.append(
+        '<rect class="gb" x="190" y="160" width="26" height="8" rx="1.5"/>'
+        '<text class="f-dat" x="203" y="156" font-size="8.5" '
+        'text-anchor="middle">330 to 470 \u03a9</text>'
+        '<path class="ww s-pwr" d="M234 124 V131"/>'
+        '<path class="ww s-gnd" d="M234 137 V144"/>'
+        '<path class="o" d="M227 131 H241 M227 137 H241"/>'
+        '<circle class="f-pwr" cx="234" cy="124" r="2.2"/>'
+        '<circle class="f-gnd" cx="234" cy="144" r="2.2"/>'
+        '<text x="224" y="137" font-size="8.5" text-anchor="end">100 nF</text>')
+    out.append(
+        _label(57, 246, "ESP32 dev board") + _label(294, 218, "WS2812B pixel")
+        + '<text x="172" y="264" font-size="10" text-anchor="middle">'
+        "One pixel draws about 60 mA: VIN on USB is fine.</text>"
+        '<text x="172" y="278" font-size="10" text-anchor="middle">'
+        "Resistor and capacitor at the pixel end.</text>"
+        '<text x="172" y="292" font-size="10" text-anchor="middle">'
+        "The pin is set on CONFIG lights.</text>"
+        "</svg>")
+    return "".join(out)
+
+
+LIGHTS_DRIVE = _lights_drive()
+
+LIGHTS_STRIP_ALT = (
+    "Wiring a strip of ten WS2812B pixels to an ESP32 dev board. The strip has "
+    "a 5 V supply of its own, rated 1 A or more: its plus to the strip's 5V, "
+    "its minus to the strip's GND, and the board's GND joined to that same "
+    "ground. GPIO14, printed D14, through a 330 to 470 ohm resistor to the "
+    "strip's DIN at the first pixel. A 100 nF capacitor across the strip's 5V "
+    "and GND. The board's VIN is not connected to the strip.")
+
+
+def _lights_strip():
+    out = ['<svg class="art wiring lights" viewBox="-5 -6 354 308" role="img" '
+           'preserveAspectRatio="xMidYMid meet" aria-label="'
+           + html.escape(LIGHTS_STRIP_ALT, quote=True) + '">', DEVBOARD_ART]
+    # The supply, with its two terminals at the bottom.
+    out.append(
+        '<rect class="o" x="236" y="12" width="106" height="50" rx="3"/>'
+        '<text class="ink" x="289" y="30" font-size="10" text-anchor="middle">'
+        "5 V supply</text>"
+        '<text x="289" y="43" font-size="9" text-anchor="middle">1 A or more</text>'
+        '<text class="f-gnd" x="300" y="57" font-size="10" text-anchor="middle">-</text>'
+        '<text class="f-pwr" x="322" y="57" font-size="10" text-anchor="middle">+</text>')
+    # The strip: its pads on the top edge, ten pixels, three of them lit.
+    lit = {0: "px1", 1: "px2", 3: "px3"}
+    out.append(
+        '<rect class="o" x="190" y="176" width="154" height="44" rx="3"/>'
+        '<text class="f-dat" x="206" y="190" font-size="8.5" text-anchor="middle">DIN</text>'
+        '<text class="f-gnd" x="300" y="190" font-size="8.5" text-anchor="middle">GND</text>'
+        '<text class="f-pwr" x="322" y="190" font-size="8.5" text-anchor="middle">5V</text>'
+        + "".join(f'<rect class="gb" x="{196 + i * 14.4:g}" y="198" width="10" '
+                  f'height="10" rx="1.5"/>' for i in range(10))
+        + "".join(f'<circle class="lf {cls}" cx="{201 + i * 14.4:g}" cy="203" r="2.6"/>'
+                  for i, cls in lit.items()))
+    # Ground: the supply's minus down to the strip, and the board's GND
+    # across to meet it. Power: the supply's plus down to the strip, and
+    # nothing from the board. Data: D14 through the resistor to DIN.
+    out.append(
+        '<path class="ww s-gnd" d="M300 64 V174 M108 144 H300"/>'
+        '<path class="ww s-pwr" d="M322 64 V174"/>'
+        '<path class="ww s-dat" d="M108 164 H150 M176 164 H206 V174"/>'
+        '<circle class="f-gnd" cx="300" cy="144" r="3"/>'
+        '<rect class="f-gnd" x="101" y="141.5" width="5" height="5" rx="1"/>'
+        '<rect class="f-dat" x="101" y="161.5" width="5" height="5" rx="1"/>'
+        '<text class="f-gnd" x="97" y="147" font-size="10" text-anchor="end">GND</text>'
+        '<text class="f-dat" x="97" y="167" font-size="10" text-anchor="end">D14</text>'
+        '<text class="f-gnd" x="200" y="139" font-size="10" text-anchor="middle">'
+        "GND, shared</text>"
+        '<text class="f-dat" x="128" y="179" font-size="10" text-anchor="middle">GPIO14</text>'
+        '<rect class="gb" x="150" y="160" width="26" height="8" rx="1.5"/>'
+        '<text class="f-dat" x="163" y="156" font-size="8.5" '
+        'text-anchor="middle">330 to 470 \u03a9</text>'
+        '<path class="ww s-gnd" d="M300 160 H306"/>'
+        '<path class="ww s-pwr" d="M316 160 H322"/>'
+        '<path class="o" d="M306 153 V167 M316 153 V167"/>'
+        '<circle class="f-gnd" cx="300" cy="160" r="2.2"/>'
+        '<circle class="f-pwr" cx="322" cy="160" r="2.2"/>'
+        '<text x="296" y="163" font-size="8.5" text-anchor="end">100 nF</text>')
+    out.append(
+        _label(57, 246, "ESP32 dev board") + _label(267, 238, "the strip, 1 to 16")
+        + '<text x="172" y="264" font-size="10" text-anchor="middle">'
+        "Ten pixels at full white: about 600 mA.</text>"
+        '<text x="172" y="278" font-size="10" text-anchor="middle">'
+        "Their own supply, its ground joined to GND.</text>"
+        '<text x="172" y="292" font-size="10" text-anchor="middle">'
+        "Resistor at the first pixel. Pin on CONFIG lights.</text>"
+        "</svg>")
+    return "".join(out)
+
+
+LIGHTS_STRIP = _lights_strip()
+
+
+# ----------------------------------------------------------------------
+# The spectrum at the top of /hardware (site 1.2.1, Rob): the three ways to
+# build a board on one line, a range to choose from and not a ladder, so
+# every stretch of the line has a head at both ends. Under the line, a
+# ruler with a tick under each stop and the estimates under the ticks.
+#
+# 354 units wide, so a 390 phone draws it at about 1:1 and the smallest
+# type lands near 9px, like the other drawings. aria-hidden: the list
+# under it on the page says the same things in words, with the links.
+# The figures are "about" on purpose and come from listings on
+# 2026-09-24 (see the comment at the top of pages/hardware.md); change
+# them here and in the list together.
+# ----------------------------------------------------------------------
+SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work
+    (59, "bare ESP32", ("functional,", "lowest cost"), "about $10", "about 5 min",
+     "no wiring"),
+    (177, "ESP32 + SD", ("economical", "and usable"), "about $15", "about 30 min",
+     "wiring the card"),
+    (295, "Waveshare S3", ("most", "expandable"), "about $15", "about 10 min",
+     "BOOT and RESET"),
+)
+
+
+def _spectrum():
+    # Type a size up from the other drawings: this one is all words, and at
+    # 390 the 9.5 unit captions read as small print (rendered 2026-09-24).
+    out = ['<svg class="art spectrum" viewBox="-4 -2 362 144" '
+           'preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">']
+    for x1, x2 in ((99, 138), (216, 249)):
+        out.append(f'<path class="o" d="M{x1} 18 H{x2} M{x1 + 5} 14 L{x1} 18 L{x1 + 5} 22 '
+                   f'M{x2 - 5} 14 L{x2} 18 L{x2 - 5} 22"/>')
+    out.append('<path class="f" d="M12 79 H342"/>')
+    for x, name, (l1, l2), cost, time, work in SPECTRUM_STOPS:
+        out.append(
+            f'<text class="ink" x="{x}" y="22" font-size="12" text-anchor="middle">{name}</text>'
+            f'<text x="{x}" y="44" font-size="10.5" text-anchor="middle">{l1}</text>'
+            f'<text x="{x}" y="57" font-size="10.5" text-anchor="middle">{l2}</text>'
+            f'<path class="o" d="M{x} 73 V85"/>'
+            f'<text class="live" x="{x}" y="104" font-size="10.5" '
+            f'text-anchor="middle">{cost}</text>'
+            f'<text x="{x}" y="118" font-size="10.5" text-anchor="middle">{time}</text>'
+            f'<text class="warm" x="{x}" y="134" font-size="9.5" '
+            f'text-anchor="middle">{work}</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+SPECTRUM = _spectrum()
 
 
 # The skull for the warning box on /how. Crossbones first, so the skull,
@@ -7899,6 +8172,9 @@ ART = {"firstcall": FIRSTCALL_ART,
        "term-terminals": MACHINE_TERMINALS,
        "term-bridge": MACHINE_BRIDGE,
        "sd-wiring": SD_WIRING,
+       "lights-drive": LIGHTS_DRIVE,
+       "lights-strip": LIGHTS_STRIP,
+       "hardware-spectrum": SPECTRUM,
        # The cover at the top of /donate. An image rather than inline, so
        # it is fetched once and cached, and it is vector either way.
        "cover": ('<img class="cover" src="/cover.svg" width="1600" height="310" '
@@ -8004,9 +8280,9 @@ belonged to somebody you could name.</p>
 <p>A telnet BBS that runs on a bare ESP32 and grows into an IoT terminal server
 through plugins. Nodes, handles, a user list, a chat room in the style of DDial and
 Gtalk, mail between callers, file areas on an SD card, forums on the same card, a
-caller log, a sysop who can page you. The forums are the newest part: topic areas
-a sysop sets up, with conversations inside each one, read at the same prompt as
-everything else. Doors come after them.</p>
+caller log, a sysop who can page you. The forums are topic areas a sysop sets
+up, with conversations inside each one, read at the same prompt as everything
+else. Doors are still to come.</p>
 
 <p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
 server farm, not a feature that can be deprecated out from under you. A chip you own,
@@ -8047,7 +8323,7 @@ analytics to leak, no retention policy to change, no company to be acquired by s
 with different ideas. What is not built cannot be exploited, and what was never
 collected cannot be handed over.</p>
 
-<h2>Freedoms gained</h2>
+<h2 id="freedoms-gained">Freedoms gained</h2>
 
 <p>None of this is granted to you. It is what is left when there is nobody in the
 middle: no company, no platform, no landlord. Every item below is something you
@@ -8194,11 +8470,8 @@ list is gone.</p>
 
 <p><b>Open communication over the internet is radio.</b> You transmit, whoever
 is on the channel hears you, and that is the whole of it. A walkie-talkie, not
-a sealed envelope. Telnet has no encryption, and the machines this is built for
-cannot carry much: a stock Commodore 64 has been made to finish a modern TLS
-handshake, and it takes
-<a href="https://github.com/JC-000/c64-https">about half an hour</a>. Pretending
-otherwise would be worse than saying so.</p>
+a sealed envelope. Telnet has no encryption, because many of the machines this
+is built for could not carry it.</p>
 
 <p><b>Somebody has to be trying.</b> Being able to listen is not the same as
 listening. It takes a packet sniffer or the equivalent, placed somewhere on the
