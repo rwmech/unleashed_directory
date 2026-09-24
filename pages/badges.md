@@ -2,9 +2,11 @@
 
 The small marks under a board's name on the [board list](/). Some are sent by the board itself, and the rest are worked out here, from this directory's own record of that board. Point at one, or tap it, and it says what it is. The **Filter** button above the list shows only the boards carrying the badges you pick.
 
-Under each name, the first line is what the board is: the software and its version, then the machine it runs on. The second line is the rest, in the same order on every board, so each badge sits in the same place as you scroll: PETSCII, guests, what is running, what this directory worked out, then the causes and the interests, those two in alphabetical order.
+Under each name, the first line is what the board is: the software and its version, then the machine it runs on. The second line is the rest, in the same order on every board, so each badge sits in the same place as you scroll: PETSCII, guests, what is running and the SD card, what this directory worked out, then the causes and the interests, those two in alphabetical order.
 
-<!-- The tables below are drawn from BADGES in server.py, the same list the board list's filter uses, so the key cannot disagree with it. Change a badge there, not here. Within a group the tables list the badges alphabetically by name; a board's row uses ROW_ORDER instead (site 1.0.0). -->
+Each cause and interest has a short code of up to six letters and digits, such as `MNTLH` for mental health or `C64` for the Commodore 64. The code is what a board sends, and the search box finds a badge by its code as well as by its name.
+
+<!-- The tables below are drawn from BADGES in server.py, the same list the board list's filter uses, so the key cannot disagree with it. The causes and interests, with their codes and aliases, come from badges.json (site 1.1.0); change one there, and give a new one a drawing in server.py. Within a group the tables list the badges alphabetically by name; a board's row uses ROW_ORDER instead (site 1.0.0). -->
 
 ::: badgefind
 :::
@@ -26,7 +28,7 @@ Add these to show what your board stands for. They come from a fixed list, chose
 
 ::: badges
 interests
-What the sysop is into, so a caller can find a board full of people who like the same things. Drawn in rose, a colour nothing else on the list uses. The same rules as support: a fixed list, a slug each, and nothing typed in. Amateur radio, this hobby's oldest neighbour, is here with the radio and the sky; it was a support badge until September 2026, and `ham` is still understood in either list.
+What the sysop is into, so a caller can find a board full of people who like the same things. Drawn in rose, a colour nothing else on the list uses. The same rules as support: a fixed list, a code each, and nothing typed in. Amateur radio, this hobby's oldest neighbour, is here with the radio and the sky; it was a support badge until September 2026, and `HAM` is still understood in either list.
 :::
 
 ### How steady is worked out
@@ -37,7 +39,9 @@ The directory has to have watched a board for the whole week before it can earn 
 
 ## Setting them
 
-A board sends the slugs, the short words in the Slug column, in the `support` and `interests` lists of its heartbeat, described in [the protocol](https://github.com/rwmech/unleashed_directory/blob/main/PROTOCOL.md). For a sysop that means typing them, separated by commas, into wherever their BBS software keeps its directory settings. A board can send up to 16 of each, and a slug this directory does not know is ignored.
+A board sends the codes in the Code column, in the `support` and `interests` lists of its heartbeat, described in [the protocol](https://github.com/rwmech/unleashed_directory/blob/main/PROTOCOL.md). For a sysop that means typing them, separated by commas, into wherever their BBS software keeps its directory settings: `MNTLH, LTRCY` for mental health and literacy. Case does not matter, so `mntlh` is the same code. A board can send up to 16 of each, and a code this directory does not know is ignored.
+
+The longer names these badges had before the codes, such as `mental-health` and `electronics`, still work, so nothing needs changing on a board that already sends them. So do the links and bookmarks made with them.
 
 > [!NOTE]
-> The µnleashed firmware does not send any of the fields on this page yet. Until a release does, µnleashed boards show only the badges the directory works out for itself.
+> On a µnleashed board the causes and interests go on the announce page of `CONFIG`, from firmware 1.0.1. The board fills in the other fields itself, from what it is running at the time.

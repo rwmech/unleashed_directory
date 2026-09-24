@@ -14,6 +14,75 @@
 
 # Changelog
 
+## 1.1.0, 2026-09-24
+
+Short codes for every cause and interest, an SD card badge, one board per
+port on the go-public guide, and the BOOT-hold reset waiting for firmware
+1.1.0.
+
+- **Every cause and interest has a short code** (Rob: "like 5 or 6 max",
+  `MNTLH` for mental health). Six letters and digits at most, a real word
+  kept whole where it fits (`HAM`, `C64`, `LINUX`, `CANCER`), otherwise a
+  consonant code (`MNTLH`, `ELCTR`, `LTRCY`). /badges shows them upper case
+  in a **Code** column, and the filter's chips say the code in their
+  tooltip. A board sends them, and the directory stores and publishes them,
+  in lower case; they are read in any case, in a heartbeat, in a `?b=`
+  link and in the search boxes.
+- **Every older slug still works.** The long slugs up to site 1.0.0
+  (`mental-health`, `electronics`) and the interim ones proposed on the
+  way (`hope`, `meeple`, `wx`) are aliases: a board on firmware 1.0.1 that
+  sends `electronics` keeps its badge, and a shared link with
+  `?b=electronics` still filters. A word is matched with its case folded
+  and everything but letters and digits dropped, so `Mental health`,
+  `mental-health` and `MNTLH` are one badge. A row stored with the old
+  slugs is read through the same aliases, with no migration, and its next
+  heartbeat writes codes. `/api/boards.json` answers in codes.
+- **The table is one file, `badges.json`**, beside server.py: each badge's
+  code, group (and sub-group for an interest), name, meaning and aliases,
+  plus the rules, in plain JSON a separate program can read. The firmware
+  can build its CONFIG pick-list from it. The drawings stay in server.py,
+  keyed by code. setup.sh installs the file with the code. Without it the
+  site still starts, shows no causes or interests, says so in the journal,
+  and leaves the causes and interests boards have stored alone rather than
+  writing them empty.
+- **An SD card badge.** A new optional announce field, `sd`: the size of the
+  card in use, in GB, already rounded by the board to the size printed on
+  the card. Shown as `SD32` in the features' blue, after what is running;
+  a filter chip (`?b=sd`) and a row on /badges; in the JSON as `sd` and in
+  the feed as "SD card: 32 GB". A value that is not a whole number from 1 to
+  4096 counts as not sent. In PROTOCOL.md, with the codes.
+- **/forward explains one board per port.** Two new sections: the same
+  port outside and in, and why a router with one port box (eero) needs it;
+  and one outside port per board at one address. From firmware 1.1.0 a
+  board's port is a setting, **Port** on the network page of CONFIG, and
+  the announce page's **Outside** is the number callers dial through the
+  router, empty meaning the same as Port. Until a 1.1.0 release is out the
+  page says what older firmware can do instead. It also says, plainly,
+  that this directory lists one board per address by itself and a second
+  waits for a person.
+- **/setup** gets the same: the wifi page becomes **network** with its
+  **Port**, and the announce page's Port becomes **Outside**, on the day a
+  1.1.0 release is on disk. The backup port's note no longer assumes 6400,
+  and the announce page mentions the causes and interests from firmware
+  1.0.1.
+- **/install's reset section waits for firmware 1.1.0**, not 1.0.2, which
+  became the restore security fix and has no BOOT-hold reset. It carries the
+  firmware's 1.1.0 wording: a warning, read before step 1, that a factory
+  reset takes the board off this directory until a backup is restored; the
+  7 to 15 second band keeps the board off the directory until a new
+  password is chosen; the 15 to 20 second band wipes the Wi-Fi too.
+- **`::: until X.Y.Z`**, the other half of `::: from`: prose shown only
+  while the newest release on disk is older, or there is none. A pair swaps
+  one account for the other on the day the release lands. A gate now also
+  closes whatever list, paragraph or table came before it, so it can follow
+  a list directly.
+- /badges: the note that the firmware sends none of these was out of date
+  since firmware 1.0.1 and is gone; the page says where a µnleashed sysop
+  types the codes. /how's example is in codes, with `sd`.
+- `SELFTEST_PORT` moves the suite's five ports off 8123, for a machine where
+  something else has it.
+- 698 checks, up from 663, with a database made by 1.0.0 among them.
+
 ## 1.0.0, 2026-09-23
 
 The site's 1.0.0 marks the public launch of the µnleashed firmware at 1.0.0.

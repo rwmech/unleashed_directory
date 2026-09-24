@@ -32,7 +32,10 @@ import time
 import urllib.error
 import urllib.request
 
-PORT = 8123
+# The suite's first port. It uses this and the four after it, all on
+# 127.0.0.1, one directory each. SELFTEST_PORT moves the lot, for a machine
+# where something else already has 8123 (site 1.1.0).
+PORT = int(os.environ.get("SELFTEST_PORT", "8123"))
 BASE = f"http://127.0.0.1:{PORT}"
 passed = failed = 0
 
@@ -253,6 +256,72 @@ CREATE TABLE hits (
 """
 
 
+# The tables as they stood at site 1.0.0, the last version before the codes
+# and the SD card: every badge column but sd. The live database is one of
+# these now, its causes and interests stored as the long slugs. Exactly what
+# CREATE TABLE made then, copied from 1.0.0's server.py.
+OLD_SCHEMA_100 = """
+CREATE TABLE boards (
+    id           INTEGER PRIMARY KEY,
+    token        TEXT UNIQUE NOT NULL,
+    name         TEXT NOT NULL,
+    owner        TEXT NOT NULL DEFAULT '',
+    description  TEXT NOT NULL DEFAULT '',
+    software     TEXT NOT NULL DEFAULT '',
+    version      TEXT NOT NULL DEFAULT '',
+    host         TEXT NOT NULL DEFAULT '',
+    address      TEXT NOT NULL DEFAULT '',
+    group_key    TEXT NOT NULL DEFAULT '',
+    port         INTEGER NOT NULL DEFAULT 6400,
+    nodes        INTEGER NOT NULL DEFAULT 0,
+    busy         INTEGER NOT NULL DEFAULT 0,
+    calls24      INTEGER,
+    minutes24    INTEGER,
+    uptime       INTEGER NOT NULL DEFAULT 0,
+    interval_min INTEGER NOT NULL DEFAULT 10,
+    state        TEXT NOT NULL DEFAULT 'pending',
+    first_seen   INTEGER NOT NULL,
+    last_seen    INTEGER NOT NULL,
+    streak_start INTEGER NOT NULL,
+    public_at    INTEGER NOT NULL DEFAULT 0,
+    beats        INTEGER NOT NULL DEFAULT 0,
+    note         TEXT NOT NULL DEFAULT '',
+    tz_offset    INTEGER NOT NULL DEFAULT 0,
+    system       TEXT NOT NULL DEFAULT '',
+    terminals    TEXT NOT NULL DEFAULT '',
+    guests       INTEGER,
+    features     TEXT NOT NULL DEFAULT '',
+    support      TEXT NOT NULL DEFAULT '',
+    tracked_since INTEGER NOT NULL DEFAULT 0,
+    interests    TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE beathours (
+    board_id INTEGER NOT NULL,
+    hour     INTEGER NOT NULL,
+    beats    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, hour)
+);
+CREATE TABLE activity (
+    board_id INTEGER NOT NULL,
+    hour     INTEGER NOT NULL,
+    beats    INTEGER NOT NULL DEFAULT 0,
+    busy     INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (board_id, hour)
+);
+CREATE TABLE reports (
+    id       INTEGER PRIMARY KEY,
+    board_id INTEGER NOT NULL,
+    at       INTEGER NOT NULL,
+    address  TEXT NOT NULL DEFAULT '',
+    reason   TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE hits (
+    address TEXT PRIMARY KEY,
+    at      INTEGER NOT NULL
+);
+"""
+
+
 def start_server(db, port):
     """A directory on its own port and database, its output drained, and
     whether it came up. The caller terminates it."""
@@ -317,6 +386,7 @@ def pane_of(page):
 def badge_checks(S, db):
     """Site 0.21.0: the badge fields, the badges, the steady record, the
     legend, the zebra rows and the hover, and a database from before."""
+    import pathlib
     import sqlite3
 
     # ----------------------------------------------------------------------
@@ -328,14 +398,19 @@ def badge_checks(S, db):
             "terminals": ["PETSCII", "ansi", "bogus", 7, None, "ansi"],
             "guests": True,
             "features": ["doors", "chat", "Files", "gopher"],
+            "sd": 32,
+            # A code in any case, and two old slugs the codes replaced (site
+            # 1.1.0): "CHIPTUNE" and "electronics" are aliases of CHPTN and
+            # ELCTR, and have to arrive as those.
             "support": ["ham", "lgbtq", "<script>alert(1)</script>", "HAM", "nazis"],
             "interests": ["CHIPTUNE", "c64", "<b>x</b>", "nazis", 64, None,
-                          "electronics", "c64"]}
+                          "electronics", "C64"]}
     junk = {"name": "Junk Fields", "port": 6400, "token": "",
             "system": ["not", "a", "string"], "terminals": "petscii",
             "guests": "yes", "features": {"chat": True}, "support": "lgbtq",
-            "interests": "c64"}
-    shut = {"name": "No Guests", "port": 6400, "token": "", "guests": False}
+            "interests": "c64", "sd": "32"}
+    shut = {"name": "No Guests", "port": 6400, "token": "", "guests": False,
+            "sd": True}
     code, got = post_from(full, "198.51.100.7")
     check("a heartbeat carrying every badge field is accepted", code == 200)
     code, gotj = post_from(junk, "198.51.100.8")
@@ -358,52 +433,216 @@ def badge_checks(S, db):
     check("guests: a JSON true is true", bb.get("guests") is True)
     check("features: known words only, in order",
           bb.get("features") == ["chat", "files", "doors"])
-    check("support: known slugs only; a made-up one, markup and all, is dropped",
+    check("support: known codes only; a made-up one, markup and all, is dropped",
           bb.get("support") == ["lgbtq"])
     # Amateur radio moved from support to the interests (site 0.22.2, Rob:
     # "Amateur radio is not a support cause"), keeping its slug; a board that
     # still sends it as support has it filed with its interests, once.
-    check("interests: known slugs only, once each, any case; markup, a number, "
-          "a null and a made-up one dropped; ham sent as support filed here",
-          bb.get("interests") == ["c64", "electronics", "chiptune", "ham"]
-          and "ham" not in S.SUPPORT_SLUGS and "ham" in S.INTEREST_SLUGS
+    check("interests: known codes only, once each, any case, an old slug read as "
+          "its code; markup, a number, a null and a made-up one dropped; ham sent "
+          "as support filed here",
+          bb.get("interests") == ["c64", "elctr", "chptn", "ham"]
+          and "ham" not in S.SUPPORT_CODES and "ham" in S.INTEREST_CODES
           and S.SUPPORT_MOVED == ("ham",))
+    check("sd: the card's size, a whole number of GB, is kept as a number",
+          bb.get("sd") == 32)
     check("a field of the wrong type counts as not sent, and the board is "
           "still listed",
           jb.get("system") == "" and jb.get("terminals") == []
           and jb.get("guests") is None and jb.get("features") == []
-          and jb.get("support") == [] and jb.get("interests") == [])
+          and jb.get("support") == [] and jb.get("interests") == []
+          and jb.get("sd") is None and listed.get("No Guests", {}).get("sd", 0) is None)
     check("only the first 16 interests are read",
-          S.pick(["x"] * 16 + ["c64"], S.INTEREST_SLUGS) == []
-          and S.pick(["x"] * 15 + ["c64"], S.INTEREST_SLUGS) == ["c64"])
-    check("about forty interests, each a plain lower case slug with a drawing, "
-          "a group, a name and a sentence",
+          S.pick(["x"] * 16 + ["c64"], S.INTEREST_CODES, alias=S.INTEREST_ALIAS) == []
+          and S.pick(["x"] * 15 + ["c64"], S.INTEREST_CODES,
+                     alias=S.INTEREST_ALIAS) == ["c64"])
+    check("about forty interests, each a code with a drawing, a group, a name and "
+          "a sentence",
           38 <= len(S.INTERESTS) <= 48
-          and len(set(S.INTEREST_SLUGS)) == len(S.INTEREST_SLUGS)
-          and all(re.fullmatch(r"[a-z0-9][a-z0-9-]{1,23}", s) for s in S.INTEREST_SLUGS)
+          and len(set(S.INTEREST_CODES)) == len(S.INTEREST_CODES)
           and all(s in S.INTEREST_ART and g in S.INTEREST_GROUPS and n and t.endswith(".")
                   for s, g, n, t in S.INTERESTS)
-          and set(S.INTEREST_ART) == set(S.INTEREST_SLUGS))
+          and set(S.INTEREST_ART) == set(S.INTEREST_CODES))
     check("and none of them is a support cause or another badge's key",
-          not set(S.INTEREST_SLUGS) & (set(S.SUPPORT_SLUGS) | {
+          not set(S.INTEREST_CODES) & (set(S.SUPPORT_CODES) | {
               k for k, *_ in S.LETTER_BADGES} | {a[1] for a in S.AGES})
           and len(S.FILTER_KEYS) == len(set(S.FILTER_KEYS)))
     # Site 0.22.2 (Rob): the support list grows by volume, to about 25, the
-    # first ten unchanged, HIV's ribbon still red while Rob decides.
-    first_ten = ("lgbtq", "trans", "disability", "neurodiversity", "mental-health",
-                 "suicide-prevention", "veterans", "cancer", "hiv", "animals")
+    # first ten unchanged, HIV's ribbon still red while Rob decides. Their
+    # codes since site 1.1.0.
+    first_ten = ("lgbtq", "trans", "dsbld", "neuro", "mntlh", "scdpv", "vets",
+                 "cancer", "hiv", "animal")
     check("about 25 causes, the first ten unchanged, each with its own drawing "
           "and a sentence",
-          22 <= len(S.SUPPORT) <= 26 and S.SUPPORT_SLUGS[:10] == first_ten
-          and all(art in S.SUPPORT_ART and name and t.endswith(".")
-                  for _s, art, name, t in S.SUPPORT)
-          and len({art for _s, art, _n, _t in S.SUPPORT}) == len(S.SUPPORT)
-          and 'stroke="#e25a55"' in S.SUPPORT_ART["ribbon-h"]
-          and all(s in S.SUPPORT_SLUGS for s in (
-              "breast-cancer", "childhood-cancer", "dementia", "caregivers",
-              "diabetes", "heart-health", "domestic-violence", "recovery",
-              "donation", "foster-adoption", "homelessness", "hunger",
-              "literacy", "first-responders")))
+          22 <= len(S.SUPPORT) <= 26 and S.SUPPORT_CODES[:10] == first_ten
+          and all(code in S.SUPPORT_ART and name and t.endswith(".")
+                  for code, name, t in S.SUPPORT)
+          and set(S.SUPPORT_ART) == set(S.SUPPORT_CODES)
+          and len(set(S.SUPPORT_ART.values())) == len(S.SUPPORT)
+          and 'stroke="#e25a55"' in S.SUPPORT_ART["hiv"]
+          and all(s in S.SUPPORT_CODES for s in (
+              "brst", "chldc", "dmnta", "carers", "dbts", "heart", "dv", "rcvry",
+              "donor", "foster", "hmlss", "hunger", "ltrcy", "frstr")))
+
+    # ----------------------------------------------------------------------
+    # Site 1.1.0 (Rob: "like 5 or 6 max", MNTLH for mental health): a short
+    # code for every cause and interest, in one file a separate program can
+    # read, every earlier slug an alias.
+    print("Badge codes")
+    table = json.load(open("badges.json", encoding="utf-8"))
+    entries = table.get("badges", [])
+    check("badges.json is the table: 24 causes and 43 interests, each a code, a "
+          "group, a name, a meaning and its aliases, and it says whose it is",
+          table.get("format") == 1
+          and sum(e["group"] == "support" for e in entries) == 24
+          and sum(e["group"] == "interests" for e in entries) == 43
+          and all(isinstance(e.get("aliases"), list) and e.get("name") and e.get("means")
+                  for e in entries)
+          and all(e.get("sub") in table["interest_groups"] for e in entries
+                  if e["group"] == "interests")
+          and table.get("copyright") == "Copyright 2026 - Robert Mech"
+          and table.get("license") == "GPL-2.0-or-later")
+    check("and the server's tables are exactly what the file says, nothing left out",
+          S.BADGE_CODES_OK
+          and list(S.SUPPORT_CODES) == [e["code"] for e in entries if e["group"] == "support"]
+          and list(S.INTEREST_CODES) == [e["code"] for e in entries
+                                         if e["group"] == "interests"]
+          and tuple(table["interest_groups"]) == S.INTEREST_GROUPS
+          and sum(len(e["aliases"]) for e in entries) + len(entries)
+          == len(S.SUPPORT_ALIAS) + len(S.INTEREST_ALIAS))
+    codes = list(S.SUPPORT_CODES) + list(S.INTEREST_CODES)
+    check("every code is one to six lower case letters and digits, and no two are "
+          "the same",
+          all(re.fullmatch(r"[a-z0-9]{1,6}", c) for c in codes)
+          and len(set(codes)) == len(codes) and len(codes) == 67)
+    check("no code or alias is a word the filter already uses for something else",
+          not (set(S.FILTER_ALIAS) & ({k for k, *_ in S.LETTER_BADGES}
+                                      | {a[1] for a in S.AGES} | {"update"})))
+    # Every slug the site used up to 1.0.0, and the code it became. Typed
+    # out here, not read from badges.json, so a slip in the file shows.
+    old = {"lgbtq": "lgbtq", "trans": "trans", "disability": "dsbld",
+           "neurodiversity": "neuro", "mental-health": "mntlh",
+           "suicide-prevention": "scdpv", "veterans": "vets", "cancer": "cancer",
+           "hiv": "hiv", "animals": "animal", "breast-cancer": "brst",
+           "childhood-cancer": "chldc", "dementia": "dmnta", "caregivers": "carers",
+           "diabetes": "dbts", "heart-health": "heart", "domestic-violence": "dv",
+           "recovery": "rcvry", "donation": "donor", "foster-adoption": "foster",
+           "homelessness": "hmlss", "hunger": "hunger", "literacy": "ltrcy",
+           "first-responders": "frstr"}
+    old_i = {"bbs-history": "bbs", "linux": "linux", "open-source": "oss",
+             "programming": "prgrm", "retrocomputing": "retro", "amiga": "amiga",
+             "apple2": "apple2", "atari": "atari", "c64": "c64", "dos": "dos",
+             "spectrum": "zx", "3d-printing": "3dprt", "electronics": "elctr",
+             "robotics": "robot", "soldering": "solder", "woodworking": "wood",
+             "arcade": "arcade", "board-games": "brdgm", "gaming": "games",
+             "retro-gaming": "rtrgm", "tabletop-rpg": "rpg", "ansi-art": "ansi",
+             "chiptune": "chptn", "demoscene": "demo", "drawing": "draw",
+             "music": "music", "photography": "photo", "ham": "ham",
+             "astronomy": "astro", "swl": "swl", "weather": "wthr",
+             "aviation": "avtn", "cars": "cars", "cooking": "cook", "cycling": "bike",
+             "fishing": "fish", "gardening": "garden", "hiking": "hike",
+             "model-trains": "trains", "anime": "anime", "books": "books",
+             "movies": "movies", "scifi": "scifi"}
+    # The interim slugs proposed on the way to the codes, none of which
+    # shipped, accepted all the same.
+    interim = {"access": "dsbld", "mental": "mntlh", "lifeline": "scdpv",
+               "hope": "scdpv", "animal": "animal", "bcancer": "brst",
+               "breast": "brst", "ccancer": "chldc", "kidca": "chldc",
+               "memory": "dmnta", "diabet": "dbts", "sober": "rcvry",
+               "homeless": "hmlss", "homes": "hmlss", "read": "ltrcy",
+               "1stresp": "frstr", "rescue": "frstr"}
+    interim_i = {"code": "prgrm", "3dprint": "3dprt", "3d": "3dprt", "elec": "elctr",
+                 "robots": "robot", "boardgm": "brdgm", "meeple": "brdgm",
+                 "retrogm": "rtrgm", "retrog": "rtrgm", "ansiart": "ansi",
+                 "chip": "chptn", "wx": "wthr", "fly": "avtn"}
+    sup_ok = [w for w, c in list(old.items()) + list(interim.items())
+              if S.pick([w, w.upper(), w.replace("-", "")], S.SUPPORT_CODES,
+                        alias=S.SUPPORT_ALIAS) != [c]]
+    int_ok = [w for w, c in list(old_i.items()) + list(interim_i.items())
+              if S.pick([w.upper()], S.INTEREST_CODES, alias=S.INTEREST_ALIAS) != [c]
+              or S.pick([w.replace("-", "")], S.INTEREST_CODES,
+                        alias=S.INTEREST_ALIAS) != [c]]
+    check("every old slug, with or without its hyphens, and every interim one is "
+          "read as its code, in any case"
+          + ("" if not (sup_ok or int_ok) else "  <- " + ", ".join(sup_ok + int_ok)),
+          not sup_ok and not int_ok and len(old) == 24 and len(old_i) == 43)
+    check("so are a code in capitals and a name typed with its spaces",
+          S.pick(["MNTLH"], S.SUPPORT_CODES, alias=S.SUPPORT_ALIAS) == ["mntlh"]
+          and S.pick(["Mental health"], S.SUPPORT_CODES, alias=S.SUPPORT_ALIAS) == ["mntlh"]
+          and S.pick(["  ElCtR "], S.INTEREST_CODES, alias=S.INTEREST_ALIAS) == ["elctr"])
+    fq_bad = [w for w, c in list(old.items()) + list(old_i.items())
+              + list(interim.items()) + list(interim_i.items())
+              if S.filter_query("b=" + w.upper())[0] != (c,)]
+    check("and in a filter link, ?b=electronics finds what is ELCTR now"
+          + ("" if not fq_bad else "  <- " + ", ".join(fq_bad)),
+          not fq_bad and S.filter_query("b=MNTLH&b=Chiptune&b=petscii")[0]
+          == ("petscii", "mntlh", "chptn"))
+    check("a word one list knows is not a badge in the other",
+          S.pick(["mntlh", "hope"], S.INTEREST_CODES, alias=S.INTEREST_ALIAS) == []
+          and S.pick(["elctr", "c64"], S.SUPPORT_CODES, alias=S.SUPPORT_ALIAS) == [])
+
+    # The loader keeps what it can: a bad entry or a taken alias is left out
+    # with a line in the journal, and a missing file is no causes at all
+    # rather than a server that will not start.
+    was_file = S.BADGE_FILE
+    bad_file = os.path.join(tempfile.gettempdir(), f"badges{os.getpid()}.json")
+    with open(bad_file, "w", encoding="utf-8") as fh:
+        json.dump({"interest_groups": ["G"], "badges": [
+            {"code": "good", "group": "support", "name": "Good", "means": "Fine.",
+             "aliases": ["Nice-One", "chat"]},
+            {"code": "toolong", "group": "support", "name": "X", "means": "X.",
+             "aliases": []},
+            {"code": "dupe", "group": "interests", "sub": "G", "name": "D",
+             "means": "D.", "aliases": ["niceone", "dupes"]},
+            {"code": "nosub", "group": "interests", "name": "N", "means": "N.",
+             "aliases": []},
+            {"code": "mail", "group": "support", "name": "P", "means": "P.",
+             "aliases": []},
+            {"code": "str", "group": "support", "name": "S", "means": "S.",
+             "aliases": "abc"}]}, fh)
+    try:
+        S.BADGE_FILE = pathlib.Path(bad_file)
+        got_b = S._badge_codes()
+        S.BADGE_FILE = pathlib.Path(bad_file + ".missing")
+        got_m = S._badge_codes()
+    finally:
+        S.BADGE_FILE = was_file
+        os.remove(bad_file)
+    check("a bad entry, a taken alias and a filter word are left out, the rest "
+          "kept, and aliases that are not a list are no aliases, not letters",
+          got_b[0] == (("good", "Good", "Fine."), ("str", "S", "S."))
+          and got_b[1] == (("dupe", "G", "D", "D."),)
+          and got_b[3] == {"good": "good", "niceone": "good", "str": "str"}
+          and got_b[4] == {"dupe": "dupe", "dupes": "dupe"} and got_b[6] is True)
+    check("and a missing file is no causes and no interests, not a crash",
+          got_m[0] == () and got_m[1] == () and got_m[6] is False)
+    # With no table the heartbeat must not write the stored causes away:
+    # every board would lose its badges to one missing file.
+    mem_db = os.path.join(tempfile.gettempdir(), f"dirnotab{os.getpid()}.db")
+    was_db, was_ok = S.DB_PATH, S.BADGE_CODES_OK
+    try:
+        S.DB_PATH = mem_db
+        S.setup()
+        _st, first, _h = S.announce({"name": "Kept", "port": 6400, "token": "",
+                                     "support": ["mntlh"], "interests": ["c64"]},
+                                    "192.0.2.90")
+        S.BADGE_CODES_OK = False
+        # From another address, so the rate limit (30 s in this process)
+        # cannot be what left the row alone.
+        st2, _b, _h = S.announce({"name": "Kept", "port": 6400, "token": first["token"],
+                                  "support": [], "interests": []}, "192.0.2.91")
+        con_n = sqlite3.connect(mem_db)
+        kept = con_n.execute("SELECT support, interests FROM boards").fetchone()
+        con_n.close()
+    finally:
+        S.DB_PATH, S.BADGE_CODES_OK = was_db, was_ok
+        for leftover in (mem_db, mem_db + "-wal", mem_db + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+    check("and with no table a heartbeat leaves the stored causes and interests alone",
+          st2 == 200 and kept == ("mntlh", "c64"))
     check("and the support drawings keep to the house style too",
           all(not re.search(r"\sid=|<script|<text|on\w+=|href", a)
               for a in S.SUPPORT_ART.values()))
@@ -440,11 +679,13 @@ def badge_checks(S, db):
     # badges in a fixed order, PETSCII, guests, the features as C M F Fi D,
     # then new or steady and time listed.
     check("the software with its version and the machine first, then the rest in "
-          "their fixed order",
+          "their fixed order, the SD card with its size after what is running",
           found == [("soft", "unleashed 1.0.0"),
                     ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;"),
                     ("term", "P"), ("guest", "G"), ("feat", "C"), ("feat", "Fi"),
-                    ("feat", "D"), ("new", "N")])
+                    ("feat", "D"), ("feat", "SD32"), ("new", "N")])
+    check("the SD card's tooltip says its size",
+          'aria-label="SD card: 32 GB, in use on the board now."' in row)
     ident = (row.split('<span class="bid">')[1].split('<span class="bset">')[0]
              if '<span class="bid">' in row else "")
     check("on two rows: what the board is, and the small badges under it",
@@ -472,7 +713,7 @@ def badge_checks(S, db):
                     r"<span class='bname'>Badge Board</span>", page) is not None
           and re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
                         r"<span class='bname'>Badge Board</span>", page).group(1)
-          == "chat doors files guests petscii new lgbtq c64 electronics chiptune ham")
+          == "chat doors files guests petscii sd new lgbtq c64 elctr chptn ham")
     check("nothing a board sent reaches the page unescaped",
           "<b>&</b>" not in page and "<script>alert" not in page
           and 'data-tip="Runs on: Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;, in the '
@@ -483,7 +724,7 @@ def badge_checks(S, db):
     arrow = row.count('class="bu"')
     check("every badge carries a tooltip, a name for a screen reader, and a "
           "focus stop for a keyboard or a tap",
-          n == 13 and row.count("data-tip=\"") == n + arrow
+          n == 14 and row.count("data-tip=\"") == n + arrow
           and row.count("aria-label=\"") == n + arrow
           and row.count('tabindex="0"') == n and row.count('role="img"') == n)
     check("and no title, which would draw the browser's tooltip over ours",
@@ -529,6 +770,7 @@ def badge_checks(S, db):
           and "Runs on: Compaq 486 &amp;lt;b&amp;gt;&amp;amp;&amp;lt;/b&amp;gt;" in feed
           and "Supports: LGBTQ+ people" in feed
           and "Interests: Commodore 64, Electronics, Chiptune, Amateur radio" in feed
+          and "SD card: 32 GB" in feed
           and "Speaks: ANSI, PETSCII" in feed and "Guests welcome" in feed
           and "No guests: an account is needed" in feed)
 
@@ -559,7 +801,9 @@ def badge_checks(S, db):
           and 'class="tn"' not in pane and 'class="tile"' not in pane
           and 'data-tip="PETSCII: a Commodore 64 or 128' in pane
           and 'data-tip="Listed a month or more."' in pane
-          and 'data-tip="Supports LGBTQ+ people."' in pane)
+          and 'data-tip="Supports LGBTQ+ people. Code LGBTQ."' in pane
+          and 'data-tip="Interest: Electronics. Code ELCTR."' in pane
+          and 'value="sd" data-n="SD card"' in pane)
     check("the pane is a GET form of checkboxes, one per badge, in the page's "
           "order, with all or any beside them",
           '<form class="fpane" id="fform" method="get" action="/"' in pane
@@ -623,6 +867,27 @@ def badge_checks(S, db):
           and '<span data-f="m">any of</span>' in any_
           and '<p class="none" id="fnone" hidden>No board with any of those yet.</p>'
           in any_)
+    # Site 1.1.0: the codes in any case, and the old slugs a link may carry.
+    q_bad = []
+    for q in ("/?b=ELCTR&b=chptn", "/?b=electronics&b=Chiptune", "/?b=Elctr&b=chip"):
+        got_q = get(q)[1]
+        rq = list_rows(got_q)
+        if not ("Badge Board" in [n for n, _k, h in rq if not h]
+                and all(("elctr" in k and "chptn" in k) != h for _n, k, h in rq)
+                and 'value="elctr" data-n="Electronics" aria-label="Electronics" checked>'
+                in got_q
+                and 'value="chptn" data-n="Chiptune" aria-label="Chiptune" checked>'
+                in got_q
+                and '<span data-f="l">Electronics, Chiptune</span>' in got_q
+                and "electronics&" not in got_q.split("<form")[0]):
+            q_bad.append(q)
+    check("a code in any case, or the old slug it replaced, filters the same and "
+          "ticks the same chips" + ("" if not q_bad else "  <- " + ", ".join(q_bad)),
+          not q_bad)
+    sd_rows = list_rows(get("/?b=sd")[1])
+    check("and ?b=sd finds the boards with an SD card in use",
+          [n for n, _k, h in sd_rows if not h] == ["Badge Board"]
+          and all(("sd" in k) != h for _n, k, h in sd_rows))
     check("a slug this directory does not know is ignored",
           list_rows(get("/?b=petscii&b=nazis")[1]) == rows1
           and not any(h for _n, _k, h in list_rows(get("/?b=nazis")[1]))
@@ -765,24 +1030,33 @@ def badge_checks(S, db):
     # Site 0.22.0: a searchable table per group, each row the symbol, the
     # name, the slug and the meaning.
     trs = re.findall(r'<tr data-k="([^"]*)"><td class="bsym">.*?</tr>', leg, re.S)
-    check("a table per group, each row the badge, its name, its slug and its "
-          "meaning, under four headings",
+    check("a table per group, each row the badge, its name, what a board sends "
+          "and its meaning, under four headings: the field for the first two, "
+          "the code for the causes and the interests",
           leg.count('<table class="btab ') == 4
           and leg.count('<th scope="col">Badge</th><th scope="col">Name</th>'
-                        '<th scope="col">Slug</th><th scope="col">Meaning</th>') == 4
+                        '<th scope="col">Sent as</th><th scope="col">Meaning</th>') == 2
+          and leg.count('<th scope="col">Badge</th><th scope="col">Name</th>'
+                        '<th scope="col">Code</th><th scope="col">Meaning</th>') == 2
+          and "Slug</th>" not in leg
           and all(has_h(leg, 2, t) for _g, t in S.BADGE_GROUPS)
           and has_h(leg, 3, "How steady is worked out")
           and 'href="#how-steady-is-worked-out"' in leg)
     check("every row is on the page with no script: one per badge, the steps "
           "of Listed sharing one",
-          len(trs) == len(S.BADGES) - 5 == 80
+          len(trs) == len(S.BADGES) - 5 == 81
           and '<tr data-k="' in leg and " hidden>" not in leg.split("</nav>")[1]
           .replace("data-js hidden>", ""))
     check("each says where it comes from: the field a board sends, or worked "
           "out here",
           leg.count("none: worked out here") == 4
           and "<code>petscii</code> <span class='src'>in terminals</span>" in leg
-          and "<code>chat</code> <span class='src'>in features</span>" in leg)
+          and "<code>chat</code> <span class='src'>in features</span>" in leg
+          and "<code>sd</code> <span class='src'>its size in GB</span>" in leg)
+    check("the SD card is in the legend, in the features' blue, and says the size "
+          "rides on the badge",
+          "<b>SD card</b>" in leg and "SD32 is a 32 GB card." in leg
+          and 'class="bd k-feat" role="img" tabindex="0" aria-label="SD card: ' in leg)
     # Site 1.0.0: a µnleashed board behind the newest release. On a row it
     # is an arrow on the software badge; here and in the filter, a badge.
     check("Update available is in the legend, in dim cyan, and a chip in the filter",
@@ -791,19 +1065,23 @@ def badge_checks(S, db):
           and 'class="bd k-upd"' in leg and S.UP_ARROW in leg
           and 'value="update"' in pane and "update" in S.FILTER_KEYS
           and "<b>Software</b>" in leg and ">unleashed 1.0.0</span>" in leg)
-    check("then Show your support: every symbol, its slug and its sentence",
-          all(f"<code>{slug}</code>" in leg and html.escape(sentence) in leg
-              for slug, _a, _n, sentence in S.SUPPORT)
+    check("then Show your support: every symbol, its code in capitals and its "
+          "sentence",
+          all(f"<code>{code.upper()}</code>" in leg and html.escape(sentence) in leg
+              for code, _n, sentence in S.SUPPORT)
+          and "<code>MNTLH</code>" in leg
+          and "<code>mental-health</code>" not in leg.split(
+              '<table class="btab support">')[1].split("</table>")[0]
           and leg.count('class="bd k-sup"') == 24 and len(S.SUPPORT) == 24)
-    check("each support slug is a plain lower case word, so a board can type it",
-          all(re.fullmatch(r"[a-z][a-z-]{1,23}", s) for s in S.SUPPORT_SLUGS)
-          and len(set(S.SUPPORT_SLUGS)) == len(S.SUPPORT_SLUGS))
-    check("every drawing named in the list exists",
-          all(art in S.SUPPORT_ART for _s, art, _n, _t in S.SUPPORT))
-    check("then the interests: every one, its slug and its sentence, in rose, "
-          "under its own group",
-          all(f"<code>{slug}</code>" in leg and html.escape(t) in leg
-              for slug, _g, _n, t in S.INTERESTS)
+    check("each support code is short enough to type on a C64",
+          all(re.fullmatch(r"[a-z0-9]{1,6}", s) for s in S.SUPPORT_CODES)
+          and len(set(S.SUPPORT_CODES)) == len(S.SUPPORT_CODES))
+    check("every cause has its drawing",
+          all(code in S.SUPPORT_ART for code, _n, _t in S.SUPPORT))
+    check("then the interests: every one, its code in capitals and its sentence, "
+          "in rose, under its own group",
+          all(f"<code>{code.upper()}</code>" in leg and html.escape(t) in leg
+              for code, _g, _n, t in S.INTERESTS)
           and leg.count('class="bd k-int"') == len(S.INTERESTS)
           and [html.unescape(g) for g in re.findall(
               r'<tr class="sub"><th colspan="4" scope="rowgroup">([^<]*)</th></tr>', leg)]
@@ -821,6 +1099,13 @@ def badge_checks(S, db):
           and all(w == w.lower() for w in trs)
           and any("amateur radio" in w and "ham" in w for w in trs)
           and any("commodore 64" in w and "c64" in w for w in trs))
+    check("and finds a cause or an interest by its code or by the old slug, with "
+          "or without its hyphens",
+          any(w.split()[:2] == ["mental", "health"] and " mntlh " in f" {w} "
+              and "mental-health" in w and "mentalhealth" in w for w in trs)
+          and any("electronics" in w and " elctr " in f" {w} " for w in trs)
+          and any("3d-printing" in w and "3dprt" in w and "3d printing" in w
+                  for w in trs))
 
     # One order everywhere (Rob): alphabetical by the name a reader sees,
     # within each group, a leading digit or symbol set aside, and the three
@@ -861,7 +1146,7 @@ def badge_checks(S, db):
           marks == ["LGBTQ+ people", "Amateur radio", "Chiptune", "Commodore 64",
                     "Electronics"]
           and S.ROW_ORDER == ("petscii", "guests", "chat", "mail", "forums", "files",
-                              "doors", "new", "steady")
+                              "doors", "sd", "new", "steady")
           and [b["sort"] for b in S.ROW_INTERESTS]
               == sorted(b["sort"] for b in S.ROW_INTERESTS)
           and [b["key"] for b in S.ROW_SUPPORT]
@@ -872,9 +1157,10 @@ def badge_checks(S, db):
     check("and on the about face, not to What this is",
           '<a class="here" href="https://boards.example/">Boards</a>' in about_leg
           and 'class="here" href="/">What this is' not in about_leg)
-    check("How to get listed shows the fields and links the legend",
-          'href="/badges"' in get("/how")[1] and '"support":["literacy"]' in get("/how")[1]
-          and '"interests":["c64","electronics","ham"]' in get("/how")[1])
+    check("How to get listed shows the fields, in codes, and links the legend",
+          'href="/badges"' in get("/how")[1] and '"support":["ltrcy"]' in get("/how")[1]
+          and '"interests":["c64","elctr","ham"]' in get("/how")[1]
+          and '"sd":32' in get("/how")[1])
 
     # ----------------------------------------------------------------------
     print("Rows: every other one striped, and the hover")
@@ -1045,8 +1331,8 @@ def badge_checks(S, db):
         was_mem.executescript(OLD_SCHEMA_0211)
         had = {r[1] for r in was_mem.execute("PRAGMA table_info(boards)")}
         was_mem.close()
-        check("its table gains interests and nothing else, and matches a new one",
-              cols == want and cols - had == {"interests"} and had <= cols)
+        check("its table gains interests and sd and nothing else, and matches a new one",
+              cols == want and cols - had == {"interests", "sd"} and had <= cols)
         r = con.execute("SELECT * FROM boards WHERE token=?", ("b" * 32,)).fetchone()
         check("the old row keeps every badge it had, and simply has no interests yet",
               r["name"] == "Badge Keeper" and r["beats"] == 777 and r["support"] == "ham"
@@ -1098,6 +1384,110 @@ def badge_checks(S, db):
         except subprocess.TimeoutExpired:
             server5.kill()
         for leftover in (db_0211, db_0211 + "-wal", db_0211 + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+
+    # ----------------------------------------------------------------------
+    # And from 1.0.0, which is what the live database is now: every badge
+    # column but sd, and the causes and interests stored as the long slugs
+    # the codes replaced. One column added; the slugs are read as codes with
+    # no migration, and the next heartbeat writes codes.
+    print("A database from 1.0.0, before the codes and the SD card")
+    db_100 = os.path.join(tempfile.gettempdir(), f"dir100{os.getpid()}.db")
+    for leftover in (db_100, db_100 + "-wal", db_100 + "-shm"):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    con = sqlite3.connect(db_100)
+    con.executescript(OLD_SCHEMA_100)
+    con.execute("INSERT INTO boards(token, name, owner, software, version, port, nodes, "
+                "state, first_seen, last_seen, streak_start, public_at, beats, system, "
+                "terminals, guests, features, support, tracked_since, interests) "
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("c" * 32, "Slug Keeper", "Sparks", "unleashed", "1.0.1", 6400, 10,
+                 "online", now - 40 * 86400, now, now - 40 * 86400, now - 40 * 86400, 900,
+                 "ESP32", "ansi", 1, "chat,files", "mental-health,literacy",
+                 now - 9 * 86400, "electronics,chiptune,3d-printing"))
+    con.commit()
+    con.close()
+    port6 = PORT + 4
+    base6 = f"http://127.0.0.1:{port6}"
+    server6, out6, up6 = start_server(db_100, port6)
+    try:
+        home6 = fetch("/", base6) if up6 else (None, "", b"")
+        check("the server starts on it and serves the list"
+              + ("" if up6 else "  <- " + b"".join(out6[-3:]).decode("utf-8", "replace")),
+              up6 and home6[0] == 200 and b"Slug Keeper" in home6[2])
+        con = sqlite3.connect(db_100)
+        con.row_factory = sqlite3.Row
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(boards)")}
+        fresh = sqlite3.connect(":memory:")
+        fresh.executescript(S.SCHEMA)
+        want = {r[1] for r in fresh.execute("PRAGMA table_info(boards)")}
+        fresh.close()
+        was_mem = sqlite3.connect(":memory:")
+        was_mem.executescript(OLD_SCHEMA_100)
+        had = {r[1] for r in was_mem.execute("PRAGMA table_info(boards)")}
+        was_mem.close()
+        check("its table gains sd and nothing else, and matches a new one",
+              cols == want and cols - had == {"sd"} and had <= cols)
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("c" * 32,)).fetchone()
+        con.close()
+        check("the old row is untouched: its slugs as they were, and no SD card",
+              r["support"] == "mental-health,literacy"
+              and r["interests"] == "electronics,chiptune,3d-printing"
+              and r["sd"] is None and r["beats"] == 900)
+        row6 = badge_row(home6[2].decode("utf-8"), "Slug Keeper")
+        check("its row shows the causes and interests the old slugs name",
+              'aria-label="Supports mental health.' in row6
+              and 'aria-label="Supports literacy.' in row6
+              and 'aria-label="Interest: Electronics.' in row6
+              and 'aria-label="Interest: 3D printing.' in row6
+              and 'aria-label="Interest: Chiptune.' in row6
+              and ("feat", "SD") not in [(c, t[:2]) for c, t in badges_in(row6)])
+        found6 = [n for n, _k, h in list_rows(
+            fetch("/?b=MNTLH&b=electronics", base6)[2].decode("utf-8")) if not h]
+        check("the filter finds it by the codes and by the old slugs",
+              found6 == ["Slug Keeper"])
+        listed6 = {b["name"]: b for b in json.loads(
+            fetch("/api/boards.json", base6)[2].decode("utf-8"))["boards"]}
+        check("and the JSON answers in codes, with no SD card",
+              listed6.get("Slug Keeper", {}).get("support") == ["mntlh", "ltrcy"]
+              and listed6.get("Slug Keeper", {}).get("interests")
+              == ["3dprt", "elctr", "chptn"]
+              and listed6.get("Slug Keeper", {}).get("sd", 0) is None)
+        code6, _b = post_from({"name": "Slug Keeper", "port": 6400, "token": "c" * 32,
+                               "software": "unleashed", "version": "1.1.0",
+                               "support": ["mental-health", "LTRCY"],
+                               "interests": ["electronics", "C64"], "sd": 64},
+                              "192.0.2.66", base6)
+        con = sqlite3.connect(db_100)
+        con.row_factory = sqlite3.Row
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("c" * 32,)).fetchone()
+        con.close()
+        check("its next heartbeat keeps its listing and stores codes and the card",
+              code6 == 200 and r["support"] == "mntlh,ltrcy"
+              and r["interests"] == "c64,elctr" and r["sd"] == 64
+              and r["beats"] == 901 and r["state"] == "online")
+        check("and the row shows SD64",
+              ("feat", "SD64") in badges_in(badge_row(
+                  fetch("/", base6)[2].decode("utf-8"), "Slug Keeper")))
+        S.DB_PATH, was = db_100, S.DB_PATH
+        try:
+            S.setup()
+            again = True
+        except Exception:
+            again = False
+        S.DB_PATH = was
+        check("and starting again on it changes nothing", again)
+    finally:
+        server6.terminate()
+        try:
+            server6.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server6.kill()
+        for leftover in (db_100, db_100 + "-wal", db_100 + "-shm"):
             try:
                 os.remove(leftover)
             except OSError:
@@ -2589,19 +2979,38 @@ def main():
               and "nothing on the board is erased" in flat_i2
               and "press Install on a new board and tick Erase everything first"
                   in flat_i2)
-        # The BOOT button and the Wi-Fi fallback are firmware 1.0.2's. They
-        # moved there from 0.24.0 and then from 1.0.1, which is the badge
-        # fields only; 1.0.0 and 1.0.1 do not have them. The repository
-        # carries 0.23.0 at most, so here they must not show; the second
-        # server below proves they stay hidden at 1.0.0 and 1.0.1 and show
-        # at 1.0.2.
+        # The BOOT button and the Wi-Fi fallback are firmware 1.1.0's (site
+        # 1.1.0). They moved there from 0.24.0, then from 1.0.1, which is the
+        # badge fields only, then from 1.0.2, which became the restore
+        # security fix and has neither. The repository carries 0.23.0 at
+        # most, so here they must not show; the second server below proves
+        # they stay hidden at 1.0.0, 1.0.1 and 1.0.2 and show at 1.1.0.
         src_gate = open(os.path.join("pages", "install.md"), encoding="utf-8").read()
-        check("the reset section is gated on 1.0.2, not 1.0.1 or 0.24.0",
-              "::: from 1.0.2" in src_gate and "::: from 1.0.1" not in src_gate
-              and "0.24" not in src_gate)
-        check("and nothing of 1.0.2's shows while the newest release is older",
+        check("the reset section is gated on 1.1.0, not on 1.0.2, 1.0.1 or 0.24.0",
+              "::: from 1.1.0" in src_gate and "::: from 1.0.2" not in src_gate
+              and "::: from 1.0.1" not in src_gate and "0.24" not in src_gate)
+        check("and nothing of 1.1.0's shows while the newest release is older",
               "The BOOT button" not in inst2 and S.ART["boot-button"] not in inst2
+              and "takes the board off this directory" not in inst2
               and "::: from" not in inst2)
+        # "::: until X.Y.Z" (site 1.1.0) is the other half of the gate: what
+        # stops being true when that release lands.
+        fwd2, set2 = get("/forward")[1], get("/setup")[1]
+        flat_f2, flat_s2 = " ".join(fwd2.split()), " ".join(set2.split())
+        check("before 1.1.0, /forward says every board listens on 6400 and the "
+              "announce page's Port carries the outside number",
+              has_h(fwd2, 2, "The same port outside and in")
+              and has_h(fwd2, 2, "One board per port")
+              and "Every board listens on 6400" in flat_f2
+              and "the <b>Port</b> setting on the announce page" in flat_f2
+              and "From firmware 1.1.0" not in flat_f2
+              and "::: until" not in fwd2 and "::: from" not in fwd2)
+        check("and /setup has the wifi page and the announce page's Port, not "
+              "Outside",
+              has_h(set2, 2, "wifi") and not has_h(set2, 2, "network")
+              and "<b>Outside</b>" not in set2
+              and "if you forwarded a different one to the" in flat_s2
+              and "::: until" not in set2 and "::: from" not in set2)
         check("the setup steps name what the board says",
               "This board has not been set up yet" in flat_i2
               and "YOU ARE THE SYSOP" in flat_i2 and "ESC skips it" in flat_i2
@@ -3988,17 +4397,73 @@ def main():
                       j3.get("Behind Board", {}).get("version") == "1.0.0"
                       and j3.get("Other Board", {}).get("software") == "Mystic"
                       and j3.get("Other Board", {}).get("version") == "0.0.1")
+                # 1.0.2 is the restore security fix: still no BOOT reset.
                 put("1.0.2", "esp32", whole)
+                inst42 = fetch("/install", base2)[2].decode("utf-8")
+                check("and with 1.0.2, the security fix, it still waits",
+                      'id="fwv0" checked> 1.0.2 (newest)' in inst42
+                      and "The BOOT button" not in inst42
+                      and S.ART["boot-button"] not in inst42
+                      and "goes back to the last network that worked" not in inst42)
+                check("and the update arrow follows the newest release on disk",
+                      "1.0.0 → 1.0.2." in badge_row(fetch("/", base2)[2].decode("utf-8"),
+                                                         "Behind Board"))
+                put("1.1.0", "esp32", whole)
                 inst5 = fetch("/install", base2)[2].decode("utf-8")
                 flat5 = " ".join(inst5.split())
-                check("with a release of 1.0.2 or later, the BOOT button shows",
+                check("with a release of 1.1.0 or later, the BOOT button shows",
                       "The BOOT button" in inst5 and S.ART["boot-button"] in inst5
                       and "Press and let go of <b>RESET</b>" in flat5
                       and "goes back to the last network that worked" in flat5
                       and "::: from" not in inst5)
-                check("and the update arrow follows the newest release on disk",
-                      "1.0.0 → 1.0.2." in badge_row(fetch("/", base2)[2].decode("utf-8"),
+                # The words from the firmware's copy for 1.1.0, section 6: the
+                # listing goes with a factory reset, and the box saying so is
+                # read before step 1.
+                boot = flat5[flat5.index("The BOOT button"):]
+                check("with the warning that a factory reset takes the board off the "
+                      "directory, above step 1, and the two bullets that say so",
+                      "A factory reset also takes the board off this directory." in boot
+                      and boot.index("takes the board off this directory")
+                      < boot.index("Press and let go of <b>RESET</b>")
+                      and '<p class="warn">A factory reset' in boot.split("Press and let go")[0]
+                      and "Until you choose a new password, the board keeps itself off "
+                          "the directory." in boot
+                      and "the accounts, the settings, the Wi-Fi, the mail and the logs "
+                          "are wiped" in boot
+                      and "is no longer on the directory unless you restore a backup."
+                          in boot)
+                check("and the arrow now says 1.1.0",
+                      "1.0.0 → 1.1.0." in badge_row(fetch("/", base2)[2].decode("utf-8"),
                                                          "Behind Board"))
+                fwd5 = " ".join(fetch("/forward", base2)[2].decode("utf-8").split())
+                set5 = fetch("/setup", base2)[2].decode("utf-8")
+                flat_set5 = " ".join(set5.split())
+                check("with 1.1.0 on disk, /forward gives each board its own Port and "
+                      "explains Outside, and the account for older firmware is gone",
+                      "From firmware 1.1.0 that is a setting" in fwd5
+                      and "<b>Port</b> (<code>port</code>)" in fwd5
+                      and "<b>Outside</b>: The port callers dial from the internet" in fwd5
+                      and "Every board listens on 6400" not in fwd5
+                      and "::: until" not in fwd5 and "::: from" not in fwd5)
+                check("and /setup has the network page with its Port, and Outside on "
+                      "the announce page, each list whole",
+                      has_h(set5, 2, "network") and not has_h(set5, 2, "wifi")
+                      and "<b>Port</b> (<code>port</code>)" in flat_set5
+                      and "<b>Outside</b>: The port callers dial" in flat_set5
+                      and "if you forwarded a different one to the" not in flat_set5
+                      and flat_set5.count("<b>Token</b>") == 1
+                      and "::: until" not in set5 and "::: from" not in set5)
+                # The gate on its own: from and until are two halves.
+                g = S.md_render("::: until 1.1.0\nold\n:::\n\n::: from 1.1.0\nnew\n:::")
+                g2 = S.md_render("::: until 9.0.0\nold\n:::\n\n::: from 9.0.0\nnew\n:::")
+                check("::: from and ::: until swap on the release, never both, never "
+                      "neither", g == "<p>new</p>" and g2 == "<p>old</p>")
+                g3 = S.md_render("- a\n::: from 1.0.0\n- b\n:::\n1. c\n::: until 9.0.0\n"
+                                 "| x |\n|---|\n| y |\n:::")
+                check("and a gate straight after a list stays after it",
+                      g3 == "<ul><li>a</li></ul><ul><li>b</li></ul><ol><li>c</li></ol>"
+                            '<div class="tablewrap"><table><tr><th>x</th></tr>'
+                            "<tr><td>y</td></tr></table></div>")
             finally:
                 server2.terminate()
                 try:

@@ -325,7 +325,8 @@ CREATE TABLE IF NOT EXISTS boards (
     features     TEXT NOT NULL DEFAULT '',
     support      TEXT NOT NULL DEFAULT '',
     tracked_since INTEGER NOT NULL DEFAULT 0,
-    interests    TEXT NOT NULL DEFAULT ''
+    interests    TEXT NOT NULL DEFAULT '',
+    sd           INTEGER
 );
 -- Heartbeats received, one row per board per UTC hour, for the last week
 -- and a bit. The steady badge is worked out from it: see steady_boards().
@@ -614,15 +615,18 @@ def setup():
 # The columns the badges added, as ALTER TABLE wants them. A column added
 # here must also be in SCHEMA, so a new database and a migrated one end up
 # with the same table; the self-test compares the two, from a database made
-# by the 0.20.2 schema and from one made by the 0.21.1 schema. interests
-# came in site 0.22.0; a 0.21.x database has every column above it.
+# by the 0.20.2 schema, from one made by the 0.21.1 schema and from one made
+# by the 1.0.0 schema. interests came in site 0.22.0; a 0.21.x database has
+# every column above it. sd, the SD card's size, came in site 1.1.0 and is
+# NULL for "not sent", which every row written before it is.
 BADGE_COLUMNS = (("system",        "TEXT NOT NULL DEFAULT ''"),
                  ("terminals",     "TEXT NOT NULL DEFAULT ''"),
                  ("guests",        "INTEGER"),
                  ("features",      "TEXT NOT NULL DEFAULT ''"),
                  ("support",       "TEXT NOT NULL DEFAULT ''"),
                  ("tracked_since", "INTEGER NOT NULL DEFAULT 0"),
-                 ("interests",     "TEXT NOT NULL DEFAULT ''"))
+                 ("interests",     "TEXT NOT NULL DEFAULT ''"),
+                 ("sd",            "INTEGER"))
 
 
 def tidy(value, limit):
@@ -666,7 +670,7 @@ def tidy_label(value, limit):
     return " ".join("".join(out).split())[:limit].rstrip()
 
 
-def pick(value, allowed, most=16):
+def pick(value, allowed, most=16, alias=None):
     """The words in a list that this directory knows, once each and in the
     directory's own order.
 
@@ -675,10 +679,17 @@ def pick(value, allowed, most=16):
     software than this directory must still be listed, and an unknown word
     is exactly what newer software sends. Only the first `most` entries are
     looked at, so a list of a million strings costs nothing.
+
+    With an alias table (the causes and the interests, site 1.1.0), each
+    entry is matched after norm_word() and becomes the code it names, so an
+    old slug, an interim one and a code in any case all arrive as the code.
     """
     if not isinstance(value, list):
         return []
-    got = {v.strip().lower() for v in value[:most] if isinstance(v, str)}
+    if alias is None:
+        got = {v.strip().lower() for v in value[:most] if isinstance(v, str)}
+    else:
+        got = {alias.get(norm_word(v), "") for v in value[:most]}
     return [a for a in allowed if a in got]
 
 
@@ -1040,7 +1051,7 @@ _MD_ITAL   = re.compile(r"(?<!\*)\*([^*\s][^*]*?)\*(?!\*)")
 # joined into a wall of text. Nothing caught it because every word was
 # present and in the right order, which is what a grep checks.
 _MD_STEP   = re.compile(r"^\d{1,2}\. ")
-_MD_GATE   = re.compile(r"^::: from (\d+)\.(\d+)\.(\d+)\s*$")
+_MD_GATE   = re.compile(r"^::: (from|until) (\d+)\.(\d+)\.(\d+)\s*$")
 
 
 def md_inline(s):
@@ -1505,11 +1516,29 @@ def _md_render(text):
     quote = []            # consecutive "> " lines: one warning, not one per line
     steps = []            # "1. " lines: a numbered list, not a paragraph
     first_step = [1]      # its first number, so a list split by a drawing carries on
-    gate = None           # "::: from X.Y.Z": [version, depth, lines]
+    gate = None           # "::: from|until X.Y.Z": [version, depth, lines, until]
     beside = None         # "::: install-top": [depth, lines]
     table = None
     card = None           # a "::: cards" block, collected whole
     comment = False       # inside "<!-- ... -->": a note for whoever edits the page
+
+    def flush():
+        if para:
+            out.append("<p>" + md_inline(" ".join(para)) + "</p>")
+            para.clear()
+        if bullets:
+            out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>"
+                                        for b in bullets) + "</ul>")
+            bullets.clear()
+        if steps:
+            start = f' start="{first_step[0]}"' if first_step[0] != 1 else ""
+            out.append(f"<ol{start}>" + "".join(f"<li>{md_inline(s)}</li>"
+                                                 for s in steps) + "</ol>")
+            steps.clear()
+        if quote:
+            out.append(md_callout(quote))
+            quote.clear()
+
     for raw in text.splitlines():
         line = raw.rstrip()
 
@@ -1517,14 +1546,19 @@ def _md_render(text):
         # released: rendered only once a release at that version or later
         # is on disk, the way the announcement banner waits for 1.0.0. It
         # may hold a drawing, so it counts ":::" pairs rather than ending
-        # at the first.
+        # at the first. "::: until 1.1.0" (site 1.1.0) is the other half:
+        # prose that stops being true when that release lands, rendered
+        # only while the newest release on disk is older, or there is none.
+        # A pair of them swaps one account for the other on the day the
+        # release is published, with nobody editing the page.
         if gate is not None:
             if line.startswith("::: "):
                 gate[1] += 1
             elif line.strip() == ":::":
                 if gate[1] == 0:
                     rels = firmware_releases()
-                    if rels and rels[0]["sort"] >= gate[0]:
+                    reached = bool(rels) and rels[0]["sort"] >= gate[0]
+                    if reached != gate[3]:
                         out.append(md_render("\n".join(gate[2])))
                     gate = None
                     continue
@@ -1532,8 +1566,15 @@ def _md_render(text):
             gate[2].append(raw)
             continue
         if code is None and card is None and _MD_GATE.match(line):
-            want = tuple(int(g) for g in _MD_GATE.match(line).groups())
-            gate = [want, 0, []]
+            # Whatever was open before it ends here, so a gate straight
+            # after a list or a paragraph cannot land in front of it.
+            if table is not None:
+                out.append(md_table(table))
+                table = None
+            flush()
+            m = _MD_GATE.match(line)
+            want = tuple(int(g) for g in m.groups()[1:])
+            gate = [want, 0, [], m.group(1) == "until"]
             continue
 
         # "::: install-top" ... ":::" is the top of /install: the steps in
@@ -1600,23 +1641,6 @@ def _md_render(text):
         if table is not None:                      # the table just ended
             out.append(md_table(table))
             table = None
-
-        def flush():
-            if para:
-                out.append("<p>" + md_inline(" ".join(para)) + "</p>")
-                para.clear()
-            if bullets:
-                out.append("<ul>" + "".join(f"<li>{md_inline(b)}</li>"
-                                            for b in bullets) + "</ul>")
-                bullets.clear()
-            if steps:
-                start = f' start="{first_step[0]}"' if first_step[0] != 1 else ""
-                out.append(f"<ol{start}>" + "".join(f"<li>{md_inline(s)}</li>"
-                                                     for s in steps) + "</ol>")
-                steps.clear()
-            if quote:
-                out.append(md_callout(quote))
-                quote.clear()
 
         if line.startswith("::: ") and line[4:].strip() in BLOCK_NAMES:
             flush()
@@ -2358,14 +2382,25 @@ def announce(payload, address):
     guests = payload.get("guests")
     fields["guests"]    = int(guests) if isinstance(guests, bool) else None
     fields["features"]  = ",".join(pick(payload.get("features"), FEATURES))
-    fields["support"]   = ",".join(pick(payload.get("support"), SUPPORT_SLUGS))
-    # What the sysop is into (site 0.22.0), exactly as support: slugs from
-    # the published list, anything else ignored, the first 16 read. A slug
-    # that moved from support to the interests (ham, 0.22.2) is still taken
-    # from the support list, and filed here.
-    moved = set(pick(payload.get("support"), SUPPORT_MOVED))
-    got = set(pick(payload.get("interests"), INTEREST_SLUGS)) | moved
-    fields["interests"] = ",".join(s for s in INTEREST_SLUGS if s in got)
+    # The SD card's size in GB (site 1.1.0): a whole number from 1 to
+    # SD_MAX, or nothing. A JSON true is an int in Python and is not a size.
+    sd = payload.get("sd")
+    fields["sd"] = (sd if isinstance(sd, int) and not isinstance(sd, bool)
+                    and 1 <= sd <= SD_MAX else None)
+    # The causes and the interests, as codes (site 1.1.0): an old slug or
+    # an interim one is read as the code it became, in any case. Left alone,
+    # not written empty, when badges.json could not be read at start.
+    if BADGE_CODES_OK:
+        fields["support"] = ",".join(pick(payload.get("support"), SUPPORT_CODES,
+                                          alias=SUPPORT_ALIAS))
+        # What the sysop is into (site 0.22.0), exactly as support: codes
+        # from the published list, anything else ignored, the first 16
+        # read. A code that moved from support to the interests (ham,
+        # 0.22.2) is still taken from the support list, and filed here.
+        moved = set(pick(payload.get("support"), SUPPORT_MOVED, alias=INTEREST_ALIAS))
+        got = set(pick(payload.get("interests"), INTEREST_CODES,
+                       alias=INTEREST_ALIAS)) | moved
+        fields["interests"] = ",".join(s for s in INTEREST_CODES if s in got)
 
     with db() as con:
         if rate_limited(con, address, now):
@@ -4328,10 +4363,17 @@ SYSTEM_MAX = 40
 TERMINALS  = ("ansi", "utf8", "petscii", "ascii", "vt100")
 FEATURES   = ("chat", "forums", "files", "mail", "doors")
 NEW_DAYS   = 7
+# The SD card's size, in GB, as the board sends it (site 1.1.0, firmware
+# 1.1.0): a whole number, already rounded by the board up to the size
+# printed on the card, so a "32 GB" card that reports 29.7 arrives as 32.
+# Anything outside 1 to SD_MAX is ignored rather than refused.
+SD_MAX     = 4096
 
 # The small badges, in the order they appear: key, letters, colour class,
 # name, and what it means, which the tooltip says after the name. The first
-# seven are sent by the board and the last two are worked out here.
+# eight are sent by the board and the last two are worked out here. The SD
+# card's letters here are what the legend and the filter show; on a board's
+# row the badge carries the size as well, "SD32".
 LETTER_BADGES = (
     ("petscii", "P",  "term",   "PETSCII",
      "a Commodore 64 or 128 gets colour and graphics here, not just text."),
@@ -4342,6 +4384,9 @@ LETTER_BADGES = (
     ("files",   "Fi", "feat",   "Files",  "file areas to download from, running now."),
     ("mail",    "M",  "feat",   "Mail",   "private mail between callers, running now."),
     ("doors",   "D",  "feat",   "Doors",  "games and programs to run, running now."),
+    ("sd",      "SD", "feat",   "SD card",
+     "an SD card is in use on the board. On a board's row the badge carries "
+     "the card's size in GB, as printed on the card: SD32 is a 32 GB card."),
     ("new",     "N",  "new",    "New",    "listed here for less than a week."),
     ("steady",  "S",  "steady", "Steady",
      "answered more than 95% of the heartbeats it was due over the last seven days."),
@@ -4361,86 +4406,164 @@ BADGE_COLOURS = {"soft": "grey", "sys": "white", "term": "purple",
                  "steady": "cyan", "age": "lavender", "int": "rose",
                  "upd": "dim cyan"}
 
-# The support list: causes a sysop can show support for, one line each, in
-# the order /badges lists them. A board sends the slugs in its "support"
-# list and anything not in this table is ignored, which is what keeps a
-# sysop from putting words of their own on the page, slurs included.
+# --------------------------------------------------------------------------
+# The support and interest badges, by code (site 1.1.0).
 #
-# The first ten are the causes most often shown as support badges, ribbons
-# and flair on community sites and profiles, picked to be broadly
-# recognised and not party political. The next fourteen (site 0.22.2, Rob:
-# "elder care, stuff that people do ... use volume as your guide") are the
-# next most common by the same test: the causes with a well-known ribbon,
-# symbol or awareness day, each checked against the organisation that
-# keeps it, and none of them a side in an argument between parties.
-# Autism is not one of them because neurodiversity already names autistic
-# people, and military families not because veterans already names them.
-# Amateur radio was the eleventh until 0.22.2, when it moved to the
-# interests, where a hobby belongs; SUPPORT_MOVED keeps a board that still
-# sends it here working. Changing the list is editing a line: slug, drawing
-# (a key of SUPPORT_ART), what it supports as it reads after "Supports",
-# and one plain sentence for /badges.
-SUPPORT = (
-    ("lgbtq",              "rainbow",   "LGBTQ+ people",
-     "Lesbian, gay, bisexual, trans and queer callers are welcome here, and the sysop says so."),
-    ("trans",              "trans",     "transgender people",
-     "Trans and non-binary callers are welcome here, by the names they use."),
-    ("disability",         "disflag",   "disabled people",
-     "For disabled people, visible and invisible disabilities alike, and for making things accessible."),
-    ("neurodiversity",     "infinity",  "neurodiversity",
-     "Autistic, ADHD and other neurodivergent minds are welcome as they are."),
-    ("mental-health",      "ribbon-mh", "mental health",
-     "For looking after mental health, and for anybody living with a mental illness."),
-    ("suicide-prevention", "semicolon", "suicide prevention",
-     "The semicolon: a sentence that could have ended and carried on."),
-    ("veterans",           "tags",      "veterans",
-     "For people who have served in the armed forces, and their families."),
-    ("cancer",             "ribbon-c",  "people with cancer",
-     "For people living with any cancer, the survivors, and the people who care for them."),
-    ("hiv",                "ribbon-h",  "people living with HIV",
-     "The red ribbon: solidarity with people living with HIV and AIDS."),
-    ("animals",            "paw",       "animal welfare",
-     "For animal rescue, adoption and welfare."),
-    ("breast-cancer",      "ribbon-bc", "breast cancer awareness",
-     "The pink ribbon: for people living with breast cancer, the survivors and the research."),
-    ("childhood-cancer",   "ribbon-cc", "children with cancer",
-     "The gold ribbon: for children and teenagers with cancer, and their families."),
-    ("dementia",           "forgetmenot", "people with dementia",
-     "The forget-me-not: for people living with Alzheimer's and other dementias, "
-     "and the people who look after them."),
-    ("caregivers",         "carer",     "carers and caregivers",
-     "For everybody looking after somebody, elder care included, family carers and paid ones alike."),
-    ("diabetes",           "bluecircle", "people with diabetes",
-     "The blue circle: for everybody living with diabetes, of any type."),
-    ("heart-health",       "heartbeat", "heart health",
-     "For heart health, and for people living with heart disease."),
-    ("domestic-violence",  "ribbon-dv", "survivors of domestic violence",
-     "The purple ribbon: for ending domestic violence, and for the people who survive it."),
-    ("recovery",           "sunrise",   "addiction recovery",
-     "For people in recovery from addiction, and the families who stand by them."),
-    ("donation",           "drop",      "blood and organ donation",
-     "For blood donors, organ donors and the people their gifts keep alive."),
-    ("foster-adoption",    "triad",     "foster care and adoption",
-     "For children in foster care and adopted children, and the families who take them in."),
-    ("homelessness",       "house",     "people without a home",
-     "For people without a safe place to live, and the shelters and workers who help."),
-    ("hunger",             "bowl",      "hunger relief",
-     "For food banks, pantries and everybody making sure people get fed."),
-    ("literacy",           "readbook",  "literacy",
-     "For reading and writing, for everybody: libraries, tutors and adult learners."),
-    ("first-responders",   "beacon",    "first responders",
-     "For the people who answer when somebody calls for help: paramedics, "
-     "firefighters, police and dispatchers."),
-)
-SUPPORT_SLUGS = tuple(s[0] for s in SUPPORT)
-# Slugs that were support causes and are interests now, still accepted in a
+# Their codes, names, sentences and aliases live in badges.json beside this
+# file, and only there, so a separate program can read the same list: the
+# firmware builds its CONFIG pick-list from it at build time. This file
+# keeps what only a page needs, the drawings, keyed by code below.
+#
+# A code is what a board sends and what this directory stores and
+# publishes: lower case, a to z and 0 to 9, six characters at most, shown in
+# upper case on the site (Rob: "like 5 or 6 max", MNTLH for mental health).
+# Every slug an earlier version of this site used, and every interim one
+# proposed on the way to the codes, is an alias, so a board on firmware
+# 1.0.1 that sends "mental-health" keeps its badge and a shared link with
+# ?b=electronics still filters. Matching folds the case and drops everything
+# that is not a letter or a digit, so "Mental health" typed into a board,
+# which the firmware sends as "mentalhealth", is understood too. A stored
+# row is read through the same aliases, so a row written before the codes
+# needed no migration and is rewritten in codes by its next heartbeat.
+#
+# The support list is causes a sysop can show support for, and anything not
+# in it is ignored, which is what keeps a sysop from putting words of their
+# own on the page, slurs included. The first ten are the causes most often
+# shown as support badges, ribbons and flair on community sites and
+# profiles, picked to be broadly recognised and not party political. The
+# next fourteen (site 0.22.2, Rob: "elder care, stuff that people do ... use
+# volume as your guide") are the next most common by the same test: causes
+# with a well-known ribbon, symbol or awareness day, each checked against
+# the organisation that keeps it, and none of them a side in an argument
+# between parties. Autism is not one of them because neurodiversity already
+# names autistic people, and military families not because veterans already
+# names them. Amateur radio was the eleventh until 0.22.2, when it moved to
+# the interests, where a hobby belongs; SUPPORT_MOVED keeps a board that
+# still sends it as support working.
+#
+# If badges.json cannot be read the site still starts, with no support or
+# interest badges and a line in the journal saying so, and a heartbeat then
+# leaves the causes and interests it has stored alone rather than writing
+# them empty: every board would otherwise lose its badges to one missing
+# file, and get them back only after somebody noticed.
+# --------------------------------------------------------------------------
+BADGE_FILE = pathlib.Path(__file__).resolve().parent / "badges.json"
+CODE_MAX   = 6
+_CODE      = re.compile(r"^[a-z0-9]{1,6}$")
+# Words that are something else in the filter, so no code or alias may be
+# one of them.
+_RESERVED  = ({b[0] for b in LETTER_BADGES} | {a[1] for a in AGES}
+              | {"update", "software", "system"})
+
+
+def norm_word(value):
+    """A badge word as it is matched: lower case, letters and digits only.
+    "Mental health", "mental-health" and "MentalHealth" are all
+    "mentalhealth"; anything that is not a string is ""."""
+    if not isinstance(value, str):
+        return ""
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def _uncap(text):
+    """A name as it reads after "Supports": its first letter lower case,
+    unless the first word is an acronym, so "LGBTQ+ people" stays whole."""
+    if len(text) > 1 and text[1].isupper():
+        return text
+    return text[:1].lower() + text[1:]
+
+
+def _badge_codes():
+    """The support and interest badges from badges.json: (support,
+    interests, interest groups, support aliases, interest aliases, the
+    aliases as written, ok).
+
+    support is (code, name, sentence) and interests (code, group, name,
+    sentence), each in the file's order. An alias table maps every word a
+    board may send, the code itself included, after norm_word, to its code;
+    the aliases as written, lower case and hyphens kept, are for the search
+    boxes. An entry that breaks a rule is left out with a line saying why,
+    and so is an alias that would name a second badge: the rest still load.
+    ok is False only when the file could not be read at all."""
+    empty = ((), (), (), {}, {}, {}, False)
+    try:
+        data = json.loads(BADGE_FILE.read_text(encoding="utf-8"))
+        entries = data["badges"]
+        groups = tuple(g for g in data.get("interest_groups") or ()
+                       if isinstance(g, str) and g)
+        if not isinstance(entries, list):
+            raise ValueError("badges is not a list")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as err:
+        print(f"badges: {BADGE_FILE.name} not read ({err}): no support or interest "
+              "badges, and heartbeats leave the stored ones alone", flush=True)
+        return empty
+    support, interests = [], []
+    alias = {"support": {}, "interests": {}}
+    written = {}                                # code: its aliases as typed
+    owner = {}                                  # every word taken, to its code
+
+    def skip(why):
+        print(f"badges: {why}, left out", flush=True)
+
+    for e in entries:
+        if not isinstance(e, dict):
+            skip("an entry that is not an object")
+            continue
+        code, group, sub = e.get("code"), e.get("group"), e.get("sub", "")
+        name, means = e.get("name"), e.get("means")
+        if not (isinstance(code, str) and _CODE.match(code)):
+            skip(f"code {code!r} is not one to six of a to z and 0 to 9")
+            continue
+        if (group not in alias or not isinstance(name, str) or not name.strip()
+                or not isinstance(means, str) or not means.strip()):
+            skip(f"{code}: its group, name or meaning")
+            continue
+        if group == "interests" and sub not in groups:
+            skip(f"{code}: {sub!r} is not one of the interest groups")
+            continue
+        if code in owner or code in _RESERVED:
+            skip(f"{code}: that word is already taken")
+            continue
+        owner[code] = code
+        alias[group][code] = code
+        aliases = e.get("aliases") or []
+        if not isinstance(aliases, list):
+            # A bare string would be read a letter at a time.
+            skip(f"{code}: its aliases, which are not a list")
+            aliases = []
+        for a in aliases:
+            w = norm_word(a)
+            if not w:
+                continue
+            if w in _RESERVED or owner.get(w, code) != code:
+                skip(f"{code}: its alias {a!r}, which is already taken")
+                continue
+            owner[w] = code
+            alias[group][w] = code
+            written.setdefault(code, []).append(a.strip().lower())
+        if group == "support":
+            support.append((code, name.strip(), means.strip()))
+        else:
+            interests.append((code, sub, name.strip(), means.strip()))
+    return (tuple(support), tuple(interests), groups,
+            alias["support"], alias["interests"], written, True)
+
+
+(SUPPORT, INTERESTS, INTEREST_GROUPS, SUPPORT_ALIAS, INTEREST_ALIAS,
+ ALIASES_WRITTEN, BADGE_CODES_OK) = _badge_codes()
+SUPPORT_CODES  = tuple(s[0] for s in SUPPORT)
+INTEREST_CODES = tuple(i[0] for i in INTERESTS)
+# Every word the filter's ?b= understands for a cause or an interest.
+FILTER_ALIAS   = {**SUPPORT_ALIAS, **INTEREST_ALIAS}
+# Codes that were support causes and are interests now, still accepted in a
 # board's "support" list and filed with its interests (site 0.22.2). No
 # firmware sent either list when it moved, so this is courtesy rather than
 # rescue, but it costs one line and keeps any hand-built board listed as it
 # meant to be.
 SUPPORT_MOVED = ("ham",)
 
-# The drawings, in a 24 unit square, line art in the manner of the rest of
+# The drawings, keyed by code (site 1.1.0; a new cause in badges.json wants
+# one here too), in a 24 unit square, line art in the manner of the rest of
 # the site: strokes, round ends, no fill except the dots. Each keeps the
 # colours its cause is known by, lifted enough to read on the page's black.
 # The chip behind them is #0d0d12, which is what "cut" strokes are drawn in:
@@ -4457,7 +4580,7 @@ def _ribbon(colour):
 
 SUPPORT_ART = {
     # Six arcs of the pride flag.
-    "rainbow": "".join(
+    "lgbtq": "".join(
         f'<path d="M{12 - r} 17.5 A{r} {r} 0 0 1 {12 + r} 17.5" stroke="{c}" '
         'stroke-width="1.35"/>'
         for r, c in ((10.5, "#ef6a5a"), (9, "#f39a4a"), (7.5, "#f2d54e"),
@@ -4470,7 +4593,7 @@ SUPPORT_ART = {
               ' stroke="#f5a9b8"/>'),
     # The disability pride flag: five stripes cutting across it corner to
     # corner, in its own muted red, yellow, white, blue and green.
-    "disflag": ('<rect x="3" y="6" width="18" height="12" rx="1.5" stroke="#8a8a8a"'
+    "dsbld": ('<rect x="3" y="6" width="18" height="12" rx="1.5" stroke="#8a8a8a"'
                 ' stroke-width="1.2"/>'
                 '<g stroke-width="1.35" stroke-linecap="butt">'
                 '<path d="M7.5 6 L21 15" stroke="#d57a86"/>'
@@ -4479,17 +4602,17 @@ SUPPORT_ART = {
                 '<path d="M3 7.5 L18.75 18" stroke="#7ab8e0"/>'
                 '<path d="M3 9 L16.5 18" stroke="#4fb487"/></g>'),
     # The neurodiversity infinity, its four quarters in rainbow colours.
-    "infinity": ('<path d="M12 12 C10.5 9.5 9 8 7.5 8 C5.5 8 4 9.8 4 12" stroke="#ef6a5a"/>'
+    "neuro": ('<path d="M12 12 C10.5 9.5 9 8 7.5 8 C5.5 8 4 9.8 4 12" stroke="#ef6a5a"/>'
                  '<path d="M4 12 C4 14.2 5.5 16 7.5 16 C9 16 10.5 14.5 12 12" stroke="#f2d54e"/>'
                  '<path d="M12 12 C13.5 9.5 15 8 16.5 8 C18.5 8 20 9.8 20 12" stroke="#5cc478"/>'
                  '<path d="M20 12 C20 14.2 18.5 16 16.5 16 C15 16 13.5 14.5 12 12" stroke="#5b9df0"/>'),
     # Awareness ribbons, in the colour each cause is known by: green for
     # mental health, lavender for every cancer, red for HIV and AIDS.
-    "ribbon-mh": _ribbon("#5fcf8c"),
-    "ribbon-c":  _ribbon("#c6a4f0"),
-    "ribbon-h":  _ribbon("#e25a55"),
+    "mntlh": _ribbon("#5fcf8c"),
+    "cancer":  _ribbon("#c6a4f0"),
+    "hiv":  _ribbon("#e25a55"),
     # Project Semicolon's mark.
-    "semicolon": ('<circle cx="12" cy="7" r="1.9" fill="#5cc6bf" stroke="#5cc6bf"'
+    "scdpv": ('<circle cx="12" cy="7" r="1.9" fill="#5cc6bf" stroke="#5cc6bf"'
                   ' stroke-width="0.6"/>'
                   '<circle cx="12" cy="14" r="1.9" fill="#5cc6bf" stroke="#5cc6bf"'
                   ' stroke-width="0.6"/>'
@@ -4497,14 +4620,14 @@ SUPPORT_ART = {
     # A dog tag on its ball chain, with its lines stamped in. Two
     # overlapping tags read as a "copy" icon at this size; one on a chain
     # reads as a tag.
-    "tags": ('<path d="M12 11 C7.5 8.5 8 2.5 12 2.5 C16 2.5 16.5 8.5 12 11"'
+    "vets": ('<path d="M12 11 C7.5 8.5 8 2.5 12 2.5 C16 2.5 16.5 8.5 12 11"'
              ' stroke="#e0a94e" stroke-width="1.3" stroke-dasharray="0.01 1.75"/>'
              '<rect x="6.8" y="10" width="10.4" height="12.2" rx="3.6" stroke="#e0a94e"/>'
              '<circle cx="12" cy="12.6" r="0.9" stroke="#e0a94e" stroke-width="1.1"/>'
              '<path d="M9.6 16 H14.4 M9.6 18.6 H13" stroke="#e0a94e" stroke-width="1.2"'
              ' opacity="0.7"/>'),
     # A paw print.
-    "paw": ('<path d="M8 17 C8 14 10 12 12 12 C14 12 16 14 16 17 C16 19 14.4 20 12 20'
+    "animal": ('<path d="M8 17 C8 14 10 12 12 12 C14 12 16 14 16 17 C16 19 14.4 20 12 20'
             ' C9.6 20 8 19 8 17 Z" stroke="#e3a36b"/>'
             '<ellipse cx="6.2" cy="11" rx="1.6" ry="2.1" transform="rotate(-20 6.2 11)"'
             ' stroke="#e3a36b"/>'
@@ -4515,12 +4638,12 @@ SUPPORT_ART = {
     # Site 0.22.2. Ribbons in the colour each cause is known by: pink for
     # breast cancer, gold for childhood cancer, purple for domestic
     # violence, a deeper purple than cancer's lavender.
-    "ribbon-bc": _ribbon("#f28cb8"),
-    "ribbon-cc": _ribbon("#e8c24a"),
-    "ribbon-dv": _ribbon("#a07ae6"),
+    "brst": _ribbon("#f28cb8"),
+    "chldc": _ribbon("#e8c24a"),
+    "dv": _ribbon("#a07ae6"),
     # The forget-me-not: five blue petals round a yellow eye, the petals
     # apart so they read as a flower at a badge's size, not a knot.
-    "forgetmenot": ("".join(
+    "dmnta": ("".join(
         f'<circle cx="{x}" cy="{y}" r="2.4" stroke="#6fa8f0" stroke-width="1.5"/>'
         for x, y in ((12, 6.8), (16.95, 10.39), (15.06, 16.21), (8.94, 16.21),
                      (7.05, 10.39)))
@@ -4528,7 +4651,7 @@ SUPPORT_ART = {
           ' stroke-width="0.6"/>'),
     # Two cupped hands holding a heart, their thumbs turned in over it so
     # the curve reads as hands and not as a smile.
-    "carer": ('<path d="M12 11.6 C9.5 9.9 8.5 8.6 8.5 7.3 C8.5 6.2 9.3 5.4 10.3 5.4'
+    "carers": ('<path d="M12 11.6 C9.5 9.9 8.5 8.6 8.5 7.3 C8.5 6.2 9.3 5.4 10.3 5.4'
               ' C11 5.4 11.6 5.8 12 6.4 C12.4 5.8 13 5.4 13.7 5.4 C14.7 5.4 15.5 6.2 15.5 7.3'
               ' C15.5 8.6 14.5 9.9 12 11.6 Z" stroke="#f5a9b8" stroke-width="1.5"/>'
               '<path d="M3.2 9.8 V12.8 C3.2 17.2 7 20.4 12 20.4 C17 20.4 20.8 17.2'
@@ -4536,15 +4659,15 @@ SUPPORT_ART = {
               '<path d="M3.2 9.8 C4.8 10.2 6 11.4 6.6 13.2 M20.8 9.8 C19.2 10.2 18 11.4'
               ' 17.4 13.2" stroke="#e6e6ea" stroke-width="1.5"/>'),
     # The International Diabetes Federation's blue circle.
-    "bluecircle": '<circle cx="12" cy="12" r="7.4" stroke="#5b9df0" stroke-width="2.8"/>',
+    "dbts": '<circle cx="12" cy="12" r="7.4" stroke="#5b9df0" stroke-width="2.8"/>',
     # A heart with a beat running through it.
-    "heartbeat": ('<path d="M12 20.2 C6.2 15.8 3.2 12.7 3.2 9 C3.2 6.3 5.2 4.3 7.6 4.3'
+    "heart": ('<path d="M12 20.2 C6.2 15.8 3.2 12.7 3.2 9 C3.2 6.3 5.2 4.3 7.6 4.3'
                   ' C9.5 4.3 11 5.5 12 7.1 C13 5.5 14.5 4.3 16.4 4.3 C18.8 4.3 20.8 6.3'
                   ' 20.8 9 C20.8 12.7 17.8 15.8 12 20.2 Z" stroke="#ef6a5a"/>'
                   '<path d="M6 11.2 H9.2 L10.6 8.4 L12.6 13.8 L14 11.2 H18" stroke="#eeeef4"'
                   ' stroke-width="1.4"/>'),
     # Recovery: a sun coming up over the line, in recovery's purple.
-    "sunrise": ('<path d="M7 17 A5 5 0 0 1 17 17" stroke="#b07ae8"/>'
+    "rcvry": ('<path d="M7 17 A5 5 0 0 1 17 17" stroke="#b07ae8"/>'
                 '<path d="M3 17 H21" stroke="#b07ae8"/>'
                 '<path d="M12 10 V8 M16.95 12.05 L18.36 10.64 M7.05 12.05 L5.64 10.64'
                 ' M18.47 14.32 L20.3 13.56 M5.53 14.32 L3.7 13.56" stroke="#b07ae8"'
@@ -4552,7 +4675,7 @@ SUPPORT_ART = {
                 '<path d="M8 20.2 H16" stroke="#b07ae8" stroke-width="1.4" opacity="0.6"/>'),
     # A drop of blood with a green heart in it: blood donation's drop and
     # organ donation's green.
-    "drop": ('<path d="M12 3 C12 3 5.5 10.2 5.5 14.4 C5.5 18 8.4 20.8 12 20.8'
+    "donor": ('<path d="M12 3 C12 3 5.5 10.2 5.5 14.4 C5.5 18 8.4 20.8 12 20.8'
              ' C15.6 20.8 18.5 18 18.5 14.4 C18.5 10.2 12 3 12 3 Z" stroke="#ef6a5a"/>'
              '<path d="M12 17.6 C10 16.2 9.2 15.1 9.2 14 C9.2 13.1 9.9 12.5 10.7 12.5'
              ' C11.3 12.5 11.8 12.9 12 13.4 C12.2 12.9 12.7 12.5 13.3 12.5 C14.1 12.5'
@@ -4560,23 +4683,23 @@ SUPPORT_ART = {
              ' stroke-width="1.3"/>'),
     # The adoption triad: a triangle and a heart through it, in foster
     # care's blue with a pink heart.
-    "triad": ('<path d="M12 3.5 L20.5 18.3 H3.5 Z" stroke="#6fb0ef"/>'
+    "foster": ('<path d="M12 3.5 L20.5 18.3 H3.5 Z" stroke="#6fb0ef"/>'
               '<path d="M12 20.6 C8.3 17.8 6.7 15.8 6.7 13.6 C6.7 11.9 8 10.7 9.5 10.7'
               ' C10.6 10.7 11.5 11.4 12 12.3 C12.5 11.4 13.4 10.7 14.5 10.7 C16 10.7'
               ' 17.3 11.9 17.3 13.6 C17.3 15.8 15.7 17.8 12 20.6 Z" stroke="#f5a9b8"'
               ' stroke-width="1.5"/>'),
     # A house with its door: somewhere to live.
-    "house": ('<path d="M3.8 11.2 L12 4 L20.2 11.2 M6 9.4 V20.2 H18 V9.4"'
+    "hmlss": ('<path d="M3.8 11.2 L12 4 L20.2 11.2 M6 9.4 V20.2 H18 V9.4"'
               ' stroke="#d4a373"/>'
               '<path d="M10 20.2 V15.2 H14 V20.2" stroke="#d4a373" stroke-width="1.5"/>'),
     # A bowl, steaming, in hunger relief's orange.
-    "bowl": ('<path d="M3.5 12 H20.5 C20.5 16.6 16.7 19.8 12 19.8 C7.3 19.8 3.5 16.6'
+    "hunger": ('<path d="M3.5 12 H20.5 C20.5 16.6 16.7 19.8 12 19.8 C7.3 19.8 3.5 16.6'
              ' 3.5 12 Z" stroke="#f39a4a"/>'
              '<path d="M8.6 9.2 C7.8 8 9.6 7 8.8 5.4 M12.2 9.2 C11.4 8 13.2 7 12.4 5.4'
              ' M15.8 9.2 C15 8 16.8 7 16 5.4" stroke="#f39a4a" stroke-width="1.3"'
              ' opacity="0.8"/>'),
     # An open book with lines of text on its pages.
-    "readbook": ('<path d="M12 6.6 C10 5.1 7 4.6 3 5.1 V18.6 C7 18.1 10 18.6 12 20.1'
+    "ltrcy": ('<path d="M12 6.6 C10 5.1 7 4.6 3 5.1 V18.6 C7 18.1 10 18.6 12 20.1'
                  ' C14 18.6 17 18.1 21 18.6 V5.1 C17 4.6 14 5.1 12 6.6 Z M12 6.6 V20.1"'
                  ' stroke="#8fb4ff"/>'
                  '<path d="M5.6 8.8 H9.6 M5.6 11.6 H9.6 M5.6 14.4 H8.6 M14.4 8.8 H18.4'
@@ -4584,7 +4707,7 @@ SUPPORT_ART = {
                  ' opacity="0.75"/>'),
     # An emergency beacon: a red lamp throwing blue light, which is every
     # service's rather than one side's.
-    "beacon": ('<path d="M7 16.4 V12.4 C7 9.6 9.2 7.4 12 7.4 C14.8 7.4 17 9.6 17 12.4'
+    "frstr": ('<path d="M7 16.4 V12.4 C7 9.6 9.2 7.4 12 7.4 C14.8 7.4 17 9.6 17 12.4'
                ' V16.4" stroke="#ef6a5a"/>'
                '<path d="M5 16.4 H19 V19.8 H5 Z" stroke="#e6e6ea" stroke-width="1.5"/>'
                '<path d="M12 4.8 V2.8 M6.4 6.6 L5 5.2 M17.6 6.6 L19 5.2 M4 11.4 H2.4'
@@ -4601,111 +4724,18 @@ def support_svg(key):
 
 # --------------------------------------------------------------------------
 # Interests (site 0.22.0, Rob): what the sysop is into, the way support is
-# what the sysop stands for. Same rules exactly: a board sends slugs in its
-# "interests" list, anything not in this table is ignored, and only the
+# what the sysop stands for. Same rules exactly: a board sends codes in its
+# "interests" list, anything not in the table is ignored, and only the
 # first 16 are read. The list is wide on purpose, because the people who
 # call BBSes are into all sorts: electronics and gaming, but also bikes,
 # gardens and trains.
 #
-# One line each: slug, group, the name a reader sees, and one plain
-# sentence for /badges. The groups are the headings on /badges and the
-# boxes in the board list's filter, in this order. Within a group the order
-# on the page is alphabetical by name (see sort_key), so the order of the
-# lines here does not matter; they are kept alphabetical anyway so this
-# table reads the way the page does.
+# The table itself, each with its group, the name a reader sees and one
+# plain sentence for /badges, is in badges.json with the support causes
+# (site 1.1.0). The groups are the headings on /badges and the rows of the
+# board list's filter, in the file's order; within a group the page orders
+# by name (see sort_key).
 # --------------------------------------------------------------------------
-INTEREST_GROUPS = ("Computing", "Platforms", "Making", "Games", "Music and art",
-                   "Radio and sky", "Outdoors and more", "Reading and watching")
-
-INTERESTS = (
-    ("bbs-history",    "Computing", "BBS history",
-     "Bulletin boards as they were: the software, the scene and the stories."),
-    ("linux",          "Computing", "Linux",
-     "Linux and the other free Unix-like systems."),
-    ("open-source",    "Computing", "Open source",
-     "Free and open source software, and the people who make it."),
-    ("programming",    "Computing", "Programming",
-     "Writing code, in any language, for any machine."),
-    ("retrocomputing", "Computing", "Retrocomputing",
-     "Old computers kept running, restored and put back to work."),
-    ("amiga",          "Platforms", "Amiga",
-     "The Commodore Amiga, from the 1000 to the 4000."),
-    ("apple2",         "Platforms", "Apple II",
-     "The Apple II family, from the first one to the IIGS."),
-    ("atari",          "Platforms", "Atari",
-     "Atari's 8-bit computers, the ST and the consoles."),
-    ("c64",            "Platforms", "Commodore 64",
-     "The Commodore 64 and 128, and the rest of Commodore's 8-bit machines."),
-    ("dos",            "Platforms", "DOS",
-     "MS-DOS, PC-DOS and the IBM PC compatibles that ran them."),
-    ("spectrum",       "Platforms", "ZX Spectrum",
-     "Sinclair's ZX Spectrum, the ZX81 and their clones."),
-    ("3d-printing",    "Making",    "3D printing",
-     "Printing parts, cases and the things nobody sells."),
-    ("electronics",    "Making",    "Electronics",
-     "Circuits, chips and the tools for poking at them."),
-    ("robotics",       "Making",    "Robotics",
-     "Robots of every size, from line followers to arms."),
-    ("soldering",      "Making",    "Soldering",
-     "Kits, repairs and anything else that wants a hot iron."),
-    ("woodworking",    "Making",    "Woodworking",
-     "Making things out of wood, computer cases and desks included."),
-    ("arcade",         "Games",     "Arcade and pinball",
-     "Coin-op cabinets and pinball tables, played or restored."),
-    ("board-games",    "Games",     "Board games",
-     "Games played round a table, from chess to the latest box."),
-    ("gaming",         "Games",     "Gaming",
-     "Video games of any age, on any machine."),
-    ("retro-gaming",   "Games",     "Retro gaming",
-     "Old games on the machines they were made for, or near enough."),
-    ("tabletop-rpg",   "Games",     "Tabletop RPGs",
-     "Dice, character sheets and somebody running the game."),
-    ("ansi-art",       "Music and art", "ANSI art",
-     "Pictures drawn in text: ANSI, ASCII and PETSCII art."),
-    ("chiptune",       "Music and art", "Chiptune",
-     "Music made on old sound chips, or in their sound."),
-    ("demoscene",      "Music and art", "Demoscene",
-     "Demos, intros and the groups that make them."),
-    ("drawing",        "Music and art", "Drawing",
-     "Drawing, painting and illustration, on paper or on a screen."),
-    ("music",          "Music and art", "Music",
-     "Making it, playing it or collecting it."),
-    ("photography",    "Music and art", "Photography",
-     "Taking pictures, on film or not."),
-    ("ham",            "Radio and sky", "Amateur radio",
-     "Hams welcome: the other hobby of talking to strangers over home-made equipment."),
-    ("astronomy",      "Radio and sky", "Astronomy",
-     "Looking up at night, with a telescope or without."),
-    ("swl",            "Radio and sky", "Shortwave listening",
-     "Tuning in to broadcasts and stations from far away."),
-    ("weather",        "Radio and sky", "Weather",
-     "Watching it, measuring it and running a weather station."),
-    ("aviation",       "Outdoors and more", "Aviation",
-     "Flying, planes, and watching them go over."),
-    ("cars",           "Outdoors and more", "Cars",
-     "Driving them, fixing them and keeping old ones on the road."),
-    ("cooking",        "Outdoors and more", "Cooking",
-     "Cooking, baking and feeding people."),
-    ("cycling",        "Outdoors and more", "Cycling",
-     "Riding bikes, fixing them, or both."),
-    ("fishing",        "Outdoors and more", "Fishing",
-     "Rod, line and patience."),
-    ("gardening",      "Outdoors and more", "Gardening",
-     "Growing things, indoors or out."),
-    ("hiking",         "Outdoors and more", "Hiking",
-     "Walking, hiking and getting up hills."),
-    ("model-trains",   "Outdoors and more", "Model trains",
-     "Model railways in any scale, and the layouts they run on."),
-    ("anime",          "Reading and watching", "Anime",
-     "Japanese animation and manga."),
-    ("books",          "Reading and watching", "Books",
-     "Reading, and talking about what you read."),
-    ("movies",         "Reading and watching", "Movies",
-     "Films, and watching them with other people."),
-    ("scifi",          "Reading and watching", "Science fiction",
-     "Science fiction in books, in films and on television."),
-)
-INTEREST_SLUGS = tuple(i[0] for i in INTERESTS)
 
 
 def _dot(x, y, r=1.0):
@@ -4713,14 +4743,14 @@ def _dot(x, y, r=1.0):
     return f'<circle cx="{x}" cy="{y}" r="{r}" fill="currentColor" stroke="none"/>'
 
 
-# The drawings, keyed by slug, in the same 24 unit square and the same line
+# The drawings, keyed by code, in the same 24 unit square and the same line
 # art as the support symbols, but in one colour, currentColor, which the
 # chip sets: rose, a family nothing else on the page uses. Simple enough to
 # read at a badge's 17px and a filter chip's 22: one outline and a detail or
 # two, never a scene. A dot is the only fill.
 INTEREST_ART = {
     # Computing
-    "bbs-history": (  # a rotary telephone: how every board was called
+    "bbs": (  # a rotary telephone: how every board was called
         '<path d="M3.6 8.8 C3.6 6.2 7.4 4.4 12 4.4 C16.6 4.4 20.4 6.2 20.4 8.8'
         ' L19.6 10 H16.4 L15.8 8.2 C13.6 7.7 10.4 7.7 8.2 8.2 L7.6 10 H4.4 Z"/>'
         '<path d="M8.6 10.6 H15.4 L19.4 19.2 C19.6 19.8 19.2 20.4 18.6 20.4 H5.4'
@@ -4739,12 +4769,12 @@ INTEREST_ART = {
         '<path d="M7 20.8 C7.8 21.8 10 21.9 10.8 20.6 M13.2 20.6 C14 21.9 16.2 21.8'
         ' 17 20.8" stroke-width="1.6"/>'
         + _dot(10.7, 6.5, 0.95) + _dot(13.3, 6.5, 0.95)),
-    "open-source": (  # the open source keyhole: a ring with its way in
+    "oss": (  # the open source keyhole: a ring with its way in
         '<path d="M9.3 20.1 A8.5 8.5 0 1 1 14.7 20.1 L13.1 15.4 '
         'A3.6 3.6 0 1 0 10.9 15.4 Z"/>'),
-    "programming": (  # angle brackets and a slash
+    "prgrm": (  # angle brackets and a slash
         '<path d="M8.5 7 L3.5 12 L8.5 17 M15.5 7 L20.5 12 L15.5 17 M13.6 4.5 L10.4 19.5"/>'),
-    "retrocomputing": (  # a monitor on a desktop box
+    "retro": (  # a monitor on a desktop box
         '<rect x="5.5" y="3.2" width="13" height="10.6" rx="1.4"/>'
         '<rect x="8" y="5.7" width="8" height="5.6" rx="0.6" stroke-width="1.3"/>'
         '<path d="M10 13.8 V16.6 M14 13.8 V16.6"/>'
@@ -4789,34 +4819,34 @@ INTEREST_ART = {
         '<path d="M7.6 3.6 V8.8 H15.4 V3.6"/>'
         '<path d="M12.9 5.2 V7.2" stroke-width="1.5"/>'
         '<path d="M6.6 20.4 V14.2 H17.4 V20.4"/>'),
-    "spectrum": (  # a flat rubber-key keyboard with the stripes in its corner
+    "zx": (  # a flat rubber-key keyboard with the stripes in its corner
         '<rect x="2.6" y="6.8" width="18.8" height="10.4" rx="1.2"/>'
         '<path d="M5.4 9.8 H13.6 M5.4 12.2 H13.6 M5.4 14.6 H12" stroke-width="1.7"'
         ' stroke-dasharray="0.01 2.05"/>'
         '<path d="M14.6 17.2 L21.4 10.4 M16.8 17.2 L21.4 12.6 M19 17.2 L21.4 14.8"'
         ' stroke-width="1.3"/>'),
     # Making
-    "3d-printing": (  # a nozzle over the layers it has laid
+    "3dprt": (  # a nozzle over the layers it has laid
         '<path d="M9.4 3 H14.6 V6.4 L12 9 L9.4 6.4 Z"/>'
         + _dot(12, 11.2, 0.85)
         + '<path d="M6 13.8 H18 M6 17 H18 M6 20.2 H18" stroke-width="1.6"/>'),
-    "electronics": (  # a chip on its pins
+    "elctr": (  # a chip on its pins
         '<rect x="7" y="4.4" width="10" height="15.2" rx="1"/>'
         '<path d="M10.6 4.4 A1.4 1.4 0 0 0 13.4 4.4" stroke-width="1.3"/>'
         '<path d="M3.8 7.8 H7 M3.8 12 H7 M3.8 16.2 H7 M17 7.8 H20.2 M17 12 H20.2'
         ' M17 16.2 H20.2"/>'),
-    "robotics": (  # a robot's head
+    "robot": (  # a robot's head
         '<rect x="5" y="8.2" width="14" height="11" rx="2"/>'
         '<path d="M12 8.2 V5"/>'
         '<circle cx="12" cy="3.9" r="1.1"/>'
         '<path d="M3 12 V15.4 M21 12 V15.4 M9.6 16.3 H14.4"/>'
         + _dot(9.2, 12.6, 1.2) + _dot(14.8, 12.6, 1.2)),
-    "soldering": (  # the iron, and a wisp off its tip
+    "solder": (  # the iron, and a wisp off its tip
         '<path d="M3.6 20.4 L8 16" stroke-width="1.5"/>'
         '<path d="M8 16 L10.4 13.6" stroke-width="2.4"/>'
         '<path d="M12 14.8 L20 6.8 A2 2 0 0 0 17.2 4 L9.2 12 Z"/>'
         '<path d="M5.4 12.6 C4.4 11.4 6.4 10.4 5.4 9.2" stroke-width="1.4" opacity="0.7"/>'),
-    "woodworking": (  # a handsaw
+    "wood": (  # a handsaw
         '<path d="M14 8.6 L3.2 12 V15.4 L4.4 16.9 L5.6 15.4 L6.8 16.9 L8 15.4'
         ' L9.2 16.9 L10.4 15.4 L11.6 16.9 L12.8 15.4 L14 16.4"/>'
         '<path d="M14 7 H18.6 C19.9 7 21 8.1 21 9.4 V15.2 C21 16.5 19.9 17.6 18.6'
@@ -4828,29 +4858,29 @@ INTEREST_ART = {
         '<rect x="9.8" y="4.6" width="4.4" height="3.8" rx="0.4" stroke-width="1.3"/>'
         '<path d="M6.6 14 H17.4 M10 14 V12.4" stroke-width="1.5"/>'
         + _dot(10, 11.8, 1) + _dot(13.3, 12.6, 0.8) + _dot(15.1, 12.6, 0.8)),
-    "board-games": (  # a meeple
+    "brdgm": (  # a meeple
         '<path d="M12 3 C13.7 3 15 4.3 15 6 C15 7 14.6 7.8 14 8.3 C16.5 8.8 20.4'
         ' 10 20.4 12 C20.4 13.3 18.5 13.5 16.8 13.3 L19 19.4 C19.3 20.4 18.8 21'
         ' 18 21 H14.2 L12 17.4 L9.8 21 H6 C5.2 21 4.7 20.4 5 19.4 L7.2 13.3 C5.5'
         ' 13.5 3.6 13.3 3.6 12 C3.6 10 7.5 8.8 10 8.3 C9.4 7.8 9 7 9 6 C9 4.3 10.3'
         ' 3 12 3 Z"/>'),
-    "gaming": (  # a game pad
+    "games": (  # a game pad
         '<path d="M7 8 H17 C19.9 8 21.5 11 21.5 14.6 C21.5 17 20.2 18.2 18.6 18.2'
         ' C17.2 18.2 16.4 16.8 15.6 15.4 H8.4 C7.6 16.8 6.8 18.2 5.4 18.2 C3.8 18.2'
         ' 2.5 17 2.5 14.6 C2.5 11 4.1 8 7 8 Z"/>'
         '<path d="M7.4 10.6 V14.6 M5.4 12.6 H9.4" stroke-width="1.6"/>'
         + _dot(15.4, 11.6, 1) + _dot(17.6, 13.6, 1)),
-    "retro-gaming": (  # the chomper, about to eat a pellet
+    "rtrgm": (  # the chomper, about to eat a pellet
         '<path d="M17.1 7.9 A7.8 7.8 0 1 0 17.1 16.1 L10.4 12 Z"/>'
         + _dot(10.2, 7.9, 1.1) + _dot(20.9, 12, 1.3)),
-    "tabletop-rpg": (  # a twenty sided die
+    "rpg": (  # a twenty sided die
         '<path d="M12 2.5 L20.2 7.25 V16.75 L12 21.5 L3.8 16.75 V7.25 Z"/>'
         '<path d="M12 7.6 L16.6 15.4 H7.4 Z" stroke-width="1.4"/>'
         '<path d="M12 7.6 L3.8 7.25 M12 7.6 L20.2 7.25 M7.4 15.4 L3.8 16.75'
         ' M7.4 15.4 L12 21.5 M16.6 15.4 L20.2 16.75 M16.6 15.4 L12 21.5 M12 2.5'
         ' V7.6" stroke-width="1.1" opacity="0.8"/>'),
     # Music and art
-    "ansi-art": (  # the shade blocks, light to full
+    "ansi": (  # the shade blocks, light to full
         '<path d="M4.6 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"'
         ' stroke-dasharray="1 2"/>'
         '<path d="M9.2 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"'
@@ -4858,14 +4888,14 @@ INTEREST_ART = {
         '<path d="M13.8 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"'
         ' stroke-dasharray="2.2 0.8"/>'
         '<path d="M18.4 4.5 V19.5" stroke-width="3.4" stroke-linecap="butt"/>'),
-    "chiptune": (  # a square wave, the sound of a pulse channel
+    "chptn": (  # a square wave, the sound of a pulse channel
         '<path d="M2.5 16 H5.6 V8 H10 V16 H14 V8 H18.4 V16 H21.5"/>'
         '<path d="M2.5 20 H21.5" stroke-width="1.2" stroke-dasharray="0.01 2.4"/>'),
-    "demoscene": (  # a sine scroller of dots, and a sparkle
+    "demo": (  # a sine scroller of dots, and a sparkle
         '<path d="M2.6 13.4 C5 5.8 8.4 5.8 10.8 13.4 S16.6 21 19 13.4"'
         ' stroke-width="2.3" stroke-dasharray="0.01 2.7"/>'
         '<path d="M19.2 2.8 V7.8 M16.7 5.3 H21.7" stroke-width="1.5"/>'),
-    "drawing": (  # a pencil
+    "draw": (  # a pencil
         '<path d="M4 20 L5 15.6 L15.6 5 C16.4 4.2 17.7 4.2 18.5 5 L19 5.5 C19.8'
         ' 6.3 19.8 7.6 19 8.4 L8.4 19 Z"/>'
         '<path d="M14 6.6 L17.4 10 M5 15.6 L8.4 19" stroke-width="1.4"/>'),
@@ -4875,7 +4905,7 @@ INTEREST_ART = {
         ' fill="currentColor"/>'
         '<ellipse cx="16.8" cy="15.8" rx="2.4" ry="1.9" transform="rotate(-20 16.8 15.8)"'
         ' fill="currentColor"/>'),
-    "photography": (  # a camera
+    "photo": (  # a camera
         '<path d="M3 9 C3 8.2 3.6 7.6 4.4 7.6 H7.4 L9 5 H15 L16.6 7.6 H19.6 C20.4'
         ' 7.6 21 8.2 21 9 V18 C21 18.8 20.4 19.4 19.6 19.4 H4.4 C3.6 19.4 3 18.8'
         ' 3 18 Z"/>'
@@ -4890,7 +4920,7 @@ INTEREST_ART = {
         + '<path d="M15.2 4.4 A4.2 4.2 0 0 1 15.2 9.6 M8.8 4.4 A4.2 4.2 0 0 0 8.8 9.6'
         ' M17.6 2.4 A7.25 7.25 0 0 1 17.6 11.6 M6.4 2.4 A7.25 7.25 0 0 0 6.4 11.6"'
         ' stroke-width="1.4"/>'),
-    "astronomy": (  # a ringed planet
+    "astro": (  # a ringed planet
         '<circle cx="12" cy="12" r="5"/>'
         '<path d="M7.2 10.7 C3.8 11.8 2.2 13.5 2.9 14.6 C3.9 16.3 10 15.5 15.8'
         ' 13.1 C21.2 10.8 22.3 8.5 21 7.7 C20.2 7.2 18.6 7.3 16.7 7.9"/>'
@@ -4900,14 +4930,14 @@ INTEREST_ART = {
         '<circle cx="8.4" cy="15.1" r="3"/>'
         '<path d="M14 13 H18.4 M14 15.6 H18.4 M14 18.2 H16.6" stroke-width="1.4"/>'
         '<path d="M16.2 9.6 L20 2.8"/>'),
-    "weather": (  # the sun behind a cloud
+    "wthr": (  # the sun behind a cloud
         '<path d="M5.4 11.6 A3.6 3.6 0 1 1 12.1 8.9" stroke-width="1.6"/>'
         '<path d="M8.6 2.4 V3.8 M3 8.4 H4.4 M4.6 4.4 L5.6 5.4 M12.6 4.4 L11.6 5.4"'
         ' stroke-width="1.5"/>'
         '<path d="M8.6 20.4 H17.8 A3.4 3.4 0 0 0 18.2 13.6 A4.8 4.8 0 0 0 9.2 13.8'
         ' A3.3 3.3 0 0 0 8.6 20.4 Z"/>'),
     # Outdoors and more
-    "aviation": (  # an aeroplane, from below
+    "avtn": (  # an aeroplane, from below
         '<path d="M12 2.5 C12.9 2.5 13.3 3.5 13.3 5 V9.5 L21 14 V16 L13.3 13.6 V18.4'
         ' L15.6 20 V21.5 L12 20.5 L8.4 21.5 V20 L10.7 18.4 V13.6 L3 16 V14 L10.7'
         ' 9.5 V5 C10.7 3.5 11.1 2.5 12 2.5 Z"/>'),
@@ -4917,31 +4947,31 @@ INTEREST_ART = {
         ' 11.8 L20.5 12.4 C21 12.6 21.4 13.1 21.4 13.6 V16.6 H19.4 M9.4 16.6 H14.6"/>'
         '<path d="M6.6 11.9 H18.4 M12.4 7.6 V11.9" stroke-width="1.4"/>'
         '<circle cx="7" cy="16.8" r="2.3"/><circle cx="17" cy="16.8" r="2.3"/>'),
-    "cooking": (  # a chef's hat
+    "cook": (  # a chef's hat
         '<path d="M7 13.2 C4.6 13.2 3 11.2 3 9.1 C3 6.9 4.8 5.1 7 5.1 C7.3 5.1 7.6'
         ' 5.1 7.9 5.2 C8.7 3.4 10.2 2.6 12 2.6 C13.8 2.6 15.3 3.4 16.1 5.2 C16.4'
         ' 5.1 16.7 5.1 17 5.1 C19.2 5.1 21 6.9 21 9.1 C21 11.2 19.4 13.2 17 13.2'
         ' V20.6 H7 Z"/>'
         '<path d="M7 17 H17" stroke-width="1.4"/>'),
-    "cycling": (  # a bicycle
+    "bike": (  # a bicycle
         '<circle cx="5.9" cy="16.4" r="3.7"/><circle cx="18.1" cy="16.4" r="3.7"/>'
         '<path d="M5.9 16.4 H12 L9.8 9.8 Z M9.8 9.8 H16.2 L12 16.4 M16.2 9.8 L18.1'
         ' 16.4 M9.8 9.8 L9.4 8.2 M8 8.2 H11 M16.2 9.8 L15.6 7.6 H17.8"'
         ' stroke-width="1.5"/>'),
-    "fishing": (  # a fish
+    "fish": (  # a fish
         '<path d="M2.8 12 C5.8 7 12.5 6.4 16.4 12 C12.5 17.6 5.8 17 2.8 12 Z"/>'
         '<path d="M16.4 12 L21.2 8.3 V15.7 Z"/>'
         '<path d="M10.4 9.4 C11.3 10.9 11.3 13.1 10.4 14.6" stroke-width="1.3"/>'
         + _dot(7.2, 11.1, 1)),
-    "gardening": (  # a seedling
+    "garden": (  # a seedling
         '<path d="M12 20.6 V11.4"/>'
         '<path d="M12 13.4 C12 9.6 9.2 7.4 5.2 7.4 C5.2 11.2 8 13.4 12 13.4 Z"/>'
         '<path d="M12 11.4 C12 7.4 14.8 4.8 18.8 4.8 C18.8 8.8 16 11.4 12 11.4 Z"/>'
         '<path d="M6.4 20.6 H17.6"/>'),
-    "hiking": (  # mountains, with snow on the high one
+    "hike": (  # mountains, with snow on the high one
         '<path d="M2 19.6 L8.6 8.4 L12.6 14.8 L15.6 10.6 L22 19.6 Z"/>'
         '<path d="M6.7 11.6 L8.1 12.7 L9.6 11.2 L10.6 12.1" stroke-width="1.3"/>'),
-    "model-trains": (  # a little steam engine on its rail
+    "trains": (  # a little steam engine on its rail
         '<path d="M3 17 V11 H13.4 V17 M13.4 17 V7 H20.4 V17 M12.6 7 H21.2'
         ' M5.4 11 V7.6 H8 V11 M2 17 H22"/>'
         '<rect x="15.3" y="8.8" width="3.2" height="2.8" rx="0.4" stroke-width="1.3"/>'
@@ -4973,11 +5003,11 @@ INTEREST_ART = {
 }
 
 
-def interest_svg(slug):
+def interest_svg(code):
     """One interest drawing, in the chip's colour, hidden from a screen
     reader because the chip it sits in is named already."""
     return ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
-            + INTEREST_ART[slug] + "</svg>")
+            + INTEREST_ART[code] + "</svg>")
 
 
 # --------------------------------------------------------------------------
@@ -5016,12 +5046,12 @@ def _badge_table():
     out = []
 
     def add(group, key, name, cls, sym, means, sent, sub="", tip="", sort=None,
-            filt=True):
+            filt=True, aliases=()):
         out.append({"group": group, "sub": sub, "key": key, "name": name,
                     "cls": cls, "sym": sym, "means": means, "sent": sent,
                     "tip": tip or f"{name}: {means[0].lower() + means[1:]}",
                     "sort": sort_key(name) if sort is None else sort,
-                    "filter": filt})
+                    "filter": filt, "aliases": tuple(aliases)})
 
     # Sent by the board. The software and the machine are the board's own
     # words, so they have no fixed symbol and nothing to filter on.
@@ -5035,7 +5065,8 @@ def _badge_table():
         "<code>system</code> <span class='src'>its own words</span>",
         tip="Runs on: Compaq 486, in the board's own words.", filt=False)
     where = {"petscii": "<code>petscii</code> <span class='src'>in terminals</span>",
-             "guests":  "<code>guests</code> <span class='src'>set to true</span>"}
+             "guests":  "<code>guests</code> <span class='src'>set to true</span>",
+             "sd":      "<code>sd</code> <span class='src'>its size in GB</span>"}
     for key, letters, cls, name, means in LETTER_BADGES:
         if key in ("new", "steady"):
             add("directory", key, name, cls, letters, _cap(means),
@@ -5065,12 +5096,18 @@ def _badge_table():
         "and links to how to update it.",
         "<span class='src'>none: worked out here</span>",
         tip="Update available: a newer µnleashed release is on the install page.")
-    for slug, art, name, sentence in SUPPORT:
-        add("support", slug, _cap(name), "sup", art, sentence, f"<code>{slug}</code>",
-            tip=f"Supports {name}.")
-    for slug, sub, name, means in INTERESTS:
-        add("interests", slug, name, "int", slug, means, f"<code>{slug}</code>",
-            sub=sub, tip=f"Interest: {name}.")
+    # The causes and the interests (site 1.1.0): keyed by code, which is
+    # what the filter's checkboxes and a board's data-b carry, lower case,
+    # and shown upper case in the legend's Code column. The aliases ride
+    # along so a search for an old slug still finds the badge it became.
+    for code, name, sentence in SUPPORT:
+        add("support", code, name, "sup", code, sentence,
+            f"<code>{html.escape(code.upper())}</code>",
+            tip=f"Supports {_uncap(name)}.", aliases=ALIASES_WRITTEN.get(code, ()))
+    for code, sub, name, means in INTERESTS:
+        add("interests", code, name, "int", code, means,
+            f"<code>{html.escape(code.upper())}</code>",
+            sub=sub, tip=f"Interest: {name}.", aliases=ALIASES_WRITTEN.get(code, ()))
 
     group_at = {g: i for i, (g, _t) in enumerate(BADGE_GROUPS)}
     sub_at = {s: i for i, s in enumerate(INTEREST_GROUPS)}
@@ -5091,9 +5128,10 @@ FILTER_KEYS = tuple(b["key"] for b in BADGES if b["filter"])
 # every row: what it speaks, guests, what is running, what the directory
 # worked out, then the causes and the interests, and only those two
 # alphabetical, because there a reader is scanning for a name. /badges and
-# the filter keep BADGES order; only the row uses this.
+# the filter keep BADGES order; only the row uses this. The SD card (site
+# 1.1.0) sits with what is running, after doors.
 ROW_ORDER = ("petscii", "guests", "chat", "mail", "forums", "files", "doors",
-             "new", "steady")
+             "sd", "new", "steady")
 ROW_SUPPORT = tuple(b for b in BADGES if b["group"] == "support")
 ROW_INTERESTS = tuple(sorted((b for b in BADGES if b["group"] == "interests"),
                              key=lambda b: b["sort"]))
@@ -5105,22 +5143,29 @@ UP_ARROW = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
 
 
 def badge_symbol(b):
-    """What a badge shows: its letters or its drawing, already markup."""
-    if b["cls"] == "sup":
+    """What a badge shows: its letters or its drawing, already markup. A
+    cause or an interest with no drawing here, which is a code added to
+    badges.json without one, shows its code rather than failing the page."""
+    if b["cls"] == "sup" and b["sym"] in SUPPORT_ART:
         return support_svg(b["sym"])
-    if b["cls"] == "int":
+    if b["cls"] == "int" and b["sym"] in INTEREST_ART:
         return interest_svg(b["sym"])
+    if b["cls"] in ("sup", "int"):
+        return html.escape(b["sym"].upper())
     if b["cls"] == "upd":
         return UP_ARROW
     return html.escape(b["sym"])
 
 
 def badge_words(b):
-    """What a search matches a badge on, lower case: its name, its slug with
-    and without hyphens, and its group, so "radio", "ham", "c64", "open
-    source" and "games" all find something."""
-    parts = (b["name"], b["key"], b["key"].replace("-", " "), b["sub"])
-    return " ".join(p for p in parts if p).lower()
+    """What a search matches a badge on, lower case: its name, its key (a
+    code, for a cause or an interest), every alias it has with and without
+    its hyphens, and its group, so "radio", "ham", "c64", "mntlh", "open
+    source", "open-source" and "games" all find something."""
+    parts = [b["name"], b["key"], b["sub"]]
+    for a in b.get("aliases", ()):
+        parts += [a, a.replace("-", " "), a.replace("-", "")]
+    return " ".join(dict.fromkeys(p.lower() for p in parts if p))
 
 
 # --------------------------------------------------------------------------
@@ -5216,26 +5261,44 @@ def row_keys(r, now, steady=False, latest=""):
     if update_for(r, latest):
         keys.add("update")
     keys.update(label for days, label, _w in AGES if age >= days * 86400)
+    if row_sd(r):
+        keys.add("sd")
     keys.update(row_support(r))
     keys.update(row_interests(r))
     return keys
 
 
+def row_sd(r):
+    """The SD card's size in GB a board's row carries, or None (site 1.1.0).
+    A row made before the column existed, or a test's own dict without it,
+    has none."""
+    try:
+        sd = r["sd"]
+    except (KeyError, IndexError):
+        return None
+    return sd if isinstance(sd, int) and 1 <= sd <= SD_MAX else None
+
+
 def row_support(r):
-    """The causes a board's row carries, as slugs, in the directory's order.
-    A slug stored in the support column before it moved to the interests
+    """The causes a board's row carries, as codes, in the directory's order.
+    A stored word is read through the aliases, so a row written with the
+    long slugs before site 1.1.0 shows the same causes with no migration.
+    A code stored in the support column before it moved to the interests
     (ham, site 0.22.2) is left out here and read by row_interests()."""
-    return [s for s in unpick(r["support"]) if s in SUPPORT_SLUGS]
+    got = {SUPPORT_ALIAS.get(norm_word(s)) for s in unpick(r["support"])}
+    return [c for c in SUPPORT_CODES if c in got]
 
 
 def row_interests(r):
-    """The interests a board's row carries, as slugs, in the directory's
-    order, with any slug that moved there from support and was stored
-    before it did. Reading them this way needs no migration: every
-    heartbeat rewrites both columns anyway."""
-    got = set(unpick(r["interests"]))
-    got.update(s for s in unpick(r["support"]) if s in SUPPORT_MOVED)
-    return [s for s in INTEREST_SLUGS if s in got]
+    """The interests a board's row carries, as codes, in the directory's
+    order, read through the aliases as row_support() does, with any code
+    that moved there from support and was stored before it did. Reading
+    them this way needs no migration: every heartbeat rewrites both columns
+    anyway."""
+    got = {INTEREST_ALIAS.get(norm_word(s)) for s in unpick(r["interests"])}
+    got.update(c for c in (INTEREST_ALIAS.get(norm_word(s)) for s in unpick(r["support"]))
+               if c in SUPPORT_MOVED)
+    return [c for c in INTEREST_CODES if c in got]
 
 
 def board_badges(r, now, steady=False, latest=""):
@@ -5261,7 +5324,12 @@ def board_badges(r, now, steady=False, latest=""):
         ident.append(badge("sys", html.escape(r["system"]),
                            f"Runs on: {r['system']}, in the board's own words."))
     for key in ROW_ORDER:
-        if key in keys:
+        if key == "sd" and key in keys:
+            # The card's size on the badge itself, SD32 (site 1.1.0).
+            sd = row_sd(r)
+            marks.append(badge("feat", f"SD{sd}",
+                               f"SD card: {sd} GB, in use on the board now."))
+        elif key in keys:
             b = BADGE_BY_KEY[key]
             marks.append(badge(b["cls"], badge_symbol(b), b["tip"]))
     # One chip for the whole of time listed: the highest step reached.
@@ -5283,8 +5351,9 @@ def board_badges(r, now, steady=False, latest=""):
 
 def legend_html(lines):
     """One group of /badges: its heading, the Markdown under it, and a table
-    of its badges, each row the symbol, the name, the slug and what it
-    means. The first line of the block names the group; the rest is prose.
+    of its badges, each row the symbol, the name, what a board sends (a
+    code, for a cause or an interest) and what it means. The first line of
+    the block names the group; the rest is prose.
 
     Every row carries what a search matches it on, and the section, like
     each sub-group of interests, is marked as a group, so the script can
@@ -5328,8 +5397,11 @@ def legend_html(lines):
             out.append(row(chips, b, b["name"], means, badge_words(b)))
         return "".join(out)
 
+    # The third column is what a board sends. For a cause or an interest
+    # that is its code, upper case (site 1.1.0); for the rest, the field.
+    third = "Code" if which in ("support", "interests") else "Sent as"
     head = ('<thead><tr><th scope="col">Badge</th><th scope="col">Name</th>'
-            '<th scope="col">Slug</th><th scope="col">Meaning</th></tr></thead>')
+            f'<th scope="col">{third}</th><th scope="col">Meaning</th></tr></thead>')
     items = [b for b in BADGES if b["group"] == which]
     if which == "interests":
         body = "".join(
@@ -5379,9 +5451,11 @@ def about_lines(r):
         lines.append("No guests: an account is needed")
     if unpick(r["features"]):
         lines.append("Running: " + ", ".join(unpick(r["features"])))
+    if row_sd(r):
+        lines.append(f"SD card: {row_sd(r)} GB")
     # In the page's order; the words are the ones the tooltip uses.
     chosen = set(row_support(r))
-    said = {slug: name for slug, _a, name, _s in SUPPORT}
+    said = {code: _uncap(name) for code, name, _s in SUPPORT}
     names = [said[b["key"]] for b in BADGES
              if b["group"] == "support" and b["key"] in chosen]
     if names:
@@ -5411,6 +5485,9 @@ def board_json(r, steady):
     out["terminals"] = unpick(r["terminals"])
     out["guests"]    = None if r["guests"] is None else bool(r["guests"])
     out["features"]  = unpick(r["features"])
+    # The card's size in GB, or null (site 1.1.0).
+    out["sd"]        = row_sd(r)
+    # Codes, lower case (site 1.1.0), whatever the row was stored with.
     out["support"]   = row_support(r)
     out["interests"] = row_interests(r)
     out["listed_at"] = listed_at(r)
@@ -5671,14 +5748,16 @@ def filter_query(query):
     """The badges chosen in a query string, in the page's order, and whether
     any of them will do rather than all. Anything that is not a badge this
     directory knows is ignored, so nothing a reader typed into the URL is
-    ever put back on the page."""
+    ever put back on the page. A cause or an interest may be named by its
+    code in any case or by any of its aliases (site 1.1.0), so a link
+    shared with ?b=electronics still finds the boards that are ELCTR now."""
     chosen, any_ = set(), False
     for part in (query or "").split("&")[:FILTER_MAX_PARAMS]:
         name, _eq, value = part.partition("=")
         name = urllib.parse.unquote_plus(name)
         value = urllib.parse.unquote_plus(value).strip().lower()
         if name == "b":
-            chosen.add(value)
+            chosen.add(FILTER_ALIAS.get(norm_word(value), value))
         elif name == "m":
             any_ = value == "any"
     return tuple(k for k in FILTER_KEYS if k in chosen), any_
@@ -5693,6 +5772,10 @@ def filter_chip(b, on):
     is the yellow ring every control here gets."""
     name = html.escape(b["name"], quote=True)
     tip = f"{b['name']} or more." if b["cls"] == "age" else b["tip"]
+    if b["group"] in ("support", "interests"):
+        # The code a sysop would type, upper case, as /badges shows it
+        # (site 1.1.0).
+        tip += f" Code {b['key'].upper()}."
     return (f'<label class="chip" data-k="{html.escape(badge_words(b), quote=True)}">'
             f'<input type="checkbox" name="b" value="{html.escape(b["key"], quote=True)}"'
             f' data-n="{name}" aria-label="{name}"' + (" checked" if on else "")
@@ -5927,8 +6010,9 @@ mentioning. It is a list of hobby BBSes.</p>
 has and how many are busy, whether it is up, and how long it has been up. Then what
 the <a href="/badges">badges</a> are made of: what the board said it runs and which
 version, what it runs on, speaks,
-allows, supports and is into, when it was first listed, and whether it has been
-steady this past week. Cached for a few seconds.</dd>
+allows and is running, the size of its SD card, what it supports and is into, as
+the short codes on the badges page, when it was first listed, and whether it has
+been steady this past week. Cached for a few seconds.</dd>
 <dt><code>POST /announce</code></dt>
 <dd>How a board lists itself. One JSON object, about 200 bytes, repeated every few
 minutes. Plain HTTP on purpose: the boards are microcontrollers with no TLS stack.</dd>
@@ -6031,17 +6115,20 @@ back in <code>token</code> on every later heartbeat: that is what stops somebody
 else taking over your entry. Send it whole. It is 32 characters and a fragment of
 one will be refused.</p>
 
-<p><b>Badges, if you want them.</b> Six optional fields put small badges under
+<p><b>Badges, if you want them.</b> Seven optional fields put small badges under
 your board's name: what it runs on in your own words, what terminals it speaks,
-whether guests can look around, what is running, the causes you support and what
-you are into. Leave them out and nothing changes. In the same JSON:</p>
+whether guests can look around, what is running, the size of its SD card, the
+causes you support and what you are into. Leave them out and nothing changes. In
+the same JSON:</p>
 
 <pre>"system":"Compaq 486", "terminals":["ansi","ascii"], "guests":true,
-"features":["chat","files"], "support":["literacy"],
-"interests":["c64","electronics","ham"]</pre>
+"features":["chat","files"], "sd":32, "support":["ltrcy"],
+"interests":["c64","elctr","ham"]</pre>
 
-<p>What each badge means is on <a href="/badges">the badges page</a>, and the
-exact rules for each field are in the protocol.</p>
+<p>Causes and interests are short codes, up to six letters and digits each, in
+any case: <code>LTRCY</code> is literacy and <code>ELCTR</code> electronics.
+What each badge means, with every code, is on <a href="/badges">the badges
+page</a>, and the exact rules for each field are in the protocol.</p>
 
 <p><b>The same rules apply to everyone.</b> Three hours of uninterrupted
 heartbeats before a listing goes public, and it disappears when the heartbeats

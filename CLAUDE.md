@@ -408,10 +408,23 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   release on disk is at least that version, for writing about firmware that
   is not out yet. It may hold drawings (it counts `:::` pairs). A numbered
   list split by a drawing keeps counting (`<ol start>`). /install's BOOT
-  button reset and CONFIG Wi-Fi fallback are `::: from 1.0.2` (they moved
+  button reset and CONFIG Wi-Fi fallback are `::: from 1.1.0` (they moved
   from 0.24.0 to firmware 1.0.1, then to 1.0.2 when 1.0.1 became the badge
-  fields only; 1.0.0 and 1.0.1 do not have them). The gate has to move
+  fields only, then to 1.1.0 in site 1.1.0 when 1.0.2 became the restore
+  security fix; 1.0.0 to 1.0.2 do not have them). The gate has to move
   before the release it would wrongly light up is published.
+  **`::: until X.Y.Z` ... `:::`** (site 1.1.0) is the other half: rendered
+  only while the newest release on disk is older, or there is none. A
+  `from`/`until` pair on the same version swaps one account for the other
+  the day the release lands; /forward's one-board-per-port and /setup's
+  network and announce pages use pairs on 1.1.0. Drop the `until` half once
+  the release is out and settled. **A gate closes whatever was open before
+  it** (paragraph, list, steps, warning, table), since site 1.1.0: before
+  that a gate straight after a list rendered in front of the list, which is
+  why every gate used to sit after a blank line. `flush()` is defined once,
+  before the loop, so the gate can call it. A gated block is rendered on its
+  own, so a list that runs into a gate is two lists: /setup's announce list
+  is written out whole in each half for that reason.
 - **The footer** is two rows, Get started and Reference, then the colophon:
   the site version from the newest `## X.Y.Z` in CHANGELOG.md, read once at
   start (so CHANGELOG.md is installed beside server.py), the copyright and
@@ -526,15 +539,16 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - **Badges (0.21.0, Rob).** Five optional announce fields (`system`,
   `terminals`, `guests`, `features`, `support`, in PROTOCOL.md) and three
   badges worked out here (new, steady, time listed). **Everything is in
-  tables in server.py and /badges is built from the same tables**:
-  `LETTER_BADGES`, `AGES`, `BADGE_COLOURS`, `SUPPORT` (one line per cause:
-  slug, drawing, name, sentence) and `SUPPORT_ART`, and since 0.22.0
-  `INTERESTS` and `INTEREST_ART`, all gathered into `BADGES` (below).
-  /badges is a searchable table per group since 0.22.0. Changing the support
-  list is editing a line of `SUPPORT`; a new cause needs a drawing in
-  `SUPPORT_ART` too. Rob reviews that list before it goes live, and it is
-  the directory's list, not a board's: an unknown slug is ignored, which is
-  what keeps free text (and slurs) off the page.
+  tables and /badges is built from the same tables**: `LETTER_BADGES`,
+  `AGES` and `BADGE_COLOURS` in server.py; since site 1.1.0 the causes and
+  the interests in `badges.json` (see Badge codes, below) and their
+  drawings in `SUPPORT_ART` and `INTEREST_ART`, keyed by code; all gathered
+  into `BADGES` (below). /badges is a searchable table per group since
+  0.22.0. Changing the support list is editing an entry of `badges.json`; a
+  new cause needs a drawing in `SUPPORT_ART` too. Rob reviews that list
+  before it goes live, and it is the directory's list, not a board's: an
+  unknown code is ignored, which is what keeps free text (and slurs) off
+  the page.
   **Junk is dropped, never refused**: a bad badge field must not cost a
   listing. `tidy_label` is stricter than `tidy`: Unicode controls, format
   characters (bidi overrides, zero-width) and separators, two combining
@@ -562,9 +576,11 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   motion is the outline alone. Check the flight by pausing it at negative
   delays in a test copy (`base href` to the local server, CSS appended).
 - **Interests, one order, and the filter (0.22.0, Rob).** `interests` is a
-  sixth badge field, handled exactly as `support`: slugs from `INTERESTS`
-  (slug, group, name, sentence; 42 of them in eight groups, from Computing
-  to Reading and watching), drawings in `INTEREST_ART` keyed by slug, drawn
+  sixth badge field, handled exactly as `support`: codes (slugs until site
+  1.1.0) from `INTERESTS` (code, group, name, sentence, now read from
+  `badges.json`; 43 of them with amateur radio, in eight groups, from
+  Computing to Reading and watching), drawings in `INTEREST_ART` keyed by
+  code, drawn
   in `currentColor` so the chip's rose (`k-int`, a family nothing else
   uses) colours them. One outline and a detail or two each, no ids, no
   text; check new ones on a contact sheet at 17, 30 and 72px, because a
@@ -644,13 +660,47 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   available" (`update`, `k-upd`), on /badges and in the filter, so a sysop
   can find their boards that are behind. `row_keys` takes `latest`, and
   `index_page` works it out once per render.
-- **The badge codes are not in 1.0.0.** Rob asked for short slugs
-  (`MNTLH` for mental health, six characters at most, upper case on
-  /badges, lower case on the wire), they were built, then moved to their
-  own site version alongside firmware 1.0.2. The proposal, with every code
-  and every alias, is `internal/badge-codes-proposal-2026-09-23.md` in the
-  firmware repository. Start there; the firmware's own badge test compares
-  the directory's JSON against long slugs and will need changing with it.
+- **Badge codes (site 1.1.0, Rob: "like 5 or 6 max", MNTLH).** Every cause
+  and interest is a code: a to z and 0 to 9, six at most, unique across both
+  lists and never a word the filter uses (`_RESERVED`), shown upper case on
+  /badges (the **Code** column; the board and directory tables say **Sent
+  as**) and in a filter chip's tooltip ("Supports mental health. Code
+  MNTLH."), stored, sent and published lower case. The mapping is the
+  firmware repo's `internal/badge-codes-proposal-2026-09-23.md`, as approved.
+  **`badges.json` is the one table**: code, group, sub (interests), name
+  (as /badges shows it; the tooltip's "Supports ..." phrase is `_uncap()`
+  of it), means, aliases, plus `copyright`, `license`, `format` and the
+  rules as prose, so a separate program can read it: the firmware builds
+  its CONFIG pick-list from it. server.py keeps only the drawings,
+  `SUPPORT_ART` and `INTEREST_ART`, **keyed by code**; a new code needs a
+  drawing there (without one the chip shows the code in letters, and the
+  suite fails). `_badge_codes()` loads it at import, leaves out an entry
+  that breaks a rule or an alias that would name a second badge with a
+  journal line, and **if the file cannot be read** returns
+  `BADGE_CODES_OK = False`: no causes or interests on the page, and
+  `announce()` then leaves the stored `support` and `interests` columns
+  alone rather than writing every board's badges away. setup.sh installs it.
+  **Aliases**: every slug up to site 1.0.0 and every interim one from the
+  proposal. `norm_word()` folds case and drops everything that is not a
+  letter or digit before matching, so hyphenless forms (`mentalhealth`,
+  what the firmware sends for "Mental health") need no entries of their
+  own. Read in four places: `pick(..., alias=)` on an announce,
+  `row_support()`/`row_interests()` on a stored row (so the 1.0.0 database's
+  long slugs needed no migration; the next heartbeat writes codes),
+  `filter_query()` through `FILTER_ALIAS`, and `badge_words()` for the two
+  search boxes, which carries each alias as written, with spaces and with
+  its hyphens dropped. `/api/boards.json` answers in codes. **The firmware's
+  own badge test** (`tools/testclient.py`, the directory badges block)
+  expects long slugs back from the JSON and needs changing: sending them
+  still works, but the answer is `ltrcy` and `elctr` now.
+- **The SD card badge (site 1.1.0).** `sd` in the announce: a whole number
+  of GB, 1 to `SD_MAX` (4096), a JSON `true` refused (Python's bool is an
+  int), anything else not sent. The `sd` column is NULL for "not sent".
+  `row_sd()` reads it and tolerates a row or a test dict without the
+  column. On a row it is `SD32` in the features' blue, placed after doors in
+  `ROW_ORDER`; `LETTER_BADGES` carries it as "SD", which is what the legend
+  and the filter chip (`?b=sd`, any card) show. JSON `sd`, feed "SD card:
+  32 GB".
 - **The installer always offers Telnet details (site 1.0.0).** The fourth
   change to the vendored dialog: `_renderDashboard` renders the link item
   whether or not the device sent a URL, to `/connected` with no fragment
@@ -674,9 +724,14 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - **Migrations are additive and tested from an old file.** `setup()` adds a
   missing column with ALTER TABLE and nothing else; `BADGE_COLUMNS` must
   match SCHEMA, and the suite builds databases with the 0.20.2 schema
-  (`OLD_SCHEMA`) and the 0.21.1 schema (`OLD_SCHEMA_0211`, copied from that
-  version's server.py), starts a server on each, and compares its columns
-  with a fresh one's. Add the next migration's old schema the same way.
+  (`OLD_SCHEMA`), the 0.21.1 schema (`OLD_SCHEMA_0211`) and the 1.0.0
+  schema (`OLD_SCHEMA_100`, with long slugs stored, which the live database
+  has), each copied from that version's server.py, starts a server on each,
+  and compares its columns with a fresh one's. Add the next migration's old
+  schema the same way.
+- **The suite's ports.** `SELFTEST_PORT` (default 8123) is the first of five
+  consecutive ports on 127.0.0.1 the suite binds, plus one ephemeral one for
+  the release fetcher. Agents here run it as `SELFTEST_PORT=18765`.
 
 ## Anti-spam, and why it is shaped this way
 

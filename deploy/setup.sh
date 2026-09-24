@@ -129,6 +129,10 @@ install -m 644 "$SRC/selftest.py" "$DEST/selftest.py"
 # for the footer. Without the file the server still starts; it just cannot
 # say which version it is.
 install -m 644 "$SRC/CHANGELOG.md" "$DEST/CHANGELOG.md"
+# The causes and interests, with their codes and aliases (site 1.1.0). The
+# server starts without it, but shows no causes or interests until it is
+# there, so it is installed with the code, every time.
+install -m 644 "$SRC/badges.json" "$DEST/badges.json"
 
 # Pages are prose in Markdown and are replaced on every install, because the
 # repository is where they get edited.

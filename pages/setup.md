@@ -72,8 +72,8 @@ shot-config-board
   board's settings file is left exactly as it was, comments included.
 - **ESC leaves** without saving.
 - **Saved means live.** The board reloads the settings at once. The exceptions
-  are the Wi-Fi page, the hostname and the NTP server, which are used from the
-  next restart.
+  are the network page (called wifi before firmware 1.1.0), the hostname and
+  the NTP server, which are used from the next restart.
 - **A value outside what a field accepts is refused** before anything is
   written, so a typo cannot take a page down.
 - **One sysop at a time.** CONFIG is the sysop's alone: co-sysops do not get it,
@@ -151,7 +151,8 @@ The backup window: a way to copy the board's settings, accounts and screens off
 it as one zip file, and to put a copy back, from a computer on your network.
 
 - **Port** (`backup_port`): The web port the window opens on. It cannot be
-  6400, which callers use. Takes 1 to 65535; as shipped, `8080`.
+  the port callers use, which is 6400 as shipped. Takes 1 to 65535; as
+  shipped, `8080`.
 - **Open for** (`backup_window_minutes`): How long one press of the button
   keeps the window open. Takes 1 to 60 minutes; as shipped, `5`.
 - **Button** (`backup_button_gpio`): The pin of the button that opens it. 0 is
@@ -207,6 +208,8 @@ hide from the lists and manage accounts; only the sysop may lift a ban. To
 change that table, edit the settings file inside a backup and send it back
 through the backup window.
 
+<!-- Firmware 1.1.0 renames this page "network" (CONFIG wifi still opens it) and adds Port. The two gates swap the account on the day a 1.1.0 release is on disk. Words for Port from the firmware repo's internal/copy-1.1.0-2026-09-23.md section 5. -->
+::: until 1.1.0
 ## wifi
 
 The network the board joins.
@@ -215,6 +218,24 @@ The network the board joins.
   characters; set to what you chose when installing.
 - **Password** (`wifi_password`): Its password. Takes 8 to 64 characters, or
   empty for an open network.
+:::
+
+::: from 1.1.0
+## network
+
+The network the board joins, and the port callers dial. `CONFIG network` opens
+it, and so does `CONFIG wifi`, its name before firmware 1.1.0.
+
+- **Network** (`wifi_ssid`): The name of the Wi-Fi network. Takes up to 32
+  characters; set to what you chose when installing.
+- **Password** (`wifi_password`): Its password. Takes 8 to 64 characters, or
+  empty for an open network.
+- **Port** (`port`): The port callers dial. Used from the next restart. It
+  cannot be the backup window's port. Takes 1 to 65535; as shipped, `6400`.
+  If callers reach the board from the internet, the forward on your router has
+  to point at the new number too. [One board per port](/forward#one-board-per-port)
+  says when you would change it.
+:::
 
 A change here is used from the **next restart**, never straight away, because
 changing the network under your own call would drop you, and a typo would leave
@@ -338,6 +359,8 @@ it would send.
 > itself while the default password is still set. And [forward the
 > port](/forward) first, or callers will find a listing that does not answer.
 
+<!-- The same list twice, so each is one list: firmware 1.1.0 relabels Port as Outside (copy-1.1.0 section 5). Edit both until a 1.1.0 release is on disk, then drop the "until" one. -->
+::: until 1.1.0
 - **Board**: The name the directory will show. It is the Board field on the
   board page, shown here, not a second copy.
 - **Sysop**: Your name, as the directory shows it. Takes up to 40 characters.
@@ -357,6 +380,36 @@ it would send.
   the last 24 hours. Takes yes or no; as shipped, `no`.
 - **Token**: Issued by the directory the first time, and kept so the listing
   survives a reflash. Leave it alone.
+:::
+
+::: from 1.1.0
+- **Board**: The name the directory will show. It is the Board field on the
+  board page, shown here, not a second copy.
+- **Sysop**: Your name, as the directory shows it. Takes up to 40 characters.
+- **About**: One line about the board. Takes up to 120 characters.
+- **DNS name**: A name of your own that reaches the board, if you have one.
+  Empty means the address the directory saw the message come from. Takes up to
+  95 characters.
+- **Outside**: The port callers dial from the internet, when your router
+  forwards a different number to the board. Leave it empty if the router
+  forwards the same number as **Port**, and the board sends that.
+- **Directory**: Where to send it. Comma separated, up to four, so a board can
+  be in several directories.
+- **Every min**: Minutes between messages. Takes 1 to 1440; as shipped, `10`.
+- **Push secs**: When somebody calls or leaves, the board tells the directory
+  early, at most this often. 0 leaves only the timed message. Takes 0 to 3600;
+  as shipped, `60`.
+- **Activity**: Whether to include the board's calls and caller-minutes over
+  the last 24 hours. Takes yes or no; as shipped, `no`.
+- **Token**: Issued by the directory the first time, and kept so the listing
+  survives a reflash. Leave it alone.
+:::
+
+::: from 1.0.1
+From firmware 1.0.1 the page also takes the causes you support and what you
+are into, as badges under the board's name: the codes on [the badges
+page](/badges), separated by commas, in any case.
+:::
 
 [Getting listed](/how) has the rest, including the house rules.
 

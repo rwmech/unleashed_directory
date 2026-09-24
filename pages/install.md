@@ -271,13 +271,19 @@ right with a reset, and your accounts and settings stay where they are.
   failing to join one, because it listens on the cable for as long as it is
   running, and nothing on the board is erased.
 
-<!-- The CONFIG Wi-Fi fallback and the BOOT button reset ship in firmware 1.0.2, not 1.0.0 or 1.0.1 (1.0.1 is the badge fields only): this block shows by itself once a 1.0.2 release is on disk. -->
-::: from 1.0.2
+<!-- The CONFIG Wi-Fi fallback and the BOOT button reset ship in firmware 1.1.0. 1.0.2 is the restore security fix and has neither, so this block shows by itself once a 1.1.0 release is on disk and not before (site 1.1.0; it was gated on 1.0.2). Copy from the firmware repo's internal/copy-1.1.0-2026-09-23.md section 6: the directory warning sits above step 1 so it is read before anybody starts counting. -->
+::: from 1.1.0
 - **A network changed in CONFIG that does not work.** If the board cannot get
   on it within a minute of starting, it goes back to the last network that
   worked, so a typo in CONFIG does not leave it stranded.
 - **The BOOT button.** For a forgotten sysop password, or a board you want
   back to how it arrived. The order matters:
+
+> A factory reset also takes the board off this directory. The listing is
+> tied to the board's settings, which the reset erases, so afterwards the
+> directory sees a new board: three hours before it is listed again, like
+> the first time. Restore a backup taken before the reset, within four
+> days, and the listing carries on where it was.
 
 1. Press and let go of **RESET**, which many boards label EN or RST.
 2. Then press **BOOT** and keep holding it. Holding BOOT while RESET is let go
@@ -292,10 +298,13 @@ boot-button
 - **7 to 15 seconds**, the LED flashes rapidly, as a warning. Letting go puts
   the sysop password back to the published default. Accounts, forums, mail and
   settings are kept, and you take the board over again as on the first call.
-- **15 to 20 seconds**, the LED stays on. Letting go is a factory reset: the
-  accounts, the settings, the mail and the logs are wiped, and the screens, the
-  firmware and the SD card are kept. The board starts again like a fresh
-  install, waiting for this page's Wi-Fi step.
+  Until you choose a new password, the board keeps itself off the
+  directory.
+- **15 to 20 seconds**, the LED stays on. Letting go is a factory reset:
+  the accounts, the settings, the Wi-Fi, the mail and the logs are wiped,
+  and the screens, the firmware and the SD card are kept. The board starts
+  again like a fresh install, waiting for this page's Wi-Fi step, and it
+  is no longer on the directory unless you restore a backup.
 - **At 20 seconds** the LED goes off and the reset is abandoned. Letting go
   does nothing.
 :::

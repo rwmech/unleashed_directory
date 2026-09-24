@@ -61,17 +61,18 @@ Connection: close
 | `terminals` | array of strings | no | what the board can speak to a caller: any of `ansi`, `utf8`, `petscii`, `ascii`, `vt100` |
 | `guests` | boolean | no | `true` if a caller can look around without an account, `false` if not |
 | `features` | array of strings | no | what is running right now: any of `chat`, `forums`, `files`, `mail`, `doors` |
-| `support` | array of strings | no | causes the sysop shows support for, as slugs from the directory's published list |
-| `interests` | array of strings | no | what the sysop is into, as slugs from the directory's published list |
+| `sd` | number | no | the SD card in use right now, its size in GB as printed on the card: a whole number from 1 to 4096 |
+| `support` | array of strings | no | causes the sysop shows support for, as codes from the directory's published list |
+| `interests` | array of strings | no | what the sysop is into, as codes from the directory's published list |
 
 **No field identifies a caller, and none ever should.** Not handles, not addresses, not what anybody typed. A directory receiving such a field should drop it.
 
 ## Badges
 
-The last six fields in the table are optional and describe the board rather than its state. A directory may show them as badges beside the board's name; the one at unleashedbbs.com does, and explains each at `/badges`. Old boards send none of them and are listed exactly as before. A directory ignores any field it does not know, so a board may send these to any directory.
+The last seven fields in the table are optional and describe the board rather than its state. A directory may show them as badges beside the board's name; the one at unleashedbbs.com does, and explains each at `/badges`. Old boards send none of them and are listed exactly as before. A directory ignores any field it does not know, so a board may send these to any directory.
 
 ```
-{"software":"unleashed","version":"1.0.0",
+{"software":"unleashed","version":"1.1.0",
  "name":"The Rusty Modem","owner":"Sparks",
  "description":"A BBS on a chip in a shack in Illinois",
  "host":"","port":6400,"nodes":6,"busy":0,
@@ -80,8 +81,9 @@ The last six fields in the table are optional and describe the board rather than
  "terminals":["ansi","utf8","petscii","ascii"],
  "guests":true,
  "features":["chat","forums","files","mail"],
- "support":["lgbtq","literacy"],
- "interests":["c64","electronics","ham"]}
+ "sd":32,
+ "support":["lgbtq","ltrcy"],
+ "interests":["c64","elctr","ham"]}
 ```
 
 | Field | Rules |
@@ -90,20 +92,23 @@ The last six fields in the table are optional and describe the board rather than
 | `terminals` | Lower case words from the list above. `utf8` means UTF-8 ANSI; `ansi` means CP437 ANSI. |
 | `guests` | A JSON `true` or `false` and nothing else. A string such as `"yes"` counts as not sent. |
 | `features` | Only what is running when the heartbeat is sent. A board that switches its file areas off should stop sending `files`. |
-| `support` | Slugs from the list the directory publishes. The one at unleashedbbs.com publishes its list at `/badges`. |
-| `interests` | Slugs from the list the directory publishes, exactly as `support`: hobbies and interests rather than causes, such as `c64`, `electronics`, `gaming` or `gardening`. The one at unleashedbbs.com publishes its list at `/badges`. A slug a directory moves from one list to the other should still be understood in the list it came from: unleashedbbs.com moved `ham` from `support` to `interests` and reads it in either. |
+| `sd` | The size of the SD card the board is using right now, in GB, rounded up by the board to the size printed on the card: a "32 GB" card that reports 29.7 GB is sent as `32`. A JSON number, a whole one, from 1 to 4096; anything else counts as not sent. Sent only while a card is in use, so a board whose card is pulled loses the badge with its next heartbeat. unleashedbbs.com shows it as `SD32`. |
+| `support` | Codes from the list the directory publishes. The one at unleashedbbs.com publishes its list at `/badges`, and as a file, `badges.json` in [its repository](https://github.com/rwmech/unleashed_directory). |
+| `interests` | Codes from the list the directory publishes, exactly as `support`: hobbies and interests rather than causes, such as `c64`, `elctr` (electronics), `games` or `garden`. The one at unleashedbbs.com publishes its list at `/badges` and in `badges.json`. A code a directory moves from one list to the other should still be understood in the list it came from: unleashedbbs.com moved `ham` from `support` to `interests` and reads it in either. |
 
 For the four lists: case does not matter, duplicates count once, a word the directory does not know is ignored rather than refused, and only the first 16 entries are read; an entry that is not a string is skipped. A field of the wrong type, a list where a string belongs or a string where a list belongs, counts as not sent. None of this ever makes a heartbeat fail: a board with a bad badge field is listed without that badge.
 
-**A directory may drop any value it cannot show.** A word it does not know, a machine name in a script its page cannot draw, a cause it does not carry: the listing stands and the badge does not. That is also why `support` and `interests` are lists of slugs and not free text: a directory publishes the causes and interests it will show, and nobody can put words of their own on its page.
+**Codes.** A cause or an interest is named by a short code: lower case letters and digits, six characters at most, unique across both lists, such as `mntlh` for mental health. A directory shows them however it likes; unleashedbbs.com shows them in upper case, `MNTLH`, and stores and publishes them in lower case. A code may have **aliases**, other words that name the same badge, which unleashedbbs.com uses to keep the longer slugs it had before the codes working: `mental-health`, `electronics` and the rest are read as the codes they became, so a board that still sends them keeps its badges. When it matches a word it folds the case and drops everything that is not a letter or a digit, so `Mental health`, `mental-health` and `MNTLH` arrive as the same badge. It always answers with codes, in `/api/boards.json` as everywhere else.
 
-**Every heartbeat replaces them.** Send them every time, or the badge goes. That is the point for `features`, which says what is running now, and it costs nothing for the rest: with all six the example above is about 450 bytes, and this directory refuses only a body over 4,096 bytes, with `413`. Sixteen of each list at the longest slugs still comes in well under it.
+**A directory may drop any value it cannot show.** A word it does not know, a machine name in a script its page cannot draw, a cause it does not carry: the listing stands and the badge does not. That is also why `support` and `interests` are lists of codes and not free text: a directory publishes the causes and interests it will show, and nobody can put words of their own on its page.
+
+**Every heartbeat replaces them.** Send them every time, or the badge goes. That is the point for `features` and `sd`, which say what is running now, and it costs nothing for the rest: with all seven the example above is about 450 bytes, and this directory refuses only a body over 4,096 bytes, with `413`. Sixteen of each list at the longest codes, or the longest old slugs, still comes in well under it.
 
 A directory works out some badges for itself, from its own records, and a board cannot send them: at unleashedbbs.com, **new** (listed less than a week), **steady** (answered more than 95% of the heartbeats its own `interval` said were due over the last seven days) and **time listed** (one month up to ten years). They appear in `/api/boards.json` as `listed_at` and `steady`.
 
 `software` and `version` are shown together, as the board sent them, on the board's first badge ("unleashed 1.0.0", "Mystic 1.12"), and both are in `/api/boards.json`. When `software` is `unleashed` and `version` is older than the newest release the directory itself offers for installing, unleashedbbs.com marks that badge with a small arrow, **update available**, linked to how to update. Versions are compared as three numbers, part by part, so 1.0.10 is newer than 1.0.9, and a pre-release such as `1.0.1-rc.1` is older than `1.0.1`; a version that is not three numbers is never marked. Other software is never marked, because a directory cannot know another program's newest version.
 
-The board list at unleashedbbs.com can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest slugs, the feature words, `petscii`, `guests`, `new`, `steady`, `update`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
+The board list at unleashedbbs.com can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest codes (or any of their aliases, in any case), the feature words, `sd` for a board with an SD card in use, `petscii`, `guests`, `new`, `steady`, `update`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
 
 ## Response
 

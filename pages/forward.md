@@ -66,6 +66,63 @@ Also worth knowing: these rules are IPv4 only on effectively all consumer
 routers. IPv6 is handled separately, usually as a firewall rule rather than a
 forward, because there is no address translation to undo.
 
+## The same port outside and in
+
+A forward has two port numbers. The outside one, which routers also call the
+external port, is the one callers dial from the internet. The inside one, the
+internal port, is where the router sends them on the board. The simplest
+forward uses the same number for both, 6400 outside to 6400 on the board, and
+every router page below does it that way.
+
+Some routers can do nothing else. They have one port box, not two, and send a
+call to the same number it arrived on. eero is one: [its page](/forward-mesh)
+says so. On a router like that, the number callers dial and the number the
+board listens on have to be the same.
+
+## One board per port
+
+Your home has one address on the internet, and one outside port on it can go
+to one device and no more. So a second board behind the same router needs an
+outside port of its own: 6400 for the first board, say, and 6401 for the
+second. One board per port.
+
+::: from 1.1.0
+The way that works on every router is to give each board its own port to
+listen on, so every forward is the same number outside and in. From firmware
+1.1.0 that is a setting, on the network page of `CONFIG`:
+
+- **Port** (`port`): The port callers dial. Used from the next restart. It
+  cannot be the backup window's port. Takes 1 to 65535; as shipped, `6400`.
+  If callers reach the board from the internet, the forward on your router has
+  to point at the new number too.
+
+So set the second board's **Port** to 6401, restart it, and forward 6401 to
+6401 at that board's address. Callers on your own network dial it on 6401 as
+well.
+
+A router that can send one outside number to a different number inside gives
+you the other way: leave both boards on 6400 and forward 6401 outside to 6400
+on the second board. Then the second board has to tell the directory which
+number callers dial, which is the **Outside** setting on the announce page of
+`CONFIG`:
+
+- **Outside**: The port callers dial from the internet, when your router
+  forwards a different number to the board. Leave it empty if the router
+  forwards the same number as **Port**, and the board sends that.
+:::
+
+::: until 1.1.0
+Every board listens on 6400, so the second board's forward has to change the
+number on the way in: 6401 outside, to 6400 on that board. That needs a
+router with separate outside and inside port boxes. Then the second board has
+to tell the directory which number callers dial, which is the **Port** setting
+on the announce page of `CONFIG`: set it to 6401.
+:::
+
+This directory lists one board per internet address by itself. A second board
+from the same address waits for the person who runs the directory to let it
+through.
+
 ## Pick your router
 
 - [NETGEAR](/forward-netgear) - Nighthawk and R-series, routerlogin.net

@@ -42,7 +42,8 @@ that domain serves the board list, with the other two faces under `/about` and
 - Issues each board a token on its first heartbeat, so nobody else can take its listing over.
 - Holds a new listing back until it has sustained heartbeats for three hours.
 - Shows which boards are up, which have gone quiet, and how long each has been running.
-- Shows small badges under each board's name: what software and version it runs and what it runs on, what terminals it speaks, whether guests are welcome, what is running, the causes its sysop supports (two dozen, from literacy to heart health), what its sysop is into (about forty interests, from the Commodore 64 to amateur radio and gardening), and four the directory works out for itself (new, steady, how long listed, and whether a µnleashed board is behind the newest release it offers). `/badges` explains them all and can be searched.
+- Shows small badges under each board's name: what software and version it runs and what it runs on, what terminals it speaks, whether guests are welcome, what is running, the size of its SD card, the causes its sysop supports (two dozen, from literacy to heart health), what its sysop is into (about forty interests, from the Commodore 64 to amateur radio and gardening), and four the directory works out for itself (new, steady, how long listed, and whether a µnleashed board is behind the newest release it offers). `/badges` explains them all and can be searched.
+- Names each cause and interest by a short code of up to six letters and digits, such as `MNTLH` for mental health, read in any case, with the longer names it used before kept as aliases. The whole list, codes, names, meanings and aliases, is one plain JSON file, [badges.json](badges.json), so other software can read the same list.
 - Filters the board list by badge: a Filter button opens every badge as small chips, a row per group, and picking some shows the boards carrying all of them, or any. It works without JavaScript, and every filtered view is a link, such as `/?b=petscii&b=ham`.
 - Tells each board the public address its heartbeat arrived from, which is dynamic DNS as a side effect.
 - Publishes new boards as an RSS feed at `/feed.xml`, so people can follow the list without an account, an email address or anything that knows who is reading.
@@ -122,7 +123,7 @@ emitted would be correctly rejected. A webhook needs neither.
 python3 selftest.py
 ```
 
-Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, the three faces, the feed, the pages, the badges and the filter, and databases made by older versions. About 600 checks in well under a minute, no network access beyond loopback.
+Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, the three faces, the feed, the pages, the badges, their codes and the filter, and databases made by older versions. About 700 checks in well under a minute, no network access beyond loopback. It binds five ports on 127.0.0.1 from 8123 up; `SELFTEST_PORT=18765 python3 selftest.py` moves them.
 
 ## Deploying it
 
