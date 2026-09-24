@@ -4292,9 +4292,10 @@ def main():
                   in hw
                   and "<dt>Firmware</dt><dd>0.20.0 preview (S3 1.0.0)" in hw
                   and "the board calls it 0.20.0-dev.3 (S3 1.0.0)" in hw
-                  and '<a href="https://link.amazon/B0bb1oJqt">Amazon</a>' in hw
-                  and '<a href="https://link.amazon/B08MTidlU">Amazon</a>'
-                      in S.board_html(["esp32"])
+                  and ('<a href="https://link.amazon/B0bb1oJqt" rel="sponsored">'
+                       'Amazon</a> (affiliate link)') in hw
+                  and ('<a href="https://link.amazon/B08MTidlU" rel="sponsored">'
+                       'Amazon</a> (affiliate link)') in S.board_html(["esp32"])
                   and "<dt>Firmware</dt><dd>0.19.2 " in S.board_html(["esp32"])
                   and S.board_html(["esp32x9"]) == "" and S.board_html([]) == "")
             # A version.txt that is not a version is not read: the folder's

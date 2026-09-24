@@ -2484,7 +2484,7 @@ def board_html(lines):
             + "<dt>Chip</dt><dd>" + html.escape(b["part"]) + "</dd>"
             + "<dt>Looks like</dt><dd>" + html.escape(b["tell"]) + "</dd>"
             + '<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
-            + '">Amazon</a></dd>'
+            + '" rel="sponsored">Amazon</a> (affiliate link)</dd>'
             + "</dl></div>")
 
 

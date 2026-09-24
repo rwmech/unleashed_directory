@@ -8,6 +8,10 @@ and a picture is the only way to tell two boards with the same chip apart.
 Each one's buy link goes to the listing for the board that was tested. Any
 board that matches the picture and the chip will do.
 
+The buy links are Amazon affiliate links: a purchase through one may earn
+the project a small commission, at no extra cost to you. Buying the same
+board anywhere else works just as well.
+
 ## ESP32 dev board
 
 ::: board
