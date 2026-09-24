@@ -14,6 +14,13 @@
 
 # Changelog
 
+## 1.2.6, 2026-09-24
+
+- /hardware no longer says the Freenove camera board has a NeoPixel. It
+  does not: its LEDs are IO2 (which shares the card's pin), RX, TX and
+  power. A drive light or photo flash on it is a pixel you add on a spare
+  pin, the same as on the dev board.
+
 ## 1.2.5, 2026-09-24
 
 A speed and a seal for each board on /hardware, and buy links for the two
