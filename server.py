@@ -473,6 +473,14 @@ NAV_SECTION = {
     "/sdcard":          "/build",
     # The lights build page, /sdcard's twin (site 1.2.1).
     "/lights":          "/build",
+    # How callers use the camera boards' camera (site 1.2.4): a hardware
+    # add-on page like the two above, reached from /build and /hardware.
+    "/camera":          "/build",
+    # What sets the board apart, and where it is going (site 1.2.4). Both
+    # belong to the argument, so they light "What this is", written with
+    # its face for the same reason /badges names the list face.
+    "/different":       "about:/",
+    "/roadmap":         "about:/",
     # Putting the firmware on a board is a step of building one, so it
     # lights up the section a reader came from. Not in the menu itself:
     # ten items is already the edge of what a phone can carry, and this is
@@ -584,7 +592,8 @@ def foot_html(role, extra=""):
     refer = "".join(
         [f'<a class="donate" href="{site_url("list", role, "/donate")}">Donate</a>']
         + [f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
-            ("/rules", "House rules"), ("/badges", "Badges"), ("/feed.xml", "RSS"))]
+            ("/rules", "House rules"), ("/badges", "Badges"),
+            ("/roadmap", "Roadmap"), ("/feed.xml", "RSS"))]
         + [f'<a href="{site_url("data", role, "/api/boards.json")}">JSON</a>'])
     links = ('<span class="row"><span class="lbl">Get started</span>' + start + "</span>"
              '<span class="row"><span class="lbl">Reference</span>' + refer + "</span>")
@@ -2315,7 +2324,88 @@ BOARDS = (
      "before": ("**First:** hold **BOOT**, tap **RESET**, let go of BOOT. "
                 "**When it is done:** press **RESET**. [Why](#on-the-waveshare-s3)")},
 )
-BOARD_BY_DIR = {b["dir"]: b for b in BOARDS}
+# The camera boards (site 1.2.4, Rob): two boards with a camera on them,
+# coming to the firmware and not yet on the installer. Drawn in the same
+# hand and at the same size as the two above. The Freenove, from Freenove's
+# own FNK0060 pinout 3.0 and Rob's bench: a long board with two header
+# rows, the WROVER module's can and antenna at one end, the USB-C socket at
+# the other, the camera on its ribbon in the middle and the NeoPixel beside
+# the socket. The S3 camera board is drawn generically, because clone
+# boards sold under that name differ: a camera, the S3's can, two USB-C
+# sockets on one edge and a lead to an external antenna.
+BOARD_ART_FNCAM = (
+    '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
+    'preserveAspectRatio="xMidYMid meet">'
+    '<rect class="o" x="8" y="12" width="80" height="36" rx="2"/>'
+    '<rect class="g" x="11" y="13.5" width="72" height="4" rx="1"/>'
+    '<rect class="g" x="11" y="42.5" width="72" height="4" rx="1"/>'
+    '<path class="d" d="' + " ".join(
+        f"M{13 + i * 5} 12 V7.5 M{13 + i * 5} 48 V52.5" for i in range(15)) + '"/>'
+    '<rect class="o" x="60" y="20" width="33" height="20" rx="1"/>'
+    '<rect class="k" x="61.5" y="21.5" width="21" height="17" rx="0.8"/>'
+    '<path class="d" d="M84.5 22.5 H91 V25.5 H85 V28.5 H91 V31.5 H85 V34.5 H91 V37.5"/>'
+    '<rect class="gb" x="3" y="25.5" width="9" height="9" rx="3"/>'
+    '<rect class="d" x="5" y="28.5" width="5" height="3" rx="1.5"/>'
+    '<rect class="o" x="29" y="20.5" width="19" height="19" rx="1.5"/>'
+    '<circle class="o" cx="38.5" cy="30" r="6.2"/>'
+    '<circle class="d" cx="38.5" cy="30" r="3.3"/>'
+    '<circle class="c1" cx="37" cy="28.5" r="0.9"/>'
+    '<path class="d" d="M48 25 H53.5 M48 30 H53.5 M48 35 H53.5"/>'
+    '<rect class="g" x="53.5" y="22.5" width="3.5" height="15" rx="0.5"/>'
+    '<rect class="o" x="16" y="21" width="4.5" height="4.5" rx="0.8"/>'
+    '<circle class="k" cx="18.25" cy="23.25" r="1.2"/>'
+    '<rect class="o" x="16" y="34.5" width="4.5" height="4.5" rx="0.6"/>'
+    '<circle class="lf" cx="18.25" cy="36.75" r="1.2"/>'
+    "</svg>")
+
+BOARD_ART_S3CAM = (
+    '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
+    'preserveAspectRatio="xMidYMid meet">'
+    '<rect class="o" x="12" y="8" width="70" height="42" rx="2"/>'
+    '<path class="d" d="' + " ".join(
+        f"M12 {12.5 + i * 5} H7.5 M82 {12.5 + i * 5} H86.5" for i in range(8)) + '"/>'
+    '<rect class="o" x="21" y="15" width="21" height="21" rx="1.5"/>'
+    '<circle class="o" cx="31.5" cy="25.5" r="7"/>'
+    '<circle class="d" cx="31.5" cy="25.5" r="3.8"/>'
+    '<circle class="c1" cx="29.8" cy="23.8" r="1"/>'
+    '<rect class="o" x="49" y="14" width="26" height="22" rx="1"/>'
+    '<rect class="k" x="50.5" y="15.5" width="23" height="19" rx="0.8"/>'
+    '<circle class="o" cx="71" cy="11" r="1.6"/>'
+    '<path class="o" d="M72.2 10 C80 6 84 4 88 3.2"/>'
+    '<rect class="gb" x="86.5" y="0.8" width="8" height="4" rx="1.6"/>'
+    '<rect class="gb" x="24" y="46" width="11" height="8" rx="3"/>'
+    '<rect class="d" x="26.5" y="48.5" width="6" height="3" rx="1.5"/>'
+    '<rect class="gb" x="57" y="46" width="11" height="8" rx="3"/>'
+    '<rect class="d" x="59.5" y="48.5" width="6" height="3" rx="1.5"/>'
+    '<circle class="lf" cx="45.5" cy="42" r="1.1"/>'
+    "</svg>")
+
+# Boards on the way, shown on /hardware under Coming soon by the same
+# ::: board block, and deliberately NOT in BOARDS: BOARDS is the
+# installer's picker and the fetcher's list of image sets, and a board goes
+# there once a release carries an image for it (the Freenove shares the
+# ESP32's chip family, so the picker will have to ask which board). No
+# "buy": Rob has given no link, and none is invented. "status" is what the
+# Firmware row says in place of a version.
+SOON_BOARDS = (
+    {"dir": "esp32-fncam", "name": "Freenove ESP32 camera board",
+     "part": "ESP32-WROVER-E, 4 MB flash, 8 MB PSRAM",
+     "tell": "A camera on a ribbon, a card slot and a USB-C socket",
+     "art": BOARD_ART_FNCAM,
+     "camera": "OV2640",
+     "page": "/hardware#freenove-esp32-camera-board",
+     "status": 'coming soon to <a href="/install">the installer</a>; '
+               "the port is under way on Rob's bench"},
+    {"dir": "esp32s3-cam", "name": "ESP32-S3 camera board",
+     "part": "ESP32-S3 N16R8, 16 MB flash, 8 MB PSRAM",
+     "tell": "A camera, two USB-C sockets and an antenna lead",
+     "art": BOARD_ART_S3CAM,
+     "camera": "OV3660, 3 MP",
+     "page": "/hardware#esp32-s3-camera-board",
+     "status": 'coming soon to <a href="/install">the installer</a>; '
+               "on order, and tested when it arrives"},
+)
+BOARD_BY_DIR = {b["dir"]: b for b in BOARDS + SOON_BOARDS}
 
 
 def board_version(rel, chip):
@@ -2514,8 +2604,13 @@ def board_html(lines):
     b = BOARD_BY_DIR.get(name)
     if b is None:
         return ""
-    o = board_offers(b["dir"])
-    if o:
+    # A board on its way (SOON_BOARDS) has no image set to look for: its
+    # Firmware row says what is happening instead, and it has a Camera row
+    # and no buy link.
+    o = [] if "status" in b else board_offers(b["dir"])
+    if "status" in b:
+        build = b["status"]
+    elif o:
         ver = board_version(o[0], b["dir"])
         exact = o[0]["sets"][b["dir"]]["shown"]
         build = (html.escape(ver) + ' <a href="/install">on the installer</a>'
@@ -2527,9 +2622,12 @@ def board_html(lines):
             + "<dl>"
             + "<dt>Firmware</dt><dd>" + build + "</dd>"
             + "<dt>Chip</dt><dd>" + html.escape(b["part"]) + "</dd>"
+            + ("<dt>Camera</dt><dd>" + html.escape(b["camera"]) + "</dd>"
+               if b.get("camera") else "")
             + "<dt>Looks like</dt><dd>" + html.escape(b["tell"]) + "</dd>"
-            + '<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
-            + '" rel="sponsored">Amazon</a> (affiliate link)</dd>'
+            + ('<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
+               + '" rel="sponsored">Amazon</a> (affiliate link)</dd>'
+               if b.get("buy") else "")
             + "</dl></div>")
 
 
@@ -6188,6 +6286,15 @@ RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
             + "</aside>")
 
 
+# The home page's one line about what the board does that is new (site
+# 1.2.4). Rob's words were "See what µnleashed can do that other BBS
+# software can't"; the "can't" is not true of all BBS software (espbbs runs
+# on an ESP8266), so the button promises what the page can prove, and the
+# page names the programs it was checked against.
+HOME_TEASER = ('<p class="next tease"><a class="go" href="/different">'
+               "See what µnleashed can do</a></p>")
+
+
 # --------------------------------------------------------------------------
 # The filter over the board list (site 0.22.0, Rob: "allow filtering on the
 # website based on a badge bento grid that you can select and get a filter.
@@ -6366,7 +6473,11 @@ def index_page(sel=(), any_=False, data=None):
             'Dial one with <a href="/terminals">any telnet client</a>, or click '
             'an address if you have one installed. '
             '<a href="/dialing">Nothing happened?</a> '
-            '<a href="/firstcall">Never called one before?</a></p></div>'
+            '<a href="/firstcall">Never called one before?</a></p>'
+            # One button to what sets the board apart (site 1.2.4, Rob),
+            # and no more than that here: the list stays the first big
+            # thing on the screen. The page makes each claim and cites it.
+            + HOME_TEASER + "</div>"
             + RUN_CARD + "</div>")
     if rows:
         # The filter and the key to the badges, small and right above the
@@ -7036,6 +7147,40 @@ svg.art.spectrum .sdot { pointer-events:none; }
 svg.art.spectrum .dh { fill:var(--dial); opacity:0.22; }
 svg.art.spectrum .dc { fill:var(--dial); }
 
+/* The roadmap on /roadmap (site 1.2.4): one line in three stretches,
+   done in --live, now in --dial, later dashed in --faint. Two drawings of
+   it, across on a desktop and down on a phone, one shown at a time. */
+svg.art.roadmap { width:100%; height:auto; margin:1rem auto 1.5rem; }
+svg.art.roadmap.wide { max-width:46rem; }
+svg.art.roadmap.tall { display:none; max-width:24rem; }
+@media (max-width: 900px) {
+  svg.art.roadmap.wide { display:none; }
+  svg.art.roadmap.tall { display:block; }
+}
+svg.art.roadmap .rl { fill:none; stroke-width:2; stroke-linecap:round; }
+svg.art.roadmap .rm-done { stroke:var(--live); }
+svg.art.roadmap .rm-now { stroke:var(--dial); }
+svg.art.roadmap .rm-later { stroke:var(--faint); stroke-dasharray:4 5; }
+svg.art.roadmap .rd, svg.art.roadmap .rj { stroke-width:1.6; }
+svg.art.roadmap .rd-done { fill:var(--live); stroke:var(--live); }
+svg.art.roadmap .rd-now { fill:var(--bg); stroke:var(--dial); }
+svg.art.roadmap .rd-later { fill:var(--bg); stroke:var(--faint); }
+svg.art.roadmap .rj.rd-done { fill:var(--bg); }
+svg.art.roadmap text.rt-done, svg.art.roadmap text.rt-now { fill:var(--ink); }
+svg.art.roadmap text.hd { letter-spacing:0.08em; }
+svg.art.roadmap text.hd.rt-done { fill:var(--live); }
+svg.art.roadmap text.hd.rt-now { fill:var(--dial); }
+svg.art.roadmap text.hd.rt-later { fill:var(--dim); }
+svg.art.roadmap .rlamp { pointer-events:none; }
+svg.art.roadmap .dh { fill:var(--dial); opacity:0.25; }
+svg.art.roadmap .dc { fill:var(--dial); }
+
+/* The camera on /camera (site 1.2.4): the shot's flash is white, and off
+   at rest. */
+svg.art.camsnap { width:100%; max-width:30rem; height:auto;
+        margin:0.75rem auto 1.25rem; }
+svg.art.camsnap .fl { fill:#ffffff; opacity:0; }
+
 /* The skull is drawn in the warning box's own amber, on its background,
    so it belongs to the box it sits in rather than to the page. */
 svg.art.skull { background:none; border:0; }
@@ -7129,6 +7274,14 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
 @keyframes specgo { from { transform:translateX(-118px); }
                     to { transform:translateX(126px); } }
 @keyframes specair { from { opacity:1; } to { opacity:0.5; } }
+/* The roadmap (site 1.2.4): the lamp runs the "now" stretch, its length
+   set per drawing in --run. The camera's flash lands as the word arrives. */
+@keyframes rmrun { 0%, 10% { transform:translateY(0px); opacity:1; }
+                   80% { transform:translateY(var(--run)); opacity:1; }
+                   95%, 100% { transform:translateY(var(--run)); opacity:0; } }
+@keyframes rmin { from { opacity:0; transform:translateY(-4px); }
+                  to { opacity:1; transform:translateY(0px); } }
+@keyframes camflash { 0%, 82% { opacity:0; } 88% { opacity:0.85; } 100% { opacity:0; } }
 
 @media (prefers-reduced-motion: no-preference) {
   /* /install: a progress bar filling, storage being made, the Wi-Fi timer */
@@ -7202,6 +7355,22 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
   svg.art.spectrum .sdot { animation:specin 0.6s ease-out 1.9s both,
         specgo 3.5s ease-in-out -1.75s infinite alternate; }
   svg.art.spectrum .arr { animation:specair 2.4s ease-in-out 2s infinite alternate backwards; }
+  /* the roadmap: the line draws, each stretch's stations come in down it,
+     one stretch after another, then the lamp runs down "now" */
+  svg.art.roadmap .seg { transform-box:fill-box; transform-origin:left center;
+        animation:specdraw 0.7s ease-out both; }
+  svg.art.roadmap.wide .br { transform-box:fill-box; transform-origin:center top;
+        animation:specgrow 0.5s ease-out 0.7s both; }
+  svg.art.roadmap.tall .br { transform-box:fill-box; transform-origin:center top;
+        animation:specgrow 0.9s ease-out both; }
+  svg.art.roadmap .st { animation:rmin 0.4s ease-out 0.9s both; }
+  svg.art.roadmap .b1 .st { animation-delay:1.3s; }
+  svg.art.roadmap .b2 .st { animation-delay:1.7s; }
+  svg.art.roadmap .rlamp { animation:specin 0.5s ease-out 2.2s both,
+        rmrun 3.2s ease-in-out 2.7s infinite; }
+  /* the camera: the word goes down the line and the pixel flashes */
+  svg.art.camsnap .go { animation:artserial 2.4s linear infinite; }
+  svg.art.camsnap .fl { animation:camflash 2.4s linear infinite; }
   svg.art.spectrum .up { transition:transform 0.2s ease-out; }
   svg.art.spectrum a:hover .up,
   svg.art.spectrum a:focus-visible .up { transform:translateY(-2px); }
@@ -7942,6 +8111,170 @@ def _spectrum():
 SPECTRUM = _spectrum()
 
 
+# ----------------------------------------------------------------------
+# The roadmap on /roadmap (site 1.2.4, Rob: "a roadmap page ... with fancy
+# line art graphics of our current roadmap in non-technical user format").
+# A signal line with a station for each thing, in three stretches: done,
+# lit in --live; now, in --dial, with a lamp going down it; later, dashed
+# in --faint. The words under the drawing say all of it again with links,
+# so the drawing is one image to a screen reader, labelled in a sentence.
+#
+# Two drawings of the same line, because fifteen stations do not fit one
+# layout at both widths: on a desktop the line runs across the top and each
+# stretch hangs its stations below it like a branch; under the site's one
+# breakpoint, 900px, it runs straight down the page, which a 390 phone
+# draws at about 1:1. CSS shows one and hides the other, so only one is
+# ever in the accessibility tree.
+#
+# Only what is decided, and no dates (Rob): the stations come from the
+# firmware's CLAUDE.md and CHANGELOG. The labels are two or three words;
+# the one sentence each gets is in pages/roadmap.md.
+#
+# The motion, all in ART_CSS's no-preference block, transforms and opacity
+# only: the line draws, each stretch's stations come in down it, and a
+# lamp runs down the "now" stretch. At rest the lamp sits on the "now"
+# junction.
+# ----------------------------------------------------------------------
+ROADMAP = (
+    ("done", "Done", "built and running",
+     ("Browser installer", "S3 board with a screen", "Lights",
+      "SD card backups", "80-column screens")),
+    ("now", "Now", "arriving with 1.1.0",
+     ("Sysop dashboard", "Silent mode", "Camera boards", "Missed pages to mail")),
+    ("later", "Later", "decided, not started",
+     ("Updates itself", "SSH on the S3", "Sensors", "Motion snapshots",
+      "Doors on a second board", "Linked chat rooms")),
+)
+ROADMAP_LABEL = "The roadmap. " + " ".join(
+    f"{title}, {sub}: {', '.join(stops)}." for _k, title, sub, stops in ROADMAP)
+
+
+def _roadmap_wide():
+    cols = (24, 264, 504)
+    line_y, first, step = 56, 86, 26
+    out = ['<svg class="art roadmap wide" viewBox="0 0 720 240" '
+           'preserveAspectRatio="xMidYMid meet" role="img" '
+           f'aria-label="{html.escape(ROADMAP_LABEL, quote=True)}">']
+    ends = (264, 504, 704)
+    for (key, _t, _s, _st), x0, x1 in zip(ROADMAP, cols, ends):
+        out.append(f'<path class="rl rm-{key} seg" d="M{x0} {line_y} H{x1}"/>')
+    for i, ((key, title, sub, stops), x0) in enumerate(zip(ROADMAP, cols)):
+        last = first + step * (len(stops) - 1)
+        out.append(f'<g class="band b{i}">'
+                   f'<text class="hd rt-{key}" x="{x0 - 6}" y="24" font-size="13">'
+                   f"{title.upper()}</text>"
+                   f'<text x="{x0 - 6}" y="40" font-size="10.5">{sub}</text>'
+                   f'<path class="rl rm-{key} br" d="M{x0} {line_y} V{last}"/>')
+        for j, name in enumerate(stops):
+            y = first + step * j
+            out.append(f'<g class="st"><circle class="rd rd-{key}" cx="{x0}" cy="{y}" r="4"/>'
+                       f'<text class="rt-{key}" x="{x0 + 14}" y="{y + 4}" '
+                       f'font-size="12">{html.escape(name)}</text></g>')
+        out.append(f'<circle class="rj rd-{key}" cx="{x0}" cy="{line_y}" r="6"/></g>')
+    now_x, now_last = cols[1], first + step * (len(ROADMAP[1][3]) - 1)
+    out.append(f'<g class="rlamp" aria-hidden="true" style="--run:{now_last - line_y}px">'
+               f'<circle class="dh" cx="{now_x}" cy="{line_y}" r="7"/>'
+               f'<circle class="dc" cx="{now_x}" cy="{line_y}" r="3"/></g>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def _roadmap_tall():
+    x0, step, head, gap = 22, 27, 33, 18
+    y, rows, junctions = 18, [], []
+    for key, title, sub, stops in ROADMAP:
+        junctions.append(y)
+        rows.append(("h", key, title, sub, y))
+        y += head
+        for name in stops:
+            rows.append(("s", key, name, "", y))
+            y += step
+        y += gap
+    last = y - gap - step
+    height = last + 18
+    out = [f'<svg class="art roadmap tall" viewBox="0 0 354 {height}" '
+           'preserveAspectRatio="xMidYMid meet" role="img" '
+           f'aria-label="{html.escape(ROADMAP_LABEL, quote=True)}">']
+    stretch = list(zip(junctions, junctions[1:] + [last]))
+    for (key, *_r), (a, b) in zip(ROADMAP, stretch):
+        out.append(f'<path class="rl rm-{key} br" d="M{x0} {a} V{b}"/>')
+    band = -1
+    for kind, key, text, sub, ry in rows:
+        if kind == "h":
+            if band >= 0:
+                out.append("</g>")
+            band += 1
+            out.append(f'<g class="band b{band}">'
+                       f'<circle class="rj rd-{key}" cx="{x0}" cy="{ry}" r="6"/>'
+                       f'<text class="hd rt-{key}" x="{x0 + 18}" y="{ry + 4.5}" '
+                       f'font-size="14.5">{text.upper()}</text>'
+                       f'<text x="{x0 + 18 + 10 * len(text) + 12}" y="{ry + 4.5}" '
+                       f'font-size="11.5">{sub}</text>')
+        else:
+            out.append(f'<g class="st"><circle class="rd rd-{key}" cx="{x0}" cy="{ry}" r="4"/>'
+                       f'<text class="rt-{key}" x="{x0 + 18}" y="{ry + 4.5}" '
+                       f'font-size="14">{html.escape(text)}</text></g>')
+    out.append("</g>")
+    now_y, now_end = junctions[1], junctions[2] - step
+    out.append(f'<g class="rlamp" aria-hidden="true" style="--run:{now_end - now_y}px">'
+               f'<circle class="dh" cx="{x0}" cy="{now_y}" r="7"/>'
+               f'<circle class="dc" cx="{x0}" cy="{now_y}" r="3"/></g>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+ROADMAP_ART = _roadmap_wide() + _roadmap_tall()
+
+
+# The camera on /camera (site 1.2.4): a terminal types SNAPSHOT, the word
+# goes down the line to the camera board, its pixel flashes white for the
+# shot, and the lens looks out at a bird feeder. 354 units wide like the
+# first call strip, so a phone draws it at about 1:1.
+CAMERA_ART = (
+    '<svg class="art camsnap" viewBox="0 0 354 124" role="img" '
+    'aria-label="A terminal types SNAPSHOT, the word goes down the line to the '
+    'camera board, its light flashes for the shot, and the lens looks at a bird '
+    'feeder." preserveAspectRatio="xMidYMid meet">'
+    # the terminal
+    '<rect class="o" x="8" y="12" width="88" height="62" rx="4"/>'
+    '<rect class="g" x="14" y="18" width="76" height="48" rx="1.5"/>'
+    '<text class="live" x="20" y="33" font-size="9.5">SNAPSHOT</text>'
+    '<text x="20" y="46" font-size="8.5">Download it</text>'
+    '<text x="20" y="57" font-size="8.5">now? (y/N)</text>'
+    '<rect class="lf caret" x="70" y="50.5" width="5" height="7"/>'
+    '<path class="o" d="M52 74 V82 M36 82 H68"/>'
+    # the line, and the word going down it
+    '<path class="ld" d="M100 43 H170"/>'
+    '<g class="go"><circle class="halo" cx="135" cy="43" r="4.5"/>'
+    '<circle class="lf" cx="135" cy="43" r="2.3"/></g>'
+    # the camera board
+    '<rect class="o" x="174" y="20" width="74" height="46" rx="2"/>'
+    '<path class="d" d="' + " ".join(
+        f"M{180 + i * 6} 20 V16 M{180 + i * 6} 66 V70" for i in range(12)) + '"/>'
+    '<rect class="o" x="190" y="30" width="26" height="26" rx="1.5"/>'
+    '<circle class="o" cx="203" cy="43" r="9"/>'
+    '<circle class="d" cx="203" cy="43" r="5"/>'
+    '<circle class="c1" cx="200.6" cy="40.6" r="1.2"/>'
+    '<rect class="o" x="228" y="28" width="9" height="9" rx="1"/>'
+    '<circle class="flash fl" cx="232.5" cy="32.5" r="7"/>'
+    '<circle class="lf" cx="232.5" cy="32.5" r="2.2"/>'
+    # what the lens sees
+    '<path class="f" d="M212 38 L294 26 M212 48 L294 80"/>'
+    # the feeder, and who is on it
+    '<path class="o" d="M322 112 V87 M298 62 L322 48 L346 62 Z"/>'
+    '<rect class="o" x="302" y="82" width="40" height="5" rx="1"/>'
+    '<path class="d" d="M306 62 V82 M338 62 V82"/>'
+    '<ellipse class="o" cx="316" cy="76" rx="6.5" ry="4.2"/>'
+    '<circle class="o" cx="322.5" cy="71.5" r="2.8"/>'
+    '<path class="o" d="M325.2 71.5 L328.2 72.3 M309.8 75 L305.5 72.5"/>'
+    '<circle class="c5" cx="323.3" cy="70.9" r="0.7"/>'
+    # captions
+    '<text x="52" y="100" font-size="10.5" text-anchor="middle">you type SNAPSHOT</text>'
+    '<text x="211" y="100" font-size="10.5" text-anchor="middle">the board takes it</text>'
+    '<text x="322" y="121" font-size="10.5" text-anchor="middle">the feeder</text>'
+    "</svg>")
+
+
 # The skull for the warning box on /how. Crossbones first, so the skull,
 # filled with the box's own background, sits in front of the crossing.
 # Not animated: a warning that moves is a warning that looks like an
@@ -8305,6 +8638,8 @@ ART = {"firstcall": FIRSTCALL_ART,
        "lights-drive": LIGHTS_DRIVE,
        "lights-strip": LIGHTS_STRIP,
        "hardware-spectrum": SPECTRUM,
+       "roadmap": ROADMAP_ART,
+       "camera-snap": CAMERA_ART,
        # The cover at the top of /donate. An image rather than inline, so
        # it is fetched once and cached, and it is vector either way.
        "cover": ('<img class="cover" src="/cover.svg" width="1600" height="310" '
@@ -8414,6 +8749,11 @@ Gtalk, mail between callers, file areas on an SD card, forums on the same card, 
 caller log, a sysop who can page you. The forums are topic areas a sysop sets
 up, with conversations inside each one, read at the same prompt as everything
 else. Doors are still to come.</p>
+
+<p>Set beside the BBS software you may already know, the difference is that
+the board is the whole computer: <a href="/different">what that lets it do</a>
+fits on one page, and <a href="/roadmap">the roadmap</a> shows what is built,
+what is arriving and what comes after.</p>
 
 <p><b>The board is yours.</b> Not an account on somebody's platform, not a tenant on a
 server farm, not a feature that can be deprecated out from under you. A chip you own,

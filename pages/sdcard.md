@@ -9,6 +9,16 @@ board: chat, mail, accounts, screens, the caller log, a directory listing, the
 serial bridge. The card is what you add when you want file areas, forums and
 screens of your own.
 
+<!-- Nightly backups: firmware CHANGELOG 1.1.0-dev.6, `nightly = yes` on CONFIG sd, one at 03:00, the last seven nightly-YYYYMMDD.zip kept, hand-made backups never pruned. -->
+::: until 1.1.0
+Firmware 1.1.0 gives the card one more job: switch on nightly backups and the
+board backs itself up to the card at 03:00 every night, keeping the last seven.
+:::
+::: from 1.1.0
+The card can also keep the board's backups: switch on nightly backups and the
+board backs itself up to the card at 03:00 every night, keeping the last seven.
+:::
+
 A module that costs about two dollars, and four signal wires plus power.
 
 ## What you need

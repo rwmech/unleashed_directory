@@ -263,7 +263,20 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   then the folder name draws `board_html()`, the picture at 9rem, the
   build /install offers, the chip, the tell line and the buy link, from
   `BOARDS` and the disk, so the page and the picker cannot disagree. A
-  board goes on it once a build has actually run on it.
+  board is listed as tested once a build has actually run on it.
+  **Boards on the way are `SOON_BOARDS`** (1.2.4, the two camera boards):
+  the same `::: board` block, a `status` line in place of a version, a
+  `camera` row, no buy link, and deliberately not in `BOARDS`, so the
+  picker and the fetcher ignore them. When one ships, move it to
+  `BOARDS` with its image-set folder; the Freenove shares the ESP32's
+  chip family, so the picker has to ask which board.
+  **/camera, /different and /roadmap** (1.2.4). /camera owns camera
+  usage and says "not settled yet" for any default the firmware plan
+  leaves open. /different claims no "only": espbbs runs a BBS on an
+  ESP8266, and each comparison links its source. /roadmap's drawing is
+  `ROADMAP` in server.py, drawn twice (across above 900px, down below);
+  change a station there and in pages/roadmap.md together, only what the
+  firmware's CLAUDE.md has decided, and never a date.
   **The sysop password on /install** (1.0.0, Rob): a board ships with one
   default password, the sysop's, `unleashed`. It works only from the
   board's own network and only until changed; the first sign-up or login

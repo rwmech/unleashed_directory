@@ -47,6 +47,11 @@ own:
 The other tested board, an ESP32-S3 board with a screen, needs neither: its
 card slot and its drive light are built in.
 
+Coming soon, two camera boards add a third: a camera on the board, so a caller
+can snap a picture of whatever it is pointed at, from any terminal. The
+boards are on [the tested boards page](/hardware#freenove-esp32-camera-board),
+and what callers can do with them is on [the camera page](/camera).
+
 ## Getting it running
 
 You need [PlatformIO](https://platformio.org/) and git. For the ESP32 dev

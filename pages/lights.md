@@ -8,7 +8,8 @@
 Two lights for an ESP32 dev board in a case: a drive light, one pixel that
 shows the board's storage at work, and a strip of pixels, ten as shipped, that
 shows who is on. Both are optional, and both stay off until you give them a
-pin.
+pin. Wire the strip, give it a pin, and each caller who dials in lights a
+pixel of their own.
 
 ::: until 1.1.0
 > [!NOTE]

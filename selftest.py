@@ -2309,6 +2309,110 @@ def main():
               and "[the house\nrules](/rules)" in
                   open(os.path.join("pages", "setup.md"), encoding="utf-8").read())
 
+        # ------------------------------------------------------------------
+        # Site 1.2.4: the camera boards, /camera, /different and /roadmap.
+        print("Camera boards, the camera, what is different, the roadmap")
+        _, hwp4 = get("/hardware")
+        hw4 = hwp4.split("<article>")[1].split("</article>")[0]
+        soon_ok = True
+        for b in S.SOON_BOARDS:
+            anchor = b["page"].split("#")[1]
+            sec = hw4.split(f'id="{anchor}"')[1].split("<h2")[0] if f'id="{anchor}"' in hw4 else ""
+            soon_ok = soon_ok and (S.board_html([b["dir"]]) in sec
+                                   and "coming soon to" in S.board_html([b["dir"]])
+                                   and "<b>Coming soon.</b>" in sec
+                                   and 'rel="sponsored"' not in sec
+                                   and 'href="/camera"' in sec)
+        check("/hardware lists both camera boards as coming soon, with no buy link",
+              len(S.SOON_BOARDS) == 2 and soon_ok
+              and "tested when it arrives" in " ".join(hw4.split())
+              and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw4)
+        _, inst4 = get("/install")
+        check("and neither is offered on the installer's picker",
+              all(b["name"] not in inst4 for b in S.SOON_BOARDS)
+              and all(b["dir"] not in {x["dir"] for x in S.BOARDS} for b in S.SOON_BOARDS))
+        code, cam = get("/camera")
+        flat_c = " ".join(cam.split())
+        check("/camera renders, with its drawing and the commands",
+              code == 200 and has_h(cam, 1, "Camera")
+              and S.ART["camera-snap"] in cam
+              and "<code>SNAPSHOT</code>" in cam and "<code>SNAP</code>" in cam
+              and "<code>Download it now? (y/N)</code>" in cam)
+        check("and says the rules Rob set: area 12, the limits, the card, the defaults",
+              "file area 12" in flat_c
+              and "10 pictures an hour and 20 a day" in flat_c
+              and "without one the camera does not start" in flat_c
+              and "up to 86,400" in flat_c
+              and "Not settled yet" in cam
+              and "A lens cap is the only real guarantee." in flat_c
+              and "There is no countdown" in flat_c)
+        check("and carries the coming-soon note until a 1.1.0 release is on disk",
+              ("arrives with firmware 1.1 for the camera boards" in flat_c)
+              == (not any(r["sort"] >= (1, 1, 0) for r in S.firmware_releases())))
+        check("it lights Build one, and /build and /whofor link it",
+              S.NAV_SECTION.get("/camera") == "/build"
+              and '<a class="here" href="/build">' in cam
+              and 'href="/camera"' in get("/build")[1]
+              and 'href="/camera"' in get("/whofor")[1])
+        _, who4 = get("/whofor")
+        flat_w = " ".join(who4.split())
+        check("/whofor has the camera's uses, motion marked as later",
+              has_h(who4, 2, "A board with a camera")
+              and "Wildlife." in flat_w and "Outdoors." in flat_w
+              and "PIR motion sensor" in flat_w
+              and "That one comes later, with the plugin for sensors." in flat_w
+              and 'href="/different"' in who4)
+        code, dif = get("/different")
+        dbody = dif.split("<article>")[1].split('id="how-it-compares"')[0]
+        items = re.findall(r'<li><b><a href="([^"]+)">', dbody)
+        check("/different renders its list, each line linked to its proof",
+              code == 200 and has_h(dif, 1, "What makes it different")
+              and 6 <= len(items) <= 8 and len(set(items)) == len(items)
+              and all(h.startswith("/") for h in items))
+        check("and compares with sources, claiming no 'only'",
+              "https://wiki.synchro.net/howto:petscii" in dif
+              and "https://github.com/snazzware/espbbs" in dif
+              and "It is not the only BBS on a microcontroller" in dif
+              and " the only BBS that" not in dif.lower()
+              and "can't" not in dbody and "cannot do" not in dbody)
+        home = get("/")[1]
+        check("the home page has one button to it and nothing more",
+              home.count('href="/different"') == 1
+              and '<p class="next tease"><a class="go" href="/different">' in home
+              and home.index('href="/different"') < home.index('class="runcard"'))
+        code, rmp = get("/roadmap")
+        art_r = rmp.split("svg.art { display:block;")[1].split("</style>")[0]
+        still_r, moving_r = art_r.split("@media (prefers-reduced-motion: no-preference) {")
+        check("/roadmap renders, with its drawing across and down",
+              code == 200 and has_h(rmp, 1, "Roadmap") and S.ART["roadmap"] in rmp
+              and rmp.count('<svg class="art roadmap wide"') == 1
+              and rmp.count('<svg class="art roadmap tall"') == 1
+              and all(rmp.count(">" + html.escape(s) + "</text>") == 2
+                      for _k, _t, _s, st in S.ROADMAP for s in st))
+        check("and the words say every station again, in three stretches",
+              [k for k, *_ in S.ROADMAP] == ["done", "now", "later"]
+              and has_h(rmp, 2, "Done") and has_h(rmp, 2, "Later")
+              and "Motion-triggered snapshots." in rmp
+              and "Home Assistant" not in rmp and "MQTT" not in rmp
+              and "captive" not in rmp.lower() and "Lua" not in rmp)
+        rm_kf = re.findall(r"@keyframes (rm\w+) \{(.*?)\}\s*\}", art_r, re.S)
+        check("and it moves only where reduced motion allows, by transform and opacity",
+              "svg.art.roadmap .rlamp { animation:" in moving_r
+              and not re.search(r"svg\.art\.roadmap[^{]*\{[^}]*(animation|transition):",
+                                still_r)
+              and len(rm_kf) == 2
+              and all(set(re.findall(r"([a-z-]+):", b)) <= {"transform", "opacity"}
+                      for _, b in rm_kf))
+        check("the roadmap is in the footer and lights What this is, like /different",
+              '>Roadmap</a>' in rmp.split("<footer>")[1]
+              and S.NAV_SECTION.get("/roadmap") == "about:/"
+              and S.NAV_SECTION.get("/different") == "about:/"
+              and re.search(r'<a class="here" href="[^"]*">What this is</a>', rmp)
+              and re.search(r'<a class="here" href="[^"]*">What this is</a>', dif))
+        about4 = get("/", host="about.example")[1]
+        check("What this is links both, in context",
+              'href="/different"' in about4 and 'href="/roadmap"' in about4)
+
         # Site 1.2.0: the tested boards page, a picture and the facts for
         # each board from the same table the installer's picker draws, and
         # the build page's table of chips says the S3 has run.
@@ -2321,7 +2425,7 @@ def main():
         check("the tested boards page draws each board, its build and where to buy it",
               code == 200 and '<h2 id="esp32-dev-board">' in body
               and '<h2 id="waveshare-esp32-s3-lcd-1-47">' in body
-              and body.count('<div class="hwb">') == len(S.BOARDS)
+              and body.count('<div class="hwb">') == len(S.BOARDS) + len(S.SOON_BOARDS)
               and all(b["buy"] in body for b in S.BOARDS)
               and all(S.board_html([b["dir"]]) in body for b in S.BOARDS))
         check("and it is part of Build one, with the drawings' stylesheet and no script",

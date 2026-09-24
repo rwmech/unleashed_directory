@@ -1,8 +1,9 @@
-<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board goes on this page only once a build has run on it. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. -->
+<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board is listed as tested only once a build has run on it. Since site 1.2.4 the two camera boards wait at the foot of the page, drawn from SOON_BOARDS in server.py with no version and no buy link (Rob has given none); their facts come from the firmware repository's internal/PLAN-freenove-cam.md: the Freenove FNK0060 (pinout 3.0, ESP32-WROVER-E, OV2640, SDMMC slot, CH340, the NeoPixel Rob pointed out, and GPIO 13, 32 and 33 free) and the ESP32-S3-CAM Rob has on order (N16R8, OV3660, two USB-C, an external antenna). Neither has run a build yet. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. -->
 # Tested boards
 
 The boards this firmware has actually run on, each with its own image on [the
-installer](/install). Pick yours by the picture: the installer checks the chip,
+installer](/install). Each one is small enough to lose in a drawer, and each
+is a whole BBS the moment it has power and Wi-Fi. Pick yours by the picture: the installer checks the chip,
 and a picture is the only way to tell two boards with the same chip apart.
 
 ::: art
@@ -21,6 +22,10 @@ Three ways to build one. Each is a choice, not a step on a ladder:
   capabilities. About $20, a screen, a card slot and a drive light on the
   board, and no wiring. It does need BOOT and RESET pressed by hand to install, which is
   why it takes a little longer than the bare board.
+
+Camera boards are next: [two boards with a camera on
+them](#freenove-esp32-camera-board), coming soon, so a caller can take a picture of
+whatever the board is looking at and download it.
 
 The prices are typical listings in September 2026, and they move. A micro SD
 card is extra on either board that takes one. The times are for somebody
@@ -108,6 +113,51 @@ pressed by hand, in three steps on the installer page.
 [Steps for this board](/install#on-the-waveshare-s3)
 :::
 
+## Freenove ESP32 camera board
+
+::: board
+esp32-fncam
+:::
+
+**Coming soon.** Freenove's camera kit, FNK0060, and the first of two boards
+with a camera on them. It is on Rob's bench and the firmware for it is under
+way. It goes on the installer once a build has run on it, the same as every
+board on this page.
+
+- **What it has:** an ESP32-WROVER-E with 4 MB of flash and 8 MB of PSRAM, an
+  OV2640 camera on a ribbon, a micro SD slot with a card in the box, a USB-C
+  socket with a CH340 USB-serial chip beside it, and a NeoPixel on the board.
+- **No wiring.** The card goes in the slot, and the NeoPixel is the drive
+  light, and the flash for a photo.
+- **Three pins to spare**, GPIO 13, 32 and 33. The camera and the card use
+  nearly every other pin on the board.
+- **The camera needs the card.** Photos are kept on it.
+
+::: next
+[What callers can do with it](/camera)
+:::
+
+## ESP32-S3 camera board
+
+::: board
+esp32s3-cam
+:::
+
+**Coming soon.** A board sold as the ESP32-S3-CAM: an ESP32-S3 N16R8, with
+16 MB of flash and 8 MB of PSRAM, an OV3660 camera of 3 megapixels, two USB-C
+sockets and a lead for an external antenna. Rob's is on order, and it will be
+tested when it arrives.
+
+Boards sold under that name are made by several companies, and they are not
+all the same board: the pins, the lights and the USB wiring differ. The build
+will be for the one that was tested, taken from its own schematic, and this
+section will say which it is once it has run. Until then, buying one to run
+this firmware is buying ahead of the testing.
+
+::: next
+[What callers can do with it](/camera)
+:::
+
 ## Other chips
 
 Plenty of chips are sold under the ESP32 name, and not all of them can run a
@@ -122,7 +172,8 @@ is what stops the radio's work from making callers' lines lag.
 - **ESP32-WROVER: should work, not yet tested.** The same original ESP32
   chip, as are other modules built on it, so the dev board's image should run.
   A WROVER adds PSRAM, a second memory chip on the module, which that image
-  does not use.
+  does not use. The Freenove camera board above is built on one, and gets a
+  build of its own for its camera and card slot.
 - **ESP32-S2, ESP32-C3 and ESP32-C5: no.** One core each, the C5 even with
   its dual-band Wi-Fi.
 - **ESP32-C6: no.** One main core. Its second, low-power core cannot run the
@@ -134,4 +185,5 @@ is what stops the radio's work from making callers' lines lag.
 A single-core chip could be made to run it, but the radio and the callers
 would take turns on one core and callers would feel it, and doing that
 properly means rebuilding the core of the BBS rather than changing a setting.
-A board goes on this page once a build has actually run on it.
+A board is listed as tested once a build has actually run on it, and it goes
+on the installer then.

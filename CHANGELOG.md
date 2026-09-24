@@ -14,6 +14,47 @@
 
 # Changelog
 
+## 1.2.4, 2026-09-24
+
+Camera boards on the way, a page for the camera, a page on what sets the
+board apart, and a roadmap.
+
+- **Two camera boards on /hardware, coming soon** (Rob): the Freenove ESP32
+  camera board (FNK0060: ESP32-WROVER-E, 4 MB flash, 8 MB PSRAM, OV2640, a
+  card slot, USB-C with a CH340, a NeoPixel), on Rob's bench with its port
+  under way, and an ESP32-S3 camera board (N16R8, OV3660 3 MP, two USB-C, an
+  external antenna), on order and tested when it arrives, named generically
+  because clone boards differ. Each has its own line-art picture and a
+  `::: board` block whose Firmware row says "coming soon to the installer",
+  from a new `SOON_BOARDS` table kept apart from `BOARDS`, so the installer's
+  picker and the release fetcher do not change. No buy links: none given.
+  The spectrum keeps its three stops and gets a line under it instead.
+- **/camera**, in the shape of /sdcard and /lights: `SNAPSHOT` (`SNAP`) with
+  no countdown and "Download it now? (y/N)", Photos as file area 12 readable
+  by everybody as shipped, 10 an hour and 20 a day per caller, the settings
+  in `CONFIG camera` with "not settled yet" where the firmware has not fixed
+  a value, timelapse, retention, the card being required, and the privacy
+  case with a lens cap as the only real guarantee. A note that it arrives
+  with firmware 1.1 shows until a 1.1.0 release is on disk, as /lights does.
+  Linked from /hardware, /build and /whofor; Build one in the menu.
+- **/different**, what the board does that the familiar BBS software does
+  not: eight lines, each linked to the page that shows it, then how it
+  compares, with sources: Synchronet, Mystic, WWIV, ENiGMA½, Talisman and
+  Citadel all run on an operating system, and Synchronet's own wiki says
+  PETSCII cannot be detected on connect. No "only": espbbs runs a BBS on an
+  ESP8266, and the page says so. The 1.1.0 items swap their wording when
+  1.1.0 is released. The home page has one button to it, "See what
+  µnleashed can do", and /whofor and What this is link it in context.
+- **/roadmap**: a line-art signal line in three stretches, done, now (1.1.0)
+  and later, drawn across on a desktop and down on a phone, CSS animation
+  with reduced motion honoured, and a sentence for each station below it.
+  Only what is decided, and no dates. In the footer's Reference row and
+  linked from What this is.
+- **/whofor** gains a board with a camera: outdoors, wildlife and
+  timelapses, and motion-triggered snapshots marked as coming with the
+  sensors. /sdcard says what nightly backups are (from 1.1.0), and /lights
+  says what the strip does when a caller dials in.
+
 ## 1.2.3, 2026-09-24
 
 The site and the firmware are GPL v3 or later.

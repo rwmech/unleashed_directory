@@ -1,0 +1,141 @@
+<!-- The camera page (site 1.2.4, Rob), in the shape of /sdcard and /lights. Every fact is from the firmware repository's internal/PLAN-freenove-cam.md as of 2026-09-24, and only from the sections Rob decided: "Snapshot command, self-timer and timelapse", "Limits, notices and naming" and "Retention", plus the privacy points in the brief (off until switched on, staff told of every snap, a lens cap the only real guarantee). Deliberately not stated, because the plan leaves them open: the quality and resolution defaults, the brightness default, the default count limits, the shortest timelapse interval (to be measured), exact wording of the board's messages other than "Download it now? (y/N)", which is Rob's, and the text-art preview (a stretch without a go). The Photos area is readable by everyone as shipped (Rob, in the 1.2.4 brief; the plan's proposal was users). The "until 1.1.0" note follows /lights; if the camera slips past 1.1.0, move the gate to the release that carries it. -->
+# Camera
+
+A camera on the board, and any caller you allow can take a picture with it.
+Point the board at a bird feeder, a garden or a workbench, and a caller on a
+laptop, or on a Commodore 64 from 1982, types `SNAPSHOT` and has the photo a
+few seconds later.
+
+::: until 1.1.0
+> [!NOTE]
+> **The camera arrives with firmware 1.1 for the camera boards**, which is not
+> released yet, and neither board is on the installer. This page describes it
+> as it has been designed, so you can plan a board around it.
+:::
+
+::: art
+camera-snap
+:::
+
+## What you need
+
+- **One of the two camera boards**: the [Freenove ESP32 camera
+  board](/hardware#freenove-esp32-camera-board) or an [ESP32-S3 camera
+  board](/hardware#esp32-s3-camera-board). The camera is on the board, so
+  there is nothing to wire.
+- **A micro SD card** in the board's slot. Photos are kept on the card, and
+  without one the camera does not start.
+- **Somewhere worth pointing it**, within reach of a USB power supply. A phone
+  charger will do.
+
+## Taking a picture
+
+Type `SNAPSHOT`, or `SNAP` for short, at the main prompt.
+
+- **It takes the picture straight away.** There is no countdown: whoever typed
+  it is somewhere else, not in front of the lens.
+- **It tells you the photo's file name**, that it is in the Photos file area,
+  and how many more you may take this hour and today.
+- **It asks `Download it now? (y/N)`.** Y sends the photo at once by YMODEM or
+  XMODEM, the same way as any download from the file areas, so the picture is
+  on your machine seconds after you asked for it. N takes you back to the
+  prompt, and the photo stays in Photos.
+
+A caller who may take pictures but not download them is told where the photo
+went and is not asked. A photo is a JPEG, which a PC terminal can save and
+open: a Commodore 64 can take the picture, and looking at it is a job for a
+PC.
+
+## Photos, file area 12
+
+Every picture goes into **Photos**, file area 12, reached from `FILES` like any
+other area. As shipped, everybody can see and download the photos in it,
+guests included, and the sysop can change that.
+
+The sysop also chooses how photos are named: by the date and time, by the
+date and time with the handle of whoever took it, or in a folder for each
+caller, so you can find your own pictures.
+
+## Limits
+
+- **10 pictures an hour and 20 a day for each caller.** Every snap says where
+  you stand, and at the limit the board says when the next one is allowed.
+- **A guest is counted by address as well as by handle**, so hanging up and
+  calling back under another name does not start the count again.
+- **The sysop is not counted.**
+
+## Before you point it at anything
+
+A camera callers can use is a window into the room it is in, open to whoever
+the sysop lets through. That is the whole of the risk, and it is worth
+getting right before any of the settings below.
+
+- **Nobody can use it until the sysop says so.** It is off until it is switched
+  on, and then, as shipped, only staff may take a picture.
+- **Staff hear about every snap.** Each member of staff on the board sees a
+  line naming the node that took one.
+- **The room can see it too.** With **Use flash LED?** on, as shipped, the
+  board's pixel lights white for as long as a picture takes.
+- **The pictures stay on your card**, not on anybody's server. A picture leaves
+  the board when a caller downloads it, and from their machine it can go
+  anywhere, like any file.
+
+Low risk is not no risk, and the difference is what is in frame.
+
+> **A lens cap is the only real guarantee.** A setting can be changed by
+> anybody who has the sysop password; a cap over the lens cannot. Point it at
+> the bird feeder, not the sofa, and cap it when the room is private.
+
+## Settings
+
+`CONFIG camera`, the sysop's alone. Where the last column says **not settled
+yet**, the firmware has not fixed a value and this page will say it once it
+has.
+
+| Setting | What it does | As shipped |
+|---|---|---|
+| On | Whether the camera runs at all. | Off |
+| Snapshot level | Who may take a picture, from everybody, guests included, up to the sysop alone. | Staff |
+| Photos level | Who may see and download the photos in area 12. | Everybody |
+| Quality, resolution | How sharp the JPEG is and how many pixels it has. | Not settled yet |
+| Flip, mirror, brightness | For a camera mounted upside down, looking through a mirror, or in a dim room. | Not settled yet |
+| Use flash LED? | Lights the board's pixel white while a picture is taken, callers' pictures and the timelapse's alike. | Yes |
+| Name snaps | By date, by date and handle, or a folder for each handle. | By date |
+| Auto photo every | A picture every so many seconds, up to 86,400, which is a day. 0 is off. | Off |
+| Keep caller snaps for | Days before a caller's photo is removed. 0 keeps them however old. | 30 days |
+| Keep timelapse for | The same for the timelapse's pictures. | 7 days |
+| Max caller snaps, max timelapse shots | How many of each are kept. 0 is no limit. | Not settled yet |
+| Card space floor | Free space the camera always leaves on the card for the file areas, the forums and the backups. | 10% of the card or 512 MB, whichever is smaller |
+
+The oldest photos go first when any of the last four rules bites, and the
+timelapse's go before callers' pictures when the card is short of room.
+
+## Timelapse
+
+Set **Auto photo every** and the board takes pictures by itself: once a minute
+for an afternoon of clouds going over, once an hour for a month of a garden
+growing. They go into a timelapse folder of their own inside Photos, with
+their own keep rules, so a fast timelapse never pushes out the pictures
+callers took. The shortest interval the board allows is still being measured
+on the bench.
+
+Later, a motion sensor on a spare pin will be able to take a picture the
+moment something moves, for the visitor at the feeder nobody was watching
+for. That arrives with the sensors, and [the roadmap](/roadmap) has it.
+
+## What goes wrong
+
+- **`SNAPSHOT` is an unknown command.** The camera is switched off in
+  `CONFIG camera`, or there is no card in the slot: without a card the camera
+  does not start.
+- **It says the card is too full.** The camera keeps the card's free space
+  above the floor in the settings by removing the oldest photos first. When it
+  still cannot make room, it refuses the picture rather than eat the space the
+  file areas, the forums and the backups use.
+- **It says you have reached your limit.** It also says when the next picture
+  is allowed.
+- **The picture is upside down or back to front.** Turn on Flip or Mirror.
+
+::: next
+[See the camera boards](/hardware#freenove-esp32-camera-board)
+:::

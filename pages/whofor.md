@@ -126,6 +126,27 @@ It is on the internet, and it is nothing like the web. No page loads, no
 cookies, no scripts, no account with anybody, no advertising, nothing between
 you and the machine. A socket and some characters.
 
+## A board with a camera
+
+Coming soon, [two boards with a camera on
+them](/hardware#freenove-esp32-camera-board) let a board look out of the
+window. A caller types `SNAPSHOT`, from a laptop or from a Commodore 64, and
+the board takes a photo of whatever it is pointed at, ready to download. (The
+Commodore can take the picture. Looking at it is a job for a PC.)
+
+- **Outdoors.** On a porch, in a shed window, beside a weather station:
+  callers dial in to see whether it is raining where the board is.
+- **Wildlife.** Point it at a feeder, a trail or a nest box and let callers
+  catch the visitors. Set it to take a picture every few minutes, and a
+  spring on a nest box becomes a timelapse.
+- **Motion.** A PIR motion sensor on a spare pin sees something move, and the
+  camera takes the picture by itself. That one comes later, with the plugin
+  for sensors.
+
+::: next
+[How the camera works](/camera)
+:::
+
 ## You are the king of everything on the board
 
 This is the part worth being plain about.
@@ -161,6 +182,8 @@ serves your house, your club room or your classroom and nothing else. Both are
 a real board and you can change your mind either way in a minute.
 
 The whole thing takes an afternoon, most of which is deciding what to call it.
+If you know the BBS software that runs on a PC, [what is different about this
+one](/different) fits on a page.
 
 ::: next
 [Build one](/build)
