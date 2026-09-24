@@ -18,8 +18,8 @@ the part that matters are dropped, and so are columns right of the widest
 row, so the drawing is only as big as what is on it.
 
 Copyright 2026 - Robert Mech
-License:      GNU General Public License v2 or later
-SPDX-License-Identifier: GPL-2.0-or-later
+License:      GNU General Public License v3 or later
+SPDX-License-Identifier: GPL-3.0-or-later
 ===========================================================================
 """
 import json

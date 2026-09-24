@@ -364,7 +364,7 @@ card](/sdcard) and [lights](/lights) as well.
 
 The source is at
 [github.com/rwmech/unleashed_BBS](https://github.com/rwmech/unleashed_BBS),
-GPL v2 or later. Anything this page installs, you can build yourself and check.
+GPL v3 or later. Anything this page installs, you can build yourself and check.
 
 ::: installer-terms
 :::

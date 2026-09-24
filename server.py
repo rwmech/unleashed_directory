@@ -34,12 +34,12 @@ Design:       Standard library only, SQLite for storage, one file. A
               are free to mint. Addresses are the scarce thing.
 
 Copyright 2026 - Robert Mech
-License:      GNU General Public License v2 or later
-SPDX-License-Identifier: GPL-2.0-or-later
+License:      GNU General Public License v3 or later
+SPDX-License-Identifier: GPL-3.0-or-later
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
-Free Software Foundation; either version 2 of the License, or (at your
+Free Software Foundation; either version 3 of the License, or (at your
 option) any later version.
 
 This program is distributed in the hope that it will be useful, but
@@ -48,7 +48,7 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
 Public License for more details.
 
 You should have received a copy of the GNU General Public License along
-with this program; if not, see <https://www.gnu.org/licenses/>.
+with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
@@ -601,8 +601,8 @@ def foot_html(role, extra=""):
                 + (f'<span>Site version {SITE_VERSION}</span>'
                    if SITE_VERSION else "")
                 + "<span>&copy; 2026 Robert Mech</span>"
-                '<span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
-                "GNU GPL v2 or later</a></span></p>")
+                '<span><a href="https://www.gnu.org/licenses/gpl-3.0.html">'
+                "GNU GPL v3 or later</a></span></p>")
     return "<br><br>".join(parts) + colophon
 
 
@@ -4494,7 +4494,7 @@ FREEDOMS = (
     ("cloud", "No cloud", "nobody else's server"),
     ("browser", "No browser", "a C64 can call in"),
     ("chip", "Real hardware", "a chip on your shelf"),
-    ("gpl", "GPL v2 or later", "free software"),
+    ("gpl", "GPL v3 or later", "free software"),
     ("lan", "No internet needed", "a local network is enough"),
     ("rules", "You write the rules", "and you are the appeal"),
     ("list", "Run your own directory", "this one is free software"),
@@ -8311,7 +8311,7 @@ ART = {"firstcall": FIRSTCALL_ART,
                  'alt="The \u00b5nleashed wordmark, with the words Electronic '
                  'freedom and No web. No cloud. No browser., beside a terminal '
                  'panel reading CONNECT 2400, NODE 1 OF 10, TELNET PETSCII ANSI '
-                 'and ESP32 GPL v2+.">')}
+                 'and ESP32 GPL v3+.">')}
 ART.update({key: shot_svg(name, alt) for key, (name, alt) in SHOTS.items()})
 
 HOW = HOW.replace("@ART_CSS@", ART_CSS).replace("@SKULL@", SKULL)
@@ -8678,7 +8678,7 @@ more on <a href="/whofor">who it's for</a>.</p>
 
 <p><a href="https://github.com/rwmech/unleashed_BBS">The source, the documentation and
 the build instructions are here.</a> It is free software under the GNU General Public
-License, version 2 or later.</p>
+License, version 3 or later.</p>
 
 <h2>How it was built</h2>
 

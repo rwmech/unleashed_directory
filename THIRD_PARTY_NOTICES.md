@@ -8,8 +8,8 @@
                the answer is close to "nothing".
 
  Copyright 2026 - Robert Mech
- License:      GNU General Public License v2 or later
- SPDX-License-Identifier: GPL-2.0-or-later
+ License:      GNU General Public License v3 or later
+ SPDX-License-Identifier: GPL-3.0-or-later
  ===========================================================================
 -->
 
@@ -17,7 +17,7 @@
 
 ## What is in this repository
 
-Its own code, and one other program's browser build, which is described in the next section. There is no `node_modules`, no lockfile and no build step. Every other file here was written for this project and is under the GNU General Public License v2 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
+Its own code, and one other program's browser build, which is described in the next section. There is no `node_modules`, no lockfile and no build step. Every other file here was written for this project and is under the GNU General Public License v3 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
 
 That is a deliberate choice rather than an accident of scale. A directory that anybody can run has to be a directory anybody can read, and a dependency tree is the fastest way to make a small program unauditable.
 
@@ -33,7 +33,7 @@ What it costs, exactly:
 - **Only when there is something to install.** With `firmware/` empty the page explains itself instead of offering a button, and no script tag is emitted at all.
 - **From this machine.** It used to load from unpkg, pinned to an exact version. Serving it from here means nobody else learns that somebody opened the installer, and nothing it runs can change between one reader and the next unless this repository changes.
 
-The exception is `firmware/`, when it has anything in it. Those are compiled images of [µnleashed BBS](https://github.com/rwmech/unleashed_BBS), also GPL v2 or later, and each release directory carries its own `THIRD_PARTY_NOTICES.md` describing the code compiled into it, ESP-IDF and its components among them. That file travels with the binaries rather than pointing at a moving target, and the installer page links it beside each version.
+The exception is `firmware/`, when it has anything in it. Those are compiled images of [µnleashed BBS](https://github.com/rwmech/unleashed_BBS), also GPL v3 or later (firmware before 1.1.0 was v2 or later), and each release directory carries its own `THIRD_PARTY_NOTICES.md` describing the code compiled into it, ESP-IDF and its components among them. That file travels with the binaries rather than pointing at a moving target, and the installer page links it beside each version.
 
 ## One thing loaded from somewhere else
 

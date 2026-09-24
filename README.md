@@ -8,8 +8,8 @@
  Purpose:      What this is, how to run it, and how to run your own.
 
  Copyright 2026 - Robert Mech
- License:      GNU General Public License v2 or later
- SPDX-License-Identifier: GPL-2.0-or-later
+ License:      GNU General Public License v3 or later
+ SPDX-License-Identifier: GPL-3.0-or-later
  ===========================================================================
 -->
 
@@ -185,7 +185,7 @@ SELECT * FROM reports ORDER BY at DESC;
 
 ## Licence
 
-GNU General Public License v2 or later, the same terms as
+GNU General Public License v3 or later, the same terms as
 [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. Every file
 carries an SPDX line. See [LICENSE](LICENSE).
 

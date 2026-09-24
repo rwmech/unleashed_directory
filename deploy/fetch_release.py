@@ -63,8 +63,8 @@ Exit codes:   0 installed, or already had it
               1 something was not installed, and here is why
 
 Copyright 2026 - Robert Mech
-License:      GNU General Public License v2 or later
-SPDX-License-Identifier: GPL-2.0-or-later
+License:      GNU General Public License v3 or later
+SPDX-License-Identifier: GPL-3.0-or-later
 ===========================================================================
 """
 import argparse

@@ -116,7 +116,7 @@ bxl, byt, bw, bh, k = 1290, 70, 250, 180, 12
 p.append(f'<path d="M{bxl + k},{byt} H{bxl + bw} V{byt + bh - k} L{bxl + bw - k},{byt + bh} '
          f'H{bxl} V{byt + k} Z" fill="{BG}" fill-opacity="0.85" stroke="{DIAL}" stroke-width="1.4"/>')
 lines = [("CONNECT 2400", LIVE), ("NODE 1 OF 10", INK), ("TELNET PETSCII ANSI", DIAL),
-         ("ESP32  GPL v2+", WARM), ("[1] Main:", STRUCT)]
+         ("ESP32  GPL v3+", WARM), ("[1] Main:", STRUCT)]
 for i, (s, col) in enumerate(lines):
     p.append(text(bxl + 18, byt + 32 + i * 31, s, col, 18, spacing=1))
 # the block cursor after the prompt, where the next key would land

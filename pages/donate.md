@@ -45,7 +45,7 @@ software written this year can say.
 
 ## What stays free
 
-- The firmware, under the GPL, version 2 or later.
+- The firmware, under the GPL, version 3 or later.
 - [The installer](/install) that puts it on a board from your browser.
 - This directory, and a listing on it.
 - Every page on this site.

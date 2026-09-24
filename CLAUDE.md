@@ -2,7 +2,7 @@
 
 The directory server for µnleashed BBS. Boards post a small JSON heartbeat,
 this keeps a list of the ones that are up, and serves three faces from one
-process. GPL v2 or later, same as the BBS.
+process. GPL v3 or later, same as the BBS (v2 or later until 2026-09-24).
 
 Read PROTOCOL.md for the wire format, INSTALL.md for a fresh droplet,
 README.md for what it is. This file is the process and the design history.
@@ -523,7 +523,7 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - **The footer** is two rows, Get started and Reference, then the colophon:
   the site version from the newest `## X.Y.Z` in CHANGELOG.md, read once at
   start (so CHANGELOG.md is installed beside server.py), the copyright and
-  "GNU GPL v2 or later", linked, each piece a nowrap span so a phone wraps
+  "GNU GPL v3 or later", linked, each piece a nowrap span so a phone wraps
   between them. Bumping the site version is writing the changelog entry.
 - **Canonical links** are filled in at reply time (`Handler.canonical`), not
   by each page builder, because a cached page is served on any face; `/about`

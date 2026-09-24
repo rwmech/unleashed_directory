@@ -7,8 +7,8 @@
  Purpose:      Where firmware images live, and how to cut a release.
 
  Copyright 2026 - Robert Mech
- License:      GNU General Public License v2 or later
- SPDX-License-Identifier: GPL-2.0-or-later
+ License:      GNU General Public License v3 or later
+ SPDX-License-Identifier: GPL-3.0-or-later
  ===========================================================================
 -->
 
@@ -224,11 +224,11 @@ words. Two consequences worth knowing:
 Steps 1 to 6 happen in the firmware repository. The directory's part is to
 fetch it, which `update.sh` does.
 
-1. **Check the source for that version is public.** The binaries are GPL v2 or
-   later, so anybody who receives one is owed the corresponding source. The
-   firmware repository is private today, so publishing a binary before its
-   tagged source is public is a licence violation and not merely untidy. This
-   step is a gate, not a formality.
+1. **Check the source for that version is public.** The binaries are GPL v3 or
+   later (v2 or later before firmware 1.1.0), so anybody who receives one is
+   owed the corresponding source. The firmware repository is private today,
+   so publishing a binary before its tagged source is public is a licence
+   violation and not merely untidy. This step is a gate, not a formality.
 
 2. **Build from a fresh clone, never from a working tree.** A fresh clone has
    no private credentials in it; a working tree almost certainly has.

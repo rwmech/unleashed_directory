@@ -15,8 +15,8 @@ Purpose:      Starts a directory on a scratch database and walks it through
 Usage:        python3 selftest.py
 
 Copyright 2026 - Robert Mech
-License:      GNU General Public License v2 or later
-SPDX-License-Identifier: GPL-2.0-or-later
+License:      GNU General Public License v3 or later
+SPDX-License-Identifier: GPL-3.0-or-later
 ===========================================================================
 """
 
@@ -501,7 +501,7 @@ def badge_checks(S, db):
           and all(e.get("sub") in table["interest_groups"] for e in entries
                   if e["group"] == "interests")
           and table.get("copyright") == "Copyright 2026 - Robert Mech"
-          and table.get("license") == "GPL-2.0-or-later")
+          and table.get("license") == "GPL-3.0-or-later")
     check("and the server's tables are exactly what the file says, nothing left out",
           S.BADGE_CODES_OK
           and list(S.SUPPORT_CODES) == [e["code"] for e in entries if e["group"] == "support"]
@@ -3580,8 +3580,8 @@ def main():
         check("and the colophon: version, copyright, and the licence linked",
               all(f'<span>Site version {newest}</span>'
                   '<span>&copy; 2026 Robert Mech</span>' in f
-                  and '<span><a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html">'
-                      "GNU GPL v2 or later</a></span></p>" in f
+                  and '<span><a href="https://www.gnu.org/licenses/gpl-3.0.html">'
+                      "GNU GPL v3 or later</a></span></p>" in f
                   and f.rindex('class="colophon"') > f.rindex('class="lbl"')
                   for f in feet))
         check("each piece of it kept whole, so a phone wraps between them",
@@ -4138,7 +4138,7 @@ def main():
               and "visibility" not in resting and "visibility" not in moving)
         check("the board's own welcome line and licence are among them",
               all(w in labels for w in ("No web", "No cloud", "No browser",
-                                        "Real hardware", "GPL v2 or later")))
+                                        "Real hardware", "GPL v3 or later")))
         # The board list carries the badge script since 0.22.0; it never
         # touches the panel, and no other face carries a script at all.
         check("and nothing on any face runs a script to move them",

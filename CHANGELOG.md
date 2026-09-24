@@ -7,12 +7,27 @@
  Purpose:      What changed, newest first.
 
  Copyright 2026 - Robert Mech
- License:      GNU General Public License v2 or later
- SPDX-License-Identifier: GPL-2.0-or-later
+ License:      GNU General Public License v3 or later
+ SPDX-License-Identifier: GPL-3.0-or-later
  ===========================================================================
 -->
 
 # Changelog
+
+## 1.2.3, 2026-09-24
+
+The site and the firmware are GPL v3 or later.
+
+- **GPL v3 or later** (Rob, 2026-09-24: "make this v3 now across the
+  board ... no benefit to keep gpl v2+"). The directory relicenses with the
+  firmware (from 1.1.0), because the firmware links Apache-2.0 code, and
+  Apache-2.0 combines cleanly with GPLv3 and not with GPLv2. `LICENSE` is
+  the GPLv3 text; every SPDX line, file notice and `badges.json` say
+  GPL-3.0-or-later; the footer reads "GNU GPL v3 or later" and links the
+  GPLv3; the freedoms panel, the cover (SVG and both PNGs, from
+  `brand/make_cover.py`) and /build, /install, /donate and /about say v3.
+  The released 0.23.0 images under `firmware/` keep their notices as
+  shipped.
 
 ## 1.2.2, 2026-09-24
 

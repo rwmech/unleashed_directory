@@ -18,8 +18,8 @@
 # carves that one path out and sends everything else upstairs.
 #
 # Copyright 2026 - Robert Mech
-# License:     GNU General Public License v2 or later
-# SPDX-License-Identifier: GPL-2.0-or-later
+# License:     GNU General Public License v3 or later
+# SPDX-License-Identifier: GPL-3.0-or-later
 # ===========================================================================
 #
 # THIS IS A REFERENCE COPY. deploy/setup.sh writes the live one at

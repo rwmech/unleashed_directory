@@ -7,8 +7,8 @@ Purpose:      A small ANSI screen model for turning a captured session into
               site art. See shots/capture/webshots.sh.
 
 Copyright 2026 - Robert Mech
-License:      GNU General Public License v2 or later
-SPDX-License-Identifier: GPL-2.0-or-later
+License:      GNU General Public License v3 or later
+SPDX-License-Identifier: GPL-3.0-or-later
 ===========================================================================
 """
 """A small ANSI screen model that keeps colour and reverse video per cell,

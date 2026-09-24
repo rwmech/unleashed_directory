@@ -1,7 +1,7 @@
 # ===========================================================================
 #  µnleashed BBS directory: service unit
 #  Copyright 2026 - Robert Mech
-#  SPDX-License-Identifier: GPL-2.0-or-later
+#  SPDX-License-Identifier: GPL-3.0-or-later
 # ===========================================================================
 [Unit]
 Description=unleashed BBS directory

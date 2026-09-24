@@ -1,7 +1,7 @@
 {
  "about": "The support and interest badges this directory shows, one entry per badge, in no particular order (the site sorts them by name). server.py reads this file at start, and a separate program, such as the firmware's CONFIG pick-list, can read it too.",
  "copyright": "Copyright 2026 - Robert Mech",
- "license": "GPL-2.0-or-later",
+ "license": "GPL-3.0-or-later",
  "format": 1,
  "rules": [
   "code: what a board sends and what the directory stores and publishes, lower case, a to z and 0 to 9, six characters at most, unique across both groups. Shown in upper case on the site.",

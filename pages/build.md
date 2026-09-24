@@ -126,7 +126,7 @@ page](/how).
 ## The source
 
 Everything is at [github.com/rwmech/unleashed_BBS](https://github.com/rwmech/unleashed_BBS),
-GPL v2 or later. The directory server you are reading is at
+GPL v3 or later. The directory server you are reading is at
 [github.com/rwmech/unleashed_directory](https://github.com/rwmech/unleashed_directory)
 under the same licence, so you can run the whole stack yourself and never speak
 to us again.
