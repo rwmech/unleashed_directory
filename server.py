@@ -7776,11 +7776,11 @@ LIGHTS_STRIP = _lights_strip()
 # them here and in the list together.
 # ----------------------------------------------------------------------
 SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work
-    (59, "bare ESP32", ("functional,", "lowest cost"), "about $10", "about 5 min",
+    (59, "bare ESP32", ("functional,", "lowest cost"), "about $5", "about 5 min",
      "no wiring"),
-    (177, "ESP32 + SD", ("economical", "and usable"), "about $15", "about 30 min",
+    (177, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
      "wiring the card"),
-    (295, "Waveshare S3", ("most", "expandable"), "about $15", "about 10 min",
+    (295, "Waveshare S3", ("most", "expandable"), "about $20", "about 10 min",
      "BOOT and RESET"),
 )
 

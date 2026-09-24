@@ -1,4 +1,4 @@
-<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board goes on this page only once a build has run on it. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The spectrum's prices are about, from listings on 2026-09-24: a single WROOM dev board $9.97 (store.rokland.com), the Waveshare $12.99 on waveshare.com and a little more elsewhere, an SD module about $2 in a five pack. Re-check them when they look wrong. -->
+<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board goes on this page only once a build has run on it. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. -->
 # Tested boards
 
 The boards this firmware has actually run on, each with its own image on [the
@@ -12,13 +12,13 @@ hardware-spectrum
 Three ways to build one. Each is a choice, not a step on a ladder:
 
 - **[A bare ESP32 dev board](#esp32-dev-board)**: functional, and the lowest
-  cost. About $10, and about five minutes from the browser. Chat, mail,
+  cost. About $5, and about five minutes from the browser. Chat, mail,
   accounts and a directory listing; file areas and forums need a card.
 - **[The same board with an SD card](/sdcard)**: economical and usable. About
-  $15 with the card module and jumper wires, and about half an hour, most of
+  $8 with the card module and jumper wires, and about half an hour, most of
   it wiring the card.
 - **[The Waveshare S3](#waveshare-esp32-s3-lcd-1-47)**: the most expandable.
-  About $15, a screen, a card slot and a drive light on the board, and no
+  About $20, a screen, a card slot and a drive light on the board, and no
   wiring. It does need BOOT and RESET pressed by hand to install, which is
   why it takes a little longer than the bare board.
 

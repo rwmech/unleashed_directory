@@ -3999,9 +3999,9 @@ def main():
               and all(f">{s[1]}</text>" in spec and f">{s[3]}</text>" in spec
                       and f">{s[4]}</text>" in spec for s in S.SPECTRUM_STOPS))
         check("and says it in words too, every figure an estimate",
-              "functional, and the lowest cost. About $10" in flat_h
-              and "economical and usable. About $15" in flat_h
-              and "the most expandable. About $15" in flat_h
+              "functional, and the lowest cost. About $5" in flat_h
+              and "economical and usable. About $8" in flat_h
+              and "the most expandable. About $20" in flat_h
               and all(s[3].startswith("about ") and s[4].startswith("about ")
                       for s in S.SPECTRUM_STOPS))
         s3sec = hwp.split('id="waveshare-esp32-s3-lcd-1-47"')[1].split('id="other-chips"')[0]
