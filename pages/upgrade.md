@@ -13,10 +13,14 @@ It does not hold the mail or the information pages. The forums and the file area
 
 ## Update
 
-1. **Plug the board in** with a cable that carries data, open [the installer](/install) in Chrome or Edge, choose your board in the card, press **Update my board** and pick the port. On the Waveshare S3, hold BOOT and tap RESET before pressing the button, and press RESET when it has finished: [On the Waveshare S3](/install#on-the-waveshare-s3) says why.
+1. **Plug the board in** with a cable that carries data, open [the installer](/install) in Chrome or Edge, choose your board in the card, press **Update my board** and pick the port. On the Waveshare S3, hold BOOT and tap RESET before pressing the button, and press RESET when it has finished. The installer page says [why the S3 needs that](/install#on-the-waveshare-s3).
 2. **Press Update unleashed BBS, then Install.** A board running 0.22.1 or later usually tells the installer its name and version, and the page shows both above the button. It may not, if the board is still starting up when the page asks, and that makes no difference here. It does not ask about erasing and it does not erase.
 3. **Writing** takes about two minutes. Keep the tab in view while it works.
 4. **The board starts on the new version**, on the Wi-Fi network it already knew.
+
+::: next
+[Go to the installer](/install)
+:::
 
 If the board already runs the version on offer, there is no update to press, and nothing **Update my board** offers can erase it.
 
@@ -52,4 +56,4 @@ Versions before 0.22.1 do not tell the installer who they are, so the page never
 
 - **The board is not back on your network.** A board built from source with its network in `secrets.h` has the same gap as an old one: the release does not carry it. Plug the board in, open [the installer](/install), pick the port and use **Connect to Wi-Fi** or **Change Wi-Fi**, as in [Changing the Wi-Fi later](/install#changing-the-wi-fi-later). Nothing else on the board changes.
 - **The update stopped part way**, a cable pulled or the tab closed. Run it again. The chip's own loader is in read-only memory and nothing the page writes can reach it, so a board can always be written again over USB. **Update my board** works whether or not the page still recognises the board, and never erases.
-- **Last of all**, **Install on a new board** with **Erase everything first** ticked. That puts the chip back to nothing and takes the accounts with it; [the installer's own page](/install#if-something-goes-wrong-reset-rather-than-reflash) has what to try first.
+- **Last of all**, **Install on a new board** with **Erase everything first** ticked. That puts the chip back to nothing and takes the accounts with it, so try [the resets on the installer page](/install#if-something-goes-wrong-reset-rather-than-reflash) first.

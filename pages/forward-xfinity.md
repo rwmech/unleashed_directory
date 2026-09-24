@@ -68,8 +68,8 @@ Your own router then does the forwarding.
   using Allow Access on the device; turning it off is the other way out. Worth
   checking first when the rule is correct and the traffic is still dropped.
 - **Double NAT.** Your own router behind a gateway that is still routing gives
-  two layers. The gateway's Bridge Mode is the fix. [The main
-  page](/forward#two-things-that-will-stop-it-working) explains double NAT and CGNAT for any router.
+  two layers. The gateway's Bridge Mode is the fix. Double NAT and CGNAT on
+  any router are explained on [the main port forwarding page](/forward#two-things-that-will-stop-it-working).
 - **IPv4 only.** The app's port forwarding is IPv4. Xfinity carries both, so a
   board reachable over IPv6 may still be unreachable over IPv4.
 

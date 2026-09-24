@@ -15,6 +15,10 @@ transfers, keeps a dialling directory, and understands `telnet://` links so
 clicking an address on this site actually works. If you install one thing,
 install this.
 
+::: next
+[Get SyncTERM](https://syncterm.bbsdev.net/)
+:::
+
 On a phone,
 **[TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android)**
 on Android and
@@ -213,5 +217,5 @@ dollars. A real modem and a real phone line also still work, if you have both.
 
 It works out what it is talking to when you connect and draws itself to
 suit, so a C64 and a modern laptop can be in the same chat room and both see
-something that looks right to them. [Your first
-call](/firstcall#it-works-out-what-you-are) says how, and what it may ask.
+something that looks right to them. The first call page says [how, and what
+it may ask](/firstcall#it-works-out-what-you-are).

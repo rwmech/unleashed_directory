@@ -52,7 +52,7 @@ durations and equipment lists, what each session teaches, what a set
 of boards costs, and a straight answer about school networks and port
 forwarding. It treats designing and printing an enclosure as a real part of
 the project, because for a lot of classrooms that is the hook.
-[For teachers](/teachers).
+[Read the page for teachers](/teachers).
 
 ## Clubs and groups
 
@@ -98,8 +98,8 @@ It works on anything with a terminal, which in an office means every machine
 there is: a laptop, a workstation, a server you already ssh into,
 the ancient thing in the corner that runs the one piece of software nobody will
 replace. There is no rollout. A telnet client is a small free program, often
-already on the machine, and anybody who can open one can join.
-[Terminals](/terminals) lists them.
+already on the machine, and anybody who can open one can join. They are
+listed on [the terminals page](/terminals).
 
 - **Group discussion that stays in the building.** Put it on the local network
   and it never touches the internet at all.
@@ -137,8 +137,8 @@ moderation contractor. Not an appeals process somebody else designed. You.
 Host whatever topics you want: there is no provider, so there are no
 provider's terms. Nobody can deplatform you, it can run almost off grid on a
 local network and a battery, and it keeps answering after the company that
-made it is gone. [The freedoms on What this is](/about#freedoms-gained) go
-through each one.
+made it is gone. Each one is explained under [the freedoms on What this
+is](/about#freedoms-gained).
 
 **It is decentralized in the way that matters.** Every board is independent.
 There is no central server, no company, no network anybody owns. Boards do not
@@ -162,6 +162,9 @@ a real board and you can change your mind either way in a minute.
 
 The whole thing takes an afternoon, most of which is deciding what to call it.
 
-[Build one](/build) is the instructions. [Terminals](/terminals) is what to
-call it with. [Boards](/) is who is up right now, and yours could be on that
-list by the weekend.
+::: next
+[Build one](/build)
+:::
+
+Call it with [any terminal program](/terminals), and see [who is up right
+now](/). Yours could be on that list by the weekend.

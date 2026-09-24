@@ -1155,7 +1155,8 @@ CARD_BLOCKS = ("cards", "hero")
 # picture and facts on /hardware, the board's folder name on the first line
 # inside it, built from BOARDS and what is on disk (site 1.2.0).
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
-                             "installer-terms", "badges", "badgefind", "board")
+                             "installer-terms", "badges", "badgefind", "board",
+                             "next")
 
 
 # --------------------------------------------------------------------------
@@ -1196,6 +1197,8 @@ def md_block(kind, lines):
         return art_html(lines)
     if kind == "cta":
         return cta_html(lines)
+    if kind == "next":
+        return next_html(lines)
     if kind == "connected":
         return connected_html(lines)
     if kind == "badges":
@@ -1251,6 +1254,33 @@ def cta_html(lines):
     if note:
         out += '<p class="note">' + md_inline(" ".join(note)) + "</p>"
     return out + "</div>"
+
+
+# --------------------------------------------------------------------------
+# A section's next step, as a button (site 1.2.2, Rob: "Need clearer calls
+# to action. The blue blends in").
+#
+#     ::: next
+#     [Choose a board](/hardware)
+#     :::
+#
+# A body link is --dial on --ink, 1.02:1 apart in luminance, so a link that
+# IS the thing to do next read as one more word in the paragraph. This is
+# the cta's outlined button at a section's size: one or two lines that are a
+# link and nothing else, each a button, and nothing else in the block. One a
+# section at most, and only where the link is what a reader does next; a
+# reference stays a link in the sentence. Class "go", not "btn2", because
+# the page's one cta pair is counted by that name.
+# --------------------------------------------------------------------------
+def next_html(lines):
+    """The ::: next block: one or two outlined buttons, nothing else."""
+    links = []
+    for ln in (l.strip() for l in lines):
+        m = _MD_LONE_LINK.match(ln)
+        if m and len(links) < 2 and m.group(2).startswith(("/", "#", "https://")):
+            links.append(f'<a class="go" href="{html.escape(m.group(2), quote=True)}">'
+                         f"{md_inline(m.group(1))}</a>")
+    return '<p class="next">' + "".join(links) + "</p>" if links else ""
 
 
 # --------------------------------------------------------------------------
@@ -3177,7 +3207,7 @@ p.stat .n {{ color:var(--live); }}
         text-align:center; white-space:nowrap; }}
 .runcard a.fill {{ color:#04212c; background:var(--dial); border:1px solid #9fdfff; }}
 .runcard a.fill:hover {{ background:#a7e2ff; }}
-.runcard a.line {{ color:var(--dial); background:transparent; border:1px solid #35566b; }}
+.runcard a.line {{ color:var(--dial); background:transparent; border:1px solid #4a7a99; }}
 .runcard a.line:hover {{ border-color:var(--dial); }}
 .runcard a.fill:focus-visible, .runcard a.line:focus-visible {{
         outline:3px solid #ffd35c; outline-offset:2px; }}
@@ -3193,7 +3223,16 @@ p.stat .n {{ color:var(--live); }}
   .runcard .say {{ display:none; }}
   .runcard .acts {{ margin:0.5rem 0 0; }}
 }}
-a {{ color:var(--dial); }}
+/* A link in the text is --dial on --ink, and the two are 1.02:1 apart in
+   luminance: no blue that is also 4.5:1 on the page can be 3:1 from the
+   text, so colour alone can never tell a reader which words are links. The
+   underline does (WCAG 1.4.1), so it is a deliberate one, a little heavier
+   than the browser's hairline and clear of the descenders, and it thickens
+   under the pointer. A link that is the thing to do next is a button, a
+   ::: next block (site 1.2.2). */
+a {{ color:var(--dial); text-decoration-thickness:0.075em;
+        text-underline-offset:0.22em; }}
+a:hover {{ text-decoration-thickness:0.14em; }}
 table {{ border-collapse:collapse; }}
 /* Full width is right for the board list, which is the product, and wrong
    for every table inside an article: the two column "Right now" table on the
@@ -4305,11 +4344,25 @@ article .hwb dt {{ color:var(--dim); }}
         text-align:center; }}
 .cta a.btn {{ color:#04212c; background:var(--dial); border:1px solid #9fdfff; }}
 .cta a.btn:hover {{ background:#a7e2ff; }}
-.cta a.btn2 {{ color:var(--dial); background:transparent; border:1px solid #35566b; }}
+.cta a.btn2 {{ color:var(--dial); background:transparent; border:1px solid #4a7a99; }}
 .cta a.btn2:hover {{ border-color:var(--dial); }}
 .cta a.btn:focus-visible, .cta a.btn2:focus-visible {{ outline:3px solid #ffd35c;
         outline-offset:2px; }}
 .cta .note {{ color:var(--dim); margin:0.75rem 0 0; }}
+/* A section's next step (::: next, site 1.2.2): the cta's outlined button
+   at a section's size, on a faint wash of --dial so it reads as a thing to
+   press rather than a boxed word. The border is 4.2:1 on the page, over
+   the 3:1 a control's edge needs; #35566b, which the outlined buttons had
+   before, was 2.5:1. It stays its own width on a phone. */
+.next {{ display:flex; flex-wrap:wrap; gap:0.625rem 0.75rem; margin:0.875rem 0 1.25rem; }}
+article li + .next, article ul + .next, article ol + .next {{ margin-top:0.5rem; }}
+a.go {{ display:inline-block; font-size:0.875rem; line-height:1.4;
+        color:var(--dial); background:rgba(127, 212, 255, 0.07);
+        border:1px solid #4a7a99; border-radius:0.375rem;
+        padding:0.5rem 1rem; text-decoration:none; }}
+a.go::after {{ content:" →"; }}
+a.go:hover {{ border-color:var(--dial); background:rgba(127, 212, 255, 0.14); }}
+a.go:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 @media (max-width: 900px) {{
   .cta .acts {{ flex-direction:column; align-items:stretch; }}
   .cta a.btn, .cta a.btn2 {{ display:block; }}
@@ -6119,7 +6172,7 @@ def stat_line(boards, callers):
 # /install does, because only that one installs.
 RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
             '<h2 id="run-your-own">Run your own board</h2>'
-            '<p class="say">An ESP32, a USB cable, five minutes.</p>'
+            '<p class="say">An ESP32 board, a USB cable, five minutes.</p>'
             '<p class="acts"><a class="fill" href="/install">Web installer</a>'
             '<a class="line" href="/build#getting-it-running">Build from source</a>'
             "</p>"
@@ -6962,9 +7015,26 @@ svg.art .f-cs { fill:var(--name); }
 /* The lights diagrams on /lights: the data line is --live. */
 svg.art .s-dat { stroke:var(--live); }
 svg.art .f-dat { fill:var(--live); }
-/* The spectrum at the top of /hardware, as wide as the wiring diagrams. */
+/* The spectrum at the top of /hardware, as wide as the wiring diagrams.
+   Each column is a link (site 1.2.2): the whole column is the target, its
+   tick brightens and its name turns --dial under the pointer, and keyboard
+   focus draws the site's yellow ring round the column rather than the
+   browser's round a stray box. The lamp is the run card's: --dial, with a
+   glow. */
 svg.art.spectrum { width:100%; max-width:30rem; height:auto;
         margin:0.75rem auto 1rem; }
+svg.art.spectrum a { outline:none; cursor:pointer; }
+svg.art.spectrum .hit { fill:transparent; stroke:none; }
+svg.art.spectrum .tk { stroke-width:1.6; opacity:0.7; }
+svg.art.spectrum .nm { text-decoration:underline; }
+svg.art.spectrum a:hover .tk, svg.art.spectrum a:focus-visible .tk { opacity:1;
+        stroke-width:2.6; }
+svg.art.spectrum a:hover .nm, svg.art.spectrum a:focus-visible .nm { fill:var(--dial); }
+svg.art.spectrum a:hover .hit { fill:rgba(127, 212, 255, 0.05); }
+svg.art.spectrum a:focus-visible .hit { stroke:#ffd35c; stroke-width:1.5; }
+svg.art.spectrum .sdot { pointer-events:none; }
+svg.art.spectrum .dh { fill:var(--dial); opacity:0.22; }
+svg.art.spectrum .dc { fill:var(--dial); }
 
 /* The skull is drawn in the warning box's own amber, on its background,
    so it belongs to the box it sits in rather than to the page. */
@@ -7049,6 +7119,16 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
 
 @keyframes artgrow { 0% { transform:scaleX(0.04); } 70%, 100% { transform:scaleX(1); } }
 @keyframes arttimer { from { stroke-dashoffset:30; } to { stroke-dashoffset:0; } }
+/* The spectrum on /hardware (site 1.2.2). The lamp's two ends are the
+   first and last stops, measured from the middle one it rests on. */
+@keyframes specdraw { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+@keyframes specgrow { from { transform:scaleY(0); } to { transform:scaleY(1); } }
+@keyframes specrise { from { opacity:0; transform:translateY(5px); }
+                      to { opacity:1; transform:translateY(0px); } }
+@keyframes specin { from { opacity:0; } to { opacity:1; } }
+@keyframes specgo { from { transform:translateX(-118px); }
+                    to { transform:translateX(126px); } }
+@keyframes specair { from { opacity:1; } to { opacity:0.5; } }
 
 @media (prefers-reduced-motion: no-preference) {
   /* /install: a progress bar filling, storage being made, the Wi-Fi timer */
@@ -7108,6 +7188,23 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
   svg.art.lights .glow { animation:artpulse 2.4s ease-in-out infinite; }
   svg.art.lights .px2 { animation:artpulse 0.9s ease-in-out infinite; }
   svg.art.lights .px3 { animation:artpulse 1.3s ease-in-out 0.4s infinite backwards; }
+  /* the spectrum: the line draws, each stop grows out of it in turn, and
+     a lamp goes along it and back, 7s the round trip */
+  svg.art.spectrum .sl { transform-box:fill-box; transform-origin:left center;
+        animation:specdraw 0.8s ease-out both; }
+  svg.art.spectrum .tk { transform-box:fill-box; transform-origin:center;
+        animation:specgrow 0.35s ease-out 0.8s both; }
+  svg.art.spectrum .lab { animation:specrise 0.45s ease-out 0.9s both; }
+  svg.art.spectrum .s1 .tk { animation-delay:1.05s; }
+  svg.art.spectrum .s1 .lab { animation-delay:1.15s; }
+  svg.art.spectrum .s2 .tk { animation-delay:1.3s; }
+  svg.art.spectrum .s2 .lab { animation-delay:1.4s; }
+  svg.art.spectrum .sdot { animation:specin 0.6s ease-out 1.9s both,
+        specgo 3.5s ease-in-out -1.75s infinite alternate; }
+  svg.art.spectrum .arr { animation:specair 2.4s ease-in-out 2s infinite alternate backwards; }
+  svg.art.spectrum .up { transition:transform 0.2s ease-out; }
+  svg.art.spectrum a:hover .up,
+  svg.art.spectrum a:focus-visible .up { transform:translateY(-2px); }
 }
 </style>"""
 
@@ -7769,42 +7866,75 @@ LIGHTS_STRIP = _lights_strip()
 # ruler with a tick under each stop and the estimates under the ticks.
 #
 # 354 units wide, so a 390 phone draws it at about 1:1 and the smallest
-# type lands near 9px, like the other drawings. aria-hidden: the list
-# under it on the page says the same things in words, with the links.
-# The figures are "about" on purpose and come from listings on
-# 2026-09-24 (see the comment at the top of pages/hardware.md); change
-# them here and in the list together.
+# type lands near 9px, like the other drawings. The figures are "about" on
+# purpose and come from listings on 2026-09-24 (see the comment at the top
+# of pages/hardware.md); change them here and in the list together.
+#
+# Since site 1.2.2 each stop is a link to its board (Rob: "how about some
+# animations here"), with an aria-label saying in words what the column
+# shows, so the drawing is a group of three links to a screen reader and
+# not decoration. The overview names the class, "ESP32-S3 board"; the
+# section it links to names the exact board, because that image runs on
+# that board and no other (Rob: "dont reference 'waveshare' but an S3
+# board ... which we can go into").
+#
+# The motion, all of it in ART_CSS's no-preference block: the line draws
+# left to right, each stop's tick grows out of it and its three figures
+# rise in, a quarter second apart, and then a lamp like the run card's
+# goes slowly along the line and back. At rest, and with reduced motion,
+# everything is drawn and the lamp sits on the middle stop. Transforms and
+# opacity only, inside a fixed viewBox, so nothing on the page moves.
 # ----------------------------------------------------------------------
-SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work
-    (59, "bare ESP32", ("functional,", "lowest cost"), "about $5", "about 5 min",
-     "no wiring"),
-    (177, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
-     "wiring the card"),
-    (295, "Waveshare S3", ("most", "expandable"), "about $20", "about 10 min",
-     "BOOT and RESET"),
+SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work,
+                    # where it links, what a screen reader is told
+    (52, "bare ESP32", ("functional,", "lowest cost"), "about $5", "about 5 min",
+     "no wiring", "#esp32-dev-board",
+     "A bare ESP32 dev board: functional, lowest cost. About $5, about 5 "
+     "minutes, no wiring."),
+    (170, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
+     "wiring the card", "/sdcard",
+     "An ESP32 dev board with an SD card: economical and usable. About $8, "
+     "about 30 minutes, most of it wiring the card."),
+    (296, "ESP32-S3 board", ("advanced", "capabilities"), "about $20",
+     "about 10 min", "BOOT and RESET", "#waveshare-esp32-s3-lcd-1-47",
+     "An ESP32-S3 board: advanced capabilities. About $20, about 10 minutes, "
+     "BOOT and RESET pressed by hand."),
 )
+SPECTRUM_HITS = ((-2, 112), (112, 120), (234, 122))  # x and width of each column
+SPECTRUM_PARK = 170                                  # the lamp at rest
 
 
 def _spectrum():
     # Type a size up from the other drawings: this one is all words, and at
     # 390 the 9.5 unit captions read as small print (rendered 2026-09-24).
     out = ['<svg class="art spectrum" viewBox="-4 -2 362 144" '
-           'preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">']
-    for x1, x2 in ((99, 138), (216, 249)):
-        out.append(f'<path class="o" d="M{x1} 18 H{x2} M{x1 + 5} 14 L{x1} 18 L{x1 + 5} 22 '
-                   f'M{x2 - 5} 14 L{x2} 18 L{x2 - 5} 22"/>')
-    out.append('<path class="f" d="M12 79 H342"/>')
-    for x, name, (l1, l2), cost, time, work in SPECTRUM_STOPS:
+           'preserveAspectRatio="xMidYMid meet" role="group" '
+           'aria-label="Three ways to build a board">']
+    for x1, x2 in ((93, 128), (210, 240)):
+        out.append(f'<path class="o arr" d="M{x1} 18 H{x2} M{x1 + 5} 14 L{x1} 18 '
+                   f'L{x1 + 5} 22 M{x2 - 5} 14 L{x2} 18 L{x2 - 5} 22"/>')
+    out.append('<path class="f sl" d="M12 79 H342"/>')
+    for i, (stop, (hx, hw)) in enumerate(zip(SPECTRUM_STOPS, SPECTRUM_HITS)):
+        x, name, (l1, l2), cost, time, work, href, label = stop
         out.append(
-            f'<text class="ink" x="{x}" y="22" font-size="12" text-anchor="middle">{name}</text>'
+            f'<a class="stp s{i}" href="{href}" aria-label="{html.escape(label, quote=True)}">'
+            f'<rect class="hit" x="{hx}" y="0" width="{hw}" height="140" rx="4"/>'
+            f'<path class="o tk" d="M{x} 73 V85"/>'
+            '<g class="up">'
+            f'<text class="ink nm" x="{x}" y="22" font-size="12" '
+            f'text-anchor="middle">{name}</text>'
             f'<text x="{x}" y="44" font-size="10.5" text-anchor="middle">{l1}</text>'
             f'<text x="{x}" y="57" font-size="10.5" text-anchor="middle">{l2}</text>'
-            f'<path class="o" d="M{x} 73 V85"/>'
+            '<g class="lab">'
             f'<text class="live" x="{x}" y="104" font-size="10.5" '
             f'text-anchor="middle">{cost}</text>'
             f'<text x="{x}" y="118" font-size="10.5" text-anchor="middle">{time}</text>'
             f'<text class="warm" x="{x}" y="134" font-size="9.5" '
-            f'text-anchor="middle">{work}</text>')
+            f'text-anchor="middle">{work}</text>'
+            "</g></g></a>")
+    out.append(f'<g class="sdot" aria-hidden="true">'
+               f'<circle class="dh" cx="{SPECTRUM_PARK}" cy="79" r="5.5"/>'
+               f'<circle class="dc" cx="{SPECTRUM_PARK}" cy="79" r="2.6"/></g>')
     out.append("</svg>")
     return "".join(out)
 
@@ -8261,8 +8391,9 @@ afternoon.</p>
 
 @GALLERY@
 
-<p><a href="/build">Build one</a> if you want to. Everything needed is a dev
-board and a USB cable.</p>
+<p>If you want one of your own, everything needed is an ESP32 dev board and
+a USB cable.</p>
+<p class="next"><a class="go" href="/build">Build one</a></p>
 
 <h2>What replaced it</h2>
 
@@ -8541,9 +8672,9 @@ give it your Wi-Fi, forward one port on your router, and you are running a publi
 No hosting bill, no domain required, no provider to ask permission from, no account
 with anybody. A chip on a shelf and one line in your router.</p>
 
-<p><a href="/whofor">Who it's for</a> is the short version of why you might:
-a classroom, a club, an office, a shelf in your own house, and the fact that
-on your own board you answer to nobody.</p>
+<p>Why you might, in short: a classroom, a club, an office, a shelf in your
+own house, and the fact that on your own board you answer to nobody. There is
+more on <a href="/whofor">who it's for</a>.</p>
 
 <p><a href="https://github.com/rwmech/unleashed_BBS">The source, the documentation and
 the build instructions are here.</a> It is free software under the GNU General Public

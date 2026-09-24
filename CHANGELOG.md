@@ -14,6 +14,60 @@
 
 # Changelog
 
+## 1.2.2, 2026-09-24
+
+The things to do next look like things to do, the pages stop using a page's
+title as a sentence's subject, and the spectrum on /hardware moves. Wording
+and presentation only: no fact on the site changed.
+
+- **/build's What you need, rewritten** (Rob: "tested boards reads wierd
+  after 'a board' its a microcontroller"). Each item leads with the thing
+  itself: **A compatible ESP32 board**, **A USB data cable**, **2.4 GHz
+  Wi-Fi**, one short sentence each, and a **Choose a board** button under
+  them. The bare module's wiring moved to its own short section under
+  Getting it running, linked from the cable item; the mesh sentence went,
+  because /forward-mesh already says it makes no difference which unit the
+  board joins.
+- **A next step is a button** (Rob: "The blue blends in"). A new block,
+  `::: next`, draws one or two outlined buttons, at most one block a
+  section, and only where the link is what a reader does next:
+  - /build: Choose a board, Add an SD card and Add lights, Choose a
+    terminal, Read before you forward a port;
+  - /hardware: Go to the installer under the dev board, Steps for this
+    board under the S3;
+  - /install: Choose a terminal (After it boots), Set up your BBS (Then);
+  - /upgrade: Go to the installer, after the steps;
+  - /connected: Set up your BBS; /whofor: Build one; /terminals: Get
+    SyncTERM; the manifesto: Build one.
+  None of them says Install: only the button on /install does.
+- **Links are marked by their underline.** A body link is --dial on --ink,
+  1.02:1 apart in luminance, and no blue that is 4.5:1 on the page can be
+  3:1 from that text, so colour alone could never mark one (WCAG 1.4.1).
+  The underline is now deliberate: 0.075em, 0.22em below the text, 0.14em
+  under the pointer. The outlined buttons' edge went from #35566b, 2.5:1 on
+  the page, to #4a7a99, 4.2:1, over the 3:1 a control needs.
+- **No page title as a sentence's subject.** "Tested boards has the two",
+  "Getting listed has the rest", "Build one is the instructions", 28 of
+  them on 10 pages, now say what is there and link the words that name it.
+  The router pages call /forward "the main port forwarding page".
+- **The third stop is an ESP32-S3 board in every overview** (Rob: "dont
+  reference 'waveshare' but an S3 board ... which we can go into"): the
+  spectrum, /hardware's three ways, /build, the run card ("An ESP32 board,
+  a USB cable, five minutes"). Its line is "advanced capabilities". The
+  brand stays where it is a safety fact: the tested board's own section,
+  its warning and buy link, the installer's picker and the steps for it.
+- **The spectrum moves** (Rob: "how about some animations here"), CSS only:
+  the line draws in 0.8 s, each stop's tick grows out of it and its figures
+  rise in, a quarter second apart, and then a lamp like the run card's goes
+  along the line and back, 7 s the round trip; the arrows breathe. Each
+  stop is a link to its board, the whole column the target, its name
+  underlined, lifting and turning --dial under the pointer, with the yellow
+  focus ring round the column. With reduced motion nothing moves and the
+  lamp sits on the middle stop. Transforms and opacity only, in a fixed
+  viewBox.
+- The suite checks each of these, including a scan of every page for a
+  link title used as a subject, which finds all 28 in 1.2.1.
+
 ## 1.2.1, 2026-09-24
 
 The pages say each thing once, a lights page joins the SD card page, the

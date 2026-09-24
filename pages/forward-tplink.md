@@ -63,8 +63,9 @@ rules.
 
 ## When it does not work
 
-Double NAT and CGNAT stop any router's forward, and [the main
-page](/forward#two-things-that-will-stop-it-working) explains both. What TP-Link adds:
+Double NAT and CGNAT stop any router's forward, and both are
+explained on [the main port forwarding page](/forward#two-things-that-will-stop-it-working).
+What TP-Link adds:
 
 - **Where the WAN address is.** **Advanced > Status > Internet**, or on Deco
   **More > Internet Connection > IPv4**. A private one means another router

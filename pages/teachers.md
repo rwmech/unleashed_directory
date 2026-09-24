@@ -33,18 +33,18 @@ trust.
 ## What you need
 
 - **One ESP32 dev board per group.** A few dollars each. A board built on the
-  ESP32-WROOM-32E is the tested one, and [Tested boards](/hardware) says which
-  other ESP32s will and will not run it. Check before you order a class set.
+  ESP32-WROOM-32E is the tested one, and [the tested boards page](/hardware)
+  says which other ESP32s will and will not run it. Check before you order a
+  class set.
 - **A USB cable per group.** Often already in a drawer.
 - **One computer per group** to install the board from, in Chrome or Edge,
-  and a terminal program.
-  [The terminals page](/terminals) lists free ones for Windows, macOS, Linux,
-  Android and iOS. **If your machines are Chromebooks, read the next section
+  and a terminal program. There are free ones for Windows, macOS, Linux,
+  Android and iOS on [the terminals page](/terminals). **If your machines are Chromebooks, read the next section
   before you plan anything**, because a Chromebook needs a setting turned on
   first and it may not be yours to turn on.
 - **Optional, for file areas and forums:** a micro SD card module, about two
   dollars, a card of 32 GB or less, and jumper wires for four signal wires plus
-  power. [Adding an SD card](/sdcard) has the parts.
+  power. The parts are on [the SD card page](/sdcard).
 - **Optional, for the enclosure:** a 3D printer, or a print service, and a
   browser for TinkerCAD.
 
@@ -71,8 +71,8 @@ fine, and [the terminals page](/terminals) has the steps from there.
 
 If the row is missing or the button refuses, it is an administrator setting,
 and a small, specific request that can be granted to one group of users rather
-than to the whole school. [The terminals page](/terminals#if-linux-is-blocked)
-names the setting and the value to ask for.
+than to the whole school. The terminals page names [the setting and the value
+to ask for](/terminals#if-linux-is-blocked).
 
 If the answer is no, find that out early rather than improvising in front of
 a class. A board on the classroom network is still reachable from any Windows,
@@ -190,8 +190,8 @@ school, which is not what the unit is about.
 
 If a student wants a board reachable from the internet, that is a project for
 home, with a parent, and it is a decision for the adult who owns that
-connection. [What opening a port does](/forward) is written for exactly that
-conversation.
+connection. The page on [what opening a port does](/forward) is written for
+exactly that conversation.
 
 ## Things to say out loud
 
@@ -211,12 +211,14 @@ eleven upwards, covering the same ground in their own terms:
 
 ## Where to go next
 
-[The web installer](/install) puts the firmware on a board, and [Set up your
-BBS](/setup) covers configuration. [Adding an SD card](/sdcard) has the pin
-map, a wiring diagram and what the card's error messages mean, and [Build
-one](/build) is the road from source. [Terminal software](/terminals) covers what to
-call a board with, on every platform a classroom is likely to have, including
-Chromebooks and what to ask for when one is locked down.
+- **Putting the firmware on a board:** [the web installer](/install).
+- **Configuring it:** [the setup guide](/setup).
+- **The SD card:** [adding an SD card](/sdcard), with the pin map, a wiring
+  diagram and what the card's error messages mean.
+- **Building from source:** [the build page](/build).
+- **Calling a board:** [terminal software](/terminals), on every platform a
+  classroom is likely to have, including Chromebooks and what to ask for when
+  one is locked down.
 
 The firmware and the documentation are free software under the GPL, so a
 school can use all of it, change any of it, and keep the changes.

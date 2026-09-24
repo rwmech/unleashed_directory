@@ -53,7 +53,7 @@ That is normal and it is fixable. [This page explains it](/dialing).
 - A computer to set it up from.
 - A memory card, only if you want to share files or run forums.
 
-[Build one](/build) has the real steps.
+The real steps are on [the build page](/build).
 
 ?? How long does it take?
 

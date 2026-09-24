@@ -24,8 +24,8 @@ The software costs nothing to use. Making it costs something every month.
   doing a great deal of the development, the writing and the design: the
   firmware, the screens a Commodore 64 draws, and the page you are reading.
   The decisions are his. The tools are a monthly bill, and not a small one.
-  [What this is](/about) says the same, because it is better said than found
-  out.
+  The page about the project, [what this is](/about), says the same, because
+  it is better said than found out.
 - **This directory.** The server it runs on, around the clock whether anybody
   visits or not, and the three domain names it answers to.
 - **Hardware to test on.** ESP32 boards, SD cards, [LEDs](/lights), and
@@ -77,8 +77,8 @@ more than a coffee does.
 - **Run a board.** It is what the software is for. [Build one](/build), or
   [install from the browser](/install) in about five minutes.
 - **Put it on the list.** A directory is only as useful as what is on it.
-  [Getting listed](/how) is switching the board's announce plugin on and
-  waiting three hours. A board running Synchronet, Mystic or something you
+  Getting listed is switching the board's announce plugin on and waiting
+  three hours: [how to get listed](/how). A board running Synchronet, Mystic or something you
   wrote yourself is welcome too.
 - **Report what breaks.** Problems with the board's software go on [the
   firmware's issue tracker](https://github.com/rwmech/unleashed_BBS/issues),
@@ -88,8 +88,7 @@ more than a coffee does.
   fixing it.
 - **Tell somebody.** A friend who still has a Commodore 64 in the loft, a club
   that wants somewhere to be between meetings, a teacher who would like a
-  network the class can hold. [Who it's for](/whofor) is the page to send
-  them.
+  network the class can hold. Send them [who it's for](/whofor).
 
 ## About Buy Me a Coffee
 

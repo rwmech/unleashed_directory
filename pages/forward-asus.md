@@ -67,8 +67,9 @@ It makes no difference which unit the board is associated with.
 
 ## When it does not work
 
-Double NAT and CGNAT stop any router's forward, and [the main
-page](/forward#two-things-that-will-stop-it-working) explains both. What ASUS adds:
+Double NAT and CGNAT stop any router's forward, and both are
+explained on [the main port forwarding page](/forward#two-things-that-will-stop-it-working).
+What ASUS adds:
 
 - **Double NAT.** ASUS states that port forwarding needs a public WAN address
   and will not work properly behind another router. Put the ISP device into

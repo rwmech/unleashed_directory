@@ -16,7 +16,8 @@ serial port. Your Wi-Fi name and password, exactly
 > **Already running µnleashed?** Press **Update my board**, pick the port,
 > then **Update unleashed BBS** and **Install**. It never erases: your
 > accounts, settings, mail and forums stay, and your SD card is never
-> touched. [Upgrading a board](/upgrade), including one older than 0.22.1.
+> touched. More on [upgrading a board](/upgrade), including one older than
+> 0.22.1.
 
 ## What happens, in order
 
@@ -131,10 +132,10 @@ your computer that has to be right.
 - **One of the boards in the card.** An ESP32 dev board with 4 MB of flash:
   the reference board is a bare ESP32-WROOM-32E, and any dev board with that
   module and a USB socket works, for about the price of a sandwich. Or a
-  Waveshare ESP32-S3-LCD-1.47, the USB stick with a screen. [Tested
-  boards](/hardware) has a picture of each. A name with letters after it,
-  such as ESP32-C3 or ESP32-S2, is a different chip: [the same
-  page](/hardware#other-chips) says which ones can run a board.
+  Waveshare ESP32-S3-LCD-1.47, the USB stick with a screen. There is a
+  picture of each on [the tested boards page](/hardware). A name with letters
+  after it, such as ESP32-C3 or ESP32-S2, is a different chip, and the same
+  page says [which chips can run a board](/hardware#other-chips).
 - **Chrome or Edge, on a desktop or laptop.** Other browsers are below this
   list.
 - **A USB cable that carries data.** This is the most common reason the board
@@ -182,7 +183,7 @@ In the order worth trying.
    ones often use a [CH9102](https://www.wch-ic.com/downloads/CH343SER_ZIP.html).
    Linux usually has the driver built in; Windows and macOS sometimes need
    the download. The Waveshare S3 has no such chip and needs no driver:
-   hold BOOT and tap RESET first, as [On the Waveshare
+   hold BOOT and tap RESET first, as [the section on the Waveshare
    S3](#on-the-waveshare-s3) says.
 5. **On Linux, give yourself the serial port.** Your user has to be in the
    group that owns it, which on most systems is `dialout`. Run
@@ -210,8 +211,8 @@ cannot be undone, so read this before you press the button.
   partitions out on, which a first install wants.
 - **Leave it unticked if the board already runs this BBS** and you are moving
   it to a newer version. The firmware and the screens are rewritten and
-  nothing else: [Upgrading a
-  board](/upgrade#what-it-writes-and-what-it-leaves) lists what is kept.
+  nothing else, and the upgrade page lists [what is
+  kept](/upgrade#what-it-writes-and-what-it-leaves).
 
 **Update my board** never shows this question and never erases, whether the
 page recognises the board or not: it always does the second of those two
@@ -250,8 +251,12 @@ LED holds on for a second once it is listening; the Waveshare S3 has no
 activity LED, and shows the address to dial on its screen instead. In your
 router's list of connected devices it is called `unleashed`.
 
-[Call it with any telnet client](/terminals). If this is your first time,
-[what to expect on a first call](/firstcall) takes two minutes to read.
+Call it with any telnet client. If this is your first time, read [what to
+expect on a first call](/firstcall): it takes two minutes.
+
+::: next
+[Choose a terminal](/terminals)
+:::
 
 ## The sysop password
 
@@ -267,8 +272,7 @@ itself on this directory.
 You take the board over on your first call from your own network: sign up or
 log in, and the board asks for this password by itself, then for one of your
 own. Choose one you use nowhere else, because calls to a BBS are not encrypted.
-[First, become the sysop](/setup#first-become-the-sysop) shows each screen of
-it.
+The setup guide shows [each screen of it](/setup#first-become-the-sysop).
 
 > **Change it before anything else.** Do not [forward the port](/forward) and
 > do not turn on the directory listing until you have. "Only from your own
@@ -354,8 +358,8 @@ The LED, on a board that has one:
 
 The browser is the short path, not the only one. The same firmware is a
 `git clone` and a `pio run -t flashall` away, which is the route you want once
-you start changing things. [The build page](/build) has it, and [Tested
-boards](/hardware) has the hardware. A dev board can take [an SD
+you start changing things. The steps are on [the build page](/build), and the
+hardware on [the tested boards page](/hardware). A dev board can take [an SD
 card](/sdcard) and [lights](/lights) as well.
 
 The source is at
@@ -367,8 +371,12 @@ GPL v2 or later. Anything this page installs, you can build yourself and check.
 
 ## Then
 
-- [Set up your BBS](/setup): every setting, page by page, all of it from the
-  board with `CONFIG`.
-- For callers from outside your own network, [forward port 6400](/forward) on
-  your router, once the sysop password is yours. That page covers the common
-  routers step by step, and says what it opens before it says how.
+Every setting, page by page, all of it from the board with `CONFIG`.
+
+::: next
+[Set up your BBS](/setup)
+:::
+
+For callers from outside your own network, [forward port 6400](/forward) on
+your router, once the sysop password is yours. That page covers the common
+routers step by step, and says what it opens before it says how.

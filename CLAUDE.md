@@ -344,6 +344,21 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   navigation "Install from your browser", which landed on a page with a
   second button to press: two presses for one action. The suite fails on
   any cta button whose label contains Install.
+  **`::: next`** (1.2.2, Rob: "Need clearer calls to action. The blue
+  blends in") is a section's next step: one or two lines that are a link
+  and nothing else, each an outlined button (`a.go`), and nothing else in
+  the block. One a section at most, and only where the link is what a
+  reader does next; a reference stays a link in its sentence. It goes after
+  a list, never inside one. The suite fails on two in one section and on a
+  label with Install in it. Class `go` and not `btn2`, because the cta pair
+  is counted by those names.
+  **A page's title is never a sentence's subject** (1.2.2): "Tested boards
+  has the two" read as a typo to anybody who had not seen that page. Say
+  what is there and link the words that name it ("the tested boards page
+  has", "choose from [the two tested boards]"). The suite scans every page.
+  **A body link is marked by its underline** (1.2.2): --dial on --ink is
+  1.02:1, and no blue 4.5:1 on the page can be 3:1 from the text, so the
+  underline is the cue and must never be taken off an in-text link.
   **`::: installer-terms`** is ESP Web Tools' licence line, under "Doing it
   the other way", and nothing when there is no release.
   **`::: connected`** is the address box on /connected with its script; the

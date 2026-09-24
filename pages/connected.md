@@ -29,11 +29,14 @@ dial once it is on your network:
 
 A new board's sysop password is `unleashed`, and it only works from your own
 network. Change it on this first call: sign up or log in, and the board asks
-for it, then for a password of your own. [The install
-page](/install#the-sysop-password) says what that password can and cannot do
-until you have.
+for it, then for a password of your own. The install page says [what that
+password can and cannot do](/install#the-sysop-password) until you have.
 
 > **Change it before anything else.** Do not [forward the port](/forward) and
 > do not turn on the directory listing until the password is yours.
 
-[Set up your BBS](/setup) goes through every setting after that.
+Once the password is yours, the setup guide goes through every other setting.
+
+::: next
+[Set up your BBS](/setup)
+:::

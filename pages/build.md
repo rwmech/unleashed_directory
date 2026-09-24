@@ -16,26 +16,36 @@ dev board in a drawer, you already have most of it.
 
 ## What you need
 
-- **A board.** [Tested boards](/hardware) has the two this firmware runs on,
-  with pictures, what each costs, and which other ESP32 chips can and cannot
-  run it.
-- **A USB cable that carries data**, and that is the whole bill of materials
-  for a dev board. A bare module also wants 3V3, ground, EN pulled up, GPIO0
-  to ground while you flash it, and a USB-serial adapter on the console pins.
-- **Wi-Fi**, 2.4 GHz. The board scans every channel and joins the strongest
-  access point with your SSID, so a mesh needs no special handling.
+- **A compatible ESP32 board.** A small computer with Wi-Fi built in, on a
+  circuit board with a USB socket. Not every ESP32 can run the BBS, so choose
+  one of the two it has been tested on.
+- **A USB data cable.** Some cables only charge, and your computer never sees
+  the board through one of those. A bare ESP32 module, rather than a dev board, needs [a
+  little more](#on-a-bare-module).
+- **2.4 GHz Wi-Fi.** The board's radio cannot join a 5 GHz network, and a
+  router that offers both bands under one name is fine.
+
+::: next
+[Choose a board](/hardware)
+:::
 
 ## Adding to it
 
-The ESP32 dev board takes two additions, each with a page of its own:
+Two additions for the ESP32 dev board, both optional, each with a page of its
+own:
 
-- [An SD card](/sdcard), for file areas, forums and screens of your own: a
-  module that costs about two dollars, and four signal wires plus power.
-- [Lights](/lights), for a board in a case: a drive light that shows the
-  storage at work, and a strip of pixels that shows the callers.
+- **An SD card**, for file areas, forums and screens of your own: a module that
+  costs about two dollars, and four signal wires plus power.
+- **Lights**, for a board in a case: a drive light that shows the storage at
+  work, and a strip of pixels that shows the callers.
 
-The Waveshare S3 needs neither page: its card slot and its drive light are on
-the board.
+::: next
+[Add an SD card](/sdcard)
+[Add lights](/lights)
+:::
+
+The other tested board, an ESP32-S3 board with a screen, needs neither: its
+card slot and its drive light are built in.
 
 ## Getting it running
 
@@ -72,30 +82,46 @@ you know it is ready without dialling in to find out.
 On a normal home network the board also answers to `unleashed.local`, which is
 the `hostname` setting doing double duty as the DHCP and mDNS name.
 
+### On a bare module
+
+A bare ESP32 module, without a dev board around it, also wants 3V3, ground, EN
+pulled up, GPIO0 to ground while you flash it, and a USB-serial adapter on the
+console pins.
+
 ## Calling it
 
-[Any telnet client](/terminals). SyncTERM is the one worth installing if you
-have none. A Commodore 64 with a TeensyROM works too, and so does a VT220 on a
-serial adapter. [Your first call](/firstcall) says what happens when you
-connect.
+Any telnet client will do, and SyncTERM is the one worth installing if you have
+none. A Commodore 64 with a TeensyROM works too, and so does a VT220 on a
+serial adapter. Before you dial, read [what happens on your first
+call](/firstcall).
+
+::: next
+[Choose a terminal](/terminals)
+:::
 
 ## Keeping it
 
 A new version does not cost you the accounts, the settings or the mail:
 `pio run -t flashall` rewrites the firmware and the screens and cannot reach
-them. [Upgrading a board](/upgrade) says the same for the browser, and how to
-take a backup first.
+them. An update from the browser keeps them too, and [the upgrade
+page](/upgrade) says how, and how to take a backup first.
 
 ## Putting it on the internet
 
 Forwarding a port on your router is what lets callers from outside reach the
-board. Calls are not encrypted, so read [what opening a port does](/forward)
-first, and [the privacy page](/privacy) for what that means to your callers.
+board. It opens a door in your network, and calls are not encrypted. The port
+forwarding page starts with what that risks, and [the privacy page](/privacy)
+says what it means for your callers.
+
+::: next
+[Read before you forward a port](/forward)
+:::
 
 ## Listing it here
 
 Switch on the `announce` plugin with `CONFIG announce`, and the board is listed
-after three hours of heartbeats. [Getting listed](/how) has the rest.
+after three hours of heartbeats. The rest is on [the getting listed
+page](/how).
 
 ## The source
 

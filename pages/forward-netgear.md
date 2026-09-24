@@ -73,8 +73,9 @@ Triggering, use that.
 
 ## When it does not work
 
-Double NAT and CGNAT stop any router's forward, and [the main
-page](/forward#two-things-that-will-stop-it-working) explains both. What NETGEAR adds:
+Double NAT and CGNAT stop any router's forward, and both are
+explained on [the main port forwarding page](/forward#two-things-that-will-stop-it-working).
+What NETGEAR adds:
 
 - **Double NAT.** NETGEAR lists port forwarding among the things it breaks. If
   the NETGEAR sits behind an ISP gateway that is also routing, bridge the

@@ -19,8 +19,8 @@ setup-steps
 ## First, become the sysop
 
 A new board has one password, the sysop's, and it is `unleashed`. It only works
-from your own network, and only until you change it. The [install
-page](/install) says why. On your first call from your own network, the board
+from your own network, and only until you change it. The install page says
+[why](/install#the-sysop-password). On your first call from your own network, the board
 asks for it by itself, once you have signed up or logged in:
 
 ::: art
@@ -233,8 +233,8 @@ it, and so does `CONFIG wifi`, its name before firmware 1.1.0.
 - **Port** (`port`): The port callers dial. Used from the next restart. It
   cannot be the backup window's port. Takes 1 to 65535; as shipped, `6400`.
   If callers reach the board from the internet, the forward on your router has
-  to point at the new number too. [One board per port](/forward#one-board-per-port)
-  says when you would change it.
+  to point at the new number too. When you would change it is under [one
+  board per port](/forward#one-board-per-port).
 :::
 
 A change here is used from the **next restart**, never straight away, because
@@ -311,8 +311,8 @@ shot-config-area
 
 An upload is invisible to everybody but staff until somebody with Delete
 approves it. Saving an area writes all four levels down, so what you saw on the
-form is what the area runs under from then on. [The SD card
-page](/sdcard) has the wiring.
+form is what the area runs under from then on. The wiring is on [the SD card
+page](/sdcard).
 
 ### forums
 
@@ -411,8 +411,8 @@ are into, as badges under the board's name: the codes on [the badges
 page](/badges), separated by commas, in any case.
 :::
 
-[Getting listed](/how) has the rest, and [the house rules](/rules) are four
-lines.
+The rest is on [the getting listed page](/how), and [the house
+rules](/rules) are four lines.
 
 ### sd
 
@@ -432,16 +432,16 @@ start and then costs nothing.
 
 The card holds file areas, the forums and your own screens. The accounts, the
 settings and the caller log stay on the board, so a card that fails loses none
-of them. On the ESP32 dev board, [Adding an SD card](/sdcard) has the wiring;
-the Waveshare S3 has a slot.
+of them. On the ESP32 dev board the wiring is on [the SD card
+page](/sdcard); the Waveshare S3 has a slot.
 
 <!-- Only a pointer until the 1.1.0 setup copy is written (review item F7, held): the lights plugin ships in firmware 1.1.0. -->
 ::: from 1.1.0
 ### lights
 
 The drive light and the strip. **Off** as shipped on the ESP32 dev board, and
-the sysop's alone. [Lights](/lights) has the wiring, the pins and what each
-effect shows.
+the sysop's alone. The wiring, the pins and what each effect shows are on
+[the lights page](/lights).
 :::
 
 ### serial and example

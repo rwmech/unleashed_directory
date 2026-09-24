@@ -2306,7 +2306,7 @@ def main():
         # NEW-1: /how links the rules it was said to cover.
         check("/how links the house rules, as /setup says it does",
               'href="/rules"' in get("/how")[1]
-              and "[the house rules](/rules)" in
+              and "[the house\nrules](/rules)" in
                   open(os.path.join("pages", "setup.md"), encoding="utf-8").read())
 
         # Site 1.2.0: the tested boards page, a picture and the facts for
@@ -3230,7 +3230,7 @@ def main():
         check("it has the Run your own board card instead, with its two ways in",
               '<aside class="runcard" aria-labelledby="run-your-own">'
               '<h2 id="run-your-own">Run your own board</h2>'
-              '<p class="say">An ESP32, a USB cable, five minutes.</p>'
+              '<p class="say">An ESP32 board, a USB cable, five minutes.</p>'
               '<p class="acts"><a class="fill" href="/install">Web installer</a>'
               '<a class="line" href="/build#getting-it-running">Build from source</a>'
               in hbody and hbody.count('class="runcard"') == 1)
@@ -3368,7 +3368,7 @@ def main():
               "Press <b>Update my board</b>, pick the port, then <b>Update unleashed "
               "BBS</b> and <b>Install</b>. It never erases: your accounts, settings, "
               "mail and forums stay, and your SD card is never touched. "
-              '<a href="/upgrade">Upgrading a board</a>' in itop
+              'More on <a href="/upgrade">upgrading a board</a>' in itop
               and itop.find('<div class="steps"><p class="aside">')
                   < itop.find('id="what-happens-in-order"'))
         # The steps no longer promise a recognised board, and name the erase
@@ -3938,8 +3938,8 @@ def main():
               "svg.art.wiring .p-cs { animation:" in
               sd.split("svg.art { display:block;")[1]
                   .split("@media (prefers-reduced-motion: no-preference) {")[1])
-        check("the build page links to it",
-              '<a href="/sdcard">An SD card</a>' in get("/build")[1])
+        check("the build page links to it, as a button",
+              '<a class="go" href="/sdcard">Add an SD card</a>' in get("/build")[1])
 
         # A Chromebook, as it is: one you control usually can, a managed one
         # usually cannot without its administrator, Chrome alone never can.
@@ -3995,13 +3995,44 @@ def main():
               spec in hwp
               and hwp.index(spec) < hwp.index('id="esp32-dev-board"')
               and spec.startswith('<svg class="art spectrum" viewBox="-4 -2 362 144"')
-              and 'aria-hidden="true"' in spec.split(">")[0]
               and all(f">{s[1]}</text>" in spec and f">{s[3]}</text>" in spec
                       and f">{s[4]}</text>" in spec for s in S.SPECTRUM_STOPS))
+        # Site 1.2.2, Rob: each stop is a link to its board, and the drawing
+        # is a group of links a screen reader can reach, each saying in words
+        # what its column shows. The overview names the class of board and
+        # the section it links to names the exact board.
+        stops = re.findall(r'<a class="stp s\d" href="([^"]+)" aria-label="([^"]+)">', spec)
+        check("and each stop is a link, told to a screen reader in words",
+              'role="group" aria-label="Three ways to build a board"' in spec.split(">")[0]
+              and [h for h, _ in stops] == ["#esp32-dev-board", "/sdcard",
+                                          "#waveshare-esp32-s3-lcd-1-47"]
+              and all("About $" in a for _, a in stops)
+              and 'id="esp32-dev-board"' in hwp
+              and 'id="waveshare-esp32-s3-lcd-1-47"' in hwp)
+        check("the overview says ESP32-S3 board, never the brand",
+              ">ESP32-S3 board</text>" in spec and "Waveshare" not in spec
+              and "Waveshare" not in hwp.split('id="esp32-dev-board"')[0])
+        # The motion: every piece of it declared where reduced motion stops
+        # it, the lamp at rest on the middle stop, transforms and opacity only.
+        art_all = hwp.split("svg.art { display:block;")[1].split("</style>")[0]
+        still, moving_s = art_all.split("@media (prefers-reduced-motion: no-preference) {")
+        check("and its motion is declared only where reduced motion stops it",
+              "svg.art.spectrum .sl { transform-box:fill-box" in moving_s
+              and "svg.art.spectrum .sdot { animation:" in moving_s
+              and "svg.art.spectrum a:hover .up," in moving_s
+              and not re.search(r"svg\.art\.spectrum[^{]*\{[^}]*(animation|transition):",
+                                still)
+              and f'cx="{S.SPECTRUM_PARK}"' in spec
+              and S.SPECTRUM_PARK == S.SPECTRUM_STOPS[1][0])
+        spec_kf = re.findall(r"@keyframes (spec\w+) \{(.*?)\}\s*\}", art_all, re.S)
+        check("and it moves by transform and opacity alone",
+              len(spec_kf) == 6
+              and all(set(re.findall(r"([a-z-]+):", body)) <= {"transform", "opacity"}
+                      for _, body in spec_kf))
         check("and says it in words too, every figure an estimate",
               "functional, and the lowest cost. About $5" in flat_h
               and "economical and usable. About $8" in flat_h
-              and "the most expandable. About $20" in flat_h
+              and "advanced capabilities. About $20" in flat_h
               and all(s[3].startswith("about ") and s[4].startswith("about ")
                       for s in S.SPECTRUM_STOPS))
         s3sec = hwp.split('id="waveshare-esp32-s3-lcd-1-47"')[1].split('id="other-chips"')[0]
@@ -4012,6 +4043,60 @@ def main():
               "Any module with the same flash will do" not in flat_b
               and "Any module with 4 MB of flash works" not in
                   " ".join(get("/teachers")[1].split()))
+
+        # Site 1.2.2, Rob on /build: "Need clearer calls to action. The blue
+        # blends in and tested boards reads wierd after 'a board' its a
+        # microcontroller and it should read like something like 'A
+        # compatible ESP32 board' and then go into it."
+        need = build.split('id="what-you-need"')[1].split("<h2")[0]
+        flat_n = " ".join(need.split())
+        check("/build's What you need leads each item with the thing itself",
+              "<li><b>A compatible ESP32 board.</b> A small computer with Wi-Fi built in" in flat_n
+              and "<li><b>A USB data cable.</b>" in flat_n
+              and "<li><b>2.4 GHz Wi-Fi.</b>" in flat_n
+              and "Tested boards</a> has" not in flat_n
+              and "special handling" not in flat_n and "EN pulled up" not in flat_n)
+        check("and its next step is a button to the tested boards",
+              '<p class="next"><a class="go" href="/hardware">Choose a board</a></p>'
+              in need and 'href="#on-a-bare-module"' in need
+              and 'id="on-a-bare-module"' in build)
+        # A next step is a button, one a section at most, and a button that
+        # is not the installer's own never says Install.
+        crowded, says_install = [], []
+        for md in sorted(pathlib.Path("pages").glob("*.md")):
+            body = get("/" + md.stem)[1]
+            for part in body.split("<h2")[1:] or [body]:
+                if part.count('<p class="next">') > 1:
+                    crowded.append(md.stem)
+            if re.search(r'<a class="go"[^>]*>[^<]*Install', body):
+                says_install.append(md.stem)
+        check("a section carries one next-step button at most"
+              + ("" if not crowded else "  <- " + ", ".join(crowded)), not crowded)
+        check("and none of them says Install"
+              + ("" if not says_install else "  <- " + ", ".join(says_install)),
+              not says_install)
+        # A page's title used as a sentence's subject ("Tested boards has the
+        # two ...") reads as a typo to anybody who has not seen that page yet.
+        subj = []
+        for md in sorted(pathlib.Path("pages").glob("*.md")):
+            text = re.sub(r"<!--.*?-->", "", md.read_text(encoding="utf-8"), flags=re.S)
+            flat_md = " ".join(text.split())
+            for m in re.finditer(r"(?:^|[.!?] |\*\* |- )\[([A-Z][^\]]*)\]\((?:/|#)[^)]*\) "
+                                 r"(has|have|says|covers|lists|is|are|explains|shows|"
+                                 r"goes|takes|names)\b", flat_md):
+                subj.append(f"{md.stem}: {m.group(1)}")
+        check("no page uses a link's title as a sentence's subject"
+              + ("" if not subj else "  <- " + " | ".join(subj)), not subj)
+        # The body link is 1.02:1 from the text around it, so the underline is
+        # what marks it (WCAG 1.4.1): a deliberate one, heavier under the
+        # pointer. The outlined buttons' edge is 4.2:1 on the page.
+        css_l = get("/build")[1]
+        check("a link is marked by its underline, not its colour alone",
+              "a { color:var(--dial); text-decoration-thickness:0.075em;" in css_l
+              and "a:hover { text-decoration-thickness:0.14em; }" in css_l
+              and "border:1px solid #4a7a99; border-radius:0.375rem;" in css_l
+              and ".cta a.btn2 { color:var(--dial); background:transparent; "
+                  "border:1px solid #4a7a99; }" in css_l)
 
         # ------------------------------------------------------------------
         # The freedoms beside the wordmark. The board's own words from its

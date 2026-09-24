@@ -17,9 +17,9 @@ Three ways to build one. Each is a choice, not a step on a ladder:
 - **[The same board with an SD card](/sdcard)**: economical and usable. About
   $8 with the card module and jumper wires, and about half an hour, most of
   it wiring the card.
-- **[The Waveshare S3](#waveshare-esp32-s3-lcd-1-47)**: the most expandable.
-  About $20, a screen, a card slot and a drive light on the board, and no
-  wiring. It does need BOOT and RESET pressed by hand to install, which is
+- **[An ESP32-S3 board](#waveshare-esp32-s3-lcd-1-47)**: advanced
+  capabilities. About $20, a screen, a card slot and a drive light on the
+  board, and no wiring. It does need BOOT and RESET pressed by hand to install, which is
   why it takes a little longer than the bare board.
 
 The prices are typical listings in September 2026, and they move. A micro SD
@@ -55,8 +55,12 @@ socket at the other end between two buttons.
   under 400 mA for the instant the radio transmits, so anything that can
   deliver 500 mA is comfortable.
 - **What you can add:** an SD card, a two dollar module and four signal wires
-  plus power ([Adding an SD card](/sdcard)), and a drive light and a strip of
-  pixels for a case ([Lights](/lights)).
+  plus power, and a drive light and a strip of pixels for a case. Each has a
+  page of its own: [the SD card](/sdcard) and [the lights](/lights).
+
+::: next
+[Go to the installer](/install)
+:::
 
 ## Waveshare ESP32-S3-LCD-1.47
 
@@ -64,8 +68,8 @@ socket at the other end between two buttons.
 esp32s3
 :::
 
-A USB stick with an ESP32-S3 on it and a small colour screen, the second board
-the firmware runs on. Tested on Rob's bench on 24 September 2026 with a 1.1.0
+The ESP32-S3 board, and exactly this one: a USB stick with an ESP32-S3 on it
+and a small colour screen, the second board the firmware runs on. Tested on Rob's bench on 24 September 2026 with a 1.1.0
 preview: it boots, answers telnet, mounts its SD card, shows the board's
 figures on its screen, and runs the drive light on its own LED.
 
@@ -80,8 +84,8 @@ What it adds over the ESP32 dev board:
 - **More memory:** 16 MB of flash and 8 MB of PSRAM, against the dev board's
   4 MB of flash and none.
 
-No wiring, and none of the build pages: [Adding an SD card](/sdcard) and
-[Lights](/lights) are for the dev board. The card goes in the slot, the drive
+No wiring, and none of the build pages: [the SD card page](/sdcard) and [the
+lights page](/lights) are for the dev board. The card goes in the slot, the drive
 light is already there, and the screen draws the strip's lamps whether or not
 a strip is wired.
 
@@ -97,8 +101,12 @@ the directory compares when it marks a board as behind.
 > installer reads the chip, not the board, so it would write this image onto
 > any S3: the picture is the check.
 
-It has no USB-serial chip, so it goes on a little differently: [On the
-Waveshare S3](/install#on-the-waveshare-s3), on the installer page.
+It has no USB-serial chip, so it goes on a little differently: BOOT and RESET
+pressed by hand, in three steps on the installer page.
+
+::: next
+[Steps for this board](/install#on-the-waveshare-s3)
+:::
 
 ## Other chips
 

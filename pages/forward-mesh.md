@@ -84,8 +84,9 @@ one **Network settings**. Both reach **Advanced Networking**.
 
 ## When it does not work
 
-Double NAT and CGNAT stop any router's forward, and [the main
-page](/forward#two-things-that-will-stop-it-working) explains both. What a mesh adds:
+Double NAT and CGNAT stop any router's forward, and both are
+explained on [the main port forwarding page](/forward#two-things-that-will-stop-it-working).
+What a mesh adds:
 
 - **Double NAT.** The WAN address is in the app. If it is private, bridge the
   ISP box, not the mesh: eero loses forwarding entirely in bridge mode, and a
