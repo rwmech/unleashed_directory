@@ -2321,9 +2321,12 @@ def main():
             soon_ok = soon_ok and (S.board_html([b["dir"]]) in sec
                                    and "coming soon to" in S.board_html([b["dir"]])
                                    and "<b>Coming soon.</b>" in sec
-                                   and 'rel="sponsored"' not in sec
+                                   and f'<a href="{b["buy"]}" rel="sponsored">Amazon</a>'
+                                   ' (affiliate link)' in sec
                                    and 'href="/camera"' in sec)
-        check("/hardware lists both camera boards as coming soon, with no buy link",
+        # Site 1.2.5, Rob: both camera boards gained a buy link, shown the
+        # way the tested boards show theirs, and stay coming soon.
+        check("/hardware lists both camera boards as coming soon, each with its buy link",
               len(S.SOON_BOARDS) == 2 and soon_ok
               and "tested when it arrives" in " ".join(hw4.split())
               and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw4)
@@ -4098,9 +4101,50 @@ def main():
         check("the tested boards page opens with the spectrum",
               spec in hwp
               and hwp.index(spec) < hwp.index('id="esp32-dev-board"')
-              and spec.startswith('<svg class="art spectrum" viewBox="-4 -2 362 144"')
+              and spec.startswith('<svg class="art spectrum" viewBox="-4 -2 362 160"')
               and all(f">{s[1]}</text>" in spec and f">{s[3]}</text>" in spec
                       and f">{s[4]}</text>" in spec for s in S.SPECTRUM_STOPS))
+        # Site 1.2.5, Rob: a speed per board, "Fast, Faster, Fastest", and
+        # every one of them says it is expected, because nothing has been
+        # measured yet. In the spectrum (fast, fast, fastest), in each
+        # board's facts list, the camera boards included, and in one line
+        # of the page's own words.
+        spd = re.findall(r'<text class="ink spd"[^>]*>(\w+) <tspan[^>]*>\(expected\)</tspan></text>', spec)
+        hw5 = hwp.split("<article>")[1].split("</article>")[0]
+        facts_ok = all(
+            f"<dt>Speed</dt><dd>{S.BOARD_SPEED[b['dir']]} "
+            '<span class="exp">(expected, not yet measured)</span></dd>'
+            in S.board_html([b["dir"]]) and S.board_html([b["dir"]]) in hw5
+            for b in S.BOARDS + S.SOON_BOARDS)
+        check("the speeds render, each one marked expected",
+              spd == ["fast", "fast", "fastest"]
+              and all("Expected to be " in s[7] and "not yet measured" in s[7]
+                      for s in S.SPECTRUM_STOPS)
+              and facts_ok
+              and [S.BOARD_SPEED[d] for d in ("esp32", "esp32-fncam", "esp32s3", "esp32s3-cam")]
+                  == ["Fast", "Faster", "Fastest", "Fastest"]
+              and "The speeds are expected, not measured" in " ".join(hw5.split())
+              and "side by side" in " ".join(hw5.split()))
+        # Site 1.2.5, Rob: a seal on each board's picture, "flash & go" for
+        # all four, the S3 camera board's marked expected, each told to a
+        # screen reader in words, and a line in the intro saying what it
+        # means. Two levels only: "a little wiring" is for add-ons and no
+        # board wears it.
+        seals = re.findall(r'<div class="hwpic">.*?(<svg class="art seal[^"]*"[^>]*>.*?</svg>)</div>',
+                           hw5, re.S)
+        check("every board's picture wears its seal, flash and go",
+              len(seals) == 4
+              and all('role="img" aria-label="Flash and go' in x and "FLASH &amp; GO</text>" in x
+                      for x in seals)
+              and sum(">expected</text>" in x for x in seals) == 1
+              and ">expected</text>" in S.seal_html(S.BOARD_SEAL["esp32s3-cam"])
+              and all(S.BOARD_SEAL[b["dir"]] == "go" for b in S.BOARDS + S.SOON_BOARDS[:1])
+              and "wiring" not in "".join(S.BOARD_SEAL.values())
+              and "<b>Flash &amp; go</b>, on a board" in hw5
+              and "svg.art.seal .rb {" in hwp and "article .hwb .hwpic svg.art.seal {" in hwp)
+        _, diff5 = get("/different")
+        check("and nowhere else",
+              "(expected" not in diff5 and "Fastest" not in diff5)
         # Site 1.2.2, Rob: each stop is a link to its board, and the drawing
         # is a group of links a screen reader can reach, each saying in words
         # what its column shows. The overview names the class of board and

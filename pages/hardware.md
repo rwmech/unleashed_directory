@@ -1,4 +1,4 @@
-<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board is listed as tested only once a build has run on it. Since site 1.2.4 the two camera boards wait at the foot of the page, drawn from SOON_BOARDS in server.py with no version and no buy link (Rob has given none); their facts come from the firmware repository's internal/PLAN-freenove-cam.md: the Freenove FNK0060 (pinout 3.0, ESP32-WROVER-E, OV2640, SDMMC slot, CH340, the NeoPixel Rob pointed out, and GPIO 13, 32 and 33 free) and the ESP32-S3-CAM Rob has on order (N16R8, OV3660, two USB-C, an external antenna). Neither has run a build yet. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. -->
+<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board is listed as tested only once a build has run on it. Since site 1.2.4 the two camera boards wait at the foot of the page, drawn from SOON_BOARDS in server.py with no version (the buy links are Rob's, given for 1.2.5); their facts come from the firmware repository's internal/PLAN-freenove-cam.md: the Freenove FNK0060 (pinout 3.0, ESP32-WROVER-E, OV2640, SDMMC slot, CH340, the NeoPixel Rob pointed out, and GPIO 13, 32 and 33 free) and the ESP32-S3-CAM Rob has on order (N16R8, OV3660, two USB-C, an external antenna). Neither has run a build yet. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The speeds (site 1.2.5) are Rob's expectation, not a measurement: fast, faster for the Freenove's PSRAM, fastest for the S3; replace them with measured figures once the benchmark has run on all three. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. The seal on each board's picture (site 1.2.5) is Rob's: flash & go for every board here, the S3 camera board expected until tested; a little wiring is for the add-ons, whose pages carry wiring diagrams rather than board art and so no seal. -->
 # Tested boards
 
 The boards this firmware has actually run on, each with its own image on [the
@@ -29,12 +29,19 @@ whatever the board is looking at and download it.
 
 The prices are typical listings in September 2026, and they move. A micro SD
 card is extra on either board that takes one. The times are for somebody
-doing it the first time.
+doing it the first time. The speeds are expected, not measured: fast for
+the ESP32 dev board, faster for the Freenove camera board and fastest for the
+ESP32-S3 boards, and measured figures follow once all three kinds of board are
+running side by side.
+
+**Flash & go**, on a board's picture, means everything is on the board: plug
+it in, install from the browser, and it runs, with no wiring.
 
 The buy links below are Amazon affiliate links: a purchase through one may
 earn the project a small commission, at no extra cost to you. Each goes to the
-listing for the board that was tested, and any board that matches the picture
-and the chip will do, bought anywhere.
+listing for the board that was tested, or for a camera board, the one being
+tested, and any board that matches the picture and the chip will do, bought
+anywhere.
 
 ## ESP32 dev board
 

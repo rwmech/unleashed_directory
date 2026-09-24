@@ -14,6 +14,44 @@
 
 # Changelog
 
+## 1.2.5, 2026-09-24
+
+A speed and a seal for each board on /hardware, and buy links for the two
+camera boards.
+
+- **Fast, faster, fastest** (Rob: "instead of numbers for now"). The ESP32
+  dev board, bare or with a card, is fast; the Freenove camera board is
+  faster, because its 8 MB of PSRAM takes the Wi-Fi buffers off internal
+  memory, although the classic ESP32 reaches PSRAM more slowly than the S3;
+  the ESP32-S3 boards, the Waveshare and the S3 camera board, are fastest.
+- **Every one says "expected".** Nothing has been measured: a benchmark
+  runs once all three kinds of board are running side by side. The
+  spectrum gains a fourth row under the work, "fast (expected)", "fast
+  (expected)", "fastest (expected)", inside the rising labels so it moves
+  with them, and each stop's screen-reader label says the same in words.
+  Each board's facts list, the two coming-soon camera boards included, has
+  a Speed row reading "(expected, not yet measured)", from a new
+  `BOARD_SPEED` table kept apart from `BOARDS` so the installer is
+  untouched. One sentence under the prices says the speeds are expected
+  and measured figures follow.
+- **A seal on each board's picture** (Rob: "So people know these boards
+  like the Freenove are literally flash and go"): a line-art ribbon over the
+  picture's top-left corner reading FLASH & GO, on all four boards, the S3
+  camera board's with "expected" under it until it has been tested. Each is
+  `role="img"` with the level said in words, and one line in the intro says
+  what it means. Two levels only: "a little wiring" is for the add-ons, and
+  /sdcard and /lights carry wiring diagrams with the ESP32 drawn in the
+  corner a seal would cover, so they get none.
+- **Buy links for the camera boards**, Rob's Amazon affiliate links, shown
+  as the other two boards show theirs. Both stay coming soon to the
+  installer, and the intro's line on the links says a camera board's goes
+  to the one being tested.
+- Nowhere else: /different and the rest of the site are unchanged.
+- Self-test: the three speeds render in the spectrum, every board's facts
+  list carries its tier marked expected, the page says so in words, and
+  /different does not; every board picture wears its seal, one of them
+  expected; both camera boards show their buy link.
+
 ## 1.2.4, 2026-09-24
 
 Camera boards on the way, a page for the camera, a page on what sets the

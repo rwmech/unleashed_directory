@@ -2384,9 +2384,10 @@ BOARD_ART_S3CAM = (
 # ::: board block, and deliberately NOT in BOARDS: BOARDS is the
 # installer's picker and the fetcher's list of image sets, and a board goes
 # there once a release carries an image for it (the Freenove shares the
-# ESP32's chip family, so the picker will have to ask which board). No
-# "buy": Rob has given no link, and none is invented. "status" is what the
-# Firmware row says in place of a version.
+# ESP32's chip family, so the picker will have to ask which board). "buy"
+# since site 1.2.5, Rob's affiliate links, so people can get one ahead of
+# the installer; the Firmware row still says coming soon. "status" is what
+# the Firmware row says in place of a version.
 SOON_BOARDS = (
     {"dir": "esp32-fncam", "name": "Freenove ESP32 camera board",
      "part": "ESP32-WROVER-E, 4 MB flash, 8 MB PSRAM",
@@ -2394,6 +2395,7 @@ SOON_BOARDS = (
      "art": BOARD_ART_FNCAM,
      "camera": "OV2640",
      "page": "/hardware#freenove-esp32-camera-board",
+     "buy": "https://link.amazon/B04Ehvw2R",
      "status": 'coming soon to <a href="/install">the installer</a>; '
                "the port is under way on Rob's bench"},
     {"dir": "esp32s3-cam", "name": "ESP32-S3 camera board",
@@ -2402,10 +2404,56 @@ SOON_BOARDS = (
      "art": BOARD_ART_S3CAM,
      "camera": "OV3660, 3 MP",
      "page": "/hardware#esp32-s3-camera-board",
+     "buy": "https://link.amazon/B07IVEMhH",
      "status": 'coming soon to <a href="/install">the installer</a>; '
                "on order, and tested when it arrives"},
 )
 BOARD_BY_DIR = {b["dir"]: b for b in BOARDS + SOON_BOARDS}
+
+# How fast each board is expected to be (site 1.2.5, Rob: "Fast, Faster,
+# Fastest ... instead of numbers for now"). Expected, not measured: a
+# benchmark runs once all three kinds are running side by side, and the
+# facts list says "expected" until then. The Freenove's 8 MB of PSRAM takes
+# the Wi-Fi buffers off internal memory, and the classic ESP32 reaches PSRAM
+# more slowly than the S3 does, hence the middle tier. Kept apart from
+# BOARDS so the installer's picker is untouched.
+BOARD_SPEED = {"esp32": "Fast", "esp32-fncam": "Faster",
+               "esp32s3": "Fastest", "esp32s3-cam": "Fastest"}
+
+# The seal on a board's picture on /hardware (site 1.2.5, Rob: "So people
+# know these boards like the Freenove are literally flash and go"). Two
+# levels and no more: "flash & go", everything on the board, plug it in and
+# install from the browser; and "a little wiring", kept for the add-ons
+# (the SD card module, the lights), which is why no board wears it. The
+# add-on pages have wiring diagrams rather than a picture of a board, with
+# the ESP32 drawn in the corner a seal would cover, so they carry none.
+# A board not yet tested says "expected" on its seal, the S3 camera board
+# until it has run. A ribbon rather than a round seal, so the words are
+# 9.5 units at 5.25rem: about 11px on a phone, where a seal's curved type
+# would have been under 8.
+BOARD_SEAL = {"esp32": "go", "esp32s3": "go", "esp32-fncam": "go",
+              "esp32s3-cam": "go-expected"}
+
+
+def seal_html(kind):
+    """The ribbon over a board picture's top-left corner: "FLASH & GO",
+    with "expected" under it for a board not yet tested. role="img" with
+    the level said in words, because the ribbon is the only place it is
+    shown."""
+    exp = kind.endswith("-expected")
+    h = 34 if exp else 24
+    label = ("Flash and go, expected: everything should be on the board, "
+             "with no wiring, once it has been tested" if exp else
+             "Flash and go: everything is on the board, plug it in and "
+             "install from the browser, no wiring")
+    return (f'<svg class="art seal{" exp" if exp else ""}" viewBox="0 0 72 {h}" '
+            f'role="img" aria-label="{label}">'
+            f'<path class="rb" d="M1 1 H71 L65 {h / 2:g} L71 {h - 1} H1 Z"/>'
+            '<text class="sl1" x="32" y="16" font-size="9.5" text-anchor="middle">'
+            "FLASH &amp; GO</text>"
+            + ('<text class="sl2" x="32" y="28" font-size="8" '
+               'text-anchor="middle">expected</text>' if exp else "")
+            + "</svg>")
 
 
 def board_version(rel, chip):
@@ -2617,14 +2665,19 @@ def board_html(lines):
                  + (f"; the board calls it {html.escape(exact)}" if exact != ver else ""))
     else:
         build = 'coming soon to <a href="/install">the installer</a>'
-    return ('<div class="hwb">' + b["art"].replace('class="art board"',
-                                                    'class="art board big"', 1)
+    seal = seal_html(BOARD_SEAL[b["dir"]]) if b["dir"] in BOARD_SEAL else ""
+    return ('<div class="hwb"><div class="hwpic">'
+            + b["art"].replace('class="art board"', 'class="art board big"', 1)
+            + seal + "</div>"
             + "<dl>"
             + "<dt>Firmware</dt><dd>" + build + "</dd>"
             + "<dt>Chip</dt><dd>" + html.escape(b["part"]) + "</dd>"
             + ("<dt>Camera</dt><dd>" + html.escape(b["camera"]) + "</dd>"
                if b.get("camera") else "")
             + "<dt>Looks like</dt><dd>" + html.escape(b["tell"]) + "</dd>"
+            + ("<dt>Speed</dt><dd>" + BOARD_SPEED[b["dir"]]
+               + ' <span class="exp">(expected, not yet measured)</span></dd>'
+               if b["dir"] in BOARD_SPEED else "")
             + ('<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
                + '" rel="sponsored">Amazon</a> (affiliate link)</dd>'
                if b.get("buy") else "")
@@ -4430,6 +4483,12 @@ article .hwb dl {{ flex:1 1 18rem; min-width:0; margin:0; display:grid;
         grid-template-columns:auto minmax(0, 1fr); gap:0.25rem 1rem; }}
 article .hwb dt, article .hwb dd {{ margin:0; line-height:1.5; }}
 article .hwb dt {{ color:var(--dim); }}
+article .hwb dd .exp {{ color:var(--dim); }}
+/* The seal (site 1.2.5): a ribbon over the picture's top-left corner,
+   sitting a little outside it so it reads as laid on, not drawn in. */
+article .hwb .hwpic {{ position:relative; flex:none; padding:0.5rem 0 0 0.5rem; }}
+article .hwb .hwpic svg.art.seal {{ position:absolute; left:0; top:0;
+        width:5.25rem; height:auto; margin:0; }}
 /* A page's one primary action, drawn like the installer's button, with
    the other way round beside it outlined, the way the installer card draws
    a kept older release, and a note under both. On a phone the two stack,
@@ -7096,6 +7155,13 @@ svg.art.steps { width:100%; max-width:34rem; height:auto;
    the step drawings reach on a desktop, so the lines are the same weight. */
 svg.art.board { flex:none; width:4.5rem; height:2.8125rem; margin:0; }
 svg.art.board.big { width:9rem; height:5.625rem; }
+/* The seal on a board's picture (site 1.2.5): --live, the site's colour
+   for up and working, on the page's own background so the board's lines
+   stop at its edge. */
+svg.art.seal .rb { fill:var(--bg); stroke:var(--live); stroke-width:1.4;
+        stroke-linejoin:round; }
+svg.art.seal text.sl1 { fill:var(--live); font-weight:bold; letter-spacing:0.04em; }
+svg.art.seal text.sl2 { fill:var(--dim); }
 
 /* The machines on /terminals, one strip under each heading. Narrower
    than the first call strip, because there are eight of them on one page
@@ -7146,6 +7212,7 @@ svg.art.spectrum a:focus-visible .hit { stroke:#ffd35c; stroke-width:1.5; }
 svg.art.spectrum .sdot { pointer-events:none; }
 svg.art.spectrum .dh { fill:var(--dial); opacity:0.22; }
 svg.art.spectrum .dc { fill:var(--dial); }
+svg.art.spectrum tspan.exp { fill:var(--dim); }
 
 /* The roadmap on /roadmap (site 1.2.4): one line in three stretches,
    done in --live, now in --dial, later dashed in --faint. Two drawings of
@@ -8047,6 +8114,14 @@ LIGHTS_STRIP = _lights_strip()
 # that board and no other (Rob: "dont reference 'waveshare' but an S3
 # board ... which we can go into").
 #
+# Since site 1.2.5 a fourth row under the work: the speed, "fast", "fast"
+# and "fastest" (Rob: "Fast, Faster, Fastest ... instead of numbers for
+# now"). Each says "(expected)" beside it, because nothing has been
+# measured: a benchmark follows once all three kinds of board run side by
+# side, and until then a speed without that word would read as a result.
+# "Faster" is the Freenove camera board's, which is not a stop here; the
+# boards' own facts lists carry all three, from BOARD_SPEED.
+#
 # The motion, all of it in ART_CSS's no-preference block: the line draws
 # left to right, each stop's tick grows out of it and its three figures
 # rise in, a quarter second apart, and then a lamp like the run card's
@@ -8055,19 +8130,21 @@ LIGHTS_STRIP = _lights_strip()
 # opacity only, inside a fixed viewBox, so nothing on the page moves.
 # ----------------------------------------------------------------------
 SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work,
-                    # where it links, what a screen reader is told
+                    # where it links, what a screen reader is told, speed
     (52, "bare ESP32", ("functional,", "lowest cost"), "about $5", "about 5 min",
      "no wiring", "#esp32-dev-board",
      "A bare ESP32 dev board: functional, lowest cost. About $5, about 5 "
-     "minutes, no wiring."),
+     "minutes, no wiring. Expected to be fast, not yet measured.", "fast"),
     (170, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
      "wiring the card", "/sdcard",
      "An ESP32 dev board with an SD card: economical and usable. About $8, "
-     "about 30 minutes, most of it wiring the card."),
+     "about 30 minutes, most of it wiring the card. Expected to be fast, "
+     "not yet measured.", "fast"),
     (296, "ESP32-S3 board", ("advanced", "capabilities"), "about $20",
      "about 10 min", "BOOT and RESET", "#waveshare-esp32-s3-lcd-1-47",
      "An ESP32-S3 board: advanced capabilities. About $20, about 10 minutes, "
-     "BOOT and RESET pressed by hand."),
+     "BOOT and RESET pressed by hand. Expected to be fastest, not yet "
+     "measured.", "fastest"),
 )
 SPECTRUM_HITS = ((-2, 112), (112, 120), (234, 122))  # x and width of each column
 SPECTRUM_PARK = 170                                  # the lamp at rest
@@ -8076,7 +8153,7 @@ SPECTRUM_PARK = 170                                  # the lamp at rest
 def _spectrum():
     # Type a size up from the other drawings: this one is all words, and at
     # 390 the 9.5 unit captions read as small print (rendered 2026-09-24).
-    out = ['<svg class="art spectrum" viewBox="-4 -2 362 144" '
+    out = ['<svg class="art spectrum" viewBox="-4 -2 362 160" '
            'preserveAspectRatio="xMidYMid meet" role="group" '
            'aria-label="Three ways to build a board">']
     for x1, x2 in ((93, 128), (210, 240)):
@@ -8084,10 +8161,10 @@ def _spectrum():
                    f'L{x1 + 5} 22 M{x2 - 5} 14 L{x2} 18 L{x2 - 5} 22"/>')
     out.append('<path class="f sl" d="M12 79 H342"/>')
     for i, (stop, (hx, hw)) in enumerate(zip(SPECTRUM_STOPS, SPECTRUM_HITS)):
-        x, name, (l1, l2), cost, time, work, href, label = stop
+        x, name, (l1, l2), cost, time, work, href, label, speed = stop
         out.append(
             f'<a class="stp s{i}" href="{href}" aria-label="{html.escape(label, quote=True)}">'
-            f'<rect class="hit" x="{hx}" y="0" width="{hw}" height="140" rx="4"/>'
+            f'<rect class="hit" x="{hx}" y="0" width="{hw}" height="156" rx="4"/>'
             f'<path class="o tk" d="M{x} 73 V85"/>'
             '<g class="up">'
             f'<text class="ink nm" x="{x}" y="22" font-size="12" '
@@ -8100,6 +8177,9 @@ def _spectrum():
             f'<text x="{x}" y="118" font-size="10.5" text-anchor="middle">{time}</text>'
             f'<text class="warm" x="{x}" y="134" font-size="9.5" '
             f'text-anchor="middle">{work}</text>'
+            f'<text class="ink spd" x="{x}" y="151" font-size="10.5" '
+            f'text-anchor="middle">{speed} <tspan font-size="9.5" '
+            'class="exp">(expected)</tspan></text>'
             "</g></g></a>")
     out.append(f'<g class="sdot" aria-hidden="true">'
                f'<circle class="dh" cx="{SPECTRUM_PARK}" cy="79" r="5.5"/>'
