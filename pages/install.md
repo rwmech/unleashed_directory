@@ -24,7 +24,9 @@ serial port. Your Wi-Fi name and password, exactly
 install-cable
 :::
 
-1. **Press Install on a new board and pick the port.** The browser lists the
+1. **Choose your board, press Install on a new board and pick the port.**
+   The card lists the boards this firmware is built for, each with a
+   picture: pick the one that looks like yours. The browser then lists the
    serial ports it can see. If you are not sure which one is the board,
    unplug it, look at the list, plug it back in, and take the one that
    appeared.
@@ -79,17 +81,60 @@ finds it and offers **Connect to Wi-Fi**, and nothing that button offers can
 erase the board.
 :::
 
+<!-- The Waveshare S3 section (site 1.2.0). From Rob's bench on 2026-09-24 (the automatic reset did not reach the stick on his PC; boots, telnet, SD, panel and drive light verified; Wi-Fi from the installer not yet tried) and the firmware repo's internal/board-waveshare-s3-lcd147-2026-09-24.md. The quoted messages are ESP Web Tools 10.4.0's own, from vendor/esp-web-tools/10.4.0/install-dialog-*.js; the core-reset sentence is Espressif's esptool troubleshooting page. Re-check the Wi-Fi paragraph once somebody has set the Wi-Fi on one from this page. -->
+## On the Waveshare S3
+
+The [Waveshare ESP32-S3-LCD-1.47](/hardware#waveshare-esp32-s3-lcd-1-47) has
+no USB-serial chip: its plug goes straight to the ESP32-S3, which speaks USB
+itself. That saves a driver. It also means the installer may not be able to
+put it into its download mode by itself, and on the one computer it has been
+installed from so far, it could not. So do it by hand:
+
+1. **Plug it in, then hold BOOT, tap RESET, and let go of BOOT.** The chip
+   starts in its download mode, waiting to be written, instead of starting
+   the BBS.
+2. **Choose the Waveshare in the card** and press **Install on a new board**,
+   or **Update my board** for one already running the BBS. Pick the port as
+   usual.
+3. **When the installer says it has finished, press RESET.** The chip's own
+   USB can restart its processor but not the chip, so it stays in download
+   mode until you do. [Espressif's documentation for their flashing
+   tool](https://docs.espressif.com/projects/esptool/en/latest/esp32s3/troubleshooting.html)
+   puts it this way: "The USB-Serial/JTAG peripheral can only trigger a core
+   reset, which does not re-sample the state of the boot strapping pin."
+
+If the installer says **Failed to initialize. Try resetting your device or
+holding the BOOT button while clicking INSTALL.**, step 1 did not take: do it
+again and press the button again. If it says **Your ESP32 board is not
+supported.** or **Your ESP32-S3 board is not supported.**, the board and the
+choice in the card do not match, and nothing was written.
+
+**Setting the Wi-Fi from this page is not yet confirmed on this board.**
+Pressing RESET restarts the board's USB along with everything else, and the
+installer can lose the port when it does. If the Wi-Fi step does not appear:
+
+- Press **Update my board** with the board running normally, without holding
+  BOOT this time, and pick the port. The page should find the board and offer
+  **Connect to Wi-Fi**, or **Change Wi-Fi**. Nothing that button offers can
+  erase the board.
+- Or, on a board that is already on a network, call it and use `CONFIG
+  network`. It takes effect at the next restart.
+
+Once it is on your network, the board's screen shows the address to dial.
+
 ## Before you start
 
 There is nothing to install and no account to make. The installer uses Web
 Serial, a feature built into the browser, so the browser is the one thing on
 your computer that has to be right.
 
-- **An ESP32 with 4 MB of flash.** The reference board is a bare
-  ESP32-WROOM-32E, and any dev board with that module and a USB socket works,
-  for about the price of a sandwich. A name with letters after it, such as
-  ESP32-C3 or ESP32-S2, is a different chip: [the build page](/build) has a
-  table of which ones can run a board.
+- **One of the boards in the card.** An ESP32 dev board with 4 MB of flash:
+  the reference board is a bare ESP32-WROOM-32E, and any dev board with that
+  module and a USB socket works, for about the price of a sandwich. Or a
+  Waveshare ESP32-S3-LCD-1.47, the USB stick with a screen. [Tested
+  boards](/hardware) has a picture of each. A name with letters after it,
+  such as ESP32-C3 or ESP32-S2, is a different chip: [the build
+  page](/build) has a table of which ones can run a board.
 - **Chrome or Edge, on a desktop or laptop.** Other browsers are below this
   list.
 - **A USB cable that carries data.** This is the most common reason the board
@@ -136,7 +181,9 @@ In the order worth trying.
    or a [CH340](https://www.wch-ic.com/downloads/CH341SER_ZIP.html); newer
    ones often use a [CH9102](https://www.wch-ic.com/downloads/CH343SER_ZIP.html).
    Linux usually has the driver built in; Windows and macOS sometimes need
-   the download.
+   the download. The Waveshare S3 has no such chip and needs no driver:
+   hold BOOT and tap RESET first, as [On the Waveshare
+   S3](#on-the-waveshare-s3) says.
 5. **On Linux, give yourself the serial port.** Your user has to be in the
    group that owns it, which on most systems is `dialout`. Run
    `sudo usermod -a -G dialout $USER`, then log out and back in.
@@ -201,8 +248,9 @@ too. Keep backups somewhere private.
 ## After it boots
 
 The board joins your network and listens for calls on port 6400. The activity
-LED holds on for a second once it is listening. In your router's list of
-connected devices it is called `unleashed`.
+LED holds on for a second once it is listening; the Waveshare S3 has no
+activity LED, and shows the address to dial on its screen instead. In your
+router's list of connected devices it is called `unleashed`.
 
 [Call it with any telnet client](/terminals). The board works out what it is
 talking to when you connect, so SyncTERM, PuTTY, a Commodore 64 through a
@@ -288,11 +336,16 @@ right with a reset, and your accounts and settings stay where they are.
 1. Press and let go of **RESET**, which many boards label EN or RST.
 2. Then press **BOOT** and keep holding it. Holding BOOT while RESET is let go
    starts the chip's own flashing mode instead, which is why RESET comes first.
-3. Let go when the activity LED shows the stage you want.
+3. Let go at the stage you want. On the ESP32 dev board the activity LED shows
+   each stage. The Waveshare S3 has no plain activity LED, so count the seconds
+   while you hold. Either board also prints each stage on its serial console,
+   for anybody watching one on the cable.
 
 ::: art
 boot-button
 :::
+
+The LED, on a board that has one:
 
 - **Under 7 seconds**, the LED blinks slowly, and letting go does nothing.
 - **7 to 15 seconds**, the LED flashes rapidly, as a warning. Letting go puts

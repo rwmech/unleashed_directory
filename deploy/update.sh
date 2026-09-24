@@ -92,10 +92,12 @@ cd "$SRC"
 [ -d .git ] || { loud "$SRC is not a git checkout, so there is nothing to pull"; exit 1; }
 
 # ---------------------------------------------------------------------------
-# The firmware release for /install. The firmware repository publishes a
-# GitHub Release (tag vX.Y.Z, five images, the notices and SHA256SUMS), and
-# fetch_release.py checks every file before anything moves, keeps the newest
-# two and leaves the current one untouched if anything is wrong. It runs on
+# The firmware releases for /install. The firmware repository publishes a
+# GitHub Release (tag vX.Y.Z, five images for each board, the notices and
+# SHA256SUMS), and a pre-release (vX.Y.Z-dev.N) for a board no release
+# carries yet. fetch_release.py checks every file before anything moves,
+# keeps the newest two releases and the preview still serving a board, and
+# leaves what is installed untouched if anything is wrong. It runs on
 # every update, including one where the site itself had nothing new, because
 # a firmware release does not come with a site change.
 #

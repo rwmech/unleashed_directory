@@ -5,9 +5,9 @@
 ===========================================================================
 
 File:         deploy/fetch_release.py
-Purpose:      Fetch the newest public release of the firmware from GitHub
-              and put it where /install looks for it. The last hop of the
-              build pipeline: the firmware repository builds and publishes a
+Purpose:      Fetch the firmware's public releases from GitHub and put them
+              where /install looks for them. The last hop of the build
+              pipeline: the firmware repository builds and publishes a
               release, and this installs it on the directory. update.sh runs
               it; it can also be run by hand.
 
@@ -17,29 +17,50 @@ Usage:        python3 deploy/fetch_release.py [--dest DIR] [--quiet]
                           beside this script's repository)
                 --quiet   say nothing unless something changed or failed
 
-The contract, which the firmware side publishes to:
-  - a GitHub Release of rwmech/unleashed_BBS, tagged vX.Y.Z, public
-  - assets bootloader.bin, partitions.bin, ota_data_initial.bin,
-    firmware.bin, storage.bin, THIRD_PARTY_NOTICES.md and SHA256SUMS
-  - SHA256SUMS in sha256sum's own format, one line per other asset
+The contract, which the firmware side publishes to (its tools/release.py):
+  - GitHub Releases of rwmech/unleashed_BBS, public. A release is tagged
+    vX.Y.Z; a pre-release is tagged with a suffix, vX.Y.Z-dev.N, and GitHub
+    marks it as one.
+  - one image set per board, five parts each. The reference ESP32's are
+    bootloader.bin, partitions.bin, ota_data_initial.bin, firmware.bin and
+    storage.bin; another board's carry its folder as a prefix,
+    esp32s3-bootloader.bin and so on (FAMILIES below).
+  - optionally, since firmware 1.1.0, each set's version.txt (the S3's as
+    esp32s3-version.txt): one line, the version as that board shows it,
+    "1.0.3" or "1.1.0 (S3 1.0.0)".
+  - THIRD_PARTY_NOTICES.md, and SHA256SUMS in sha256sum's own format, one
+    line per other asset
 
-What it does, in the order that keeps a bad download harmless:
-  1. asks GitHub for the latest release (public releases only: no token,
-     because until 1.0.0 the repository is private and after it nothing
-     needs one)
-  2. downloads every asset into a staging directory inside the firmware
-     directory, so the final move is a rename on one filesystem
-  3. checks every file against SHA256SUMS, and checks the screens image
+Which releases, since site 1.2.0. Each board is served on its own:
+  - the newest release by version (not a draft, not a pre-release) is
+    installed, every set it carries;
+  - a board it does not carry is served from the newest older release that
+    does, so an ESP32-only patch never takes a board off its release;
+  - a board no release carries at all is served from the newest pre-release
+    that carries it, installed under its real name (firmware/1.1.0-dev.8/),
+    which the site shows as a preview and never counts as the newest
+    release. That is how the Waveshare S3 arrives before 1.1.0 is released,
+    while the ESP32 stays on the latest release.
+
+What it does, for each release it wants, in the order that keeps a bad
+download harmless:
+  1. downloads every asset of the sets it carries into a staging directory
+     inside the firmware directory, so the final move is a rename on one
+     filesystem
+  2. checks every file against SHA256SUMS, and checks each screens image
      carries no password, Wi-Fi key or token
-  4. only then moves the release into firmware/<version>/, as the installer
-     expects it: esp32/<the five parts>, THIRD_PARTY_NOTICES.md, release.txt
-  5. keeps the newest two versions and removes the rest
+  3. only then moves the release into firmware/<version>/, as the installer
+     expects it: <set>/<the five parts>, <set>/version.txt when the release
+     has one, THIRD_PARTY_NOTICES.md, SHA256SUMS, release.txt
+  4. keeps the newest two releases, an older release while it is the one
+     serving some board, and a pre-release only while it is the one serving
+     some board, and removes the rest
 
-Anything that fails before step 4 deletes the staging directory and leaves
+Anything that fails before step 3 deletes the staging directory and leaves
 the release already there exactly as it was.
 
 Exit codes:   0 installed, or already had it
-              1 nothing changed, and here is why
+              1 something was not installed, and here is why
 
 Copyright 2026 - Robert Mech
 License:      GNU General Public License v2 or later
@@ -59,20 +80,34 @@ import urllib.error
 import urllib.request
 
 REPO = "rwmech/unleashed_BBS"
-# Overridable so the self-test can point it at a release served from
-# 127.0.0.1. Nothing else about the script changes when it is.
+# Overridable so the self-test can point it at releases served from
+# 127.0.0.1. Nothing else about the script changes when it is. The list, not
+# /releases/latest, because the latest leaves out every pre-release; an
+# answer that is one release rather than a list is read as a list of one.
 API = os.environ.get("UNLEASHED_RELEASE_API",
-                     "https://api.github.com/repos/" + REPO + "/releases/latest")
+                     "https://api.github.com/repos/" + REPO + "/releases?per_page=30")
 PARTS = ("bootloader.bin", "partitions.bin", "ota_data_initial.bin",
          "firmware.bin", "storage.bin")
+VERSION_TXT = "version.txt"
 NOTICES = "THIRD_PARTY_NOTICES.md"
 SUMS = "SHA256SUMS"
-CHIP = "esp32"
+# The image sets a release can carry, by the folder the directory keeps each
+# in, which is the firmware's own name for the build (tools/release.py) and
+# a board in the site's BOARDS. The first is the reference ESP32, whose
+# assets carry no prefix, as every release before 1.1.0 had them; any other
+# set's are "<folder>-<part>".
+FAMILIES = ("esp32", "esp32s3")
 KEEP = 2
-TAG = re.compile(r"^v(\d{1,3})\.(\d{1,3})\.(\d{1,4})$")
-VERSION = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})$")
+TAG = re.compile(r"^v(\d{1,3})\.(\d{1,3})\.(\d{1,4})"
+                 r"(?:-([0-9A-Za-z-]{1,20}(?:\.[0-9A-Za-z-]{1,20}){0,3}))?$")
+VERSION = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})"
+                     r"(?:-([0-9A-Za-z-]{1,20}(?:\.[0-9A-Za-z-]{1,20}){0,3}))?$")
+# What a version.txt may say: the server reads the same shape.
+SHOWN = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,4}(?:-[0-9A-Za-z.-]{1,40})?"
+                   r"(?: \([A-Za-z0-9][A-Za-z0-9 .-]{0,30}\))?$")
 SUM_LINE = re.compile(r"^([0-9a-fA-F]{64}) [ *]([^\s/\\]+)$")
-# A 4 MB flash cannot hold a larger part, so anything bigger is not ours.
+# The S3's parts are laid out for the same 4 MB as the ESP32's, and a 4 MB
+# flash cannot hold a larger part, so anything bigger is not ours.
 MAX_ASSET = 8 * 1024 * 1024
 # The same test selftest.py runs on anything already in firmware/: the
 # screens image carries system.cfg, and a developer's copy carries the staff
@@ -88,6 +123,10 @@ class Refused(Exception):
     """A reason to change nothing, worded for the person reading it."""
 
 
+def prefix(family):
+    return "" if family == FAMILIES[0] else family + "-"
+
+
 def fetch(url, accept):
     req = urllib.request.Request(url, headers={
         "Accept": accept,
@@ -100,9 +139,12 @@ def fetch(url, accept):
     return data
 
 
-def latest_release():
+def list_releases():
+    """Every release GitHub will show without a token, in the order it lists
+    them, newest first. Drafts are never shown without one, and are skipped
+    anyway."""
     try:
-        return json.loads(fetch(API, "application/vnd.github+json").decode("utf-8"))
+        got = json.loads(fetch(API, "application/vnd.github+json").decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 404:
             raise Refused(
@@ -113,11 +155,52 @@ def latest_release():
             raise Refused(
                 f"GitHub refused the request ({e.code}), which is usually its "
                 "rate limit for requests without a token. Try again in an hour.")
-        raise Refused(f"GitHub answered {e.code} for the latest release.")
+        raise Refused(f"GitHub answered {e.code} for the list of releases.")
     except urllib.error.URLError as e:
         raise Refused(f"Could not reach GitHub: {e.reason}.")
     except ValueError:
-        raise Refused("GitHub's answer about the latest release was not JSON.")
+        raise Refused("GitHub's answer about the releases was not JSON.")
+    if isinstance(got, dict):
+        got = [got]
+    if not isinstance(got, list):
+        raise Refused("GitHub's answer about the releases was not a list.")
+    return [r for r in got if isinstance(r, dict) and not r.get("draft")]
+
+
+def version_key(version):
+    """A version directory's name as something to sort by: three numbers,
+    then a release above any pre-release of it, and pre-releases by their
+    parts, numbers as numbers, so dev.10 is after dev.9."""
+    m = VERSION.match(version)
+    nums = tuple(int(g) for g in m.groups()[:3])
+    if not m.group(4):
+        return nums + ((1,),)
+    return nums + ((0,) + tuple((0, int(p), "") if p.isdigit() else (1, 0, p)
+                                for p in m.group(4).split(".")),)
+
+
+def asset_urls(release):
+    return {a.get("name"): a.get("browser_download_url")
+            for a in release.get("assets", []) if a.get("name")}
+
+
+def carried(release):
+    """The image sets a release carries whole, in FAMILIES order. A set with
+    some of its parts and not others, or a release with none of the
+    reference set's parts and no other set, is half published, and refused
+    rather than skipped, because the reason is worth reading."""
+    assets = asset_urls(release)
+    sets = []
+    others = any(assets.get(prefix(f) + p) for f in FAMILIES[1:] for p in PARTS)
+    for fam in FAMILIES:
+        have = [p for p in PARTS if assets.get(prefix(fam) + p)]
+        if len(have) == len(PARTS):
+            sets.append(fam)
+        elif have or (fam == FAMILIES[0] and not others):
+            missing = [prefix(fam) + p for p in PARTS if p not in have]
+            raise Refused(f"Release {release.get('tag_name')} is missing "
+                          f"{', '.join(missing)}.")
+    return sets
 
 
 def parse_sums(text):
@@ -141,48 +224,82 @@ def installed_sums(dest, version):
         return fh.read()
 
 
-def complete(dest, version):
-    d = os.path.join(dest, version, CHIP)
-    return all(os.path.isfile(os.path.join(d, p)) and os.path.getsize(os.path.join(d, p))
+def complete(dest, version, families, sums=None):
+    """Every part of every set on disk, and every version.txt the release's
+    sums name: one that was named and not installed would leave the board's
+    manifest on the directory's name for ever, since the sums would go on
+    matching."""
+    for fam in families:
+        d = os.path.join(dest, version, fam)
+        if not all(os.path.isfile(os.path.join(d, p)) and os.path.getsize(os.path.join(d, p))
+                   for p in PARTS):
+            return False
+        if sums and prefix(fam) + VERSION_TXT in sums \
+                and not os.path.isfile(os.path.join(d, VERSION_TXT)):
+            return False
+    return True
+
+
+def set_complete(path):
+    """Whether one set folder on disk holds all five parts, the way the
+    server decides a set is there to offer."""
+    return all(os.path.isfile(os.path.join(path, p)) and os.path.getsize(os.path.join(path, p))
                for p in PARTS)
 
 
-def stage(dest, release, version):
+def stage(dest, release, version, families):
     """Download and check everything into a staging directory. Returns its
     path; the caller moves it into place. Raises Refused, having removed it,
     on anything wrong."""
-    assets = {a.get("name"): a.get("browser_download_url")
-              for a in release.get("assets", []) if a.get("name")}
-    missing = [n for n in PARTS + (NOTICES, SUMS) if not assets.get(n)]
-    if missing:
-        raise Refused(f"Release v{version} is missing {', '.join(missing)}.")
+    assets = asset_urls(release)
+    for n in (NOTICES, SUMS):
+        if not assets.get(n):
+            raise Refused(f"Release v{version} is missing {n}.")
 
     staging = tempfile.mkdtemp(prefix=".incoming-", dir=dest)
     try:
         sums_text = fetch(assets[SUMS], "application/octet-stream").decode("utf-8", "replace")
         sums = parse_sums(sums_text)
-        unsummed = [n for n in PARTS + (NOTICES,) if n not in sums]
+        wanted = [(fam, p, prefix(fam) + p) for fam in families for p in PARTS]
+        unsummed = [a for _f, _p, a in wanted if a not in sums]
+        if NOTICES not in sums:
+            unsummed.append(NOTICES)
         if unsummed:
             raise Refused(f"SHA256SUMS has no line for {', '.join(unsummed)}.")
-        os.makedirs(os.path.join(staging, CHIP))
-        for name in PARTS + (NOTICES,):
+        # version.txt is optional, and only ever installed as checked: one
+        # the sums do not cover is left out, not trusted. One the sums name
+        # and the release does not have is a set half published, the same as
+        # a missing part: the board's manifest would carry the wrong version.
+        for fam in families:
+            a = prefix(fam) + VERSION_TXT
+            if a in sums and not assets.get(a):
+                raise Refused(f"Release v{version} is missing {a}.")
+            if assets.get(a) and a in sums:
+                wanted.append((fam, VERSION_TXT, a))
+        for fam in families:
+            os.makedirs(os.path.join(staging, fam))
+        for fam, name, asset in wanted + [(None, NOTICES, NOTICES)]:
             try:
-                blob = fetch(assets[name], "application/octet-stream")
+                blob = fetch(assets[asset], "application/octet-stream")
             except urllib.error.URLError as e:
-                raise Refused(f"Could not download {name}: {getattr(e, 'reason', e)}.")
+                raise Refused(f"Could not download {asset}: {getattr(e, 'reason', e)}.")
             if not blob:
-                raise Refused(f"{name} downloaded empty.")
+                raise Refused(f"{asset} downloaded empty.")
             got = hashlib.sha256(blob).hexdigest()
-            if got != sums[name]:
-                raise Refused(f"{name} does not match SHA256SUMS "
-                              f"(got {got[:16]}..., expected {sums[name][:16]}...). "
+            if got != sums[asset]:
+                raise Refused(f"{asset} does not match SHA256SUMS "
+                              f"(got {got[:16]}..., expected {sums[asset][:16]}...). "
                               "A download went wrong, or the release was changed "
                               "after its sums were written.")
             if name == "storage.bin" and SECRET.search(blob):
-                raise Refused("storage.bin carries a password, a Wi-Fi key or a "
+                raise Refused(f"{asset} carries a password, a Wi-Fi key or a "
                               "directory token. It was built from a working tree, "
                               "not a fresh clone, and must not be published.")
-            where = os.path.join(staging, CHIP if name in PARTS else "", name)
+            if name == VERSION_TXT:
+                line = blob.decode("ascii", "replace").strip()
+                if len(blob) > 128 or not SHOWN.match(line):
+                    raise Refused(f"{asset} is not one line naming a version.")
+            where = os.path.join(staging, fam or "", name)
             with open(where, "wb") as fh:
                 fh.write(blob)
         with open(os.path.join(staging, SUMS), "w", encoding="utf-8", newline="\n") as fh:
@@ -222,26 +339,58 @@ def put_in_place(dest, staging, version):
         shutil.rmtree(aside, ignore_errors=True)
 
 
-def prune(dest):
-    """Keep the newest KEEP versions and remove the rest. Only directories
-    named like a version are ever considered, so README.md and anything else
-    a person put there are left alone."""
+def prune(dest, keep_also=()):
+    """Keep the newest KEEP releases, whatever on disk is serving a board,
+    and anything in keep_also, and remove the rest. Only directories named
+    like a version are ever considered, so README.md and anything else a
+    person put there are left alone.
+
+    Serving is read off the disk the way the server reads it, not off what
+    GitHub listed today: for each board, the newest release here carrying
+    its set, and failing that the newest pre-release here carrying it. So a
+    preview copied in by hand stays until a release or a newer preview here
+    carries its board, and an older release still serving a board stays
+    past the newest KEEP."""
     found = []
     for name in os.listdir(dest):
         m = VERSION.match(name)
         if m and os.path.isdir(os.path.join(dest, name)):
-            found.append((tuple(int(g) for g in m.groups()), name))
+            found.append((version_key(name), name, bool(m.group(4))))
     found.sort(reverse=True)
+    keep = set([name for _k, name, pre in found if not pre][:KEEP]) | set(keep_also)
+    for fam in FAMILIES:
+        full = [n for _k, n, pre in found
+                if not pre and set_complete(os.path.join(dest, n, fam))]
+        pre = [n for _k, n, p in found if p and set_complete(os.path.join(dest, n, fam))]
+        if full or pre:
+            keep.add((full or pre)[0])
     gone = []
-    for _key, name in found[KEEP:]:
-        shutil.rmtree(os.path.join(dest, name), ignore_errors=True)
-        gone.append(name)
+    for _key, name, _pre in found:
+        if name not in keep:
+            shutil.rmtree(os.path.join(dest, name), ignore_errors=True)
+            gone.append(name)
     return gone
+
+
+def install(dest, release, version, families, say):
+    """One release into place. True when it was installed now, False when
+    it was there already; Refused when it could not be."""
+    have = installed_sums(dest, version)
+    if have is not None and complete(dest, version, families, parse_sums(have)):
+        sums_url = asset_urls(release).get(SUMS)
+        if sums_url:
+            remote = fetch(sums_url, "application/octet-stream").decode("utf-8", "replace")
+            if parse_sums(remote) == parse_sums(have):
+                say(f"Firmware {version} is already installed.")
+                return False
+    staging = stage(dest, release, version, families)
+    put_in_place(dest, staging, version)
+    return True
 
 
 def main():
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ap = argparse.ArgumentParser(description="Install the newest firmware release.")
+    ap = argparse.ArgumentParser(description="Install the newest firmware releases.")
     ap.add_argument("--dest", default=os.environ.get(
         "DIRECTORY_FIRMWARE_DIR", os.path.join(here, "firmware")))
     ap.add_argument("--quiet", action="store_true")
@@ -252,39 +401,138 @@ def main():
         if not args.quiet:
             print(msg)
 
+    def refused(version, why):
+        print(f"Firmware {version} not installed: {why}" if version
+              else f"Firmware release not updated: {why}")
+        print("The release already installed, if there is one, is untouched.")
+
     try:
         if not os.path.isdir(dest):
             raise Refused(f"{dest} is not a directory.")
-        release = latest_release()
-        tag = str(release.get("tag_name", ""))
-        m = TAG.match(tag)
-        if not m:
-            raise Refused(f"The latest release is tagged {tag!r}, not vX.Y.Z.")
-        version = ".".join(m.groups())
-        if complete(dest, version) and installed_sums(dest, version) is not None:
-            sums_url = next((a.get("browser_download_url") for a in release.get("assets", [])
-                             if a.get("name") == SUMS), None)
-            if sums_url:
-                remote = fetch(sums_url, "application/octet-stream").decode("utf-8", "replace")
-                if parse_sums(remote) == parse_sums(installed_sums(dest, version)):
-                    say(f"Firmware {version} is already installed.")
-                    return 0
-        staging = stage(dest, release, version)
-        put_in_place(dest, staging, version)
-        gone = prune(dest)
-        print(f"Installed firmware {version} for the browser installer.")
-        if gone:
-            print("Removed older releases: " + ", ".join(sorted(gone)) + ".")
-        return 0
+        releases = list_releases()
     except Refused as e:
-        print(f"Firmware release not updated: {e}")
-        print("The release already installed, if there is one, is untouched.")
+        refused("", e)
         return 1
     except Exception as e:                               # noqa: BLE001
-        print(f"Firmware release not updated: {type(e).__name__}: {e}")
-        print("The release already installed, if there is one, is untouched.")
+        refused("", f"{type(e).__name__}: {e}")
         return 1
 
+    failed = False
+    # (release, version, the sets it carries, the ones it is wanted for,
+    # whether it is a preview), in the order they are installed.
+    wanted = []
+    served = set()
+    # Every board some release names at all, whole or not. A preview never
+    # serves one of these: a broken release leaves its board on whatever is
+    # installed, and never hands it to a pre-release.
+    claimed = set()
+
+    # The releases, newest version first. Version order rather than the
+    # order GitHub lists them in, which is when each was made: a patch to an
+    # older line published after a newer release is not the newest release,
+    # and the site orders them by version too. The one GitHub lists first is
+    # the one a sysop just published, so a bad tag there is reported; an old
+    # one further down is only skipped.
+    full = []
+    first = True
+    for r in releases:
+        if r.get("prerelease"):
+            continue
+        tag = str(r.get("tag_name", ""))
+        m = TAG.match(tag)
+        assets = asset_urls(r)
+        claimed.add(FAMILIES[0])
+        claimed.update(f for f in FAMILIES if any(assets.get(prefix(f) + p) for p in PARTS))
+        if not m or m.group(4):
+            if first:
+                failed = True
+                refused("", f"The latest release is tagged {tag!r}, not vX.Y.Z.")
+            else:
+                say(f"Release {tag} not used: it is not tagged vX.Y.Z.")
+            first = False
+            continue
+        first = False
+        full.append((version_key(tag[1:]), r, tag[1:]))
+    full.sort(key=lambda c: c[0], reverse=True)
+
+    # The newest release is installed, every set it carries. A board it does
+    # not carry is served from the newest older release that does, so an
+    # ESP32-only patch to an older line never takes a board off the release
+    # that carries it.
+    for i, (_k, r, version) in enumerate(full):
+        try:
+            fams = carried(r)
+        except Refused as e:
+            if i == 0:
+                failed = True
+                refused("", e)
+            else:
+                say(f"Release {version} not used: {e}")
+            continue
+        needed = [f for f in fams if f not in served]
+        if i == 0 or needed:
+            wanted.append((r, version, fams, needed, False))
+            served.update(fams)
+
+    # A board no release carries: the newest pre-release that carries it,
+    # under its real name. A pre-release tagged like a release would land in
+    # a directory the site takes for a release, so it is never used.
+    candidates = []
+    for r in releases:
+        if not r.get("prerelease"):
+            continue
+        tag = str(r.get("tag_name", ""))
+        m = TAG.match(tag)
+        if not m or not m.group(4):
+            continue
+        try:
+            fams = carried(r)
+        except Refused as e:
+            say(f"Pre-release {tag} not used: {e}")
+            continue
+        candidates.append((version_key(tag[1:]), r, tag[1:], fams))
+    candidates.sort(key=lambda c: c[0], reverse=True)
+    for _k, r, version, fams in candidates:
+        needed = [f for f in fams if f not in served and f not in claimed]
+        if needed:
+            wanted.append((r, version, fams, needed, True))
+            served.update(needed)
+
+    if not wanted and not failed:
+        refused("", f"GitHub has no public release of {REPO} (the list is empty). "
+                    "The repository is private until 1.0.0, or has not published "
+                    "a release yet.")
+        return 1
+
+    serving = []
+    for r, version, fams, needed, preview in wanted:
+        try:
+            if install(dest, r, version, fams, say):
+                what = ""
+                if preview:
+                    what = (" (a preview, for the " + " and ".join(needed) + " image"
+                            + ("s" if len(needed) > 1 else "") + ")")
+                print(f"Installed firmware {version}{what} for the browser installer.")
+        except Refused as e:
+            failed = True
+            refused(version, e)
+        except Exception as e:                           # noqa: BLE001
+            failed = True
+            refused(version, f"{type(e).__name__}: {e}")
+        # Kept by prune whatever its age: an older release still serving a
+        # board, and the preview serving one.
+        if os.path.isdir(os.path.join(dest, version)):
+            serving.append(version)
+    # Anything that could not be installed leaves what was serving its board
+    # where it is: prune reads that off the disk. And after any refusal every
+    # pre-release already here is kept as well, until a run goes through.
+    if failed:
+        serving += [n for n in os.listdir(dest)
+                    if VERSION.match(n) and VERSION.match(n).group(4)]
+    gone = prune(dest, keep_also=serving)
+    if gone:
+        print("Removed older releases: " + ", ".join(sorted(gone)) + ".")
+    return 1 if failed else 0
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -13,7 +13,7 @@ It does not hold the mail or the information pages. The forums and the file area
 
 ## Update
 
-1. **Plug the board in** with a cable that carries data, open [the installer](/install) in Chrome or Edge, press **Update my board** and pick the port.
+1. **Plug the board in** with a cable that carries data, open [the installer](/install) in Chrome or Edge, choose your board in the card, press **Update my board** and pick the port. On the Waveshare S3, hold BOOT and tap RESET before pressing the button, and press RESET when it has finished: [On the Waveshare S3](/install#on-the-waveshare-s3) says why.
 2. **Press Update unleashed BBS, then Install.** A board running 0.22.1 or later usually tells the installer its name and version, and the page shows both above the button. It may not, if the board is still starting up when the page asks, and that makes no difference here. It does not ask about erasing and it does not erase.
 3. **Writing** takes about two minutes. Keep the tab in view while it works.
 4. **The board starts on the new version**, on the Wi-Fi network it already knew.

@@ -27,61 +27,90 @@ ESP Web Tools manifest from what is actually on disk, so a release cannot be
 half-published, and the "no release published yet" state on the page is the
 absence of files rather than a flag anybody has to remember to flip.
 
-**Do not put a `manifest.json` in here.** The server writes it, from the files
-it finds, and serves it at `/install/<version>/manifest.json`. A hand-written
-one would be ignored, and one that could be served would be able to name a
-file that is not there.
+**The manifests are the server's.** It writes one for each board from the
+files it finds, and serves it at `/install/<version>/<board>/manifest.json`.
+A `manifest.json` in here, such as the one the firmware's `tools/release.py`
+writes into each board's folder for trying a release by hand, is never
+served: the server only reads its `version` when the folder has no
+`version.txt`. One that could be served would be able to name a file that is
+not there.
 
 ## Layout
 
 ```
 firmware/
   README.md                      this file
-  0.22.1/                        one directory per release, named for the version
+  1.0.3/                         one directory per release, named for the version
     release.txt                  optional: date on line 1, a short note after
     THIRD_PARTY_NOTICES.md       from the firmware repo, with the release
     SHA256SUMS                   the release's own, kept for the record
-    esp32/                       one directory per chip family
+    esp32/                       one directory per board's image set
       bootloader.bin
       partitions.bin
       ota_data_initial.bin
       firmware.bin
       storage.bin
-  0.22.0/
-    ...
+      version.txt                optional (firmware 1.1.0 on): "1.0.3"
+  1.1.0-dev.8/                   a pre-release: a preview, see below
+    esp32/ ...
+    esp32s3/                     the Waveshare ESP32-S3-LCD-1.47's set
+      <the five parts>
+      version.txt                "1.1.0-dev.8 (S3 1.0.0)"
 ```
 
 Served as:
 
 ```
-/install/0.22.1/manifest.json            built by server.py, never a file
-/install/0.22.1/esp32/<part>.bin         the five parts, same origin as the page
-/install/0.22.1/THIRD_PARTY_NOTICES.md
+/install/1.0.3/esp32/manifest.json          built by server.py, never a file
+/install/1.0.3/esp32/manifest-update.json   the same, and it can never erase
+/install/1.0.3/esp32/<part>.bin             the five parts, same origin as the page
+/install/1.0.3/THIRD_PARTY_NOTICES.md
+/install/1.0.3/manifest.json                the ESP32's, where it was before
+/install/1.0.3/manifest-update.json         site 1.2.0, for a page or link from then
 ```
 
-Three rules, all enforced by `server.py` rather than by care:
+The rules, all enforced by `server.py` rather than by care:
 
-- **A version directory is named `MAJOR.MINOR.PATCH` and nothing else.** Any
-  other name in here is ignored, which is why this README can sit beside the
-  releases without being mistaken for one.
-- **A chip directory is offered only when all five of its parts are present**,
+- **A version directory is named `MAJOR.MINOR.PATCH`, or that and a
+  pre-release suffix (`1.1.0-dev.8`), and nothing else.** Any other name in
+  here is ignored, which is why this README can sit beside the releases
+  without being mistaken for one.
+- **A board's set is offered only when all five of its parts are present**,
   and none of them is empty.
-  A missing or misnamed file means that chip family is not offered, silently
-  and safely. It is never offered with a part pointing at a file that is not
-  there.
-- **Two releases are offered at a time**, newest first by version number.
-  `DIRECTORY_FIRMWARE_KEEP` moves that; the extra ones on disk are simply not
-  listed, so a third left behind by accident cannot appear.
+  A missing or misnamed file means that board is not offered from that
+  release, silently and safely. It is never offered with a part pointing at
+  a file that is not there.
+- **Each board is offered on its own.** A board gets the releases that carry
+  its set, newest first, two at a time (`DIRECTORY_FIRMWARE_KEEP`); the extra
+  ones on disk are not listed, and not served, so a third left behind by
+  accident cannot appear. A board no release carries gets the newest
+  pre-release that does, alone, labelled a preview.
+- **A pre-release is never a release.** It does not count as the newest
+  release anywhere on the site: not for the announcement banner, not for a
+  `::: from` gate, not for a board's update arrow. And a preview's set for a
+  board that has a release is neither offered nor served.
+- **One board a manifest.** ESP Web Tools picks a build by the chip family it
+  reads out of the board, so a manifest naming both would hand any ESP32-S3
+  the Waveshare image with the Waveshare's pins. Each board's manifest holds
+  its own build and nothing else, and a board of the other family is refused
+  before anything is written.
+- **A manifest's version is the set's `version.txt`**, the version exactly as
+  that board shows it over Improv, because ESP Web Tools compares the two to
+  decide whether the board already runs it. Without the file, the folder's
+  `manifest.json` version, then the release's name.
 
 Four of the five filenames are what PlatformIO produces. The fifth is
 `storage.bin`, which PlatformIO calls `littlefs.bin`: a release names it for
 the partition it is written to, so it is renamed as it is copied in.
 
-## Chip families
+## Boards and chip families
 
-A second chip family is a new directory, not a code change. The directory name
-maps to the ESP Web Tools `chipFamily` string, and to that family's bootloader
-offset, in `FLASH_FAMILIES` in `server.py`:
+A board is a directory, named as the firmware's `tools/release.py` names the
+build, and an entry in `BOARDS` in `server.py`: its picture, its name, the
+line that says how to tell it, where to buy one and what it needs doing
+before a button is pressed. The directory name maps to the ESP Web Tools
+`chipFamily` string, and to that family's bootloader offset, in
+`FLASH_FAMILIES` in `server.py`:
 
 | Directory | `chipFamily` | Bootloader offset |
 |---|---|---|
@@ -90,14 +119,15 @@ offset, in `FLASH_FAMILIES` in `server.py`:
 | `esp32s3` | `ESP32-S3` | `0x0` |
 | `esp32c3` | `ESP32-C3` | `0x0` |
 
-Only `esp32` is real today. The reference board is a bare ESP32-WROOM-32E and
-an ESP32-S3 with PSRAM is the documented upgrade path, so the table is there so
-that the day an S3 build exists it is a directory drop and nothing else.
+`esp32` and `esp32s3` are real since site 1.2.0: the reference ESP32 dev
+board, and the Waveshare ESP32-S3-LCD-1.47. A second board on the same chip
+would be a second directory and a second entry in `BOARDS`, never the same
+directory: its image carries its own pins.
 
-ESP Web Tools reads the chip out of the board it just connected to and picks
-the matching entry, so a page offering several families needs no chooser and
-the visitor is never asked a question about their hardware that the hardware
-can answer.
+ESP Web Tools reads the chip out of the board it just connected to, but it
+cannot tell two boards on the same chip apart, which is why /install asks:
+a picker with a picture of each board, and each choice's buttons point at a
+manifest holding that board's build alone.
 
 ## The offsets, and where they come from
 
@@ -251,22 +281,42 @@ fetch it, which `update.sh` does.
    with them rather than being linked to a moving target.
 
 6. **Publish a GitHub Release** of `rwmech/unleashed_BBS`, tagged `v` and the
-   version (`v1.0.0`), public, with these seven assets:
+   version (`v1.0.0`), public. The firmware's `tools/release.py` and its
+   workflow do this. The assets are five parts for each board, the ESP32's
+   plain and another board's prefixed with its directory, each board's
+   `version.txt`, the notices, and `SHA256SUMS` over all of them:
 
    ```
    bootloader.bin  partitions.bin  ota_data_initial.bin  firmware.bin
-   storage.bin     THIRD_PARTY_NOTICES.md                SHA256SUMS
+   storage.bin     version.txt
+   esp32s3-bootloader.bin  esp32s3-partitions.bin  esp32s3-ota_data_initial.bin
+   esp32s3-firmware.bin    esp32s3-storage.bin     esp32s3-version.txt
+   THIRD_PARTY_NOTICES.md  SHA256SUMS
    ```
 
    `storage.bin` is PlatformIO's `littlefs.bin` renamed. `SHA256SUMS` is
-   `sha256sum`'s own output over the other six. A release without all seven,
-   or with a file that does not match its sum, or whose `storage.bin` carries a
-   password, a Wi-Fi key or a token, is refused and nothing on the site moves.
+   `sha256sum`'s own output over the others. A release missing part of a
+   board's set, or with a file that does not match its sum, or whose
+   `storage.bin` carries a password, a Wi-Fi key or a token, or whose
+   `version.txt` is not a version, is refused and nothing on the site moves.
+   Releases before 1.1.0 carry the ESP32's set alone and no `version.txt`,
+   and are read exactly as before.
+
+   **A tag with a suffix (`v1.1.0-dev.8`) is published as a pre-release.**
+   The fetcher installs one only for a board no release carries, under its
+   own name, and the page offers it for that board as a preview. Once a
+   release carries that board, the preview is removed. A board the newest
+   release leaves out, but an older release carries, stays on that older
+   release.
 
 7. **Rob runs `sudo /srv/unleashed_directory/deploy/update.sh`** on the
    droplet. It fetches the newest release on every run, whether or not the site
-   itself changed, installs it here, and keeps the newest two. A fetch that
-   fails says why and leaves the installed release alone.
+   itself changed, and for any board that release does not carry the newest
+   older release that does, or failing that a preview; it installs them here,
+   and keeps the newest two releases and whatever is still serving a board,
+   read off the disk the way the page reads it. A fetch that fails says why
+   and leaves what is installed alone. A preview copied in by hand stays
+   until a release or a newer preview here carries its board.
 
 8. **To check a build locally before it is published**, copy it in by hand;
    the version directory is git-ignored, so it cannot be committed by
@@ -287,7 +337,10 @@ fetch it, which `update.sh` does.
 
    The manifest should name the new version and list five parts, with the
    offsets `4096`, `32768`, `61440`, `131072` and `3932160`. Every part should
-   fetch with a 200 and a plausible length.
+   fetch with a 200 and a plausible length. The board's own manifest is
+   `/install/$V/esp32/manifest.json`, with the same offsets and bare part
+   names; an S3 set's is `/install/$V/esp32s3/manifest.json`, bootloader at
+   `0`.
 
    Open `http://127.0.0.1:8937/install` in Chrome and check the button is
    live. `127.0.0.1` and `localhost` count as secure contexts, so Web Serial

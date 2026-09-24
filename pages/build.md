@@ -19,7 +19,10 @@ dev board in a drawer, you already have most of it.
 - **An ESP32 with 4 MB of flash.** The reference board is a bare
   ESP32-WROOM-32E: 520 KB of SRAM, 4 MB of flash, no PSRAM, Bluetooth off. Not
   every ESP32 can run it, and the table below says which. A dev board with a
-  USB-serial chip needs nothing but the cable.
+  USB-serial chip needs nothing but the cable. The one other board with an
+  image of its own is the Waveshare ESP32-S3-LCD-1.47, a USB stick with a
+  screen and a card slot: [Tested boards](/hardware) has both, with
+  pictures.
 - **A USB cable**, and that is the whole bill of materials for a dev board. A
   bare module also wants 3V3, ground, EN pulled up, GPIO0 to ground while you
   flash it, and a USB-serial adapter on the console pins.
@@ -40,9 +43,9 @@ what stops the radio's work from making callers' lines lag.
 
 | Chip | Runs it? | Why |
 |---|---|---|
-| ESP32-WROOM-32E | **Yes, tested** | The reference board: ten caller lines, a busy line and a hidden sysop line. The only one anybody has run. [SD card wiring diagram](/sdcard) |
+| ESP32-WROOM-32E | **Yes, tested** | The reference board: ten caller lines, a busy line and a hidden sysop line. Every release is tested on it. [Tested boards](/hardware), [SD card wiring diagram](/sdcard) |
 | ESP32-WROVER | Should work, not yet tested | The same original ESP32 chip, and the same goes for other modules built on it. A WROVER adds PSRAM, a second memory chip on the module, which leaves room for more callers, but nobody has measured how many. |
-| ESP32-S3 | Should work, not yet tested | Two cores and Wi-Fi, with or without PSRAM. There is no ready-made firmware build for it yet. |
+| ESP32-S3 | **Yes, on one board** | Two cores and Wi-Fi. The Waveshare ESP32-S3-LCD-1.47 has its own image and has been run: a screen, a card slot and a drive light on the board, and still ten caller lines. [Tested boards](/hardware). Another S3 board needs a build of its own, because the image carries the Waveshare's pins. |
 | ESP32-S2 | No | One core. |
 | ESP32-C3 | No | One core. |
 | ESP32-C5 | No | One core, even with dual-band Wi-Fi. |
@@ -50,10 +53,11 @@ what stops the radio's work from making callers' lines lag.
 | ESP32-H2 | No | One core, and no Wi-Fi. |
 | ESP32-P4 | No | No Wi-Fi on the chip. It needs a second chip to reach a network. |
 
-The firmware is built for the original ESP32 and does not run on the others as
-it stands. A single-core chip could be made to run it, but the radio and the
-callers would take turns on one core and callers would feel it, and doing that
-properly means rebuilding the core of the BBS rather than changing a setting.
+The firmware is built for the original ESP32 and, as a board of its own, for
+the Waveshare S3, and does not run on the others as it stands. A single-core
+chip could be made to run it, but the radio and the callers would take turns
+on one core and callers would feel it, and doing that properly means
+rebuilding the core of the BBS rather than changing a setting.
 
 ## Getting it running
 

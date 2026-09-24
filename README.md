@@ -47,7 +47,7 @@ that domain serves the board list, with the other two faces under `/about` and
 - Filters the board list by badge: a Filter button opens every badge as small chips, a row per group, and picking some shows the boards carrying all of them, or any. It works without JavaScript, and every filtered view is a link, such as `/?b=petscii&b=ham`.
 - Tells each board the public address its heartbeat arrived from, which is dynamic DNS as a side effect.
 - Publishes new boards as an RSS feed at `/feed.xml`, so people can follow the list without an account, an email address or anything that knows who is reading.
-- Hosts the browser installer at `/install`, which writes the BBS firmware to an ESP32 over USB from a Chrome or Edge tab, with no toolchain to set up. The images it serves live in [firmware/](firmware/README.md), which is empty today; the page says so rather than offering a download that is not there.
+- Hosts the browser installer at `/install`, which writes the BBS firmware to a board over USB from a Chrome or Edge tab, with no toolchain to set up. The reader picks their board from a list with a picture of each, the ESP32 dev board or the Waveshare ESP32-S3-LCD-1.47, and each choice installs that board's image and no other. `/hardware` shows the boards that have been tested, with their current build and where to buy one. The images live in [firmware/](firmware/README.md), fetched from the firmware's GitHub releases, a pre-release standing in as a preview for a board no release carries yet; with nothing there, the page says so rather than offering a download that is not there.
 
 ## What it will not do
 
@@ -77,7 +77,7 @@ Settings come from the environment, so a deployment never edits the code:
 | `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one address |
 | `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page and feed are reused |
 | `DIRECTORY_FIRMWARE_DIR` | `firmware/` | where the browser installer's firmware images live |
-| `DIRECTORY_FIRMWARE_KEEP` | `2` | how many releases `/install` offers, newest first |
+| `DIRECTORY_FIRMWARE_KEEP` | `2` | how many releases `/install` offers for each board, newest first |
 | `DIRECTORY_LIST_DOMAIN` | | the domain that shows the board list |
 | `DIRECTORY_ABOUT_DOMAIN` | | the domain that shows what this is |
 | `DIRECTORY_DATA_DOMAIN` | | the domain that shows the API |
@@ -123,7 +123,7 @@ emitted would be correctly rejected. A webhook needs neither.
 python3 selftest.py
 ```
 
-Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, the three faces, the feed, the pages, the badges, their codes and the filter, and databases made by older versions. About 700 checks in well under a minute, no network access beyond loopback. It binds five ports on 127.0.0.1 from 8123 up; `SELFTEST_PORT=18765 python3 selftest.py` moves them.
+Starts a directory on a scratch database and walks a listing through its whole life: first announce, token issue, the pending window, going public, a second board from the same address queueing, an attempted hijack, bad input, the three faces, the feed, the pages, the badges, their codes and the filter, databases made by older versions, and the release fetcher with its boards and previews. About 730 checks in well under a minute, no network access beyond loopback. It binds five ports on 127.0.0.1 from 8123 up; `SELFTEST_PORT=18765 python3 selftest.py` moves them.
 
 ## Deploying it
 

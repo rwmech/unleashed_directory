@@ -152,11 +152,13 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `firmware/README.md`.
   **Releases arrive from GitHub, not from commits** (0.16.0). The firmware
   repository publishes a GitHub Release of `rwmech/unleashed_BBS`, tagged
-  `vX.Y.Z`, with seven assets: `bootloader.bin`, `partitions.bin`,
-  `ota_data_initial.bin`, `firmware.bin`, `storage.bin`,
+  `vX.Y.Z`, with the ESP32's five parts `bootloader.bin`, `partitions.bin`,
+  `ota_data_initial.bin`, `firmware.bin`, `storage.bin` (and, from 1.1.0,
+  `version.txt` and the same six prefixed `esp32s3-` for the S3),
   `THIRD_PARTY_NOTICES.md` and `SHA256SUMS`. `deploy/update.sh` runs
   `deploy/fetch_release.py` on every run, including one where the site had
-  nothing new, and that installs the latest release as:
+  nothing new, and that installs the latest release as (an S3 set is an
+  `esp32s3/` folder beside `esp32/`, bootloader at 0x0):
 
   ```
   firmware/<version>/esp32/bootloader.bin         0x1000    4096
@@ -182,13 +184,75 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   runs the fetcher against a release served from 127.0.0.1, including every
   way it should refuse. Dropping files in by hand still works, for testing.
   `storage.bin` is PlatformIO's `littlefs.bin`, renamed for its partition.
-  **No `manifest.json` goes in the folder**: the server builds it from the
-  five files and serves it at `/install/<version>/manifest.json`, with
-  `name` "unleashed BBS", `new_install_prompt_erase` true and
-  `new_install_improv_wait_time` 30. The chip directory is `esp32` so an
-  S3 build is a second directory (`esp32s3`, bootloader at 0x0) and not a
-  code change. A family missing any part, or with an empty part, is not
-  offered. Two releases are offered, newest first.
+  **The manifests are the server's**: it builds one a board from the five
+  files and serves it at `/install/<version>/<board>/manifest.json` (and
+  `manifest-update.json`), with `name` "unleashed BBS",
+  `new_install_prompt_erase` true and `new_install_improv_wait_time` 30. A
+  `manifest.json` on disk (release.py writes one into each folder for
+  trying images by hand) is never served. A family missing any part, or
+  with an empty part, is not offered.
+  **Boards (site 1.2.0, Rob: "select the board type ... include an image
+  for confirmation ... Small picture in the pick list").** A board is an
+  image set folder, named as the firmware's `tools/release.py` names the
+  build, plus an entry in `BOARDS` in server.py: its line-art picture
+  (`BOARD_ART_ESP32`, `BOARD_ART_S3`, 96 x 60 units, the art classes and
+  stroke weights), name, a "how to tell" line, the /hardware anchor, the
+  buy link, and a "before" note in Markdown (the S3's download mode). Today
+  `esp32` (the reference dev board) and `esp32s3` (the Waveshare
+  ESP32-S3-LCD-1.47, bootloader at 0x0). **One manifest a board, holding
+  only that board's build**: ESP Web Tools picks a build by chip family
+  alone, so a combined manifest would give any ESP32-S3 the Waveshare's
+  pins; with one build, the other family is refused before writing.
+  `/install/<version>/manifest.json` and `manifest-update.json` still
+  answer, the ESP32's alone with its folder in each path, for a page or a
+  link from before 1.2.0. A second board on the same chip is a second
+  folder and a second `BOARDS` row, never a shared folder.
+  **The card's picker** is a fieldset of native radios (`fwboard`, ids
+  `fwb<j>`), each row the picture, name, tell line and "Firmware 1.0.3";
+  each board's buttons, version radios (`fwver<j>`, ids `fwv<j>_<i>`),
+  version line and notices are its `.bsec.b<j>`, shown by `:has()` rules
+  generated under the card. Without `:has()` the first board with a set
+  stays showing. `.bd` and `.chip` were taken (badges, filter chips), which
+  is why the names are `.bsec` and `.fam`: check a class name against the
+  whole stylesheet before using it. The amber box moved under the buttons
+  on a desktop too, and the column is 26rem, to keep both buttons on the
+  first screen at 1366 x 768 (ESP32 Update ends 665px, S3 719px).
+  **Versions.** A set's `version.txt`, one line exactly as the board shows
+  it ("1.0.3", "1.1.0 (S3 1.0.0)", brackets because a PETSCII terminal has
+  no middle dot), is the manifest's `version`, because ESP Web Tools
+  compares it with Improv's answer to decide whether to offer Update.
+  Without it, the folder's manifest.json version, then the directory name.
+  `FIRMWARE_SHOWN` is the shape; anything else is not read.
+  **Previews.** A directory named with a pre-release suffix
+  (`1.1.0-dev.8`, `FIRMWARE_VER`) is a preview. `firmware_releases()` is
+  releases only, so a preview is never "the newest release": no gate,
+  banner or update arrow. `board_offers(dir)` gives a board the releases
+  carrying its set, newest first, up to FIRMWARE_KEEP, else the newest
+  preview carrying it, alone; `firmware_file()` serves only what
+  `board_offers` offers, so a preview's ESP32 set is unreachable while the
+  ESP32 has a release. The picker says "1.1.0 preview (S3 1.0.0)" and the
+  line under the buttons the exact version.
+  **The fetcher reads `/releases`, not `/releases/latest`** (which leaves
+  out pre-releases; a single release object is still read as a list of
+  one). It installs the newest release by version (not GitHub's list order)
+  with every set it carries (the ESP32's assets plain, another's prefixed:
+  `esp32s3-firmware.bin`, `esp32s3-version.txt`); for each board that
+  release does not carry, the newest older release carrying it; and only
+  for a board no release names at all, the newest pre-release carrying it,
+  under its own name. A pre-release tagged like a release is never used. A
+  half-published set, a version.txt the sums name but the release lacks, or
+  a bad version.txt refuses that release; after any refusal every preview
+  on disk is kept. Prune keeps the newest two releases plus whatever is
+  serving a board **read off the disk the way board_offers reads it** (the
+  newest release here carrying the set, else the newest preview here), not
+  off what GitHub listed today, so a preview copied in by hand is not
+  deleted by the nightly run while it is the only copy (code review,
+  2026-09-24).
+  **/hardware** is `pages/hardware.md`, the tested boards: `::: board`
+  then the folder name draws `board_html()`, the picture at 9rem, the
+  build /install offers, the chip, the tell line and the buy link, from
+  `BOARDS` and the disk, so the page and the picker cannot disagree. A
+  board goes on it once a build has actually run on it.
   **The sysop password on /install** (1.0.0, Rob): a board ships with one
   default password, the sysop's, `unleashed`. It works only from the
   board's own network and only until changed; the first sign-up or login
@@ -713,6 +777,13 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   each with a line-art symbol (`BTN_ICON_NEW`, `BTN_ICON_UPDATE`). Measured
   with two releases offered, the tallest the card gets: the Update button
   ends near 740px. Re-measure after touching the card or the amber box.
+  Since site 1.2.0 the drawing is gone, the board picker opens the card,
+  the amber box is under the buttons and the column is 26rem: the ESP32's
+  Update button ends at 665px, the S3's at 719px. Measure with the
+  installer's module left out of a test copy and its `.no` spans hidden,
+  or the undefined element shows both refusal messages and reads 200px
+  tall; and a second server started on the same port on Windows binds
+  beside a stale one that keeps answering, so stop it by its pid.
 - **The card's lamps (0.22.0, from the UX spec)**: two lamps half a lap
   apart, each a head and three beads, 20s a lap, linear. Three a third of a
   lap apart looked scattered because a rectangle has no three-fold

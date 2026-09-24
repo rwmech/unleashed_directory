@@ -2150,7 +2150,7 @@ def main():
                      "/firstcall", "/privacy", "/whofor", "/kids",
                      "/teachers", "/forward", "/forward-netgear",
                      "/forward-tplink", "/forward-asus", "/forward-xfinity",
-                     "/forward-mesh", "/badges"):
+                     "/forward-mesh", "/badges", "/hardware"):
             every[path] = get(path)[1]
         # Forums, not message bases. The feature is the same one; the name
         # changed, and a reader meeting both words assumes they are two
@@ -2253,6 +2253,29 @@ def main():
               "use `diskpart`" not in page and "refuses it as well" in page)
         code, page = get("/build")
         check("and build links to it", 'href="/sdcard"' in page)
+
+        # Site 1.2.0: the tested boards page, a picture and the facts for
+        # each board from the same table the installer's picker draws, and
+        # the build page's table of chips says the S3 has run.
+        check("build's table says the S3 has run, on one board, and links the "
+              "tested boards",
+              "<td>ESP32-S3</td><td><b>Yes, on one board</b></td>" in page
+              and 'href="/hardware"' in page and "Should work, not yet tested</td><td>"
+              "Two cores and Wi-Fi, with or without PSRAM" not in page)
+        code, page = get("/hardware")
+        body = page.split("<article>")[1].split("</article>")[0] if "<article>" in page else ""
+        check("the tested boards page draws each board, its build and where to buy it",
+              code == 200 and '<h2 id="esp32-dev-board">' in body
+              and '<h2 id="waveshare-esp32-s3-lcd-1-47">' in body
+              and body.count('<div class="hwb">') == len(S.BOARDS)
+              and all(b["buy"] in body for b in S.BOARDS)
+              and all(S.board_html([b["dir"]]) in body for b in S.BOARDS))
+        check("and it is part of Build one, with the drawings' stylesheet and no script",
+              '<a class="here" href="/build">' in page and "svg.art.board {" in page
+              and "<script" not in page)
+        check("and the S3's install steps are on /install, where it points",
+              'href="/install#on-the-waveshare-s3"' in body
+              and '<h2 id="on-the-waveshare-s3">' in get("/install")[1])
 
         code, page = get("/terminals")
         check("the terminal page renders its tables",
@@ -3048,23 +3071,43 @@ def main():
             check("the card's amber box is the page's own words, and links down the page",
                   '<div class="pre"><p><b>Before you start:</b> Chrome or Edge' in top
                   and '<a href="#before-you-start">more below</a>' in top)
-            check("and it carries its small drawing, the board slot and one version line",
-                  '<svg class="art mini"' in top and "Board: ESP32, 4 MB flash" in top
-                  and top.count('class="meta ver ') == 1)
+            # Site 1.2.0: the board picker, every board with its picture,
+            # name and "how to tell" line, and one version line for each
+            # release a board is offered; a board with nothing on disk says
+            # "Coming soon" and has no buttons.
+            offered = sum(len(S.board_offers(b["dir"])) for b in S.BOARDS)
+            check("and it carries the board picker, a picture a board, and a version "
+                  "line for each release offered",
+                  '<fieldset class="boards"><legend>Your board <a href="/hardware">'
+                  "which is mine?</a></legend>" in top
+                  and all(b["art"] in top and html.escape(b["name"]) in top
+                          and html.escape(b["tell"]) in top for b in S.BOARDS)
+                  and top.count('<input type="radio" name="fwboard"') == len(S.BOARDS)
+                  and top.count('class="meta ver ') == offered
+                  and top.count("Coming soon") == sum(
+                      1 for b in S.BOARDS if not S.board_offers(b["dir"]))
+                  and '<svg class="art mini"' not in top)
             check("the installer's own licence is under Doing it the other way",
                   S.EWT_BASE + "LICENSE" in inst2.split('id="doing-it-the-other-way"')[1]
                   and S.EWT_BASE + "LICENSE" not in top)
         css_i = inst2.split("<style>")[1]
         check("two columns from 901px, the card sticky and level with the title",
-              "grid-template-columns:minmax(0, 1fr) 24rem" in css_i
+              "grid-template-columns:minmax(0, 1fr) 26rem" in css_i
               and "grid-row:1 / span 2" in css_i and "position:sticky" in css_i)
         # Site 1.0.0: both buttons on the first screen at 1366 x 768 with a
         # second release offered. Measured with headless Chrome when it was
         # built (the Update button's bottom went from 831px to about 740px);
-        # here, the rules that bought the room are pinned.
+        # here, the rules that bought the room are pinned. Site 1.2.0 put the
+        # board picker where the drawing and the amber box were, and the
+        # amber box under the buttons: 665px for the ESP32 and 719px for the
+        # S3 under its download-mode note, measured the same way.
         check("the card tightened so both buttons fit the first screen at 1366 x 768",
-              "article .installer svg.art.mini { height:3.5rem; }" in css_i
+              "svg.art.mini" not in css_i
               and "article .installer { display:flex; flex-direction:column; gap:0.5rem; }"
+                  in css_i
+              and "article .installer .bsec { display:flex; flex-direction:column; "
+                  "gap:0.5rem; }" in css_i
+              and "article .installer .bopt svg.art.board { width:4rem; height:2.5rem; }"
                   in css_i
               and "position:sticky; top:1rem; padding:1rem 1.25rem; }" in css_i
               and "article .installer button.go { padding-top:0.5625rem; "
@@ -3076,9 +3119,15 @@ def main():
               and (not published
                    or (S.BTN_ICON_NEW + "Install on a new board</button>" in inst2
                        and S.BTN_ICON_UPDATE + "Update my board</button>" in inst2)))
-        check("and on a phone the button comes before the amber box",
-              "article .installer esp-web-install-button { order:2; }" in css_i
-              and "article .installer .pre { order:5; }" in css_i)
+        # The picker, then the buttons, then the amber box, in the markup,
+        # which is the order a phone gets and, since site 1.2.0, a desktop
+        # too: nothing is reordered by the stylesheet any more.
+        check("and on a phone the picker and the button come before the amber box",
+              "{ order:" not in css_i.split("The install card, laid out")[1].split(
+                  "A page's one primary action")[0]
+              and (not published
+                   or 0 < top.find('<fieldset class="boards">')
+                   < top.find("<esp-web-install-button") < top.find('<div class="pre">')))
         # The board's Improv answer is telnet://, which a browser cannot open.
         check("the last step says Telnet details, not Visit Device",
               "<b>Telnet details</b>" in inst2 and "Visit Device" not in inst2)
@@ -3265,7 +3314,8 @@ def main():
         # screen by the words it now shows.
         flat_top = " ".join(re.sub(r"<[^>]+>", " ", itop).split())
         check("and the steps name the new buttons and the erase screen's words",
-              "Press Install on a new board and pick the port." in flat_top
+              "Choose your board, press Install on a new board and pick the port."
+              in flat_top
               and "offers Install or update unleashed BBS ." in flat_top
               and "may be greeted by name and version" in flat_top
               and "headed Start fresh? , unless the board was recognised" in flat_top
@@ -4070,7 +4120,7 @@ def main():
             shown = S.installer_html()
             check("with an image published the page offers the element",
                   "<esp-web-install-button" in shown
-                  and 'manifest="/install/0.19.2/manifest.json"' in shown)
+                  and 'manifest="/install/0.19.2/esp32/manifest.json"' in shown)
             check("with our own button and both refusal messages in its slots",
                   'slot="activate"' in shown and 'slot="unsupported"' in shown
                   and 'slot="not-allowed"' in shown)
@@ -4079,11 +4129,12 @@ def main():
             # board slot now, two native radios and no script: the checked
             # one decides which button, version line and notices link show.
             check("the older release is kept as a choice, the newest picked",
-                  'manifest="/install/0.19.1/manifest.json"' in shown
-                  and shown.count('name="fwver"') == 2
-                  and '<input type="radio" name="fwver" id="fwv0" checked> 0.19.2' in shown
-                  and ".installer .r1{display:none}" in shown
-                  and ".installer:has(#fwv1:checked) .r1{display:block}" in shown
+                  'manifest="/install/0.19.1/esp32/manifest.json"' in shown
+                  and shown.count('name="fwver0"') == 2
+                  and '<input type="radio" name="fwver0" id="fwv0_0" checked> 0.19.2'
+                      in shown
+                  and ".installer .b0 .r1{display:none}" in shown
+                  and ".installer:has(#fwv0_1:checked) .b0 .r1{display:block}" in shown
                   and shown.count('<span class="no" slot="unsupported">') == 2)
             # The card said the version three times: on the button, in a
             # line under it, and again as release.txt's first line.
@@ -4099,16 +4150,30 @@ def main():
             check("each release has Install on a new board and Update my board",
                   shown.count(">Update my board</button>") == 2
                   and '<esp-web-install-button class="r0 upd" manifest="/install/'
-                      '0.19.2/manifest-update.json"><button class="go upd" '
+                      '0.19.2/esp32/manifest-update.json"><button class="go upd" '
                       'slot="activate">' + S.BTN_ICON_UPDATE + 'Update my board</button>'
                       in shown
-                  and 'manifest="/install/0.19.1/manifest-update.json"' in shown
-                  and shown.index('manifest="/install/0.19.2/manifest.json"')
-                      < shown.index('manifest="/install/0.19.2/manifest-update.json"')
+                  and 'manifest="/install/0.19.1/esp32/manifest-update.json"' in shown
+                  and shown.index('manifest="/install/0.19.2/esp32/manifest.json"')
+                      < shown.index('manifest="/install/0.19.2/esp32/manifest-update.json"')
                   and shown.count('<span slot="unsupported"></span>'
                                   '<span slot="not-allowed"></span>') == 2)
-            check("the board slot names the board and its flash",
-                  '<p class="meta board">Board: ESP32, 4 MB flash</p>' in shown)
+            # Site 1.2.0: the board slot is the board picker. The ESP32 is
+            # picked to start with and says which firmware it would get; the
+            # S3, with nothing on disk, says so and has no buttons.
+            check("the picker offers each board, the ESP32 picked, its version said",
+                  '<input type="radio" name="fwboard" id="fwb0" checked>'
+                  + S.BOARD_ART_ESP32 in shown
+                  and '<input type="radio" name="fwboard" id="fwb1">' + S.BOARD_ART_S3
+                      in shown
+                  and '<span class="bv">Firmware 0.19.2</span>' in shown
+                  and '<span class="bv soon">Coming soon</span>' in shown
+                  and '<div class="bsec b1"><p class="soon">There is no image for this '
+                      "board on this site yet." in shown
+                  and ".installer .bsec.b1{display:none}"
+                      ".installer:has(#fwb1:checked) .bsec.b0{display:none}"
+                      ".installer:has(#fwb1:checked) .bsec.b1{display:flex}" in shown
+                  and "Board: ESP32" not in shown)
             # Site 1.0.0: a symbol on each button, a fresh chip with a
             # sparkle and a chip in an arrow going round it. Decoration: the
             # words say it, so a screen reader is not told twice.
@@ -4130,6 +4195,125 @@ def main():
                   "/install/0.19.2/THIRD_PARTY_NOTICES.md" in shown
                   and S.EWT_BASE + "LICENSE" in S.installer_terms_html()
                   and S.EWT_BASE + "THIRD_PARTY_LICENSES.txt" in S.installer_terms_html())
+
+            # ------------------------------------------------------------------
+            # Site 1.2.0: one board a manifest, and a preview for a board no
+            # release carries. The firmware's pre-release (vX.Y.Z-dev.N)
+            # carries both chips; the ESP32 stays on its release, the S3 is
+            # offered the preview, and the preview is never "the newest
+            # release" (no gates, no banner, no update arrows).
+            print("Boards, one manifest each, and a preview")
+            put("0.20.0-dev.3", "esp32", whole + ["version.txt"])
+            put("0.20.0-dev.3", "esp32s3", whole,
+                {"release.txt": "version 0.20.0-dev.3\ncommit abc1234\n",
+                 "THIRD_PARTY_NOTICES.md": "notices\n"})
+            with open(os.path.join(fwroot, "0.20.0-dev.3", "esp32", "version.txt"), "w") as fh:
+                fh.write("0.20.0-dev.3\n")
+            with open(os.path.join(fwroot, "0.20.0-dev.3", "esp32s3", "version.txt"),
+                      "w") as fh:
+                fh.write("0.20.0-dev.3 (S3 1.0.0)\n")
+            os.makedirs(os.path.join(fwroot, "0.20.0-", "esp32"), exist_ok=True)
+            os.makedirs(os.path.join(fwroot, "0.20.0-a..b", "esp32"), exist_ok=True)
+            check("a preview is not a release, and nothing else changes",
+                  [r["version"] for r in S.firmware_releases()] == ["0.19.2", "0.19.1"]
+                  and S.newest_release() == "0.19.2")
+            check("the ESP32 is offered its releases; the S3, which no release "
+                  "carries, the preview",
+                  [r["version"] for r in S.board_offers("esp32")] == ["0.19.2", "0.19.1"]
+                  and [r["version"] for r in S.board_offers("esp32s3")] == ["0.20.0-dev.3"]
+                  and S.board_offers("esp32s3")[0]["pre"] is True)
+            m3 = S.firmware_manifest("0.20.0-dev.3", chip="esp32s3")
+            check("a board's manifest holds that board's build and nothing else",
+                  m3 is not None and [b["chipFamily"] for b in m3["builds"]] == ["ESP32-S3"]
+                  and [b["chipFamily"] for b in S.firmware_manifest(
+                      "0.19.2", chip="esp32")["builds"]] == ["ESP32"])
+            check("at the S3's offsets, bootloader at 0, the parts beside it",
+                  [(p["path"], p["offset"]) for p in m3["builds"][0]["parts"]]
+                  == [("bootloader.bin", 0), ("partitions.bin", 32768),
+                      ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
+                      ("storage.bin", 3932160)])
+            check("under the version the board shows, from its version.txt",
+                  m3["version"] == "0.20.0-dev.3 (S3 1.0.0)"
+                  and S.firmware_manifest("0.19.2", chip="esp32")["version"] == "0.19.2")
+            check("the Update manifest for a board is the same plus the key that "
+                  "forbids the erase",
+                  {k: v for k, v in S.firmware_manifest(
+                      "0.20.0-dev.3", update=True, chip="esp32s3").items()
+                   if k != "unleashed_update"} == m3)
+            got3 = S.firmware_file("0.20.0-dev.3/esp32s3/manifest.json")
+            check("served from inside the board's own folder",
+                  got3 is not None and json.loads(got3[0].decode()) == m3
+                  and S.firmware_file("0.20.0-dev.3/esp32s3/firmware.bin") is not None
+                  and json.loads(S.firmware_file("0.19.2/esp32/manifest.json")[0]
+                                 .decode())["builds"][0]["parts"][0]["path"]
+                      == "bootloader.bin")
+            check("the old path is the ESP32's alone, and the preview has none",
+                  [b["chipFamily"] for b in json.loads(
+                      S.firmware_file("0.19.2/manifest.json")[0].decode())["builds"]]
+                  == ["ESP32"]
+                  and S.firmware_file("0.20.0-dev.3/manifest.json") is None)
+            # The preview's own ESP32 set is not offered while the ESP32 has
+            # a release, so it is not reachable by guessing either.
+            check("a set that is not offered is not served",
+                  S.firmware_file("0.20.0-dev.3/esp32/firmware.bin") is None
+                  and S.firmware_file("0.20.0-dev.3/esp32/manifest.json") is None
+                  and S.firmware_file("0.19.2/esp32s3/manifest.json") is None
+                  and S.firmware_file("0.20.0-dev.3/esp32s3/version.txt") is None
+                  and S.firmware_file("0.20.0-dev.3/esp32s3/../esp32/firmware.bin") is None)
+            check("a pre-release name that is not one is not a version",
+                  S.FIRMWARE_VER.match("0.20.0-") is None
+                  and S.FIRMWARE_VER.match("0.20.0-a..b") is None
+                  and S.FIRMWARE_VER.match("0.20.0-dev.3") is not None
+                  and all(r["version"] not in ("0.20.0-", "0.20.0-a..b")
+                          for r in S.firmware_sets()))
+            check("the firmware's own release.txt is not taken for a note",
+                  S.board_offers("esp32s3")[0]["note"] == ""
+                  and S.board_offers("esp32s3")[0]["date"] == "")
+            pick = S.installer_html()
+            check("the picker says preview, and the line under the buttons the "
+                  "exact version",
+                  '<span class="bv">Firmware 0.20.0 preview (S3 1.0.0)</span>' in pick
+                  and '<p class="meta ver r0">Version 0.20.0-dev.3 (S3 1.0.0), a preview.'
+                      "</p>" in pick
+                  and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest.json"' in pick
+                  and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest-update.json"'
+                      in pick
+                  and "Coming soon" not in pick)
+            check("and the S3's section says download mode first, before its buttons",
+                  pick.find('<div class="bsec b1"><p class="first"><b>First:</b> hold '
+                            "<b>BOOT</b>, tap <b>RESET</b>, let go of BOOT.")
+                  > 0
+                  and pick.find('<div class="bsec b1"><p class="first">')
+                      < pick.find('manifest="/install/0.20.0-dev.3/esp32s3/manifest.json"')
+                  and '<div class="bsec b0"><p class="first">' not in pick)
+            hw = S.board_html(["esp32s3"])
+            check("the tested boards page draws the same board, build and buy link",
+                  S.BOARD_ART_S3.replace('class="art board"', 'class="art board big"')
+                  in hw
+                  and "<dt>Firmware</dt><dd>0.20.0 preview (S3 1.0.0)" in hw
+                  and "the board calls it 0.20.0-dev.3 (S3 1.0.0)" in hw
+                  and '<a href="https://link.amazon/B0bb1oJqt">Amazon</a>' in hw
+                  and '<a href="https://link.amazon/B08MTidlU">Amazon</a>'
+                      in S.board_html(["esp32"])
+                  and "<dt>Firmware</dt><dd>0.19.2 " in S.board_html(["esp32"])
+                  and S.board_html(["esp32x9"]) == "" and S.board_html([]) == "")
+            # A version.txt that is not a version is not read: the folder's
+            # name stands in for it.
+            with open(os.path.join(fwroot, "0.20.0-dev.3", "esp32s3", "version.txt"),
+                      "w") as fh:
+                fh.write("<b>0.20.0</b>\n")
+            check("a version.txt that is not a version is not believed",
+                  S.firmware_manifest("0.20.0-dev.3", chip="esp32s3")["version"]
+                  == "0.20.0-dev.3")
+            # A release that carries the S3 takes it over from the preview.
+            put("0.19.3", "esp32s3", whole)
+            check("once a release carries the S3, the preview is not offered at all",
+                  [r["version"] for r in S.board_offers("esp32s3")] == ["0.19.3"]
+                  and S.firmware_file("0.20.0-dev.3/esp32s3/manifest.json") is None)
+            for gone in ("0.19.3", "0.20.0-dev.3", "0.20.0-", "0.20.0-a..b"):
+                shutil.rmtree(os.path.join(fwroot, gone), ignore_errors=True)
+            check("and with them gone the card is as it was",
+                  S.installer_html() == shown)
 
             # The same, end to end, over HTTP: a second server pointed at
             # the scratch releases, so the route, the content types and the
@@ -4273,8 +4457,8 @@ def main():
                 check("a 1.0.0 release is found, served and offered as the newest",
                       [r["version"] for r in rels_1] == ["1.0.0", "0.19.2"]
                       and code == 200 and json.loads(man1.decode())["version"] == "1.0.0"
-                      and 'manifest="/install/1.0.0/manifest.json"' in inst4
-                      and 'id="fwv0" checked> 1.0.0 (newest)' in inst4)
+                      and 'manifest="/install/1.0.0/esp32/manifest.json"' in inst4
+                      and 'id="fwv0_0" checked> 1.0.0 (newest)' in inst4)
                 # 1.0.0 has no BOOT button reset, and neither has 1.0.1,
                 # which is the badge fields only: it is 1.0.2's.
                 check("with 1.0.0 on disk, the BOOT button section still waits",
@@ -4283,7 +4467,7 @@ def main():
                 put("1.0.1", "esp32", whole)
                 inst41 = fetch("/install", base2)[2].decode("utf-8")
                 check("and with 1.0.1, the badge release, it still waits",
-                      'id="fwv0" checked> 1.0.1 (newest)' in inst41
+                      'id="fwv0_0" checked> 1.0.1 (newest)' in inst41
                       and "The BOOT button" not in inst41
                       and S.ART["boot-button"] not in inst41
                       and "goes back to the last network that worked" not in inst41
@@ -4401,7 +4585,7 @@ def main():
                 put("1.0.2", "esp32", whole)
                 inst42 = fetch("/install", base2)[2].decode("utf-8")
                 check("and with 1.0.2, the security fix, it still waits",
-                      'id="fwv0" checked> 1.0.2 (newest)' in inst42
+                      'id="fwv0_0" checked> 1.0.2 (newest)' in inst42
                       and "The BOOT button" not in inst42
                       and S.ART["boot-button"] not in inst42
                       and "goes back to the last network that worked" not in inst42)
@@ -4495,6 +4679,34 @@ def main():
         dest = tempfile.mkdtemp(prefix="dirdest")
         rel_state = {"tag": "v1.0.0", "missing": None, "tamper": None, "status": 200,
                      "secret": False}
+        rel_list = []
+
+        def list_release(tag, fams=("esp32",), pre=False, draft=False, tamper=None,
+                         missing=None, versions=None):
+            """One release of the list: every set in fams (the ESP32's plain,
+            the rest prefixed), version.txt files from versions, notices and
+            SHA256SUMS over all of it."""
+            d = os.path.join(relroot, "list", tag)
+            shutil.rmtree(d, ignore_errors=True)
+            os.makedirs(d)
+            files = {}
+            for fam in fams:
+                pre_ = "" if fam == "esp32" else fam + "-"
+                for n in ("bootloader.bin", "partitions.bin", "ota_data_initial.bin",
+                          "firmware.bin", "storage.bin"):
+                    files[pre_ + n] = (fam + n + tag).encode() * 32
+            for fam, text in (versions or {}).items():
+                files[("" if fam == "esp32" else fam + "-") + "version.txt"] = text.encode()
+            files["THIRD_PARTY_NOTICES.md"] = b"notices\n"
+            files["SHA256SUMS"] = "".join(
+                f"{hashlib.sha256(b).hexdigest()}  {n}\n" for n, b in files.items()).encode()
+            if tamper:
+                files[tamper] += b"x"
+            for n, b in files.items():
+                if n != missing:
+                    with open(os.path.join(d, n), "wb") as fh:
+                        fh.write(b)
+            rel_list.append({"tag": tag, "pre": pre, "draft": draft})
 
         def make_release():
             d = os.path.join(relroot, "assets")
@@ -4524,7 +4736,25 @@ def main():
 
             def do_GET(self):
                 port = self.server.server_address[1]
-                if self.path == "/releases/latest":
+                if self.path == "/releases":
+                    body = json.dumps([
+                        {"tag_name": r["tag"], "prerelease": r.get("pre", False),
+                         "draft": r.get("draft", False),
+                         "published_at": "2026-10-02T12:00:00Z",
+                         "assets": [{"name": n, "browser_download_url":
+                                     f"http://127.0.0.1:{port}/dl2/{r['tag']}/{n}"}
+                                    for n in sorted(os.listdir(
+                                        os.path.join(relroot, "list", r["tag"])))]}
+                        for r in rel_list]).encode()
+                elif self.path.startswith("/dl2/"):
+                    tag, _s, name = self.path[5:].partition("/")
+                    f = os.path.join(relroot, "list", tag, name)
+                    if not os.path.isfile(f):
+                        self.send_response(404)
+                        self.end_headers()
+                        return
+                    body = open(f, "rb").read()
+                elif self.path == "/releases/latest":
                     if rel_state["status"] != 200:
                         self.send_response(rel_state["status"])
                         self.end_headers()
@@ -4638,6 +4868,144 @@ def main():
             kept = sorted(n for n in os.listdir(dest) if re.match(r"^\d+\.\d+\.\d+$", n))
             check("the newest two releases are kept and the older removed",
                   rc == 0 and kept == ["1.0.1", "1.1.0"] and "Removed older releases: 1.0.0" in out)
+
+            # --------------------------------------------------------------
+            # Site 1.2.0: the list of releases, a board to each image set,
+            # and a pre-release serving the board no release carries.
+            relenv["UNLEASHED_RELEASE_API"] = (
+                f"http://127.0.0.1:{relsrv.server_address[1]}/releases")
+            shutil.rmtree(dest, ignore_errors=True)
+            os.makedirs(dest)
+            list_release("v1.3.0-dev.1", ("esp32", "esp32s3"), pre=True)
+            list_release("v1.3.0-dev.2", ("esp32", "esp32s3"), pre=True,
+                         versions={"esp32": "1.3.0-dev.2\n",
+                                   "esp32s3": "1.3.0-dev.2 (S3 1.0.0)\n"})
+            list_release("v1.4.0", ("esp32", "esp32s3"), draft=True)
+            list_release("v1.2.9", ("esp32", "esp32s3"), pre=True)   # tagged like a release
+            list_release("v1.2.0")
+            # GitHub lists newest first.
+            rel_list.reverse()
+            rc, out = run_fetch()
+            t12 = tree("1.2.0")
+            tp = tree("1.3.0-dev.2")
+            check("the latest release is installed, and the S3 from the newest pre-release",
+                  rc == 0 and "Installed firmware 1.2.0 for the browser installer." in out
+                  and "Installed firmware 1.3.0-dev.2 (a preview, for the esp32s3 image) "
+                      "for the browser installer." in out
+                  and t12 is not None and "esp32s3/firmware.bin" not in t12
+                  and tp is not None
+                  and all("esp32s3/" + n in tp for n in ("bootloader.bin", "partitions.bin",
+                                                          "ota_data_initial.bin",
+                                                          "firmware.bin", "storage.bin"))
+                  and tp.get("esp32s3/version.txt") == b"1.3.0-dev.2 (S3 1.0.0)\n"
+                  and tp.get("esp32/version.txt") == b"1.3.0-dev.2\n")
+            check("never a draft, an older preview, or a pre-release tagged like a release",
+                  sorted(os.listdir(dest)) == ["1.2.0", "1.3.0-dev.2"])
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                offers = ([r["version"] for r in S.board_offers("esp32")],
+                          [r["version"] for r in S.board_offers("esp32s3")])
+                m3 = S.firmware_manifest("1.3.0-dev.2", chip="esp32s3")
+                newest = S.newest_release()
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("and the site serves the ESP32 its release and the S3 the preview",
+                  offers == (["1.2.0"], ["1.3.0-dev.2"]) and newest == "1.2.0"
+                  and m3["version"] == "1.3.0-dev.2 (S3 1.0.0)"
+                  and [b["chipFamily"] for b in m3["builds"]] == ["ESP32-S3"])
+            rc, out = run_fetch()
+            check("a second run changes nothing",
+                  rc == 0 and "Firmware 1.2.0 is already installed." in out
+                  and "Firmware 1.3.0-dev.2 is already installed." in out
+                  and tree("1.3.0-dev.2") == tp)
+            # A preview copied in by hand, which GitHub does not list, stays
+            # until a release or a newer preview here carries its board: the
+            # daily run must not delete the only copy.
+            shutil.copytree(os.path.join(dest, "1.3.0-dev.2"), os.path.join(dest, "1.3.0-dev.9"))
+            rc, out = run_fetch()
+            check("a preview copied in by hand is kept while it serves its board",
+                  rc == 0 and "Removed" not in out
+                  and sorted(os.listdir(dest)) == ["1.2.0", "1.3.0-dev.2", "1.3.0-dev.9"])
+            shutil.rmtree(os.path.join(dest, "1.3.0-dev.9"))
+            # A newer pre-release that is broken leaves the one before serving.
+            list_release("v1.3.0-dev.3", ("esp32", "esp32s3"), pre=True,
+                         tamper="esp32s3-firmware.bin")
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            check("a broken preview installs nothing and the one before stays",
+                  rc == 1 and "esp32s3-firmware.bin does not match SHA256SUMS" in out
+                  and tree("1.3.0-dev.3") is None and tree("1.3.0-dev.2") == tp
+                  and tree("1.2.0") == t12)
+            rel_list.pop(0)
+            # A half-published S3 set is refused, not half installed.
+            list_release("v1.2.1", ("esp32", "esp32s3"), missing="esp32s3-storage.bin")
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            check("a release missing part of a set is refused, naming the part",
+                  rc == 1 and "missing esp32s3-storage.bin" in out and tree("1.2.1") is None
+                  and tree("1.2.0") == t12 and tree("1.3.0-dev.2") == tp)
+            rel_list.pop(0)
+            # A version.txt the sums name and the release does not carry is a
+            # set half published, like a missing part.
+            list_release("v1.2.4", ("esp32", "esp32s3"), missing="esp32s3-version.txt",
+                         versions={"esp32s3": "1.2.4 (S3 1.0.0)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            check("and one whose sums name a version.txt it does not carry",
+                  rc == 1 and "missing esp32s3-version.txt" in out and tree("1.2.4") is None
+                  and tree("1.3.0-dev.2") == tp)
+            rel_list.pop(0)
+            # A version.txt that does not name a version is refused too.
+            list_release("v1.2.2", ("esp32",), versions={"esp32": "<b>hi</b>\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            check("and one whose version.txt is not a version",
+                  rc == 1 and "version.txt is not one line naming a version" in out
+                  and tree("1.2.2") is None)
+            rel_list.pop(0)
+            # A release that carries the S3 takes it over, and the preview goes.
+            list_release("v1.3.0", ("esp32", "esp32s3"),
+                         versions={"esp32s3": "1.3.0 (S3 1.0.0)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            check("once a release carries the S3, the preview is removed",
+                  rc == 0 and "Installed firmware 1.3.0 for the browser installer." in out
+                  and sorted(os.listdir(dest)) == ["1.2.0", "1.3.0"]
+                  and "Removed older releases: 1.3.0-dev.2." in out
+                  and (tree("1.3.0") or {}).get("esp32s3/version.txt") == b"1.3.0 (S3 1.0.0)\n")
+            # Two ESP32-only patches after it: the S3 stays on the release
+            # that carries it, however old, and is never handed back to a
+            # pre-release, and that release is kept past the newest two.
+            t130 = tree("1.3.0")
+            list_release("v1.3.1")
+            rel_list.insert(0, rel_list.pop())
+            rc1, out1 = run_fetch()
+            list_release("v1.3.2")
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                offers = ([r["version"] for r in S.board_offers("esp32")],
+                          [r["version"] for r in S.board_offers("esp32s3")])
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("a board the newest release lacks stays on the older release that "
+                  "carries it, kept past the newest two",
+                  rc1 == 0 and rc == 0 and "Removed older releases: 1.2.0." in out1
+                  and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"]
+                  and tree("1.3.0") == t130 and "preview" not in out1 + out
+                  and "Removed" not in out
+                  and offers == (["1.3.2", "1.3.1"], ["1.3.0"]))
+            # Newest by version, not by the order GitHub lists them: a patch
+            # to an older line, published last, is not the newest release.
+            list_release("v1.2.3")
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            check("the newest release is the highest version, not the last published",
+                  rc == 0 and "Installed firmware" not in out
+                  and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"])
         finally:
             relsrv.shutdown()
             shutil.rmtree(relroot, ignore_errors=True)

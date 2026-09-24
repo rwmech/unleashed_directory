@@ -14,6 +14,88 @@
 
 # Changelog
 
+## 1.2.0, 2026-09-24
+
+A second board: /install asks which board you have, with a picture of each,
+and serves the Waveshare ESP32-S3-LCD-1.47 its own image. A new page,
+/hardware, shows the tested boards.
+
+- **A board picker on /install** (Rob: "update the flasher to select the
+  board type ... include an image for confirmation so the user flashes the
+  right one. Small picture in the pick list"). The card opens with a radio
+  list, one row a board: a small line-art picture, the name, one line on how
+  to tell it ("Two rows of pins and a USB socket", "A USB stick with a colour
+  screen") and the firmware this page would put on it. The chosen row
+  decides which buttons, version line and notices show, with native radios
+  and CSS and no script, the way a kept older release always has. A board
+  with nothing to install says **Coming soon** and has no buttons. A line
+  under the buttons says the installer reads the chip first and stops,
+  writing nothing, if it is the other kind, and "which is mine?" links to
+  /hardware.
+- **One manifest a board.** Each choice's buttons fetch
+  `/install/<version>/<board>/manifest.json` (and `manifest-update.json`),
+  holding that board's build and nothing else: ESP Web Tools picks a build
+  by chip family alone, so a manifest naming both would give any ESP32-S3
+  the Waveshare's image and pins. A board of the other family is refused
+  before anything is written ("Your ESP32-S3 board is not supported."). The
+  manifest's version is the set's `version.txt`, exactly as the board shows
+  it over Improv ("1.1.0 (S3 1.0.0)"), because ESP Web Tools compares the two
+  to decide whether the board already runs it. `/install/<version>/manifest.json`
+  still answers, the ESP32's alone.
+- **Previews.** A directory named for a pre-release (`1.1.0-dev.8`) is a
+  preview: offered only for a board no release carries, labelled "1.1.0
+  preview (S3 1.0.0)" in the picker with the exact version under the
+  buttons, and never counted as the newest release, so it lights no
+  `::: from` gate, no announcement banner and no update arrow. Its set for a
+  board that has a release is neither offered nor served. Once a release
+  carries the board, the preview is not offered at all.
+- **The fetcher reads the list of releases, not only the latest.** It
+  installs the newest release by version, every board's set it carries (the
+  ESP32's assets plain, another board's prefixed: `esp32s3-firmware.bin`),
+  and each set's `version.txt` when the release has one, checked against
+  SHA256SUMS like everything else. A board the newest release does not carry
+  is served from the newest older release that does, so an ESP32-only patch
+  never takes the S3 off its release; a board no release carries at all,
+  from the newest pre-release that carries it, installed under its own name.
+  A release missing part of a set, or with a `version.txt` that is not a
+  version, is refused and nothing moves, and so is one whose sums name a
+  `version.txt` it does not carry. The newest two releases are kept, plus
+  whatever release or preview is serving a board, read off the disk the way
+  the page reads it, so a preview copied in by hand stays until a release or
+  a newer preview carries its board; after any refusal every preview on
+  disk is kept. Releases before 1.1.0 read exactly as before.
+- **The S3's own steps.** Its section of the card says first to hold BOOT,
+  tap RESET and let go of BOOT, and to press RESET when the install has
+  finished: the stick has no USB-serial chip, and on Rob's PC the automatic
+  reset did not reach it. A new section of /install, **On the Waveshare
+  S3**, says why, quotes the installer's own messages and Espressif's
+  documentation, and says plainly that setting the Wi-Fi from this page is
+  not yet confirmed on this board, with the two ways round it: **Update my
+  board** with the board running normally, or `CONFIG network`. /upgrade and
+  the driver advice point at it.
+- **The amber "before you start" box is under the buttons**, on a desktop as
+  on a phone: the picker took its room, and both buttons still sit on the
+  first screen at 1366 x 768 (the ESP32's Update button ends at 665px, the
+  S3's at 719px). The card's column is 26rem, from 24. The small laptop and
+  board drawing that opened the card is gone; the pictures in the picker
+  replace it.
+- **/hardware, the tested boards.** Each board's picture at twice the
+  picker's size, the firmware /install offers it, its chip, how to tell it,
+  and a buy link (Amazon), drawn by a new `::: board` block from the same
+  table as the picker, so the two cannot disagree; then what was tested on
+  it and what it adds. The Waveshare's: its screen of figures, the onboard
+  LED as the drive light, a TF slot with no wiring, 16 MB of flash and 8 MB
+  of PSRAM, and still ten caller lines, because sockets cap it the same as
+  the ESP32. It warns that the 1.47B and every other S3 board are not this
+  build. In the Build one section of the menu.
+- **/build's table** says the ESP32-S3 has run, on one board, and links
+  /hardware; "What you need" names the second board.
+- **The BOOT-hold reset, waiting for firmware 1.1.0, is worded for both
+  boards**: the ESP32 dev board shows each stage on its activity LED; the S3
+  has none, so you count the seconds, and either prints each stage on its
+  serial console.
+- 731 checks, up from 698.
+
 ## 1.1.0, 2026-09-24
 
 Short codes for every cause and interest, an SD card badge, one board per

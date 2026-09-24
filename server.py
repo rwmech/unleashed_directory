@@ -179,9 +179,22 @@ FIRMWARE_KEEP = int(os.environ.get("DIRECTORY_FIRMWARE_KEEP", "2"))
 
 # A release directory is named for its version and nothing else, which is
 # what lets firmware/README.md sit beside the releases without being mistaken
-# for one.
-FIRMWARE_VER  = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})$")
+# for one. A suffix after a hyphen (1.1.0-dev.8) is a pre-release, the name
+# a GitHub pre-release is tagged with (site 1.2.0): a preview, offered only
+# for a board no full release carries, and never "the newest release". Its
+# parts are letters, digits and hyphens between single dots, so the name is
+# one path component and can never be "..".
+FIRMWARE_VER  = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})"
+                           r"(?:-([0-9A-Za-z-]{1,20}(?:\.[0-9A-Za-z-]{1,20}){0,3}))?$")
 FIRMWARE_CHIP = re.compile(r"^[a-z][a-z0-9]{2,11}$")
+# A family's version.txt: one line, the version exactly as that board shows
+# it (SYS, ABOUT, Improv), which the firmware's tools/release.py writes from
+# BBS_VERSION_SHOWN. The core version alone for the reference ESP32 ("1.0.3"),
+# the core then the board profile's own in brackets for a board with one
+# ("1.1.0 (S3 1.0.0)"). Plain ASCII, brackets and not a middle dot, because
+# a PETSCII or plain ASCII terminal cannot show one.
+FIRMWARE_SHOWN = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})(-[0-9A-Za-z.-]{1,40})?"
+                            r"(?: \(([A-Za-z0-9][A-Za-z0-9 .-]{0,30})\))?$")
 
 # ESP Web Tools, the one piece of JavaScript on this site, served from this
 # machine rather than from a CDN.
@@ -466,6 +479,9 @@ NAV_SECTION = {
     "/install":         "/build",
     # The setup guide is the step after installing, so it is Build one too.
     "/setup":           "/build",
+    # The boards that have run the firmware, with pictures, linked from the
+    # installer's picker and from /build's table of chips (site 1.2.0).
+    "/hardware":        "/build",
     # Where the installer's last step lands, with the board's address.
     "/connected":       "/build",
     # Putting a new version on a board that already runs one: the
@@ -1125,9 +1141,11 @@ CARD_BLOCKS = ("cards", "hero")
 # "board", "directory", "support" or "interests" on the first line inside
 # it, then the Markdown that goes under the group's heading. "badgefind" is
 # the search at the top of that page, with its script. Both are built from
-# the tables the board list draws with.
+# the tables the board list draws with. "board" is one tested board's
+# picture and facts on /hardware, the board's folder name on the first line
+# inside it, built from BOARDS and what is on disk (site 1.2.0).
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
-                             "installer-terms", "badges", "badgefind")
+                             "installer-terms", "badges", "badgefind", "board")
 
 
 # --------------------------------------------------------------------------
@@ -1174,6 +1192,8 @@ def md_block(kind, lines):
         return legend_html(lines)
     if kind == "badgefind":
         return badge_find_html()
+    if kind == "board":
+        return board_html(lines)
     return md_cards(kind, lines)
 
 
@@ -1764,7 +1784,8 @@ def md_page(name, role="list"):
     # The install card carries a small drawing of its own, so a page with the
     # installer on it needs the sheet whether or not it has an "::: art".
     wants_installer = re.search(r"^::: installer\s*$", text, re.M) is not None
-    if "::: art" in text or wants_installer:
+    if ("::: art" in text or wants_installer
+            or re.search(r"^::: board\s*$", text, re.M)):
         body = ART_CSS + body
     # The installer's script, and the only page that can carry it. (The two
     # other scripts on the site are written here and ride with a block of
@@ -1785,7 +1806,7 @@ def md_page(name, role="list"):
     # JavaScript is still true of the manifesto. The script itself comes
     # from this machine; see EWT_SCRIPT.
     head = ""
-    if wants_installer and firmware_releases():
+    if wants_installer and firmware_offered():
         head = ('<script type="module" src="' + html.escape(EWT_SCRIPT, quote=True)
                 + '"></script>')
     return PAGE.format(refresh="", head=head, title=html.escape(title),
@@ -1907,17 +1928,57 @@ def gallery_html():
 # offered, and what is not on disk cannot be.
 
 
-def firmware_builds(vdir):
-    """The chip families in one release directory that are complete.
+def _firmware_pre_key(suffix):
+    """A pre-release suffix as something to sort by: dot-separated parts,
+    numbers compared as numbers and before words, the way semantic versions
+    order them, so dev.10 is after dev.9."""
+    return tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in suffix.split("."))
+
+
+def _firmware_shown(vdir, chip):
+    """The version one image set says it is, exactly as the board shows it,
+    or "" when the set does not say. version.txt first, which is what the
+    firmware's release writes into every family's folder since 1.1.0 and the
+    fetcher installs from the release's assets; then the per-family
+    manifest.json that the same release writes for trying images by hand.
+    Neither is trusted beyond its shape: a line that is not a version, and
+    anything longer than one, is not read."""
+    f = vdir / chip / "version.txt"
+    try:
+        if f.is_file() and f.stat().st_size <= 128:
+            line = f.read_text(encoding="ascii", errors="replace").strip()
+            if FIRMWARE_SHOWN.match(line):
+                return line
+    except OSError:
+        pass
+    f = vdir / chip / "manifest.json"
+    try:
+        if f.is_file() and f.stat().st_size <= 8192:
+            v = json.loads(f.read_text(encoding="utf-8")).get("version")
+            if isinstance(v, str) and FIRMWARE_SHOWN.match(v.strip()):
+                return v.strip()
+    except (OSError, ValueError, AttributeError):
+        pass
+    return ""
+
+
+def _firmware_sets(vdir):
+    """{chip directory: its image set} for one release directory, complete
+    sets only, in directory order. A set is the chip family, the five parts
+    with their offsets (paths relative to the set's own folder), and the
+    version it says it is.
 
     A family is offered only when every part in FLASH_PARTS is present. A
-    missing or misspelled file drops that family out of the manifest
-    entirely, which is the behaviour worth having: a manifest naming a file
-    that is not there fails in the browser, halfway through, on somebody's
-    board, and reads as a broken flasher rather than as a bad upload.
-    """
-    builds = []
-    for chip in sorted(p.name for p in vdir.iterdir() if p.is_dir()):
+    missing or misspelled file drops that family out entirely, which is the
+    behaviour worth having: a manifest naming a file that is not there fails
+    in the browser, halfway through, on somebody's board, and reads as a
+    broken flasher rather than as a bad upload."""
+    sets = {}
+    try:
+        chips = sorted(p.name for p in vdir.iterdir() if p.is_dir())
+    except OSError:
+        return sets
+    for chip in chips:
         if not FIRMWARE_CHIP.match(chip) or chip not in FLASH_FAMILIES:
             continue
         family, boot = FLASH_FAMILIES[chip]
@@ -1932,19 +1993,23 @@ def firmware_builds(vdir):
             # binaries are reached on whatever domain the manifest was
             # fetched from, so this needs no knowledge of the site's name
             # and no CORS headers anywhere.
-            parts.append({"path": chip + "/" + name,
+            parts.append({"path": name,
                           "offset": boot if offset is None else offset})
         if parts:
-            builds.append({"chipFamily": family, "parts": parts})
-    return builds
+            sets[chip] = {"family": family, "parts": parts,
+                          "shown": _firmware_shown(vdir, chip) or vdir.name}
+    return sets
 
 
-def firmware_releases():
-    """Every complete release on disk, newest first, capped at FIRMWARE_KEEP.
+def firmware_sets():
+    """Every version directory on disk holding at least one complete image
+    set, releases and previews alike, newest first.
 
-    A release is complete when at least one chip family in it is complete.
-    Anything else in the directory, README.md included, is not a version
-    number and is skipped without comment.
+    A preview is a directory named for a pre-release (1.1.0-dev.8). It sorts
+    below the release it leads to and above the one before, and it is never
+    what firmware_releases() calls a release. Anything else in the
+    directory, README.md included, is not a version and is skipped without
+    comment.
     """
     if not FIRMWARE_DIR.is_dir():
         return []
@@ -1959,8 +2024,8 @@ def firmware_releases():
         m = FIRMWARE_VER.match(vdir.name)
         if not m:
             continue
-        builds = firmware_builds(vdir)
-        if not builds:
+        sets = _firmware_sets(vdir)
+        if not sets:
             continue
         date, note = "", ""
         meta = vdir / "release.txt"
@@ -1974,23 +2039,85 @@ def firmware_releases():
                 # release. Every release now speaks Improv, so the line
                 # means nothing; it is skipped rather than shown as the
                 # release's note, which is what it would otherwise become.
-                if s.lower().startswith("improv:"):
+                # "version ..." and "commit ..." are the firmware's own
+                # release.txt, written into release/<ver>/install/ for a
+                # copy made by hand: the version is the directory's name
+                # and the commit is for the record, so neither is a note.
+                low = s.lower()
+                if low.startswith(("improv:", "version ", "commit ")):
                     continue
-                if i == 0 and re.match(r"^\d{4}-\d{2}-\d{2}$", s):
+                if re.match(r"^\d{4}-\d{2}-\d{2}$", s) and not date and not note:
                     date = s
                 elif not note:
                     note = s[:160]
+        sort = tuple(int(g) for g in m.groups()[:3])
+        pre = m.group(4) or ""
         found.append({"version": vdir.name,
-                      "sort": tuple(int(g) for g in m.groups()),
+                      "sort": sort,
+                      "key": sort + ((0, _firmware_pre_key(pre)) if pre else (1,)),
+                      "pre": bool(pre),
                       "date": date, "note": note,
                       "notices": (vdir / "THIRD_PARTY_NOTICES.md").is_file(),
-                      "builds": builds})
-    found.sort(key=lambda r: r["sort"], reverse=True)
-    return found[:FIRMWARE_KEEP]
+                      "sets": sets,
+                      "builds": [{"chipFamily": s["family"],
+                                  "parts": [dict(p, path=chip + "/" + p["path"])
+                                            for p in s["parts"]]}
+                                 for chip, s in sets.items()]})
+    found.sort(key=lambda r: r["key"], reverse=True)
+    return found
 
 
-def firmware_manifest(version, update=False):
-    """The ESP Web Tools manifest for one release, or None.
+def firmware_releases():
+    """Every complete release on disk, newest first, capped at FIRMWARE_KEEP.
+
+    A release is complete when at least one chip family in it is complete.
+    Releases only: a preview is never one, so it never lights a "::: from"
+    gate, the announcement banner or a board's update arrow, all of which
+    read "the newest release" from here.
+    """
+    return [r for r in firmware_sets() if not r["pre"]][:FIRMWARE_KEEP]
+
+
+def board_offers(chip):
+    """What /install offers for one board: the releases that carry its image
+    set, newest first, up to FIRMWARE_KEEP; or, when no release on disk
+    carries it, the newest preview that does, alone. Each board is looked
+    at on its own, so the ESP32 stays on its newest release while a board
+    only a preview carries is offered that preview."""
+    every = firmware_sets()
+    full = [r for r in every if not r["pre"] and chip in r["sets"]]
+    if full:
+        return full[:FIRMWARE_KEEP]
+    return [r for r in every if r["pre"] and chip in r["sets"]][:1]
+
+
+def firmware_offered():
+    """Whether /install has anything to install at all, on any board."""
+    return any(board_offers(b["dir"]) for b in BOARDS)
+
+
+def firmware_manifest(version, update=False, chip=None):
+    """The ESP Web Tools manifest for one board's image set in one release,
+    or None.
+
+    One board a manifest, and only that board's build in it (site 1.2.0).
+    ESP Web Tools picks a build by the chip family it reads out of the
+    board, so a manifest naming both would hand any ESP32-S3 the Waveshare
+    image with the Waveshare's pins. With one build, a board of the other
+    family is refused before anything is written ("Your ESP32 board is not
+    supported."), and the picture in the picker covers a different board of
+    the same family.
+
+    chip names the board's set, and the manifest is served from inside its
+    folder, /install/<version>/<chip>/manifest.json, so the parts are bare
+    names. With no chip it is the ESP32's, served where every manifest was
+    before 1.2.0, /install/<version>/manifest.json, with its folder in each
+    path: a page cached from before, or a link written down, still gets the
+    reference board and nothing else.
+
+    The version is the set's own, as the board shows it ("1.1.0 (S3
+    1.0.0)"), because ESP Web Tools compares it with what the board says
+    over Improv to decide whether the board already runs it.
 
     The schema is theirs and the spellings are not negotiable: the top level
     is snake_case and the keys inside a build are camelCase, which is the
@@ -2008,12 +2135,15 @@ def firmware_manifest(version, update=False):
     before 0.22.1, still in a browser's cache. With it set, the worst an
     old copy can do is ask, with the box unticked.
     """
-    for rel in firmware_releases():
+    board = chip or "esp32"
+    for rel in board_offers(board):
         if rel["version"] != version:
             continue
+        s = rel["sets"][board]
+        where = "" if chip else board + "/"
         man = {
             "name": "unleashed BBS",
-            "version": rel["version"],
+            "version": s["shown"],
             # The user is asked rather than erased by default, and that is
             # what lets somebody reinstall over a board they already run
             # without losing their accounts: with this false, every install
@@ -2024,7 +2154,8 @@ def firmware_manifest(version, update=False):
             # Seconds to wait after an install for the board to answer over
             # Improv Wi-Fi Serial. See EWT_IMPROV_WAIT for why it is thirty.
             "new_install_improv_wait_time": EWT_IMPROV_WAIT,
-            "builds": rel["builds"],
+            "builds": [{"chipFamily": s["family"],
+                        "parts": [dict(p, path=where + p["path"]) for p in s["parts"]]}],
         }
         if update:
             man["unleashed_update"] = True
@@ -2054,33 +2185,137 @@ BTN_ICON_UPDATE = (
     '<path d="M17.38 3.15 L17.66 6.34 L14.47 6.06"/></svg>')
 
 
-def board_label(family):
-    """What the picker slot says a build is for. The ESP32 build is laid out
-    for 4 MB of flash, which is the one fact about a board a reader can
-    check against the listing they bought it from."""
-    return family + (", 4 MB flash" if family == "ESP32" else "")
+# The boards (site 1.2.0, Rob: "update the flasher to select the board type
+# ... include an image for confirmation so the user flashes the right one.
+# Small picture in the pick list"). Two pictures, drawn here in the hand of
+# the site's other drawings: the same classes, the same stroke weights,
+# 96 x 60 units so the picker shows them at about 1:1 and the tested boards
+# page at twice that, which is the scale the step drawings reach on a
+# desktop. Decoration beside words that say the same thing, so each is
+# aria-hidden: the name and the "how to tell" line carry the meaning.
+#
+# The ESP32 dev board, the reference: a long board with a header down each
+# side, the module's metal can at one end with its antenna past the edge of
+# the board, the USB socket at the other end between the two buttons.
+BOARD_ART_ESP32 = (
+    '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
+    'preserveAspectRatio="xMidYMid meet">'
+    '<rect class="o" x="8" y="14" width="80" height="32" rx="2"/>'
+    '<rect class="g" x="11" y="15.5" width="72" height="4" rx="1"/>'
+    '<rect class="g" x="11" y="40.5" width="72" height="4" rx="1"/>'
+    '<path class="d" d="' + " ".join(
+        f"M{13 + i * 5} 14 V9.5 M{13 + i * 5} 46 V50.5" for i in range(15)) + '"/>'
+    '<rect class="o" x="57" y="21.5" width="36" height="17" rx="1"/>'
+    '<rect class="k" x="58.5" y="23" width="23" height="14" rx="0.8"/>'
+    '<path class="d" d="M84.5 24 H91 V27 H85 V30 H91 V33 H85 V36 H91"/>'
+    '<rect class="gb" x="3" y="25" width="10" height="10" rx="1"/>'
+    '<rect class="d" x="4.5" y="27.5" width="3.5" height="5" rx="0.6"/>'
+    '<rect class="o" x="15" y="21.5" width="5" height="5" rx="0.8"/>'
+    '<circle class="k" cx="17.5" cy="24" r="1.4"/>'
+    '<rect class="o" x="15" y="33.5" width="5" height="5" rx="0.8"/>'
+    '<circle class="k" cx="17.5" cy="36" r="1.4"/>'
+    '<rect class="d" x="26" y="25.5" width="9" height="9" rx="0.8"/>'
+    '<circle class="lf" cx="42" cy="30" r="1.4"/>'
+    "</svg>")
+
+# The Waveshare ESP32-S3-LCD-1.47: a USB-A stick, drawn the way its screen
+# is used, portrait with the plug at the top (the firmware's own
+# ESP32_BOARD_CHOICE.md): the plug's shell with its two windows, the body,
+# and the screen on it showing lines of figures and the row of lamps the
+# firmware's status panel draws along the bottom.
+BOARD_ART_S3 = (
+    '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
+    'preserveAspectRatio="xMidYMid meet">'
+    '<rect class="o" x="38" y="2" width="20" height="13" rx="1"/>'
+    '<rect class="d" x="41.5" y="5.5" width="4.5" height="3"/>'
+    '<rect class="d" x="50" y="5.5" width="4.5" height="3"/>'
+    '<rect class="o" x="34" y="15" width="28" height="43" rx="3"/>'
+    '<rect class="g" x="37.5" y="18.5" width="21" height="35" rx="1"/>'
+    '<path class="lt" d="M40.5 23 H51"/>'
+    '<path class="d" d="M40.5 28 H55.5 M40.5 32.5 H52 M40.5 37 H54 M40.5 41.5 H49"/>'
+    '<circle class="lf" cx="41.5" cy="48.5" r="1.1"/>'
+    '<circle class="c5" cx="45.5" cy="48.5" r="1.1"/>'
+    '<circle class="c1" cx="49.5" cy="48.5" r="1.1"/>'
+    '<circle class="lf" cx="53.5" cy="48.5" r="1.1"/>'
+    "</svg>")
+
+# The boards /install offers, in the order its picker lists them. A board
+# is an image set, the folder a release keeps that board's five parts in,
+# which is the firmware's own name for the build (tools/release.py, BUILDS).
+# A second board on the same chip would be a second folder and a second row
+# here, never a second name for one folder: the manifest picks a build by
+# chip family alone.
+#
+# "tell" is the one line that says which board a reader has, beside the
+# picture, and it is short on purpose: the card is 26rem wide. "before" is
+# what a board needs done before either button, in the card's own Markdown,
+# and the steps on /install say why. "buy" is where Rob bought the one that
+# was tested, for the tested boards page.
+BOARDS = (
+    {"dir": "esp32", "name": "ESP32 dev board",
+     "part": "ESP32-WROOM-32E, 4 MB flash",
+     "tell": "Two rows of pins and a USB socket",
+     "art": BOARD_ART_ESP32,
+     "page": "/hardware#esp32-dev-board",
+     "buy": "https://link.amazon/B08MTidlU",
+     "before": ""},
+    {"dir": "esp32s3", "name": "Waveshare ESP32-S3-LCD-1.47",
+     "part": "ESP32-S3R8, 16 MB flash, 8 MB PSRAM",
+     "tell": "A USB stick with a colour screen",
+     "art": BOARD_ART_S3,
+     "page": "/hardware#waveshare-esp32-s3-lcd-1-47",
+     "buy": "https://link.amazon/B0bb1oJqt",
+     # From Rob's bench: the stick has no USB-serial chip, and on his PC the
+     # installer's automatic reset did not reach it.
+     "before": ("**First:** hold **BOOT**, tap **RESET**, let go of BOOT. "
+                "**When it is done:** press **RESET**. [Why](#on-the-waveshare-s3)")},
+)
+BOARD_BY_DIR = {b["dir"]: b for b in BOARDS}
+
+
+def board_version(rel, chip):
+    """The version one board's image set says it is, for a reader: exactly as
+    the board shows it for a release ("1.0.3", "1.1.0 (S3 1.0.0)"), and
+    "1.1.0 preview" in place of the pre-release name for a preview, the
+    board's own part kept. The exact string is on the version line under
+    the buttons, so it can be matched against the board's SYS screen."""
+    shown = rel["sets"][chip]["shown"]
+    if not rel["pre"]:
+        return shown
+    m = FIRMWARE_SHOWN.match(shown)
+    core = ".".join(str(n) for n in rel["sort"])
+    return core + " preview" + (f" ({m.group(5)})" if m and m.group(5) else "")
 
 
 def installer_html(lines=()):
     """The ::: installer block: the install card, or an honest account of
     why there is no button.
 
-    There is deliberately no third state. Either a complete release is on
-    disk and the page offers it, or it is not and the page says so; nothing
-    here can render a button that fetches a file that does not exist.
+    There is deliberately no third state. Either something installable is
+    on disk and the page offers it, or nothing is and the page says so;
+    nothing here can render a button that fetches a file that does not
+    exist.
 
     The lines inside the block are the short list of things to have ready,
     written in the page's own Markdown and shown in the card's amber box, so
     the words stay in pages/install.md with the rest of the page's words.
 
+    Since site 1.2.0 the card opens with the board picker: each board in
+    BOARDS as a native radio, with its picture, its name, one line on how to
+    tell it, and the version this page would put on it. The checked one
+    decides which buttons, version line and notices show, with no script,
+    the way a kept older release always has; each board's buttons fetch a
+    manifest holding that board's build and nothing else. A board with
+    nothing on disk says "coming soon" and has no buttons.
+
     The card is laid out for /install's layout spec
     (internal/tty-ux-install-page-2026-09-23.md in the firmware repository):
-    a small drawing, the amber box, the picker slot, the button, one version
-    line and the notices link, in that order on a desktop. On a phone the
-    stylesheet reorders it so the button comes first.
+    the amber box, the picker, the buttons, one version line and the notices
+    link, in that order on a desktop. On a phone the stylesheet reorders it
+    so the picker and the buttons come first.
     """
-    rels = firmware_releases()
-    if not rels:
+    offers = [(b, board_offers(b["dir"])) for b in BOARDS]
+    if not any(o for _b, o in offers):
         # No button, and no element for a button to live in: a control that
         # cannot do anything is a puzzle, and a reader who presses it learns
         # nothing about why.
@@ -2097,95 +2332,160 @@ def installer_html(lines=()):
             "step.</p>"
             "</div>")
 
-    out = ['<div class="installer">', INSTALL_MINI]
+    out = ['<div class="installer">']
+
+    # The picker. The first board with something to install is chosen to
+    # start with, which is the reference ESP32 whenever it has a release.
+    first = next(j for j, (_b, o) in enumerate(offers) if o)
+    out.append('<fieldset class="boards"><legend>Your board '
+               '<a href="/hardware">which is mine?</a></legend>')
+    for j, (b, o) in enumerate(offers):
+        ver = ("Firmware " + board_version(o[0], b["dir"])) if o else "Coming soon"
+        out.append(f'<label class="bopt"><input type="radio" name="fwboard" id="fwb{j}"'
+                   + (" checked" if j == first else "") + ">"
+                   + b["art"]
+                   + '<span class="bt"><b>' + html.escape(b["name"]) + "</b>"
+                   + '<span class="tell">' + html.escape(b["tell"]) + "</span>"
+                   + '<span class="bv' + ("" if o else " soon") + '">'
+                   + html.escape(ver) + "</span></span></label>")
+    out.append("</fieldset>")
+
+    for j, (b, o) in enumerate(offers):
+        out.append(f'<div class="bsec b{j}">')
+        if not o:
+            out.append('<p class="soon">There is no image for this board on this '
+                       "site yet. When one is published, its buttons appear here. "
+                       f'<a href="{b["page"]}">About this board</a>.</p>')
+            out.append("</div>")
+            continue
+        if len(o) > 1:
+            # Short labels, so both fit on one line of the card: the line
+            # under the buttons says the rest.
+            out.append(f'<p class="vers" role="radiogroup" aria-label="Version">')
+            for i, rel in enumerate(o):
+                v = html.escape(rel["version"])
+                what = " (newest)" if i == 0 else ""
+                out.append(f'<label><input type="radio" name="fwver{j}" id="fwv{j}_{i}"'
+                           + (" checked" if i == 0 else "") + f"> {v}{what}</label>")
+            out.append("</p>")
+        if b["before"]:
+            out.append('<p class="first">' + md_inline(b["before"]) + "</p>")
+        d = html.escape(b["dir"], quote=True)
+        for i, rel in enumerate(o):
+            v = html.escape(rel["version"], quote=True)
+            # Our own button in the activate slot. The element exports three
+            # colour variables and no ::part(), so anything beyond a colour
+            # means supplying the element, and this page is monospace on
+            # black rather than a rounded blue pill. The version is not on
+            # the button: the line under it says which, once.
+            #
+            # Two buttons, two manifests (0.22.1, Rob: "just offer an
+            # upgrade button ... then we dont have anyone freaked out"). The
+            # first is the install as it always was, erase question and all.
+            # The second fetches manifest-update.json, whose one extra key
+            # makes the copy of the dialog served here skip the erase
+            # question and refuse to erase on every path; see
+            # firmware_manifest() and the notice at the top of the dialog
+            # chunk. It needs no fallback text of its own: the first
+            # button's says it once, and the second hides itself on a
+            # browser that cannot use it.
+            out.append(f'<esp-web-install-button class="r{i}" manifest="/install/{v}/{d}'
+                       '/manifest.json"><button class="go" slot="activate">'
+                       + BTN_ICON_NEW + "Install on a new board</button>"
+                       # Both fallbacks are given rather than left to the
+                       # component's defaults, which name Firefox first and
+                       # say nothing about what to do next. The precedence
+                       # in their code is insecure-context first, so
+                       # "not-allowed" is the one a reader sees over plain
+                       # http and never the other.
+                       '<span class="no" slot="unsupported">This browser cannot talk '
+                       "to a serial port. Chrome or Edge on a desktop or laptop can, "
+                       "and so can Firefox from version 151; there is more about "
+                       'that <a href="#other-browsers">below</a>.</span>'
+                       '<span class="no" slot="not-allowed">This page has to be '
+                       "served over https for a browser to allow it near a serial "
+                       "port.</span></esp-web-install-button>")
+            out.append(f'<esp-web-install-button class="r{i} upd" manifest="/install/{v}/{d}'
+                       '/manifest-update.json"><button class="go upd" slot="activate">'
+                       + BTN_ICON_UPDATE + "Update my board</button>"
+                       '<span slot="unsupported"></span><span slot="not-allowed"></span>'
+                       "</esp-web-install-button>")
+        for i, rel in enumerate(o):
+            meta = "Version " + html.escape(rel["sets"][b["dir"]]["shown"])
+            if rel["pre"]:
+                meta += ", a preview"
+                if rel["date"]:
+                    meta += ", published " + html.escape(rel["date"])
+            elif rel["date"]:
+                meta += ", released " + html.escape(rel["date"])
+            out.append(f'<p class="meta ver r{i}">' + meta + ".</p>")
+        for i, rel in enumerate(o):
+            if rel["notices"]:
+                out.append(f'<p class="meta notices r{i}"><a href="/install/'
+                           + html.escape(rel["version"], quote=True)
+                           + '/THIRD_PARTY_NOTICES.md">What is inside it, and under '
+                           "what terms</a></p>")
+        out.append("</div>")
+
+    out.append('<p class="meta fam">Each image is for its own chip. The installer '
+               "reads the board first and stops, writing nothing, if it is the "
+               "other kind.</p>")
+    # The amber box comes after the buttons since site 1.2.0, on a desktop
+    # as it already did on a phone: the picker took the room it had, and
+    # Rob's rule for the card is both buttons on the first screen at 1366 x
+    # 768 (site 1.0.0).
     pre = "\n".join(lines).strip()
     if pre:
         out.append('<div class="pre">' + md_render(pre) + "</div>")
 
-    # The picker slot. One board today, so it holds a line saying which one
-    # rather than a radio group of one, which is a control that does
-    # nothing. It keeps its height either way, so nothing moves the day a
-    # second board arrives. A kept older release is the one real choice, and
-    # that gets native radios: no script, the checked one decides which
-    # button, version line and notices link show (the rules are in the
-    # <style> under the card, one set per release).
-    families = []
-    for b in rels[0]["builds"]:
-        if b["chipFamily"] not in families:
-            families.append(b["chipFamily"])
-    out.append('<div class="pick"><p class="meta board">Board: '
-               + html.escape("; ".join(board_label(f) for f in families)) + "</p>")
-    if len(rels) > 1:
-        out.append('<p class="vers" role="radiogroup" aria-label="Version">')
-        # Short labels, so both fit on one line of the card: the line under
-        # the button says the rest. Two lines here put the button under the
-        # fold at 1366 x 768.
-        for i, rel in enumerate(rels):
-            v = html.escape(rel["version"])
-            what = " (newest)" if i == 0 else ""
-            out.append(f'<label><input type="radio" name="fwver" id="fwv{i}"'
-                       + (" checked" if i == 0 else "") + f"> {v}{what}</label>")
-        out.append("</p>")
-    out.append("</div>")
-
-    for i, rel in enumerate(rels):
-        v = html.escape(rel["version"], quote=True)
-        # Our own button in the activate slot. The element exports three
-        # colour variables and no ::part(), so anything beyond a colour
-        # means supplying the element, and this page is monospace on black
-        # rather than a rounded blue pill. The version is not on the button:
-        # the line under it says which, once, rather than the card saying
-        # it three times.
-        #
-        # Two buttons, two manifests (0.22.1, Rob: "just offer an upgrade
-        # button ... then we dont have anyone freaked out"). The first is
-        # the install as it always was, erase question and all. The second
-        # fetches manifest-update.json, whose one extra key makes the copy
-        # of the dialog served here skip the erase question and refuse to
-        # erase on every path; see firmware_manifest() and the notice at the
-        # top of the dialog chunk. It needs no fallback text of its own:
-        # the first button's says it once, and the second hides itself on a
-        # browser that cannot use it.
-        out.append(f'<esp-web-install-button class="r{i}" manifest="/install/{v}'
-                   '/manifest.json"><button class="go" slot="activate">'
-                   + BTN_ICON_NEW + "Install on a new board</button>"
-                   # Both fallbacks are given rather than left to the
-                   # component's defaults, which name Firefox first and say
-                   # nothing about what to do next. The precedence in their
-                   # code is insecure-context first, so "not-allowed" is the
-                   # one a reader sees over plain http and never the other.
-                   '<span class="no" slot="unsupported">This browser cannot talk '
-                   "to a serial port. Chrome or Edge on a desktop or laptop can, "
-                   "and so can Firefox from version 151; there is more about "
-                   'that <a href="#other-browsers">below</a>.</span>'
-                   '<span class="no" slot="not-allowed">This page has to be '
-                   "served over https for a browser to allow it near a serial "
-                   "port.</span></esp-web-install-button>")
-        out.append(f'<esp-web-install-button class="r{i} upd" manifest="/install/{v}'
-                   '/manifest-update.json"><button class="go upd" slot="activate">'
-                   + BTN_ICON_UPDATE + "Update my board</button>"
-                   '<span slot="unsupported"></span><span slot="not-allowed"></span>'
-                   "</esp-web-install-button>")
-    for i, rel in enumerate(rels):
-        meta = "Version " + html.escape(rel["version"])
-        if rel["date"]:
-            meta += ", released " + html.escape(rel["date"])
-        out.append(f'<p class="meta ver r{i}">' + meta + ".</p>")
-    for i, rel in enumerate(rels):
-        if rel["notices"]:
-            out.append(f'<p class="meta notices r{i}"><a href="/install/'
-                       + html.escape(rel["version"], quote=True)
-                       + '/THIRD_PARTY_NOTICES.md">What is inside it, and under '
-                       "what terms</a></p>")
-    if len(rels) > 1:
-        rules = []
-        for i in range(1, len(rels)):
-            rules.append(f".installer .r{i}{{display:none}}"
-                         f".installer:has(#fwv{i}:checked) .r0{{display:none}}"
-                         f".installer:has(#fwv{i}:checked) .r{i}{{display:block}}")
+    # The rules that make the radios work, generated for what is on the
+    # page: the board picked shows its section and hides the one picked to
+    # start with; inside a section, a version picked shows its buttons, line
+    # and link and hides the newest's. Without :has() the board picked to
+    # start with stays showing, which is the reference board.
+    rules = []
+    for j, (_b, o) in enumerate(offers):
+        if j != first:
+            rules.append(f".installer .bsec.b{j}{{display:none}}"
+                         f".installer:has(#fwb{j}:checked) .bsec.b{first}{{display:none}}"
+                         f".installer:has(#fwb{j}:checked) .bsec.b{j}{{display:flex}}")
+        for i in range(1, len(o)):
+            rules.append(f".installer .b{j} .r{i}{{display:none}}"
+                         f".installer:has(#fwv{j}_{i}:checked) .b{j} .r0{{display:none}}"
+                         f".installer:has(#fwv{j}_{i}:checked) .b{j} .r{i}{{display:block}}")
+    if rules:
         out.append("<style>" + "".join(rules) + "</style>")
     out.append("</div>")
     return "".join(out)
+
+
+def board_html(lines):
+    """The ::: board block on the tested boards page: one board's picture
+    and its facts, from BOARDS and from what is on disk, so the page and the
+    installer's picker can never name different versions. The first line
+    inside the block is the board's folder name ("esp32", "esp32s3"); an
+    unknown one renders nothing, the way an unknown drawing does."""
+    name = next((l.strip() for l in lines if l.strip()), "")
+    b = BOARD_BY_DIR.get(name)
+    if b is None:
+        return ""
+    o = board_offers(b["dir"])
+    if o:
+        ver = board_version(o[0], b["dir"])
+        exact = o[0]["sets"][b["dir"]]["shown"]
+        build = (html.escape(ver) + ' <a href="/install">on the installer</a>'
+                 + (f"; the board calls it {html.escape(exact)}" if exact != ver else ""))
+    else:
+        build = 'coming soon to <a href="/install">the installer</a>'
+    return ('<div class="hwb">' + b["art"].replace('class="art board"',
+                                                    'class="art board big"', 1)
+            + "<dl>"
+            + "<dt>Firmware</dt><dd>" + build + "</dd>"
+            + "<dt>Chip</dt><dd>" + html.escape(b["part"]) + "</dd>"
+            + "<dt>Looks like</dt><dd>" + html.escape(b["tell"]) + "</dd>"
+            + '<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
+            + '">Amazon</a></dd>'
+            + "</dl></div>")
 
 
 def installer_terms_html():
@@ -2194,7 +2494,7 @@ def installer_terms_html():
     the firmware's notices are. It used to sit in the install card, which
     is for installing; it lives under "Doing it the other way" now. With no
     release on disk there is no installer on the page, so nothing to say."""
-    if not firmware_releases():
+    if not firmware_offered():
         return ""
     return ('<p class="meta terms">The installer on this page is '
             '<a href="https://github.com/esphome/esp-web-tools">ESP Web '
@@ -2270,29 +2570,32 @@ def firmware_file(rest):
     None. `rest` is the path after "/install/".
 
     Names are checked rather than paths, the way static_file() does it, and
-    the shapes accepted are the only four the page ever links:
+    the shapes accepted are the only ones the page ever links:
 
-        <version>/manifest.json
-        <version>/manifest-update.json    the Update button's, never erases
-        <version>/THIRD_PARTY_NOTICES.md
+        <version>/<chip>/manifest.json         one board's, since site 1.2.0
+        <version>/<chip>/manifest-update.json  the same, never erases
         <version>/<chip>/<one of FLASH_PARTS>
+        <version>/THIRD_PARTY_NOTICES.md
+        <version>/manifest.json                the ESP32's, where it was
+        <version>/manifest-update.json         before 1.2.0
 
-    Both manifests sit in the release's own directory, so the parts they
-    name resolve to the same files.
+    A board's manifests sit in its own folder, so the bare part names they
+    carry resolve to that folder's files; the two older paths carry the
+    folder in each part's path and resolve to the same files.
 
-    A binary is served only when its release is one firmware_releases()
-    would offer, so a version left on disk past FIRMWARE_KEEP is not
-    reachable by guessing its number either.
+    Anything is served only for a version /install offers for that board
+    (board_offers), so a version left on disk past FIRMWARE_KEEP, or a
+    preview's ESP32 set while the ESP32 has a release, is not reachable by
+    guessing its name either.
     """
     bits = [b for b in rest.split("/") if b]
     if not bits or not FIRMWARE_VER.match(bits[0]):
         return None
-    offered = [r["version"] for r in firmware_releases()]
-    if bits[0] not in offered:
-        return None
+    offered = {b["dir"]: [r["version"] for r in board_offers(b["dir"])] for b in BOARDS}
+    manifests = ("manifest.json", "manifest-update.json")
     vdir = FIRMWARE_DIR / bits[0]
 
-    if len(bits) == 2 and bits[1] in ("manifest.json", "manifest-update.json"):
+    if len(bits) == 2 and bits[1] in manifests:
         man = firmware_manifest(bits[0], update=bits[1] == "manifest-update.json")
         if man is None:
             return None
@@ -2300,18 +2603,27 @@ def firmware_file(rest):
                 "application/json; charset=utf-8")
 
     if len(bits) == 2 and bits[1] == "THIRD_PARTY_NOTICES.md":
+        if not any(bits[0] in v for v in offered.values()):
+            return None
         f = vdir / bits[1]
         if not f.is_file():
             return None
         return f.read_bytes(), "text/plain; charset=utf-8"
 
     if (len(bits) == 3 and FIRMWARE_CHIP.match(bits[1])
-            and bits[1] in FLASH_FAMILIES
-            and bits[2] in [name for name, _ in FLASH_PARTS]):
-        f = vdir / bits[1] / bits[2]
-        if not f.is_file():
-            return None
-        return f.read_bytes(), "application/octet-stream"
+            and bits[0] in offered.get(bits[1], ())):
+        if bits[2] in manifests:
+            man = firmware_manifest(bits[0], update=bits[2] == "manifest-update.json",
+                                    chip=bits[1])
+            if man is None:
+                return None
+            return (json.dumps(man, indent=1).encode("utf-8"),
+                    "application/json; charset=utf-8")
+        if bits[2] in [name for name, _ in FLASH_PARTS]:
+            f = vdir / bits[1] / bits[2]
+            if not f.is_file():
+                return None
+            return f.read_bytes(), "application/octet-stream"
 
     return None
 
@@ -3862,9 +4174,46 @@ article .installer .pre {{ color:#f0c674; background:#241d10;
         padding:0.625rem 0.875rem; font-size:0.8125rem; }}
 article .installer .pre p {{ margin:0; line-height:1.45; }}
 article .installer .pre b {{ color:#ffd35c; }}
-/* The board slot keeps its height whether it holds one line or a choice,
-   so nothing moves the day a second board or release arrives. */
-article .installer .pick {{ min-height:1.5rem; }}
+/* The board picker (site 1.2.0, Rob: "select the board type ... include an
+   image for confirmation so the user flashes the right one. Small picture
+   in the pick list"). A fieldset of native radios, one row a board: the
+   radio, the picture, then the name, how to tell it and the version this
+   page would put on it. The chosen row is outlined in --dial on the
+   buttons' own dark blue, and keyboard focus rings the whole row. A
+   board's buttons, version line and notices are its own section, .bsec,
+   shown by the rules under the card. */
+article .installer fieldset.boards {{ border:0; margin:0; padding:0; min-width:0;
+        display:flex; flex-direction:column; gap:0.25rem; }}
+article .installer fieldset.boards legend {{ padding:0; margin:0 0 0.25rem;
+        font-size:0.8125rem; color:var(--dim); }}
+article .installer fieldset.boards legend a {{ margin-left:0.5rem; }}
+article .installer .bopt {{ display:flex; align-items:center; gap:0.625rem;
+        padding:0.25rem 0.625rem 0.25rem 0.5rem; border:1px solid #2c3a44;
+        border-radius:0.375rem; cursor:pointer; }}
+article .installer .bopt input {{ flex:none; margin:0; accent-color:var(--dial); }}
+article .installer .bopt:has(input:checked) {{ border-color:var(--dial);
+        background:#102630; }}
+article .installer .bopt:has(input:focus-visible) {{ outline:3px solid #ffd35c;
+        outline-offset:2px; }}
+article .installer .bopt .bt {{ display:flex; flex-direction:column; min-width:0;
+        font-size:0.8125rem; line-height:1.25; }}
+article .installer .bopt .bt b {{ color:var(--ink); }}
+article .installer .bopt svg.art.board {{ width:4rem; height:2.5rem; }}
+article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}
+article .installer .bopt .bv {{ color:var(--dial); font-size:0.75rem; }}
+article .installer .bopt .bv.soon {{ color:var(--faint); }}
+article .installer .bsec {{ display:flex; flex-direction:column; gap:0.5rem; }}
+article .installer .bsec > * {{ margin:0; }}
+/* What a board needs done before either button: an instruction rather than
+   a warning, so the calm box and not the amber one. */
+article .installer .first {{ color:var(--ink); background:#12121a;
+        border-left:3px solid #2c5a70; border-radius:0.25rem;
+        padding:0.5rem 0.75rem; font-size:0.8125rem; line-height:1.45; }}
+article .installer .first b {{ color:var(--dial); }}
+/* A board with nothing to install: says so, in the quiet colours of the
+   card with no release, and has no buttons. */
+article .installer p.soon {{ color:var(--dim); border:1px dashed #3a3a46;
+        border-radius:0.375rem; padding:0.625rem 0.75rem; font-size:0.8125rem; }}
 article .installer .vers {{ display:flex; flex-wrap:wrap; gap:0.25rem 1rem;
         margin:0.25rem 0 0; font-size:0.8125rem; color:var(--ink); }}
 article .installer .vers label {{ cursor:pointer; }}
@@ -3885,30 +4234,37 @@ article .install-top > .steps > p.aside:first-child {{ margin:0 0 1.25rem; }}
    drawing held to 3.5rem tall rather than growing with the width; smaller
    gaps, a little less padding and buttons 0.25rem shorter. The Update
    button went from ending at 831px to about 740px. Re-measure it after
-   changing anything in the card or the amber box's words. */
+   changing anything in the card or the amber box's words.
+   Site 1.2.0 put the board picker at the top of the card and moved the
+   amber box under the buttons, and the column is 26rem so a board's name
+   and its version line each keep to one line beside the picture. Measured
+   with two releases for the ESP32: its Update button ends at 665px, and
+   the S3's, under its download-mode note, at 719px. */
 @media (min-width: 901px) {{
-  article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 24rem;
+  article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 26rem;
         grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}
   article .install-top > .intro {{ grid-column:1; grid-row:1; }}
   article .install-top > .installer {{ grid-column:2; grid-row:1 / span 2; margin:0;
         position:sticky; top:1rem; padding:1rem 1.25rem; }}
-  article .installer svg.art.mini {{ height:3.5rem; }}
   article .installer button.go {{ padding-top:0.5625rem; padding-bottom:0.5625rem; }}
   article .install-top > .steps {{ grid-column:1; grid-row:2; }}
   article .install-top .steps svg.art.steps {{ margin:1rem 0 1.25rem; }}
 }}
-/* On a phone the card is one column above the steps, and the button comes
-   first: the menu already takes the top third of the screen, and the
-   "before you start" box ahead of the button would push it under the fold
-   of a smaller phone. Rob's call, from the spec's own disagreement. */
-@media (max-width: 900px) {{
-  article .installer .pick {{ order:1; }}
-  article .installer esp-web-install-button {{ order:2; }}
-  article .installer .ver {{ order:3; }}
-  article .installer .notices {{ order:4; }}
-  article .installer .pre {{ order:5; }}
-  article .installer svg.mini {{ order:6; }}
-}}
+/* On a phone the card is one column above the steps, and the picker and
+   the buttons come first: the menu already takes the top third of the
+   screen, and the "before you start" box ahead of the button would push it
+   under the fold of a smaller phone. Rob's call, from the spec's own
+   disagreement. Since site 1.2.0 that is the markup's own order, on a
+   desktop too, so there is nothing to reorder. */
+/* A tested board on /hardware (site 1.2.0): its picture beside what it is,
+   the build the installer offers for it and where to buy one, from BOARDS
+   and the firmware on disk. The facts wrap under the picture on a phone. */
+article .hwb {{ display:flex; flex-wrap:wrap; align-items:flex-start;
+        gap:0.875rem 1.5rem; margin:0.75rem 0 1.25rem; }}
+article .hwb dl {{ flex:1 1 18rem; min-width:0; margin:0; display:grid;
+        grid-template-columns:auto minmax(0, 1fr); gap:0.25rem 1rem; }}
+article .hwb dt, article .hwb dd {{ margin:0; line-height:1.5; }}
+article .hwb dt {{ color:var(--dim); }}
 /* A page's one primary action, drawn like the installer's button, with
    the other way round beside it outlined, the way the installer card draws
    a kept older release, and a note under both. On a phone the two stack,
@@ -6504,10 +6860,11 @@ article .freedom svg.icon { float:right; width:4.25rem; height:4.25rem;
    phone draws it at 1:1 and the smallest type lands at about 9px. */
 svg.art.steps { width:100%; max-width:34rem; height:auto;
         margin:1.125rem auto 1.5rem; }
-/* The install card's own small drawing. No frame of its own, because the
-   card is the frame: a box in a box reads as two things. */
-svg.art.mini { width:100%; max-width:none; height:auto; background:none;
-        border:0; margin:0; }
+/* The boards (site 1.2.0): 96 x 60 units, shown at about 1:1 in the
+   install card's picker and at twice that on /hardware, which is the scale
+   the step drawings reach on a desktop, so the lines are the same weight. */
+svg.art.board { flex:none; width:4.5rem; height:2.8125rem; margin:0; }
+svg.art.board.big { width:9rem; height:5.625rem; }
 
 /* The machines on /terminals, one strip under each heading. Narrower
    than the first call strip, because there are eight of them on one page
@@ -7484,24 +7841,6 @@ BOOT_BUTTON = _deco(206,
     f'<text x="{_bx(21.2)}" y="152" font-size="8" text-anchor="middle">off:</text>'
     f'<text class="ink" x="{_bx(21.2)}" y="163" font-size="7" text-anchor="middle">abandoned</text>'
     f'<text x="{_bx(11)}" y="190" font-size="8" text-anchor="middle">what letting go of BOOT does, by seconds held</text>')
-
-# The small drawing at the top of the install card: the same hand as the
-# first step's, laptop, cable and board, with no caption and no box of its
-# own, because it sits inside a box already. 354 wide like the others, and
-# only 96 tall. From site 1.0.0 a desktop holds it to 3.5rem tall, centred,
-# so the card's buttons stay on the first screen; on a phone it is last in
-# the card and fills the width.
-INSTALL_MINI = (
-    '<svg class="art mini" viewBox="0 0 354 96" aria-hidden="true" '
-    'focusable="false" preserveAspectRatio="xMidYMid meet">'
-    '<rect class="o" x="8" y="10" width="100" height="64" rx="4"/>'
-    '<rect class="g" x="14" y="16" width="88" height="52" rx="2"/>'
-    '<rect class="k" x="28" y="34" width="60" height="16" rx="3"/>'
-    '<text class="ink" x="58" y="45.5" font-size="9" text-anchor="middle">Install</text>'
-    '<path class="o" d="M0 78 H116 L110 84 H6 Z"/>'
-    '<path class="o" d="M116 78 C152 78 162 52 200 52"/>'
-    '<path class="lt" d="M117 81 C153 81 163 55 200 55"/>'
-    + _board(206, 26, "lf") + "</svg>")
 
 SETUP_ALT = (
     "Three steps. A board on a USB cable, flashed from the browser. Wi-Fi "
