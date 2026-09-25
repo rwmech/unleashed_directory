@@ -14,6 +14,54 @@
 
 # Changelog
 
+## 1.3.7, 2026-09-25
+
+Rob: once the Freenove camera fixes check out, firmware 1.1.1-dev.1 is a
+pre-release, and the installer offers it for the Freenove camera board as
+its 1.1.1 preview, the way the ESP32-CAM already gets 1.1.1-dev.0.
+
+- **A preview can go ahead of a release, for one board.** A board marked
+  `"previews": "ahead"` (the Freenove) is offered the newest preview carrying
+  its image set when that preview is newer than its newest release: first,
+  labelled preview by the existing rules ("Firmware 1.1.1 preview (FNCAM
+  1.0.4)"), with the release beside it as a second choice, "1.1.1-dev.1
+  (preview)" and "1.1.0". It still waits for a release before any preview,
+  as it did before 1.1.0. The ESP32 and the S3 are unchanged: a pre-release
+  carrying their sets is never offered while a release carries them.
+- **The release fetcher does the same**: `AHEAD = ("esp32-fncam",)` takes the
+  newest pre-release carrying the Freenove's set that is newer than every
+  release naming it, installs it as a preview beside that release, keeps it
+  while it serves the board, and drops it once a newer release carries the
+  board.
+- **A gate on a board and a version**: `::: from esp32-fncam 1.1.1` and its
+  `until` half switch prose once the installer offers that board 1.1.1 or
+  later, its preview included. A plain version gate never sees a preview,
+  and a plain board gate was already lit by 1.1.0.
+- **/hardware, "Choosing a camera board"**: the Freenove's largest photo is
+  640x480 with a GC0308, and 1600x1200 with an OV2640 from firmware 1.1.1,
+  in place of "640x480, with either camera", behind that gate. The
+  ESP32-CAM's entry and its recommendation say its camera is a swappable
+  ribbon module, as the Freenove's is.
+- **/hardware, the Freenove's entry**: the swap paragraph follows the same
+  gate, and 1.1.1's fixes are listed once it is offered: the OV2640's green
+  cast and the washed-out first frame fixed, Auto levels for the GC0308,
+  better JPEG quality from an OV2640, and a watermark that no longer costs
+  detail. "About 4 seconds a picture" is gone: snap times are being measured
+  again.
+- **/camera, "What size photos can I take?"**: the Freenove's sizes follow
+  the camera fitted from 1.1.1, behind the gate. The Resolution row in the
+  settings table points at that section instead of repeating it, so the
+  sizes live in one place on the page.
+- **/install, the Freenove's section**: a paragraph, behind the gate, saying
+  it has two versions to choose from and that the line under the buttons
+  says which is a preview.
+- Self-test: the gate both ways, and a later version not lit early; the
+  Freenove offered the preview first and 1.1.0 second while the ESP32 and
+  the S3, carried by the same pre-release, stay on their releases; the
+  picker row, the version radios and both version lines; the size prose
+  before and after; the preview dropped once 1.1.1 is a release; and the
+  fetcher installing, keeping and then dropping the preview.
+
 ## 1.3.6, 2026-09-25
 
 Rob, on /different's "What is on those sites": "this should be a table, one

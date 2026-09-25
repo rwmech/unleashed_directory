@@ -239,7 +239,10 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   releases only, so a preview is never "the newest release": no gate,
   banner or update arrow. `board_offers(dir)` gives a board the releases
   carrying its set, newest first, up to FIRMWARE_KEEP, else the newest
-  preview carrying it, alone; `firmware_file()` serves only what
+  preview carrying it, alone. A board marked `"previews": "ahead"` (the
+  Freenove, 1.3.7) also gets the newest preview newer than its newest
+  release, first, with that release beside it; `False` or `"ahead"` means
+  no preview at all before a release. `firmware_file()` serves only what
   `board_offers` offers, so a preview's ESP32 set is unreachable while the
   ESP32 has a release. The picker says "1.1.0 preview (S3 1.0.0)" and the
   line under the buttons the exact version.
@@ -250,7 +253,9 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `esp32s3-firmware.bin`, `esp32s3-version.txt`); for each board that
   release does not carry, the newest older release carrying it; and only
   for a board no release names at all, the newest pre-release carrying it,
-  under its own name. A pre-release tagged like a release is never used. A
+  under its own name. `AHEAD` (1.3.7, the Freenove) adds a pre-release newer
+  than every release naming the board, beside that release, and prune keeps
+  it the same way. A pre-release tagged like a release is never used. A
   half-published set, a version.txt the sums name but the release lacks, or
   a bad version.txt refuses that release; after any refusal every preview
   on disk is kept. Prune keeps the newest two releases plus whatever is
@@ -578,7 +583,12 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   open once `board_offers()` gives that board anything, a preview included.
   A version gate never sees a preview, so a board that arrives on a
   pre-release needs this one. Gates nest: /hardware's intro is a board pair
-  inside `::: from 1.1.0`.
+  inside `::: from 1.1.0`. **`::: from <board> X.Y.Z`** (site 1.3.7, the
+  Freenove's 1.1.1) opens once that board is offered X.Y.Z or later, a
+  preview included. Do not nest `::: until X.Y.Z` inside it to say "while it
+  is a preview": that gate reads the newest release of any board, so an
+  ESP32-only 1.1.1 would close it early. Word such prose to stay true after
+  the release, and let the version line say "preview".
 - **The footer** is two rows, Get started and Reference, then the colophon:
   the site version from the newest `## X.Y.Z` in CHANGELOG.md, read once at
   start (so CHANGELOG.md is installed beside server.py), the copyright and

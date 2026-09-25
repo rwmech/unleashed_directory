@@ -2493,7 +2493,8 @@ def main():
               and "esp32-cam/manifest" not in inst4
               and 'id="on-the-esp32-cam"' not in inst4
               and all(b["dir"] not in {x["dir"] for x in S.BOARDS} for b in S.SOON_BOARDS)
-              and fncam.get("previews") is False
+              # Site 1.3.7: "ahead", which still waits for a release first.
+              and fncam.get("previews") == "ahead"
               and fncam not in S.picker_boards()
               and 'id="on-the-freenove-camera-board"' not in inst4)
         code, cam = get("/camera")
@@ -4541,7 +4542,12 @@ def main():
               and "varies between batches" in flat_c7 and "GC0308" in flat_c7
               and "works with either" in flat_c7
               and "| Resolution |" not in cam7
-              and "On the Freenove, 320x240 or 640x480, on either camera;" in cam7
+              # Site 1.3.7: the Resolution row points at the sizes section,
+              # which is the one home for each board's sizes.
+              and ("The sizes the board&#x27;s camera can take: see <a "
+                   'href="#what-size-photos-can-i-take">') in cam7
+              and 'id="what-size-photos-can-i-take"' in cam7
+              and "on either camera" not in cam7
               # Site 1.3.4: /camera now gives every board's largest photo,
               # so the rule that no size above 640x480 appears beside the
               # Freenove holds for its own entry, where it always mattered.
@@ -4589,7 +4595,7 @@ def main():
               "ESP32-D0WDQ6" in ecb["part"] and "8 MB PSRAM (4 MB usable)" in ecb["part"]
               and "OV2640" in ecb["camera"] and "2 MP" in ecb["camera"]
               and "1600x1200" in ecb["camera"]
-              and "better than the one on Rob" in flat_ec
+              and "better than the one Rob" in flat_ec
               and "1600x1200" in flat_ec and "640x480" in flat_ec
               and "8 MB of" in flat_ec and "the chip can use 4 MB" in flat_ec
               and "ESP32-CAM-MB" in flat_ec and "micro USB" in flat_ec and "CH340" in flat_ec
@@ -5652,6 +5658,141 @@ def main():
                       and "let a board look out of the window" in " ".join(who3.split())
                       and "::: from" not in hw3 + inst3 + cam3 + who3
                       and "::: until" not in hw3 + inst3 + cam3 + who3)
+
+                # ----------------------------------------------------------
+                # Site 1.3.7 (Rob, 2026-09-25): firmware 1.1.1-dev.1 is the
+                # Freenove's 1.1.1 preview (FNCAM 1.0.4). The Freenove takes
+                # it ahead of its 1.1.0 release, with 1.1.0 beside it; the
+                # ESP32 and the S3 stay on their releases although the same
+                # pre-release carries their sets; and the size prose gated on
+                # "esp32-fncam 1.1.1" switches with it, both ways.
+                print("The Freenove's 1.1.1 preview, ahead of its release")
+                gate_fn = ("::: until esp32-fncam 1.1.1\nold\n:::\n\n"
+                           "::: from esp32-fncam 1.1.1\nnew\n:::")
+                gate_later = ("::: from esp32-fncam 1.1.2\nnew\n:::\n"
+                              "::: until esp32-fncam 1.1.2\nold\n:::")
+                g_fn0 = S.md_render(gate_fn)
+                g_fn_later0 = S.md_render(gate_later)
+                pick4a = S.installer_html()
+                put110("1.1.1-dev.1", "esp32", "1.1.1-dev.1", "2026-09-27")
+                put110("1.1.1-dev.1", "esp32s3", "1.1.1-dev.1 (S3 1.1.1)", "2026-09-27")
+                put110("1.1.1-dev.1", "esp32-fncam", "1.1.1-dev.1 (FNCAM 1.0.4)",
+                       "2026-09-27")
+                put110("1.1.1-dev.1", "esp32-cam", "1.1.1-dev.1 (ESPCAM 1.0.2)",
+                       "2026-09-27")
+                g_fn1 = S.md_render(gate_fn)
+                g_fn_later1 = S.md_render(gate_later)
+                g_fn_other = S.md_render("::: from esp32s3 1.1.1\nnew\n:::\n"
+                                         "::: until esp32s3 1.1.1\nold\n:::")
+                offers4 = {c: [r["version"] for r in S.board_offers(c)]
+                           for c in ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")}
+                check("a gate on a board and a version opens when the installer offers "
+                      "that board that version, its preview included, and not before",
+                      g_fn0 == "<p>old</p>" and g_fn1 == "<p>new</p>"
+                      and g_fn_later0 == "<p>old</p>" and g_fn_later1 == "<p>old</p>"
+                      # the S3's set is in the pre-release, but not offered
+                      and g_fn_other == "<p>old</p>")
+                check("the Freenove takes the pre-release as a preview, ahead of 1.1.0; "
+                      "the ESP32 and the S3 do not, and the ESP32-CAM moves to it",
+                      offers4 == {"esp32": ["1.1.1", "1.1.0"], "esp32s3": ["1.1.0"],
+                                  "esp32-fncam": ["1.1.1-dev.1", "1.1.0"],
+                                  "esp32-cam": ["1.1.1-dev.1"]}
+                      and S.firmware_file("1.1.1-dev.1/esp32-fncam/manifest.json") is not None
+                      and S.firmware_file("1.1.0/esp32-fncam/manifest.json") is not None
+                      and S.firmware_file("1.1.1-dev.1/esp32s3/manifest.json") is None
+                      and S.firmware_file("1.1.1-dev.1/esp32/manifest.json") is None
+                      and S.firmware_releases()[0]["version"] == "1.1.1")
+                pick4 = S.installer_html()
+                rows4 = pick4.split('<label class="bopt">')[1:]
+                b2 = (pick4.split('<div class="bsec b2">')[1].split('<div class="bsec b3">')[0]
+                      if '<div class="bsec b2">' in pick4 else "")
+                check("the picker labels the Freenove's row the 1.1.1 preview, with "
+                      "1.1.0 to choose beside it, and the S3's row unchanged",
+                      len(rows4) == 4
+                      and '<span class="bv">Firmware 1.1.1 preview (FNCAM 1.0.4)</span>'
+                          in rows4[2]
+                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)<span class="sep"'
+                          in rows4[1]
+                      and "preview" not in rows4[0] + rows4[1]
+                      and '<p class="vers" role="radiogroup" aria-label="Version">' in b2
+                      and '<input type="radio" name="fwver2" id="fwv2_0" checked> '
+                          "1.1.1-dev.1 (preview)</label>" in b2
+                      and '<input type="radio" name="fwver2" id="fwv2_1"> 1.1.0</label>' in b2
+                      and 'manifest="/install/1.1.1-dev.1/esp32-fncam/manifest.json"' in b2
+                      and 'manifest="/install/1.1.0/esp32-fncam/manifest.json"' in b2
+                      and '<p class="meta ver r0">Version 1.1.1-dev.1 (FNCAM 1.0.4), a '
+                          "preview, published 2026-09-27.</p>" in b2
+                      and '<p class="meta ver r1">Version 1.1.0 (FNCAM 1.0.2), released '
+                          "2026-09-26.</p>" in b2
+                      and ".installer:has(#fwv2_1:checked) .b2 .r1{display:block}" in pick4
+                      and "1.1.1-dev.1/esp32s3" not in pick4
+                      and "1.1.1-dev.1/esp32/" not in pick4
+                      and "Freenove" in pick4a and "1.1.1-dev.1" not in pick4a)
+                hw4, inst4, cam4 = render("hardware"), render("install"), render("camera")
+
+                def part(page, anchor):
+                    return (page.split(f'id="{anchor}"')[1].split("<h2")[0]
+                            if f'id="{anchor}"' in page else "")
+
+                fn3 = part(hw3, "freenove-esp32-camera-board")
+                fn4 = part(hw4, "freenove-esp32-camera-board")
+                ch3 = part(hw3, "choosing-a-camera-board")
+                ch4 = part(hw4, "choosing-a-camera-board")
+                sz3 = part(cam3, "what-size-photos-can-i-take")
+                sz4 = part(cam4, "what-size-photos-can-i-take")
+                flat_fn3, flat_fn4 = " ".join(fn3.split()), " ".join(fn4.split())
+                flat_sz3, flat_sz4 = " ".join(sz3.split()), " ".join(sz4.split())
+                check("before the preview: the Freenove's largest photo is 640x480 "
+                      "with either camera, and nothing claims 1.1.1",
+                      "<td>640x480, with either camera</td>" in ch3
+                      and "from firmware 1.1.1" not in ch3
+                      and "firmware 1.1.0 takes 640x480 photos at most with either"
+                          in flat_fn3
+                      and "1600x1200" not in flat_fn3 and "1.1.1" not in flat_fn3
+                      and "320x240 or 640x480, whichever camera it came with" in flat_sz3
+                      and "1.1.1" not in flat_sz3
+                      and "Two versions to choose from" not in inst3)
+                check("with it: 640x480 with a GC0308, up to 1600x1200 with an OV2640 "
+                      "from firmware 1.1.1, the swap and the fixes, and the preview named",
+                      "<td>640x480 with a GC0308; 1600x1200 with an OV2640, from "
+                      "firmware 1.1.1</td>" in ch4
+                      and "with either camera" not in ch4
+                      and ch4.count("<table") == 3
+                      and "With a GC0308, 320x240 or 640x480. With an OV2640, from "
+                          "firmware 1.1.1, up to 1600x1200" in flat_sz4
+                      and "whichever camera it came with" not in flat_sz4
+                      and "can be swapped for another" in flat_sz4
+                      and "with an OV2640 it takes photos up to 1600x1200" in flat_fn4
+                      and "at most with either" not in flat_fn4
+                      and "green cast" in flat_fn4 and "washed photos out" in flat_fn4
+                      and "<b>Auto levels</b>" in flat_fn4
+                      and "the watermark no longer costs the photo any detail" in flat_fn4
+                      and "The installer offers it first, with 1.1.0 beside it, and its "
+                          "version line says whether 1.1.1 is still a preview" in flat_fn4
+                      and "<dt>Firmware</dt><dd>1.1.1 preview (FNCAM 1.0.4) <a href="
+                          '"/install">on the installer</a>; the board calls it '
+                          "1.1.1-dev.1 (FNCAM 1.0.4)</dd>" in fn4
+                      and "<b>Two versions to choose from.</b>" in inst4
+                      and "seconds" not in flat_fn4.split("Better photos")[-1]
+                      and "::: from" not in hw4 + inst4 + cam4
+                      and "::: until" not in hw4 + inst4 + cam4)
+                check("the ESP32-CAM entry says its camera is a swappable ribbon module too",
+                      "On both boards the camera is a module on a ribbon, so it can be "
+                      "swapped for another." in " ".join(part(hw4, "esp32-cam").split()))
+                # A release of 1.1.1 carrying the Freenove takes over from the
+                # preview, and the "until 1.1.1" preview lines go.
+                put110("1.1.1", "esp32-fncam", "1.1.1 (FNCAM 1.0.4)", "2026-09-30")
+                hw5b, inst5b = render("hardware"), render("install")
+                flat_fn5 = " ".join(part(hw5b, "freenove-esp32-camera-board").split())
+                check("and once a 1.1.1 release carries the Freenove, the preview is not "
+                      "offered and the 1.1.1 facts stay",
+                      [r["version"] for r in S.board_offers("esp32-fncam")]
+                          == ["1.1.1", "1.1.0"]
+                      and S.firmware_file("1.1.1-dev.1/esp32-fncam/manifest.json") is None
+                      and "<b>Two versions to choose from.</b>" in inst5b
+                      and "preview (FNCAM" not in flat_fn5
+                      and "<dt>Firmware</dt><dd>1.1.1 (FNCAM 1.0.4) <a" in flat_fn5
+                      and "with an OV2640 it takes photos up to 1600x1200" in flat_fn5)
             finally:
                 S.FIRMWARE_DIR = pathlib.Path(fwroot)
                 shutil.rmtree(fw110, ignore_errors=True)
@@ -6449,6 +6590,56 @@ def main():
             check("and the next run keeps it while it serves the board",
                   rc == 0 and "Firmware 1.4.1-dev.0 is already installed." in out
                   and "1.4.1-dev.0" in os.listdir(dest) and "Removed" not in out)
+            # Site 1.3.7: a pre-release carrying every set. The Freenove,
+            # which a release carries, takes it ahead of that release; the
+            # ESP32-CAM moves to it; the ESP32 and the S3 stay on 1.4.0.
+            list_release("v1.4.1-dev.1", ("esp32", "esp32s3", "esp32-fncam", "esp32-cam"),
+                         pre=True,
+                         versions={"esp32-fncam": "1.4.1-dev.1 (FNCAM 1.0.4)\n",
+                                   "esp32-cam": "1.4.1-dev.1 (ESPCAM 1.0.2)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            fetch_src = open(os.path.join("deploy", "fetch_release.py"), encoding="utf-8").read()
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                ah_offers = {c: [r["version"] for r in S.board_offers(c)]
+                             for c in ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")}
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("a pre-release goes ahead of the Freenove's release as a preview, "
+                  "and never ahead of the ESP32's or the S3's",
+                  rc == 0 and 'AHEAD = ("esp32-fncam",)' in fetch_src
+                  and "Installed firmware 1.4.1-dev.1 (a preview, for the esp32-fncam "
+                      "and esp32-cam images) for the browser installer." in out
+                  and (tree("1.4.1-dev.1") or {}).get("esp32-fncam/version.txt")
+                      == b"1.4.1-dev.1 (FNCAM 1.0.4)\n"
+                  and ah_offers["esp32"][0] == "1.4.0" and ah_offers["esp32s3"][0] == "1.4.0"
+                  and ah_offers["esp32-fncam"] == ["1.4.1-dev.1", "1.4.0"]
+                  and ah_offers["esp32-cam"] == ["1.4.1-dev.1"]
+                  and "1.4.1-dev.0" not in os.listdir(dest)
+                  and "1.4.0" in os.listdir(dest))
+            rc, out = run_fetch()
+            check("and the next run keeps it, with the release it goes ahead of",
+                  rc == 0 and "Firmware 1.4.1-dev.1 is already installed." in out
+                  and "1.4.1-dev.1" in os.listdir(dest) and "1.4.0" in os.listdir(dest)
+                  and "Removed" not in out)
+            # A release carrying the Freenove, newer than the preview, takes
+            # over, and the preview goes once it serves no board.
+            list_release("v1.4.1", ("esp32", "esp32s3", "esp32-fncam", "esp32-cam"),
+                         versions={"esp32-fncam": "1.4.1 (FNCAM 1.0.4)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                fn_after = [r["version"] for r in S.board_offers("esp32-fncam")]
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("a newer release carrying the Freenove takes over, and the preview goes",
+                  rc == 0 and "Installed firmware 1.4.1 for the browser installer." in out
+                  and "1.4.1-dev.1" not in os.listdir(dest)
+                  and fn_after == ["1.4.1", "1.4.0"])
         finally:
             relsrv.shutdown()
             shutil.rmtree(relroot, ignore_errors=True)

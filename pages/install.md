@@ -142,6 +142,15 @@ board with a camera on a ribbon in the middle and a USB-C socket at one end.
   end, or in your router's list of devices.
 - **It has a CH340 USB-serial chip**, which Windows and macOS sometimes need a
   driver for: see [when the board does not appear](#when-the-board-does-not-appear).
+
+<!-- Site 1.3.7: from the day the installer offers the Freenove 1.1.1, its preview included ("previews": "ahead" in server.py). Worded to stay true once 1.1.1 is a release: the version line says which is a preview. -->
+::: from esp32-fncam 1.1.1
+**Two versions to choose from.** The newest, 1.1.1, is chosen to start
+with: better photos and, with an OV2640 camera, photos up to 1600x1200
+([what is new](/hardware#freenove-esp32-camera-board)). 1.1.0 is beside it.
+The line under the buttons says which one you have chosen, and whether it
+is a preview, an early build out for testing.
+:::
 :::
 
 <!-- The ESP32-CAM section (site 1.3.5), shown once the installer offers the board anything, a preview included ("::: from esp32-cam"). Its set is esp32-cam, chipFamily ESP32, first on the firmware's pre-release v1.1.1-dev.0 (ESPCAM 1.0.1). The card-out step is Rob's, from his bench on 2026-09-25. Why: the card's line on GPIO 2 is a boot strap, and Espressif's esptool page "Boot mode selection" says GPIO 2 "must also be either left unconnected/floating, or driven Low, in order to enter the serial bootloader"; ESP-IDF's "SD pull-up requirements" page names the same conflict. Some cards do not hold it high, so the step says always. "Failed to initialize" is the start of the only message ESP Web Tools 10.4.0 shows when it cannot bring the chip into its flashing mode (vendor/esp-web-tools/10.4.0, install-dialog chunk: "Failed to initialize. Try resetting your device or holding the BOOT button while clicking INSTALL."). The board looks for its card as it starts, hence the unplug. -->

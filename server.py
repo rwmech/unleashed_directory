@@ -1114,7 +1114,8 @@ _MD_STEP   = re.compile(r"^\d{1,2}\. ")
 # "::: from|until" takes a version, or since site 1.3.5 a board's image set
 # folder ("esp32-cam"), the same shape FIRMWARE_CHIP allows.
 _MD_GATE   = re.compile(r"^::: (from|until) (?:(\d+)\.(\d+)\.(\d+)|"
-                        r"([a-z][a-z0-9]{2,11}(?:-[a-z0-9]{2,11})?))\s*$")
+                        r"([a-z][a-z0-9]{2,11}(?:-[a-z0-9]{2,11})?)"
+                        r"(?: (\d+)\.(\d+)\.(\d+))?)\s*$")
 
 
 # --------------------------------------------------------------------------
@@ -1781,13 +1782,19 @@ def _md_render(text):
         # release: rendered once the installer offers that board anything,
         # a preview included, which a version gate can never see because a
         # preview never lights one. "::: until esp32-cam" is its other half.
+        # "::: from esp32-fncam 1.1.1" (site 1.3.7) gates on a board and a
+        # version together: rendered once the installer offers that board
+        # something at that version or later, a preview included, so a
+        # board's own preview can switch its prose a release early.
         if gate is not None:
             if line.startswith("::: "):
                 gate[1] += 1
             elif line.strip() == ":::":
                 if gate[1] == 0:
-                    if isinstance(gate[0], str):
-                        reached = bool(board_offers(gate[0]))
+                    if isinstance(gate[0], list):
+                        offered = board_offers(gate[0][0])
+                        reached = (bool(offered) if gate[0][1] is None else
+                                   any(r["sort"] >= gate[0][1] for r in offered))
                     else:
                         rels = firmware_releases()
                         reached = bool(rels) and rels[0]["sort"] >= gate[0]
@@ -1806,7 +1813,8 @@ def _md_render(text):
                 table = None
             flush()
             m = _MD_GATE.match(line)
-            want = (m.group(5) if m.group(5)
+            want = ([m.group(5), tuple(int(g) for g in m.groups()[5:8])
+                     if m.group(6) else None] if m.group(5)
                     else tuple(int(g) for g in m.groups()[1:4]))
             gate = [want, 0, [], m.group(1) == "until"]
             continue
@@ -2337,11 +2345,21 @@ def board_offers(chip):
     only a preview carries is offered that preview."""
     every = firmware_sets()
     full = [r for r in every if not r["pre"] and chip in r["sets"]]
+    mode = BOARD_BY_DIR.get(chip, {}).get("previews", True)
     if full:
+        # A board marked "previews": "ahead" (the Freenove, site 1.3.7) is
+        # offered the newest preview carrying it that is newer than its
+        # newest release, first, with that release beside it as the way
+        # back. Every other board with a release is offered releases only.
+        if mode == "ahead":
+            pre = [r for r in every if r["pre"] and chip in r["sets"]
+                   and r["key"] > full[0]["key"]][:1]
+            return (pre + full)[:FIRMWARE_KEEP]
         return full[:FIRMWARE_KEEP]
-    # A board marked "previews": False (the Freenove, Rob: nothing of it
-    # shows before 1.1.0) waits for a release and is never offered one.
-    if not BOARD_BY_DIR.get(chip, {}).get("previews", True):
+    # A board marked "previews": False or "ahead" waits for a release and
+    # is never offered a preview before one (the Freenove, Rob: nothing of
+    # it shows before 1.1.0).
+    if mode is not True:
         return []
     return [r for r in every if r["pre"] and chip in r["sets"]][:1]
 
@@ -2353,7 +2371,7 @@ def picker_boards():
     soon" in the picker: /hardware says so, and a picker line for a board
     with nothing to install is one more thing to read past."""
     return [b for b in BOARDS
-            if b.get("previews", True) or board_offers(b["dir"])]
+            if b.get("previews", True) is True or board_offers(b["dir"])]
 
 
 # The early-testing line (site 1.2.9, Rob's release flow from firmware
@@ -2624,8 +2642,14 @@ BOARD_ART_ESPCAM = (
 # "previews": False (site 1.2.9) is a board that waits for a release: no
 # preview is ever offered for it, and the picker leaves it out until a
 # release on disk carries it. Its "status" is what /hardware's Firmware row
-# says until then. The Freenove is the first, because nothing of it is to
+# says until then. The Freenove was the first, because nothing of it was to
 # show on the installer before firmware 1.1.0.
+#
+# "previews": "ahead" (site 1.3.7) waits for a release the same way, and
+# once one carries the board, a newer preview carrying it goes ahead of it:
+# offered first, labelled preview, with the release beside it. The Freenove,
+# since Rob's decision of 2026-09-25 that firmware 1.1.1-dev.1 (FNCAM 1.0.4)
+# is its 1.1.1 preview. The ESP32 and the S3 stay on their releases.
 BOARDS = (
     # "(Base)", site 1.2.9 (Rob): the dev board is one choice with or
     # without an SD card wired to it, and someone with a card module should
@@ -2662,10 +2686,10 @@ BOARDS = (
      # Site 1.2.7: the sensor varies between batches. Freenove document an
      # OV2640; Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no
      # JPEG encoder), and the firmware (FNCAM 1.0.2) drives both.
-     "camera": "varies by batch: OV2640, or a GC0308 at 640x480 as on Rob's",
+     "camera": "varies by batch: OV2640, or a GC0308 at 640x480 as Rob's came",
      "page": "/hardware#freenove-esp32-camera-board",
      "buy": "https://link.amazon/B04Ehvw2R",
-     "previews": False,
+     "previews": "ahead",
      "status": 'coming soon to <a href="/install">the installer</a>; '
                "running on Rob's bench, camera and card included",
      "before": ("**Check the picture:** the installer cannot tell this board "
@@ -3051,7 +3075,8 @@ def installer_html(lines=()):
             out.append(f'<p class="vers" role="radiogroup" aria-label="Version">')
             for i, rel in enumerate(o):
                 v = html.escape(rel["version"])
-                what = " (newest)" if i == 0 else ""
+                what = (" (preview)" if rel["pre"]
+                        else " (newest)" if i == 0 else "")
                 out.append(f'<label><input type="radio" name="fwver{j}" id="fwv{j}_{i}"'
                            + (" checked" if i == 0 else "") + f"> {v}{what}</label>")
             out.append("</p>")

@@ -43,7 +43,13 @@ Which releases, since site 1.2.0. Each board is served on its own:
     release. That is how the Waveshare S3 arrives before 1.1.0 is released,
     while the ESP32 stays on the latest release.
   - except a board in NO_PREVIEW, which waits for a release: the Freenove
-    camera board, which is to show nowhere before firmware 1.1.0.
+    camera board, which was to show nowhere before firmware 1.1.0.
+  - and a board in AHEAD, once a release carries it, is also served from the
+    newest pre-release that carries it and is newer than every release
+    naming it, beside that release (site 1.3.7). The Freenove again: firmware
+    1.1.1-dev.1 goes on the installer as its 1.1.1 preview while 1.1.0 is
+    its release. The ESP32 and the S3 are not in it, so a pre-release never
+    goes ahead of their releases.
 
 What it does, for each release it wants, in the order that keeps a bad
 download harmless:
@@ -104,9 +110,15 @@ SUMS = "SHA256SUMS"
 # family again, and it arrives on a pre-release first, so it is served as a
 # preview until a release carries it, and is not in NO_PREVIEW.
 FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")
-# Sets never taken from a pre-release, and never kept for one: the site
-# offers them from a release or not at all (server.py, "previews": False).
+# Sets never taken from a pre-release while no release carries them: the
+# site waits for a release before offering them at all (server.py,
+# "previews": False or "ahead").
 NO_PREVIEW = ("esp32-fncam",)
+# Sets that, once a release carries them, also take the newest pre-release
+# carrying them that is newer than every release naming them, as a preview
+# beside that release (server.py, "previews": "ahead"; site 1.3.7, Rob: the
+# Freenove gets firmware 1.1.1-dev.1 as its 1.1.1 preview).
+AHEAD = ("esp32-fncam",)
 KEEP = 2
 TAG = re.compile(r"^v(\d{1,3})\.(\d{1,3})\.(\d{1,4})"
                  r"(?:-([0-9A-Za-z-]{1,20}(?:\.[0-9A-Za-z-]{1,20}){0,3}))?$")
@@ -375,6 +387,14 @@ def prune(dest, keep_also=()):
                and set_complete(os.path.join(dest, n, fam))]
         if full or pre:
             keep.add((full or pre)[0])
+        # A board that takes a preview ahead of its release keeps the newest
+        # preview here that is newer than that release, as the server offers.
+        if full and fam in AHEAD:
+            top = version_key(full[0])
+            ahead = [n for _k, n, p in found if p and version_key(n) > top
+                     and set_complete(os.path.join(dest, n, fam))]
+            if ahead:
+                keep.add(ahead[0])
     gone = []
     for _key, name, _pre in found:
         if name not in keep:
@@ -437,6 +457,7 @@ def main():
     # serves one of these: a broken release leaves its board on whatever is
     # installed, and never hands it to a pre-release.
     claimed = set()
+    newest_named = {}
 
     # The releases, newest version first. Version order rather than the
     # order GitHub lists them in, which is when each was made: a patch to an
@@ -452,8 +473,17 @@ def main():
         tag = str(r.get("tag_name", ""))
         m = TAG.match(tag)
         assets = asset_urls(r)
-        claimed.add(FAMILIES[0])
-        claimed.update(f for f in FAMILIES if any(assets.get(prefix(f) + p) for p in PARTS))
+        named = [FAMILIES[0]] + [f for f in FAMILIES[1:]
+                                 if any(assets.get(prefix(f) + p) for p in PARTS)]
+        claimed.update(named)
+        # The newest release naming each board, whole or not, for AHEAD: a
+        # preview goes ahead of a board's release only when it is newer than
+        # every release naming it, so a broken release is never overtaken
+        # by an older pre-release.
+        if m and not m.group(4):
+            for f in named:
+                if f not in newest_named or version_key(tag[1:]) > newest_named[f]:
+                    newest_named[f] = version_key(tag[1:])
         if not m or m.group(4):
             if first:
                 failed = True
@@ -503,12 +533,19 @@ def main():
             continue
         candidates.append((version_key(tag[1:]), r, tag[1:], fams))
     candidates.sort(key=lambda c: c[0], reverse=True)
-    for _k, r, version, fams in candidates:
+    # And a board in AHEAD that a release carries: the newest pre-release
+    # carrying it that is newer than every release naming it, beside its
+    # release (site 1.3.7).
+    ahead_done = set()
+    for k, r, version, fams in candidates:
         needed = [f for f in fams
-                  if f not in served and f not in claimed and f not in NO_PREVIEW]
+                  if (f not in served and f not in claimed and f not in NO_PREVIEW)
+                  or (f in AHEAD and f in served and f not in ahead_done
+                      and f in newest_named and k > newest_named[f])]
         if needed:
             wanted.append((r, version, fams, needed, True))
             served.update(needed)
+            ahead_done.update(f for f in needed if f in AHEAD)
 
     if not wanted and not failed:
         refused("", f"GitHub has no public release of {REPO} (the list is empty). "
