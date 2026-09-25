@@ -14,6 +14,47 @@
 
 # Changelog
 
+## 1.3.10, 2026-09-25
+
+A board whose sysop has closed it shows as **Temporarily closed** (Rob).
+From firmware 1.1.1 a closed board keeps announcing and sends
+`"closed": true`; when it is open the field is absent. A board still on the
+published default password never announces at all.
+
+- **`closed` in the announce**, documented in PROTOCOL.md under Closed
+  boards: optional, and only a JSON `true` closes. Absent, `false`, a string,
+  a number or anything else is open, and none of them refuses the heartbeat.
+  Any directory may implement it. It is not a listing state: pending,
+  online, offline and queued work as before, so a closed board that stops
+  heartbeating goes quiet and is delisted on the same clock as any other.
+- **Stored in a new `closed` column**, `INTEGER NOT NULL DEFAULT 0`, added by
+  `setup()` with ALTER TABLE the way every column since 0.21.0 has been, so
+  every row already in the live database reads as open. Tested from a 1.3.9
+  database (`OLD_SCHEMA_139`) as well as the three older ones.
+- **On /directory**, a closed board that is up says "Temporarily closed", in
+  a small box in the sysop's colour, where its callers-on figure would be,
+  and its address is words in grey rather than a telnet:// link. It is
+  listed after every open board that is up, however busy it is, and before
+  the quiet ones. It counts as a community listed, but its callers are not
+  added to the people connected. A quiet board is shown quiet, whatever it
+  last said. Closed is a state rather than a badge, so it is not in the
+  filter; a closed board is still found by its badges.
+- **`/api/boards.json` carries `closed`** on every board, true or false, as
+  its last heartbeat said. The data page says so.
+- **The feed** says "Temporarily closed: not taking calls right now." and
+  gives the address as "Address:" rather than "Dial:".
+- **/setup**'s announce section says what a closed board looks like on the
+  list, gated on firmware 1.1.1, since 1.1.0 stops announcing while closed.
+- **The front page** (Rob): under the hero's two buttons, a quiet text link,
+  "See how µnleashed is different", to /different. The site's own link style,
+  not a third button: left with the buttons on a desktop, centred under
+  them on a phone.
+- Self-test: closed true, false, missing and six kinds of junk; a new board
+  arriving closed; the row, the address, the order, the figures and the
+  description on /directory; the filter; the JSON; the feed; opening again;
+  going quiet and being delisted; PROTOCOL.md; a 1.3.9 database; the link
+  under the buttons.
+
 ## 1.3.9, 2026-09-25
 
 The spectrum at the top of /hardware gets a fourth stop at the top end

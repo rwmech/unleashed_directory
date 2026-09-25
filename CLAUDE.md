@@ -867,6 +867,23 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `ROW_ORDER`; `LETTER_BADGES` carries it as "SD", which is what the legend
   and the filter chip (`?b=sd`, any card) show. JSON `sd`, feed "SD card:
   32 GB".
+- **Closed boards (site 1.3.10, Rob).** Firmware 1.1.1 keeps announcing
+  while its sysop has it closed ("Stop taking calls") and sends `"closed":
+  true`; 1.1.0 stops announcing while closed, and a board on the published
+  default password never announces. Only a JSON `true` closes; anything else
+  is open and never refuses the heartbeat. Column `closed`, `INTEGER NOT
+  NULL DEFAULT 0`, in `BADGE_COLUMNS` though it is not a badge. `row_closed()`
+  is what the board last said (the JSON's `closed`, never null);
+  `shut_now()` is closed and online, and is what the page and the feed act
+  on, so a closed board that stops heartbeating is shown quiet and delisted
+  like any other: closed is not a listing state. Shown: `.state.closed
+  .shut` "Temporarily closed" in --warm, boxed, in place of "n of m on", the
+  address as `.nodial` words, not a telnet:// link. Sorted after every open
+  board that is up and before the quiet ones (the second ORDER BY term in
+  `index_data`); not counted in the people connected or the description's
+  communities online. Not a filter key: it is a state, and the filter is
+  badges. A heartbeat that flips it drops the page cache. The front page
+  has no top ten since 1.3.0, so /directory's order is the ranking.
 - **The installer always offers Telnet details (site 1.0.0).** The fourth
   change to the vendored dialog: `_renderDashboard` renders the link item
   whether or not the device sent a URL, to `/connected` with no fragment
@@ -898,10 +915,11 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   missing column with ALTER TABLE and nothing else; `BADGE_COLUMNS` must
   match SCHEMA, and the suite builds databases with the 0.20.2 schema
   (`OLD_SCHEMA`), the 0.21.1 schema (`OLD_SCHEMA_0211`) and the 1.0.0
-  schema (`OLD_SCHEMA_100`, with long slugs stored, which the live database
-  has), each copied from that version's server.py, starts a server on each,
-  and compares its columns with a fresh one's. Add the next migration's old
-  schema the same way.
+  schema (`OLD_SCHEMA_100`, with long slugs stored), and since 1.3.10 the
+  1.3.9 schema (`OLD_SCHEMA_139`, 1.0.0's plus `sd`, which the live
+  database has), each copied from that version's server.py, starts a server
+  on each, and compares its columns with a fresh one's. Add the next
+  migration's old schema the same way.
 - **The suite's ports.** `SELFTEST_PORT` (default 8123) is the first of five
   consecutive ports on 127.0.0.1 the suite binds, plus one ephemeral one for
   the release fetcher. Agents here run it as `SELFTEST_PORT=18765`.

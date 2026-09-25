@@ -399,6 +399,15 @@ CREATE TABLE hits (
 """
 
 
+# The boards table from site 1.1.0 to 1.3.9, what the live database is before
+# 1.3.10: every column but closed. It is 1.0.0's with the SD card added,
+# which is all 1.1.0's setup() added; the assert says so.
+OLD_SCHEMA_139 = OLD_SCHEMA_100.replace(
+    "    interests    TEXT NOT NULL DEFAULT ''\n);",
+    "    interests    TEXT NOT NULL DEFAULT '',\n    sd           INTEGER\n);", 1)
+assert OLD_SCHEMA_139.count("sd           INTEGER") == 1
+
+
 def start_server(db, port):
     """A directory on its own port and database, its output drained, and
     whether it came up. The caller terminates it."""
@@ -1432,8 +1441,9 @@ def badge_checks(S, db):
         was_mem.executescript(OLD_SCHEMA_0211)
         had = {r[1] for r in was_mem.execute("PRAGMA table_info(boards)")}
         was_mem.close()
-        check("its table gains interests and sd and nothing else, and matches a new one",
-              cols == want and cols - had == {"interests", "sd"} and had <= cols)
+        check("its table gains interests, sd and closed and nothing else, and "
+              "matches a new one",
+              cols == want and cols - had == {"interests", "sd", "closed"} and had <= cols)
         r = con.execute("SELECT * FROM boards WHERE token=?", ("b" * 32,)).fetchone()
         check("the old row keeps every badge it had, and simply has no interests yet",
               r["name"] == "Badge Keeper" and r["beats"] == 777 and r["support"] == "ham"
@@ -1531,8 +1541,8 @@ def badge_checks(S, db):
         was_mem.executescript(OLD_SCHEMA_100)
         had = {r[1] for r in was_mem.execute("PRAGMA table_info(boards)")}
         was_mem.close()
-        check("its table gains sd and nothing else, and matches a new one",
-              cols == want and cols - had == {"sd"} and had <= cols)
+        check("its table gains sd and closed and nothing else, and matches a new one",
+              cols == want and cols - had == {"sd", "closed"} and had <= cols)
         r = con.execute("SELECT * FROM boards WHERE token=?", ("c" * 32,)).fetchone()
         con.close()
         check("the old row is untouched: its slugs as they were, and no SD card",
@@ -1703,6 +1713,327 @@ def directory_checks(S):
         except subprocess.TimeoutExpired:
             server7.kill()
         for leftover in (db12, db12 + "-wal", db12 + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+
+
+def closed_checks(S):
+    """Site 1.3.10 (Rob: a board whose sysop has closed it shows as
+    "Temporarily closed"; if its heartbeats stop, the stale and delisting
+    rules apply as now). A directory of its own, seeded so the order is
+    known: two open boards up, a closed one up that is busier than both, a
+    quiet one and a quiet closed one, and a board for every way of sending
+    closed, each stored as closed first so that open has to be written."""
+    import inspect
+    import sqlite3
+    print("Closed boards")
+    dbc = os.path.join(tempfile.gettempdir(), f"dirclosed{os.getpid()}.db")
+    for leftover in (dbc, dbc + "-wal", dbc + "-shm"):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    now = int(time.time())
+    # name, token, state, busy, minutes24, closed, seconds since last seen
+    seed = [("Busy Open", "b" * 32, "online", 3, 300, 0, 0),
+            ("Idle Open", "i" * 32, "online", 0, None, 0, 0),
+            ("Shut Shop", "s" * 32, "online", 5, 900, 1, 0),
+            ("Quiet Place", "q" * 32, "offline", 0, 50, 0, 7200),
+            ("Quiet Shut", "u" * 32, "offline", 0, 2000, 1, 7200)]
+    # Every way of sending closed, each board stored closed until it speaks.
+    sends = [("True Board", True), ("False Board", False), ("Missing Board", None),
+             ("Junk Yes", "yes"), ("Junk One", 1), ("Junk Null", "null"),
+             ("Junk List", [True]), ("Junk Text", "true"), ("Junk Map", {"closed": True})]
+    for i, (name, _v) in enumerate(sends):
+        seed.append((name, f"{i:032d}", "online", 0, None, 1, 0))
+    con = sqlite3.connect(dbc)
+    con.executescript(S.SCHEMA)
+    for name, token, state, busy, mins, closed, ago in seed:
+        con.execute("INSERT INTO boards(token, name, owner, description, software, "
+                    "version, host, port, nodes, busy, minutes24, state, first_seen, "
+                    "last_seen, streak_start, public_at, features, closed) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (token, name, "Op", "A board", "unleashed", "1.1.1",
+                     name.lower().replace(" ", "-") + ".example", 6400, 10, busy, mins,
+                     state, now - 86400, now - ago, now - 86400, now - 86400,
+                     "chat", closed))
+    con.commit()
+    con.close()
+    portc = PORT + 4
+    basec = f"http://127.0.0.1:{portc}"
+    serverc, outc, upc = start_server(dbc, portc)
+
+    def page(path):
+        code, _t, body = fetch(path, basec) if upc else (None, "", b"")
+        return code, body.decode("utf-8", "replace")
+
+    def stored(name):
+        c = sqlite3.connect(dbc)
+        c.row_factory = sqlite3.Row
+        r = c.execute("SELECT * FROM boards WHERE name=?", (name,)).fetchone()
+        c.close()
+        return r
+
+    def api():
+        return {b["name"]: b for b in json.loads(page("/api/boards.json")[1])["boards"]}
+
+    try:
+        check("the server starts on a seeded directory"
+              + ("" if upc else "  <- " + b"".join(outc[-3:]).decode("utf-8", "replace")),
+              upc)
+        codes = []
+        for i, (name, value) in enumerate(sends):
+            body = {"name": name, "port": 6400, "token": f"{i:032d}", "nodes": 10,
+                    "busy": 2 if name == "True Board" else 0,
+                    "host": name.lower().replace(" ", "-") + ".example"}
+            if value is not None:
+                body["closed"] = value
+            codes.append(post_from(body, f"203.0.113.{40 + i}", basec)[0])
+        check("a heartbeat with closed true, false, missing or junk is accepted, "
+              "never refused", codes == [200] * len(sends))
+        check("only a JSON true is stored as closed: false, missing, \"yes\", 1, "
+              "\"null\", a list, \"true\" and an object are all open",
+              stored("True Board")["closed"] == 1
+              and all(stored(n)["closed"] == 0 for n, _v in sends[1:]))
+        codeN, gotN = post_from({"name": "New And Shut", "port": 6400, "closed": True},
+                                "203.0.113.90", basec)
+        check("a board new to the directory can arrive closed, and still earns its "
+              "listing the way any board does",
+              codeN == 200 and gotN.get("state") == "pending"
+              and stored("New And Shut")["closed"] == 1)
+
+        listed = api()
+        check("/api/boards.json carries closed on every board, true or false, never null",
+              all(isinstance(b.get("closed"), bool) for b in listed.values())
+              and listed.get("True Board", {}).get("closed") is True
+              and listed.get("Shut Shop", {}).get("closed") is True
+              and listed.get("False Board", {}).get("closed") is False
+              and listed.get("Junk Yes", {}).get("closed") is False
+              and "New And Shut" not in listed)
+        check("a quiet board keeps what it last said, beside its state",
+              listed.get("Quiet Shut", {}).get("closed") is True
+              and listed.get("Quiet Shut", {}).get("state") == "offline")
+
+        code, full = page("/directory")
+        shut = badge_row(full, "Shut Shop")
+        busy = badge_row(full, "Busy Open")
+        check("a closed board that is up says Temporarily closed where its "
+              "callers-on figure would be",
+              code == 200
+              and "<td class='status' data-label='State'><span class='state closed'>"
+                  "<span class='shut'>Temporarily closed</span>" in shut
+              and "of 10 on" not in shut and "5 of" not in shut)
+        check("and its address is words, not a telnet:// link to dial",
+              "<span class='nodial'>shut-shop.example 6400</span>" in shut
+              and "telnet://" not in shut and "<a href='telnet" not in shut)
+        check("an open board keeps its callers-on figure and its link",
+              "3 of 10 on" in busy
+              and "<a href='telnet://busy-open.example:6400'" in busy
+              and "Temporarily closed" not in busy and "nodial" not in busy)
+        check("the marker has its own style: the human colour, in a box, and the "
+              "address in --dim with no dotted rule",
+              ".state.closed .shut { display:inline-block; color:var(--warm);" in full
+              and ".addr .nodial { color:var(--dim);" in full)
+        order = [n for n, _k, _h in list_rows(full)]
+        up_open = [n for n, b in listed.items()
+                   if b["state"] == "online" and not b["closed"]]
+        up_shut = [n for n, b in listed.items() if b["state"] == "online" and b["closed"]]
+        quiet = [n for n, b in listed.items() if b["state"] == "offline"]
+        check("the list: every open board that is up, then the closed ones, busier "
+              "or not, then the quiet ones",
+              len(order) == len(listed)
+              and set(order[:len(up_open)]) == set(up_open)
+              and set(order[len(up_open):len(up_open) + len(up_shut)])
+              == {"Shut Shop", "True Board"} == set(up_shut)
+              and set(order[len(up_open) + len(up_shut):]) == set(quiet)
+              and order[0] == "Busy Open")
+        check("a quiet board that was closed is quiet like any other: no marker, "
+              "its link as a quiet board's is",
+              "quiet, " in badge_row(full, "Quiet Shut")
+              and "Temporarily closed" not in badge_row(full, "Quiet Shut")
+              and "<a href='telnet://quiet-shut.example:6400'" in badge_row(full, "Quiet Shut"))
+        # Busy Open's 3; Shut Shop's 5 and True Board's 2 are not added.
+        n_listed = len(listed)
+        check("it counts as listed, but its callers are not added to the people "
+              "connected",
+              f"<span class='n'>{n_listed}</span> communities listed, with "
+              "<span class='n'>3</span> people connected right now." in full)
+        check("and the page's description counts only the open boards that are up",
+              f'content="{len(up_open)} communities online and 3 people connected' in full)
+        _c, chat = page("/directory?b=chat")
+        check("closed is not a badge, so the filter neither offers it nor loses the "
+              "board: a closed board with chat is found by chat",
+              "closed" not in S.FILTER_KEYS
+              and "Shut Shop" in [n for n, _k, h in list_rows(chat) if not h])
+
+        _c, feed = page("/feed.xml")
+        item = feed[feed.find("<title>Shut Shop</title>"):]
+        item = item[:item.find("</item>")]
+        open_item = feed[feed.find("<title>Busy Open</title>"):]
+        open_item = open_item[:open_item.find("</item>")]
+        check("the feed says a closed board is closed, and gives its address rather "
+              "than a number to dial",
+              "Temporarily closed: not taking calls right now." in item
+              and "Address: shut-shop.example 6400" in item and "Dial:" not in item
+              and "Dial: busy-open.example 6400" in open_item
+              and "Temporarily closed" not in open_item)
+
+        # It opens again: the next heartbeat without closed takes the marker
+        # away, and its figures put it back at the top.
+        post_from({"name": "Shut Shop", "port": 6400, "token": "s" * 32, "nodes": 10,
+                   "busy": 5, "minutes24": 900, "host": "shut-shop.example"},
+                  "203.0.113.70", basec)
+        _c, again = page("/directory")
+        row = badge_row(again, "Shut Shop")
+        check("opened again, the next heartbeat takes the marker away and puts back "
+              "its figure, its link and its place",
+              "Temporarily closed" not in row and "5 of 10 on" in row
+              and "<a href='telnet://shut-shop.example:6400'" in row
+              and [n for n, _k, _h in list_rows(again)][0] == "Shut Shop"
+              and api().get("Shut Shop", {}).get("closed") is False)
+
+        # Its heartbeats stop: stale on the same clock as any board, then gone.
+        c = sqlite3.connect(dbc)
+        c.execute("UPDATE boards SET last_seen=? WHERE name='True Board'",
+                  (now - 10 * 60 * S.MISSED_BEATS - 60,))
+        c.commit()
+        c.close()
+        _c, stale = page("/directory")
+        gone_quiet = api().get("True Board", {})
+        check("a closed board whose heartbeats stop goes quiet, as any board does",
+              gone_quiet.get("state") == "offline"
+              and "quiet, " in badge_row(stale, "True Board")
+              and "Temporarily closed" not in badge_row(stale, "True Board"))
+        c = sqlite3.connect(dbc)
+        c.execute("UPDATE boards SET last_seen=? WHERE name='True Board'",
+                  (now - int(S.EXPIRE_DAYS * 86400) - 60,))
+        c.commit()
+        c.close()
+        check("and is delisted on the same clock too", "True Board" not in api())
+
+        check("row_closed and shut_now: a row with no column is open, and a quiet "
+              "board is never shown closed",
+              S.row_closed({}) is False and S.row_closed({"closed": 1}) is True
+              and not S.shut_now({"state": "offline", "closed": 1})
+              and S.shut_now({"state": "online", "closed": 1}))
+        proto = open("PROTOCOL.md", encoding="utf-8").read()
+        check("PROTOCOL.md documents closed: a boolean, only true closes, and not a "
+              "listing state",
+              "| `closed` | boolean | no |" in proto and "## Closed boards" in proto
+              and "Only `true` closes" in proto and "It is not a listing state" in proto)
+        check("and the data page says the JSON carries it",
+              "(<code>closed</code>, true or false)" in inspect.getsource(S.data_page))
+
+        # Site 1.3.10 (Rob): under the hero's two buttons, a quiet text link to
+        # /different, the name with its micro sign, not a third button.
+        print("The front page's way on to /different")
+        _c, home = page("/")
+        check("directly under the buttons, a text link to /different, with the "
+              "micro sign",
+              '<a class="b2" href="/directory">Try one first</a></p>'
+              '<p class="diff"><a href="/different">See how µnleashed is '
+              'different</a></p><p class="facts">' in home)
+        hero = home[home.find('<section class="hero">'):home.find("</section>")]
+        check("it is not a button: two buttons in the hero still, and the link has "
+              "no button class",
+              hero.count('class="b1"') == 1 and hero.count('class="b2"') == 1
+              and '<p class="diff"><a class=' not in hero)
+        check("styled as the site's link, left with the buttons on a desktop and "
+              "centred under them on a phone, with room between",
+              ".front p.diff { font-size:0.8125rem; margin:0.625rem 0 0; }" in home
+              and ".front p.diff { text-align:center; margin-top:0.75rem; }" in home
+              and ".front p.diff a:focus-visible { outline:3px solid #ffd35c;" in home)
+    finally:
+        serverc.terminate()
+        try:
+            serverc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            serverc.kill()
+        for leftover in (dbc, dbc + "-wal", dbc + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+
+    # ----------------------------------------------------------------------
+    # And from 1.1.0 to 1.3.9, which is the live database now: every column
+    # but closed. One column added, every row open, and the next heartbeat
+    # can close it.
+    print("A database from 1.3.9, before closed")
+    db_139 = os.path.join(tempfile.gettempdir(), f"dir139{os.getpid()}.db")
+    for leftover in (db_139, db_139 + "-wal", db_139 + "-shm"):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    con = sqlite3.connect(db_139)
+    con.executescript(OLD_SCHEMA_139)
+    con.execute("INSERT INTO boards(token, name, owner, software, version, host, port, "
+                "nodes, busy, state, first_seen, last_seen, streak_start, public_at, "
+                "beats, sd) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("d" * 32, "Before Closed", "Sparks", "unleashed", "1.1.0",
+                 "before.example", 6400, 10, 1, "online", now - 30 * 86400, now,
+                 now - 30 * 86400, now - 30 * 86400, 700, 32))
+    con.commit()
+    con.close()
+    port8 = PORT + 3
+    base8 = f"http://127.0.0.1:{port8}"
+    server8, out8, up8 = start_server(db_139, port8)
+    try:
+        home8 = fetch("/directory", base8) if up8 else (None, "", b"")
+        check("the server starts on it and serves the list"
+              + ("" if up8 else "  <- " + b"".join(out8[-3:]).decode("utf-8", "replace")),
+              up8 and home8[0] == 200 and b"Before Closed" in home8[2])
+        con = sqlite3.connect(db_139)
+        con.row_factory = sqlite3.Row
+        cols = {r["name"] for r in con.execute("PRAGMA table_info(boards)")}
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("d" * 32,)).fetchone()
+        con.close()
+        fresh = sqlite3.connect(":memory:")
+        fresh.executescript(S.SCHEMA)
+        want = {x[1] for x in fresh.execute("PRAGMA table_info(boards)")}
+        fresh.close()
+        was_mem = sqlite3.connect(":memory:")
+        was_mem.executescript(OLD_SCHEMA_139)
+        had = {x[1] for x in was_mem.execute("PRAGMA table_info(boards)")}
+        was_mem.close()
+        check("its table gains closed and nothing else, and matches a new one",
+              cols == want and cols - had == {"closed"} and had <= cols)
+        check("the old row is untouched and reads as open",
+              r["closed"] == 0 and r["sd"] == 32 and r["beats"] == 700
+              and r["state"] == "online")
+        row8 = badge_row(home8[2].decode("utf-8"), "Before Closed")
+        listed8 = {b["name"]: b for b in json.loads(
+            fetch("/api/boards.json", base8)[2].decode("utf-8"))["boards"]}
+        check("its row and the JSON say open",
+              "1 of 10 on" in row8 and "<a href='telnet://before.example:6400'" in row8
+              and listed8.get("Before Closed", {}).get("closed") is False)
+        code8, _b = post_from({"name": "Before Closed", "port": 6400, "token": "d" * 32,
+                               "nodes": 10, "busy": 0, "host": "before.example",
+                               "software": "unleashed", "version": "1.1.1",
+                               "closed": True}, "192.0.2.77", base8)
+        con = sqlite3.connect(db_139)
+        con.row_factory = sqlite3.Row
+        r = con.execute("SELECT * FROM boards WHERE token=?", ("d" * 32,)).fetchone()
+        con.close()
+        row8 = badge_row(fetch("/directory", base8)[2].decode("utf-8"), "Before Closed")
+        check("its next heartbeat, closed, keeps its listing and shows it closed",
+              code8 == 200 and r["closed"] == 1 and r["beats"] == 701
+              and r["state"] == "online" and "Temporarily closed" in row8
+              and "telnet://" not in row8)
+        S.DB_PATH, was = db_139, S.DB_PATH
+        try:
+            S.setup()
+            again = True
+        except Exception:
+            again = False
+        S.DB_PATH = was
+        check("and starting again on it changes nothing", again)
+    finally:
+        server8.terminate()
+        try:
+            server8.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server8.kill()
+        for leftover in (db_139, db_139 + "-wal", db_139 + "-shm"):
             try:
                 os.remove(leftover)
             except OSError:
@@ -2729,9 +3060,14 @@ def main():
               and "none built in: it runs on a PC you already have" in cmp_t
               and "not built in" in cmp_t)
         home = get("/")[1]
-        check("the front page links to it once, from its history",
-              home.count('href="/different"') == 1
-              and home.index('id="before-social-media"') < home.index('href="/different"'))
+        # Twice since site 1.3.10 (Rob): the quiet link under the hero's
+        # buttons, and the one in its history.
+        check("the front page links to it twice, under the buttons and from its "
+              "history",
+              home.count('href="/different"') == 2
+              and home.index('<p class="diff"><a href="/different">')
+              < home.index('id="before-social-media"')
+              < home.rindex('href="/different"'))
         face, _w = S.PITCH_FONTS[S.PITCH_FONT]
         fcode, fctype, fblob = fetch("/font/" + face)
         lcode, _lt, lblob = fetch("/font/OFL-" + face.split("-")[0].split(".")[0] + ".txt")
@@ -6935,6 +7271,7 @@ def main():
 
         badge_checks(S, db)
         directory_checks(S)
+        closed_checks(S)
     finally:
         server.terminate()
         try:

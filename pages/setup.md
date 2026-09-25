@@ -366,6 +366,13 @@ it would send.
 > itself while the default password is still set. And [forward the
 > port](/forward) first, or callers will find a listing that does not answer.
 
+<!-- Site 1.3.10: from firmware 1.1.1 a closed board keeps announcing and sends "closed": true (PROTOCOL.md, Closed boards); 1.1.0 stops announcing while closed. -->
+::: from 1.1.1
+While the board is closed to callers, it stays on the list, marked
+**Temporarily closed**, and its address is not offered as something to dial.
+Open it again and the mark goes with the next announce.
+:::
+
 <!-- The same list twice, so each is one list: firmware 1.1.0 relabels Port as Outside (copy-1.1.0 section 5). Edit both until a 1.1.0 release is on disk, then drop the "until" one. -->
 ::: until 1.1.0
 - **Board**: The name the directory will show. It is the Board field on the

@@ -57,6 +57,7 @@ Connection: close
 | `token` | string | no | empty on the first announce, then whatever the directory issued |
 | `calls24` | number | no | calls in the last 24 hours. Only when the sysop opted in |
 | `minutes24` | number | no | caller-minutes in the last 24 hours. Only when the sysop opted in |
+| `closed` | boolean | no | `true` while the board's sysop has closed it to callers for now. Absent or `false` means open. See [Closed boards](#closed-boards) |
 | `system` | string | no | the machine the board runs on, up to 40 printable characters. See [Badges](#badges) |
 | `terminals` | array of strings | no | what the board can speak to a caller: any of `ansi`, `utf8`, `petscii`, `ascii`, `vt100` |
 | `guests` | boolean | no | `true` if a caller can look around without an account, `false` if not |
@@ -109,6 +110,20 @@ A directory works out some badges for itself, from its own records, and a board 
 `software` and `version` are shown together, as the board sent them, on the board's first badge ("unleashed 1.0.0", "Mystic 1.12"), and both are in `/api/boards.json`. When `software` is `unleashed` and `version` is older than the newest release the directory itself offers for installing, unleashedbbs.com marks that badge with a small arrow, **update available**, linked to how to update. Versions are compared as three numbers, part by part, so 1.0.10 is newer than 1.0.9, and a pre-release such as `1.0.1-rc.1` is older than `1.0.1`; a version that is not three numbers is never marked. Other software is never marked, because a directory cannot know another program's newest version.
 
 The board list at unleashedbbs.com can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest codes (or any of their aliases, in any case), the feature words, `sd` for a board with an SD card in use, `petscii`, `guests`, `new`, `steady`, `update`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
+
+## Closed boards
+
+A sysop can close a board for a while without switching it off: setting it up, moving it, or dealing with a problem. µnleashed calls this "Stop taking calls". While it is closed a board can go on announcing, and sends `"closed": true`, so a directory can keep it listed and say it is closed instead of letting it drop off the list as if it had gone away. When it opens again it stops sending the field, or sends `false`.
+
+| Rule | |
+|---|---|
+| Only `true` closes | A JSON `true` and nothing else. Absent, `false`, a string such as `"yes"`, a number or anything else means open. None of them makes the heartbeat fail. |
+| Every heartbeat replaces it | The same as the badges: a board that stops sending `true` is open from that heartbeat on. |
+| It is not a listing state | Pending, online, offline and queued work exactly as they do for an open board. A closed board still earns its listing by heartbeating, and a closed board that stops heartbeating goes quiet and is removed on the same clock as any other. |
+
+What a directory shows is up to it. unleashedbbs.com shows a closed board that is still heartbeating as **Temporarily closed** in place of its callers-on figure, gives its address as text rather than a link to dial, and lists it after every open board that is up and before the quiet ones. It counts as listed, but its callers are not added to the number of people connected. `/api/boards.json` carries `closed` for every board, `true` or `false`, as its last heartbeat said. Once a board goes quiet it is shown as quiet, whatever it last said.
+
+µnleashed from firmware 1.1.1 sends `closed`. A board still on the published default sysop password does not announce at all, closed or not, and firmware 1.1.0 does not announce while closed.
 
 ## Response
 

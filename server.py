@@ -355,7 +355,8 @@ CREATE TABLE IF NOT EXISTS boards (
     support      TEXT NOT NULL DEFAULT '',
     tracked_since INTEGER NOT NULL DEFAULT 0,
     interests    TEXT NOT NULL DEFAULT '',
-    sd           INTEGER
+    sd           INTEGER,
+    closed       INTEGER NOT NULL DEFAULT 0
 );
 -- Heartbeats received, one row per board per UTC hour, for the last week
 -- and a bit. The steady badge is worked out from it: see steady_boards().
@@ -683,7 +684,11 @@ def setup():
 # by the 0.20.2 schema, from one made by the 0.21.1 schema and from one made
 # by the 1.0.0 schema. interests came in site 0.22.0; a 0.21.x database has
 # every column above it. sd, the SD card's size, came in site 1.1.0 and is
-# NULL for "not sent", which every row written before it is.
+# NULL for "not sent", which every row written before it is. closed came in
+# site 1.3.10, 1 while the board's sysop has it closed and 0 otherwise, so
+# every row written before it reads as open, which is what those boards were:
+# a closed board on firmware 1.1.0 does not announce at all. It is not a
+# badge, but it is added the same way, so it lives in the same list.
 BADGE_COLUMNS = (("system",        "TEXT NOT NULL DEFAULT ''"),
                  ("terminals",     "TEXT NOT NULL DEFAULT ''"),
                  ("guests",        "INTEGER"),
@@ -691,7 +696,8 @@ BADGE_COLUMNS = (("system",        "TEXT NOT NULL DEFAULT ''"),
                  ("support",       "TEXT NOT NULL DEFAULT ''"),
                  ("tracked_since", "INTEGER NOT NULL DEFAULT 0"),
                  ("interests",     "TEXT NOT NULL DEFAULT ''"),
-                 ("sd",            "INTEGER"))
+                 ("sd",            "INTEGER"),
+                 ("closed",        "INTEGER NOT NULL DEFAULT 0"))
 
 
 def tidy(value, limit):
@@ -3874,6 +3880,11 @@ def announce(payload, address):
     sd = payload.get("sd")
     fields["sd"] = (sd if isinstance(sd, int) and not isinstance(sd, bool)
                     and 1 <= sd <= SD_MAX else None)
+    # Closed by its sysop, "Stop taking calls" (site 1.3.10, firmware 1.1.1):
+    # only a JSON true closes a board. Absent, false, "yes", 1 or anything
+    # else is open, because a word that might mean closed must not take a
+    # board's invitation off the page, and it never costs the heartbeat.
+    fields["closed"] = 1 if payload.get("closed") is True else 0
     # The causes and the interests, as codes (site 1.1.0): an old slug or
     # an interim one is read as the code it became, in any case. Left alone,
     # not written empty, when badges.json could not be read at start.
@@ -3937,7 +3948,7 @@ def announce(payload, address):
             sample(con, row["id"], fields.get("busy") or 0, tz, now)
             tally(con, row["id"], now)
             fresh = con.execute("SELECT * FROM boards WHERE id=?", (row["id"],)).fetchone()
-            if fresh["state"] != row["state"]:
+            if fresh["state"] != row["state"] or fresh["closed"] != row["closed"]:
                 _cache.clear()                         # the page says something new now
             return 200, listing(fresh, now), {"X-Listing-Token": token}
 
@@ -4354,6 +4365,13 @@ p.qline a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 .front a.b1:focus-visible, .front a.b2:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 .front p.facts {{ color:var(--faint); font-size:0.6875rem; letter-spacing:0.06em; margin:0.875rem 0 0; }}
 .front p.facts b {{ color:var(--dim); font-weight:normal; }}
+/* The quiet way on under the buttons (site 1.3.10): the site's own link,
+   a little smaller than the buttons' words, lined up with them on the left,
+   and on a phone centred under the two full width buttons. The padding
+   makes it a tap target without making it look like one. */
+.front p.diff {{ font-size:0.8125rem; margin:0.625rem 0 0; }}
+.front p.diff a {{ display:inline-block; padding:0.25rem 0; }}
+.front p.diff a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 .front figure.board {{ margin:0; text-align:center; }}
 .front figure.board svg {{ width:100%; height:auto; max-width:22rem; }}
 .front figure.board figcaption {{ color:var(--faint); font-size:0.625rem; margin:0.5rem 0 0; }}
@@ -4406,6 +4424,8 @@ p.qline a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
   .front ol.fsteps li {{ padding-left:2.75rem; }}
   .front .crt {{ margin:1rem 0 0; }}
   .front p.btns a {{ flex:1 1 100%; }}
+  .front p.diff {{ text-align:center; margin-top:0.75rem; }}
+  .front p.diff a {{ padding:0.5rem 0; }}
 }}
 /* /directory's first step for somebody who has never joined a board: the
    app to use, in one box, before the search and the list (site 1.3.0).
@@ -4453,6 +4473,17 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
 .addr a {{ color:var(--dial); text-decoration:none; border-bottom:1px dotted #35566b;
         display:inline-block; padding:0.375rem 0; overflow-wrap:anywhere; }}
 .addr a:hover {{ border-bottom-style:solid; }}
+/* A closed board's address (site 1.3.10): words in --dim, the same box as
+   the link so the row does not move, and no dotted rule under it, because
+   the rule is what says "press this". */
+.addr .nodial {{ color:var(--dim); display:inline-block; padding:0.375rem 0;
+        overflow-wrap:anywhere; }}
+/* Closed by its sysop: a marker in the human colour, boxed so it reads as a
+   state and not as a callers figure, and inline-block so on a phone, where
+   the state is pinned at 15ch, it wraps inside its box. */
+.state.closed .shut {{ display:inline-block; color:var(--warm);
+        border:1px solid rgba(224, 169, 78, 0.5); border-radius:0.25rem;
+        padding:0 0.25rem; font-size:0.75rem; line-height:1.5; }}
 .desc {{ color:var(--dim); }}
 /* --------------------------------------------------------------------
    The badges under a board's name (board_badges() builds them, /badges
@@ -5448,7 +5479,11 @@ main > table tr:not(:first-child):nth-child(odd of :not([hidden])) {{ background
   /* The one field a phone has no heading for and no label inside it. */
   main > table td.addr::before {{ content:attr(data-label) " ";
         color:var(--faint); }}
-  .addr a {{ padding:0.5rem 0; }}
+  .addr a, .addr .nodial {{ padding:0.5rem 0; }}
+  /* "Temporarily closed" is wider than the pinned 15ch, so it takes two
+     lines; min-content keeps its box tight round them rather than 15ch
+     wide with a gap down its left side. */
+  .state.closed .shut {{ width:min-content; }}
 }}
 /* --------------------------------------------------------------------
    The browser installer, and it is the only thing on this site that
@@ -7205,6 +7240,23 @@ def row_sd(r):
     return sd if isinstance(sd, int) and 1 <= sd <= SD_MAX else None
 
 
+def row_closed(r):
+    """Whether a board's last heartbeat said its sysop has closed it (site
+    1.3.10). A row made before the column existed, or a test's own dict
+    without it, is open."""
+    try:
+        return r["closed"] == 1
+    except (KeyError, IndexError):
+        return False
+
+
+def shut_now(r):
+    """Closed and up: the board is answering heartbeats and turning callers
+    away. A closed board that stops heartbeating is quiet like any other,
+    and the stale and delisting rules take it from there."""
+    return r["state"] == "online" and row_closed(r)
+
+
 def row_support(r):
     """The causes a board's row carries, as codes, in the directory's order.
     A stored word is read through the aliases, so a row written with the
@@ -7415,6 +7467,10 @@ def board_json(r, steady):
     out["features"]  = unpick(r["features"])
     # The card's size in GB, or null (site 1.1.0).
     out["sd"]        = row_sd(r)
+    # Closed by its sysop, as its last heartbeat said: true or false, never
+    # null (site 1.3.10). A quiet board keeps what it last said; state says
+    # whether it is still answering.
+    out["closed"]    = row_closed(r)
     # Codes, lower case (site 1.1.0), whatever the row was stored with.
     out["support"]   = row_support(r)
     out["interests"] = row_interests(r)
@@ -7445,7 +7501,15 @@ def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False, latest="
         where = r["host"] or r["address"]
         state = r["state"]
         seen = now - r["last_seen"]
-        if state == "online":
+        shut = shut_now(r)
+        if shut:
+            # Closed by its sysop (site 1.3.10): up, and turning callers
+            # away. It says so where the callers-on figure would be, and
+            # that figure is not shown: a sysop setting the board up can be
+            # on it, and "1 of 10 on" reads as an invitation.
+            label = "Temporarily closed"
+            klass = "closed"
+        elif state == "online":
             # Somebody actually being on is the thing worth seeing from across
             # the room, so it gets the bright colour and a board that is up but
             # empty does not.
@@ -7531,12 +7595,21 @@ def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False, latest="
             + who_runs
             + ((charts or {}).get(r["id"]) or "")
             + "</td>"
-            f"<td class='addr' data-label='Address'><a href='{dial}' "
-            f"title='Opens your terminal program, if one is registered for "
-            f"telnet:// links.'>"
-            f"{html.escape(where)} {r['port']}</a></td>"
-            f"<td class='status' data-label='State'>"
-            f"<span class='state {klass}'>{html.escape(label)} {fresh}</span>"
+            + "<td class='addr' data-label='Address'>"
+            + (
+                # Closed: the address as words, not a telnet:// link. It is
+                # still the board's address, but nothing here should ask a
+                # reader to dial a board that will only say it is closed.
+                f"<span class='nodial'>{html.escape(where)} {r['port']}</span>"
+                if shut else
+                f"<a href='{dial}' "
+                f"title='Opens your terminal program, if one is registered for "
+                f"telnet:// links.'>"
+                f"{html.escape(where)} {r['port']}</a>")
+            + "</td><td class='status' data-label='State'>"
+            + (f"<span class='state closed'><span class='shut'>"
+               f"{html.escape(label)}</span> {fresh}</span>" if shut else
+               f"<span class='state {klass}'>{html.escape(label)} {fresh}</span>")
             + act_line
             + "<span class='upfor'><span class='lbl'>up for</span> "
             + human_streak(now - r["streak_start"]) + "</span>"
@@ -7687,6 +7760,8 @@ FRONT_DESC = ("Chat and messages for your class, club, family or friends, on a "
 # Install: only the button on /install does, because only that one does.
 FRONT_BUILD = '<a class="b1" href="/install">Build yours</a>'
 FRONT_TRY = '<a class="b2" href="/directory">Try one first</a>'
+FRONT_DIFF = ('<p class="diff"><a href="/different">See how µnleashed is '
+              "different</a></p>")
 
 # What it is: three cards.
 FRONT_IS = (
@@ -7769,6 +7844,10 @@ def front_html():
         "middle. People join from a PC, an Android phone or an iPhone with a "
         "free app, and from old computers and terminals too.</p>"
         f'<p class="btns">{FRONT_BUILD}{FRONT_TRY}</p>'
+        # Site 1.3.10 (Rob): a quiet way on for the reader who wants the
+        # argument before either button. A text link in the site's own link
+        # style, not a third button, under the two it follows.
+        + FRONT_DIFF +
         '<p class="facts"><b>About $5</b> &middot; <b>About five minutes</b> '
         "&middot; <b>No subscription</b> &middot; <b>Free software</b></p>"
         '</div><figure class="board">' + FRONT_BOARD_ART
@@ -7978,7 +8057,11 @@ def index_data():
         settle(con, now)                               # keep the list honest on read
         rows = con.execute(
             "SELECT * FROM boards WHERE state IN ('online','offline') "
-            "ORDER BY state='online' DESC, "
+            # Up first, and of those the ones taking calls: a closed board
+            # (site 1.3.10) is not active whatever its figures say, so it
+            # follows every open board that is up, busiest or not, and
+            # comes before the quiet ones. Quiet is quiet, closed or not.
+            "ORDER BY state='online' DESC, (state='online' AND closed=1) ASC, "
             "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC, "
             "name COLLATE NOCASE ASC").fetchall()
         charts = {}
@@ -8100,7 +8183,10 @@ def directory_page(sel=(), any_=False, q="", data=None):
     filter, and nothing else. sel and any_ are the filter, q the search.
     With none of them it is the same for everybody and cached whole."""
     now, rows, charts, steady = data or index_data()
-    live = [r for r in rows if r["state"] == "online"]
+    # Up and taking calls. A closed board (site 1.3.10) is listed and
+    # counted as a community, but its callers-on figure is not added to
+    # the people connected, and it is not one of the communities online.
+    live = [r for r in rows if r["state"] == "online" and not row_closed(r)]
     on = sum(r["busy"] or 0 for r in live)
     found = [r for r in rows if board_found(r, q)] if q else rows
     qe = html.escape(q, quote=True)
@@ -8176,7 +8262,13 @@ def feed_xml():
         where = html.escape(f"{r['host'] or r['address']} {r['port']}")
         desc = html.escape(r["description"] or "")
         owner = html.escape(r["owner"] or "")
-        body = f"{desc}<br>Dial: {where}"
+        if shut_now(r):
+            # Closed by its sysop (site 1.3.10): said first, and the address
+            # given as an address rather than as something to dial.
+            body = (f"{desc}<br>Temporarily closed: not taking calls right now."
+                    f"<br>Address: {where}")
+        else:
+            body = f"{desc}<br>Dial: {where}"
         if owner:
             body += f"<br>Sysop: {owner}"
         # What the board has told us about itself, in words: a feed reader
@@ -8227,7 +8319,8 @@ mentioning. It is a list of hobby BBSes.</p>
 <dl>
 <dt><code>GET /api/boards.json</code></dt>
 <dd>Every listed board: name, owner, description, where to dial it, how many lines it
-has and how many are busy, whether it is up, and how long it has been up. Then what
+has and how many are busy, whether it is up, whether its sysop has closed it for now
+(<code>closed</code>, true or false), and how long it has been up. Then what
 the <a href="/badges">badges</a> are made of: what the board said it runs and which
 version, what it runs on, speaks,
 allows and is running, the size of its SD card, what it supports and is into, as
