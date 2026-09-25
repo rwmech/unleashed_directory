@@ -1,9 +1,10 @@
-# Putting a board on the internet
+<!-- Site 1.3.0 (Rob, marketing round 3): "Go public" became "Let others in" in the menu, and this title says what the reader gets. The warning stays first, before any instructions, and the router instructions below keep their technical words, each explained where it first appears. -->
+# Let people outside your home join
 
-Forwarding a port is the step that turns a board on your desk into a board
-anyone can call. It is one setting on your router, and it is the setting with
-the most consequences, so this page is blunt about what it does before it
-tells you how.
+[[Port forwarding]] is the step that turns a board on your desk into a board
+anyone can join from anywhere, where the BBS world says "call". It is one
+setting on your router, and it is the setting with the most consequences, so
+this page is blunt about what it does before it tells you how.
 
 > **Read this first. You are opening a door in your own network, and you are
 > the only person responsible for what comes through it.** Nobody here can see
@@ -26,11 +27,11 @@ you can expose something you never meant to.
 ## The specific risks
 
 > **Telnet is plain text.** This is a BBS, and the protocol has no encryption.
-> Every password typed by every caller crosses the open internet in the clear,
-> and anybody positioned between a caller and your board can read all of it.
-> That is a property of the protocol, not a bug in this software, and it was
-> true of every board in 1985 too. Tell your callers, and never reuse a
-> password on a telnet board.
+> Every password typed by every visitor crosses the open internet in the
+> clear, and anybody positioned between a visitor and your board can read all
+> of it. That is a property of the protocol, not a bug in this software, and
+> it was true of every board in 1985 too. Tell the people who join, and never
+> reuse a password on a telnet board.
 
 - **You will be scanned within minutes.** Every address on the internet is
   swept continuously by automated scanners. This is normal and not personal,
@@ -69,7 +70,7 @@ forward, because there is no address translation to undo.
 ## The same port outside and in
 
 A forward has two port numbers. The outside one, which routers also call the
-external port, is the one callers dial from the internet. The inside one, the
+external port, is the one visitors connect to from the internet. The inside one, the
 internal port, is where the router sends them on the board. The simplest
 forward uses the same number for both, 6400 outside to 6400 on the board, and
 every router page below does it that way.
@@ -139,8 +140,8 @@ than an honest gap.
 ## A safer way to try it first
 
 You do not have to open anything to run a board. On your own network it works
-immediately, and callers on the same Wi-Fi can dial it by address or by
-`unleashed.local` with [any terminal program](/terminals). To let people
+immediately, and people on the same Wi-Fi can connect by address or by
+`unleashed.local` with [a free app for joining](/terminals). To let people
 outside reach it without opening a port, use a VPN into your own network or a
 tunnel from a machine you rent. Both work, and neither puts your address on a
 scanner's list.

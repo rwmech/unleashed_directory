@@ -1,13 +1,13 @@
 <!-- "::: install-top" is the top of the page: the title, the install card and the steps, side by side on a desktop and one after another on a phone. The words inside "::: installer" are the card's amber box; the rest of the card (the two buttons, version, notices) comes from what is in firmware/. -->
 ::: install-top
-# Put the BBS on your board
+# Set up your board
 
-Install the BBS on an ESP32 from this page over a USB cable, then tell it which Wi-Fi network to join. About five minutes, most of it waiting.
+Install the BBS software on an ESP32 from this page over a USB cable, which the hobby calls [[flashing]], then tell it which Wi-Fi network to join. About five minutes, most of it waiting.
 
 ::: installer
 **Before you start:** Chrome or Edge, on a desktop or laptop. A USB cable
-that carries data, not a charge-only one. Close anything else using the
-serial port. Your Wi-Fi name and password, exactly
+that carries data, not a charge-only one. Close any other program that is
+connected to the board. Your Wi-Fi name and password, exactly
 ([more below](#before-you-start)).
 :::
 
@@ -28,7 +28,7 @@ install-cable
 1. **Choose your board, press Install on a new board and pick the port.**
    The card lists the boards this firmware is built for, each with a
    picture: pick the one that looks like yours. The browser then lists the
-   serial ports it can see. If you are not sure which one is the board,
+   devices plugged in, its serial ports. If you are not sure which one is the board,
    unplug it, look at the list, plug it back in, and take the one that
    appeared.
 2. **The page reads the chip** and offers **Install or update unleashed
@@ -67,9 +67,10 @@ install-boot
 install-wifi
 :::
 
-7. **The address.** The page offers **Telnet details**. It opens a page here
-   with the board's address on your network and how to call it: the telnet
-   command, a link, and the settings for SyncTERM and PuTTY. The address goes
+7. **The address.** The page offers **Telnet details**, which is how to
+   connect. It opens a page here with the board's address on your network and
+   how to connect to it: the telnet command, a link, and the settings for
+   SyncTERM and PuTTY. The address goes
    from the board to your browser and no further; this site never receives
    it. If the board had not joined your Wi-Fi yet when the installer read
    it, there is no address to pass on, and that page says the three ways to

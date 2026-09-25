@@ -1,8 +1,9 @@
 <!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board is listed as tested only once a build has run on it. Since site 1.2.4 the two camera boards wait at the foot of the page, drawn from SOON_BOARDS in server.py with no version (the buy links are Rob's, given for 1.2.5); their facts come from the firmware repository's internal/PLAN-freenove-cam.md: the Freenove FNK0060 (pinout 3.0, ESP32-WROVER-E, OV2640, SDMMC slot, CH340, no NeoPixel: Rob's photo shows only the IO2, RX, TX and ON LEDs; the pixel he meant is on another S3 board, and GPIO 13, 32 and 33 free) (the camera varies between batches: Freenove document an OV2640, and Rob's kit, on his bench 2026-09-25, carries a GalaxyCore GC0308, 640x480 at most with no JPEG encoder, which the firmware's FNCAM 1.0.2 captures raw and encodes on the board in 3.6 to 3.9 s; the firmware supports both, and since site 1.2.7 the Freenove is running there, core, card and camera, though no release carries it yet) and the ESP32-S3-CAM Rob has on order (N16R8, OV3660, two USB-C, an external antenna). The S3 camera board has not run a build yet. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The speeds (site 1.2.5) are Rob's expectation, not a measurement: fast, faster for the Freenove's PSRAM, fastest for the S3; replace them with measured figures once the benchmark has run on all three. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. The seal on each board's picture (site 1.2.5) is Rob's: flash & go for every board here, the S3 camera board expected until tested. Since site 1.2.7 the dev board is two entries (Rob: "esp32 is misleading with flash and go, it has to have an sd card"): bare, flash & go, and with an SD card, the first to wear a little wiring. Both run the one ESP32 image, so the second is drawn from SHOWN_BOARDS in server.py and never reaches the installer's picker. What needs a card is the firmware's own: files and forums are PF_SD (src/plugins/files.cpp, forums.cpp), and backups to the card came in 1.1.0. Since site 1.2.9 (Rob) both dev board entries are "(Base)": one choice on the installer, with or without a card. The Freenove moved into BOARDS in server.py, marked to wait for a release, so its entry is coming soon until a release on disk carries its image set (esp32-fncam, firmware 1.1.0) and tested from then, by the gates below and by what is on disk. -->
-# Tested boards
+# Which board to buy
 
-The boards this firmware has actually run on, each with its own image on [the
-installer](/install). Each one is small enough to lose in a drawer, and each
+The tested boards: the ones this software, the [[firmware]], has actually run
+on, each with its own image on [the installer](/install). Each one is small
+enough to lose in a drawer, and each
 is a whole BBS the moment it has power and Wi-Fi. Pick yours by the picture: the installer checks the chip,
 and a picture is the only way to tell two boards with the same chip apart.
 
@@ -25,13 +26,13 @@ Three ways to build one. Each is a choice, not a step on a ladder:
 
 ::: until 1.1.0
 Camera boards are next: [two boards with a camera on
-them](#freenove-esp32-camera-board), coming soon, so a caller can take a picture of
+them](#freenove-esp32-camera-board), coming soon, so a visitor can take a picture of
 whatever the board is looking at and download it.
 :::
 
 ::: from 1.1.0
 And one with a camera: [the Freenove camera
-board](#freenove-esp32-camera-board), so a caller can take a picture of whatever
+board](#freenove-esp32-camera-board), so a visitor can take a picture of whatever
 the board is looking at and download it. A second camera board, on the
 ESP32-S3, follows once it has been tested.
 :::
@@ -75,8 +76,10 @@ socket at the other end between two buttons.
 - **What was tested:** installing from this site, setting the Wi-Fi from the
   browser, the first-call setup, and callers from PuTTY, SyncTERM and a
   Commodore 64 through a TeensyROM.
-- **What it has:** ten caller lines, a busy line and a hidden sysop line.
-  520 KB of SRAM and 4 MB of flash, no PSRAM, and Bluetooth switched off.
+- **How many at once:** ten people, plus a busy line that tells the
+  eleventh to try again later, and a hidden line for the [[sysop]], the host.
+  Technical details: 520 KB of SRAM and 4 MB of flash, no PSRAM, and
+  Bluetooth switched off.
 - **Power:** the USB port you installed it from, a phone charger, or 3V3 on a
   bench supply. It draws about a tenth of an amp while it waits, because the
   firmware keeps the radio listening rather than letting it doze, and a little

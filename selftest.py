@@ -672,7 +672,7 @@ def badge_checks(S, db):
 
     # ----------------------------------------------------------------------
     print("Badges on the board list")
-    page = get("/")[1]
+    page = get("/directory")[1]
     row = badge_row(page, "Badge Board")
     found = badges_in(row)
     check("the name has a box of its own, the width of the name",
@@ -792,7 +792,7 @@ def badge_checks(S, db):
     # Site 0.22.0 (Rob): a Filter button over the list, a pane of every
     # badge that opens with no script, and the server filtering on ?b=.
     print("The filter over the board list")
-    home = get("/")[1]
+    home = get("/directory")[1]
     pane = pane_of(home)
     check("there is a Filter button, a <details>, closed by default",
           '<details class="filter" id="filter"><summary>Filter' in home
@@ -979,7 +979,7 @@ def badge_checks(S, db):
                     "VALUES(?,?,6)", [(bid, h) for h in range(now // 3600 - 170,
                                                               now // 3600 + 1)])
     con.commit()
-    row = badge_row(get("/")[1], "Badge Board")
+    row = badge_row(get("/directory")[1], "Badge Board")
     check("a week with every heartbeat in it earns S", ("steady", "S") in badges_in(row))
     check("a board listed 400 days is no longer new, and shows 1y and only 1y",
           ("new", "N") not in badges_in(row)
@@ -995,11 +995,11 @@ def badge_checks(S, db):
                 (bid, first, first + 24))
     con.commit()
     check("a silent day in the week loses it",
-          ("steady", "S") not in badges_in(badge_row(get("/")[1], "Badge Board")))
+          ("steady", "S") not in badges_in(badge_row(get("/directory")[1], "Badge Board")))
     con.execute("UPDATE beathours SET beats=60 WHERE board_id=?", (bid,))
     con.commit()
     check("and a burst of extra heartbeats in the other hours cannot buy it back",
-          ("steady", "S") not in badges_in(badge_row(get("/")[1], "Badge Board")))
+          ("steady", "S") not in badges_in(badge_row(get("/directory")[1], "Badge Board")))
     con.close()
     # The arithmetic on its own, against a scratch table.
     mem = sqlite3.connect(":memory:")
@@ -1158,8 +1158,8 @@ def badge_checks(S, db):
     check("the filter's grid lists them in that order",
           got_tiles == [b["name"] for b in S.BADGES if b["filter"]])
     rank = {b["key"]: i for i, b in enumerate(S.BADGES)}
-    carried = dict((n, k) for n, k, _h in list_rows(get("/")[1])).get("Badge Board", [])
-    shown = badge_row(get("/")[1], "Badge Board")
+    carried = dict((n, k) for n, k, _h in list_rows(get("/directory")[1])).get("Badge Board", [])
+    shown = badge_row(get("/directory")[1], "Badge Board")
     marks = [m for m in re.findall(r'aria-label="(?:Supports |Interest: )([^."]+)\.', shown)]
     check("a board's filter keys are in that order too",
           len(carried) > 5 and carried == sorted(carried, key=rank.get))
@@ -1174,11 +1174,12 @@ def badge_checks(S, db):
               == sorted(b["sort"] for b in S.ROW_INTERESTS)
           and [b["key"] for b in S.ROW_SUPPORT]
               == [b["key"] for b in S.BADGES if b["group"] == "support"])
-    check("it belongs to Boards in the menu, on the list face",
-          '<a class="here" href="/">Boards</a>' in leg)
+    check("it belongs to Find a community in the menu, on the list face",
+          '<a class="here" href="/directory">Find a community</a>' in leg)
     about_leg = get("/badges", host="about.example")[1]
     check("and on the about face, not to What this is",
-          '<a class="here" href="https://boards.example/">Boards</a>' in about_leg
+          '<a class="here" href="https://boards.example/directory">Find a community</a>'
+          in about_leg
           and 'class="here" href="/">What this is' not in about_leg)
     check("How to get listed shows the fields, in codes, and links the legend",
           'href="/badges"' in get("/how")[1] and '"support":["ltrcy"]' in get("/how")[1]
@@ -1187,7 +1188,7 @@ def badge_checks(S, db):
 
     # ----------------------------------------------------------------------
     print("Rows: every other one striped, and the hover")
-    css = get("/")[1].split("<style>")[1].split("</style>")[0]
+    css = get("/directory")[1].split("<style>")[1].split("</style>")[0]
     check("every other board is a shade lighter, starting on the second",
           "main > table tr:nth-child(odd):not(:first-child) { background:#111116; }" in css)
     hover = css[css.index("@media (hover: hover) and (pointer: fine) {\n  main > table"):]
@@ -1255,7 +1256,7 @@ def badge_checks(S, db):
                 if server4.poll() is not None:
                     break
                 time.sleep(0.1)
-        home4 = fetch("/", base4) if up4 else (None, "", b"")
+        home4 = fetch("/directory", base4) if up4 else (None, "", b"")
         check("the server starts on it and serves the list"
               + ("" if up4 else "  <- " + b"".join(out4[-3:]).decode("utf-8", "replace")),
               up4 == 200 and home4[0] == 200 and b"Old Timer" in home4[2])
@@ -1339,7 +1340,7 @@ def badge_checks(S, db):
     base5 = f"http://127.0.0.1:{port5}"
     server5, out5, up5 = start_server(db_0211, port5)
     try:
-        home5 = fetch("/", base5) if up5 else (None, "", b"")
+        home5 = fetch("/directory", base5) if up5 else (None, "", b"")
         check("the server starts on it and serves the list"
               + ("" if up5 else "  <- " + b"".join(out5[-3:]).decode("utf-8", "replace")),
               up5 and home5[0] == 200 and b"Badge Keeper" in home5[2])
@@ -1438,7 +1439,7 @@ def badge_checks(S, db):
     base6 = f"http://127.0.0.1:{port6}"
     server6, out6, up6 = start_server(db_100, port6)
     try:
-        home6 = fetch("/", base6) if up6 else (None, "", b"")
+        home6 = fetch("/directory", base6) if up6 else (None, "", b"")
         check("the server starts on it and serves the list"
               + ("" if up6 else "  <- " + b"".join(out6[-3:]).decode("utf-8", "replace")),
               up6 and home6[0] == 200 and b"Slug Keeper" in home6[2])
@@ -1495,7 +1496,7 @@ def badge_checks(S, db):
               and r["beats"] == 901 and r["state"] == "online")
         check("and the row shows SD64",
               ("feat", "SD64") in badges_in(badge_row(
-                  fetch("/", base6)[2].decode("utf-8"), "Slug Keeper")))
+                  fetch("/directory", base6)[2].decode("utf-8"), "Slug Keeper")))
         S.DB_PATH, was = db_100, S.DB_PATH
         try:
             S.setup()
@@ -1556,26 +1557,19 @@ def directory_checks(S):
             code, _t, body = fetch(path, base7) if up7 else (None, "", b"")
             return code, body.decode("utf-8", "replace")
 
+        # Site 1.3.0: the front page is the pitch, and every board is on
+        # /directory, busiest first.
         code, home = page("/")
-        front = [n for n, _k, _h in list_rows(home)]
-        check("the front page shows the ten busiest of twelve, busiest first"
+        check("the front page carries no board list, and no script"
               + ("" if up7 else "  <- " + b"".join(out7[-3:]).decode("utf-8", "replace")),
-              code == 200 and front == names[:10])
-        check("says so in one line above the list, and offers all of them under it",
-              '<p class="topn">The ten busiest boards right now.</p><table id="boards"'
-              in home
-              and '<p class="next allb"><a class="go" href="/directory">All 12 boards, '
-                  "search and filters</a></p>" in home
-              and home.index("</table>") < home.index('class="next allb"'))
-        check("its filter goes to /directory, and its script leaves it alone",
-              '<form class="fpane" id="fform" method="get" action="/directory" data-go'
-              in home and "f.hasAttribute('data-go')" in S.BADGE_JS)
+              code == 200 and list_rows(home) == [] and "<script" not in home
+              and '<table id="boards"' not in home)
         code, full = page("/directory")
-        check("/directory shows all twelve, in the same order",
+        check("/directory shows all twelve, busiest first",
               code == 200 and [n for n, _k, _h in list_rows(full)] == names
-              and "<h1>All boards</h1>" in full)
-        check("and lights Boards in the menu",
-              '<a class="here" href="/">Boards</a>' in full)
+              and "<h1>Find a community BBS</h1>" in full)
+        check("and lights Find a community in the menu",
+              '<a class="here" href="/directory">Find a community</a>' in full)
         check("with a search box that belongs to the filter's form",
               '<input type="search" id="nq" name="q" form="fform" value=""'
               f' maxlength="{S.SEARCH_MAX}"' in full
@@ -1767,7 +1761,7 @@ def main():
         check("the board is told its own address", head.get("X-Seen-Address") == "127.0.0.1")
 
         print("It is not on the public list yet")
-        _, page = get("/")
+        _, page = get("/directory")
         check("pending boards are not listed", "Rusty Modem" not in page)
 
         print("A second board from the same address has to wait for a human")
@@ -1785,7 +1779,7 @@ def main():
         check("the same token is kept", body["token"] == token)
         check("the state is in the headers too", head.get("X-Listing-State") == "online")
 
-        _, page = get("/")
+        _, page = get("/directory")
         check("the board is on the page now", "Rusty Modem" in page)
         check("with its sysop", "Sparks" in page)
         check("and how to dial it", "6400" in page)
@@ -1800,28 +1794,28 @@ def main():
         # small numbers beside it. One board, reporting two callers on.
         print("The heading's figures")
         check("the heading is the heading, with nothing crammed beside it",
-              "<h1>BBS directory</h1>" in page and "listed &middot;" not in page)
+              "<h1>Find a community BBS</h1>" in page and "listed &middot;" not in page)
         check("and the figures are a sentence under it, counted from the list",
-              '<h1>BBS directory</h1><p class="stat">Unleashed is hosting '
-              "<span class='n'>1</span> board with <span class='n'>2</span> "
-              "callers on right now.</p>" in page)
+              '<h1>Find a community BBS</h1><p class="stat">'
+              "<span class='n'>1</span> community listed, with <span class='n'>2</span> "
+              "people connected right now.</p>" in page)
         check("in --live, the colour that means up",
               "p.stat .n { color:var(--live); }" in page)
         # Plurals, and the two zeros, straight from the function that
         # writes the sentence, since the running server has one board.
         def said(n, m):
             return re.sub(r"<[^>]+>", "", S.stat_line(n, m))
-        check("no boards: said as such, with no callers clause to go wrong",
-              said(0, 0) == "Unleashed is hosting no boards yet.")
-        check("one board, one caller: both singular",
-              said(1, 1) == "Unleashed is hosting 1 board with 1 caller on right now.")
-        check("one board, nobody on: no callers, not 0 callers",
-              said(1, 0) == "Unleashed is hosting 1 board with no callers on right now.")
-        check("two boards, five callers: both plural",
-              said(2, 5) == "Unleashed is hosting 2 boards with 5 callers on right now.")
+        check("no boards: said as such, with no people clause to go wrong",
+              said(0, 0) == "No communities listed yet.")
+        check("one board, one person: both singular",
+              said(1, 1) == "1 community listed, with 1 person connected right now.")
+        check("one board, nobody on: nobody, not 0 people",
+              said(1, 0) == "1 community listed, with nobody connected right now.")
+        check("two boards, five people: both plural",
+              said(2, 5) == "2 communities listed, with 5 people connected right now.")
         check("a big figure gets its thousands separator",
-              said(1200, 3400) == "Unleashed is hosting 1,200 boards with 3,400 "
-                                  "callers on right now.")
+              said(1200, 3400) == "1,200 communities listed, with 3,400 "
+                                  "people connected right now.")
         # The directory knows nothing about where a board is, so nothing on
         # the page may say "across the globe" until something true can.
         check("the suffix is empty, and nothing claims the globe",
@@ -1829,7 +1823,7 @@ def main():
         was_suffix = S.STAT_SUFFIX
         S.STAT_SUFFIX = " in three time zones"
         check("and a suffix, once set, goes before the full stop",
-              said(2, 5).endswith("callers on right now in three time zones."))
+              said(2, 5).endswith("connected right now in three time zones."))
         S.STAT_SUFFIX = was_suffix
 
         print("The JSON list")
@@ -1845,7 +1839,7 @@ def main():
                                "token": "0" * 32})
         check("an unknown token makes a new entry, it does not seize one",
               other["token"] != token and other["state"] in ("queued", "pending"))
-        _, page = get("/")
+        _, page = get("/directory")
         check("the real listing still says who owns it", "Sparks" in page)
         check("the impostor is not published", "Impostor" not in page)
 
@@ -1865,10 +1859,10 @@ def main():
         check("the data domain documents the API", "/api/boards.json" in page)
         check("and says what is not in it", "Nothing about callers" in page)
 
-        _, page = get("/", host="boards.example")
+        _, page = get("/directory", host="boards.example")
         check("the list domain still lists boards", "Rusty Modem" in page)
         check("the list page owns the board-list heading",
-              "Boards that are up right now" in page)
+              "Find a community BBS" in page)
 
         # The board list's heading used to live in the shared page shell, so
         # it turned up above the manifesto as well. Every page brings its own.
@@ -2017,7 +2011,7 @@ def main():
         print("What happens after you connect, and what it risks")
         code, page = get("/firstcall")
         check("the first call page exists",
-              code == 200 and "A handle is the name other callers see" in page)
+              code == 200 and "is the nickname other people on the board see" in page)
         check("and says what a guest actually gets",
               "fifteen minutes" in page)
         code, page = get("/privacy")
@@ -2109,7 +2103,7 @@ def main():
         check("it ends by telling somebody how to start",
               'href="/build"' in page)
         check("it is in the menu next to the manifesto",
-              ">Who it's for</a>" in page)
+              ">Who builds one</a>" in page)
         _, page = get("/", host="about.example")
         check("and the manifesto points at it",
               'href="/whofor"' in page)
@@ -2291,7 +2285,7 @@ def main():
         # front of one, in session 1, where everybody connects at once. The
         # figure is BBS_MAX_NODES in the firmware and is not a config key.
         check("and honest about how many callers fit on one board",
-              "answers ten callers at once" in " ".join(page.split())
+              "answers ten people at once" in " ".join(page.split())
               and "serves a whole class" not in page)
 
         # ------------------------------------------------------------------
@@ -2331,9 +2325,9 @@ def main():
             _, page = get(path, host=host)
             check(f"no callsign on {path}", "KE9CXN" not in page)
 
-        _, page = get("/")
-        check("the front page offers a way out when a dial link does nothing",
-              'href="/dialing">Nothing happened?' in page)
+        _, page = get("/directory")
+        check("the board list offers a way out when a dial link does nothing",
+              'href="/dialing">Did not connect?' in page)
         check("and the footer carries it on every page",
               '>Dial links</a>' in page)
         check("the dial link's tooltip no longer reads a URL out as text",
@@ -2527,10 +2521,10 @@ def main():
               and "That one comes later, with the plugin for sensors." in flat_w
               and 'href="/different"' in who4)
         code, dif = get("/different")
-        dbody = dif.split("<article>")[1].split('id="how-it-compares"')[0]
+        dbody = dif.split("<article>")[1].split('id="how-it-compares-with-the-apps')[0]
         items = re.findall(r'<li><b><a href="([^"]+)">', dbody)
         check("/different renders its list, each line linked to its proof",
-              code == 200 and has_h(dif, 1, "What makes it different")
+              code == 200 and has_h(dif, 1, "What a board can do")
               and 10 <= len(items) <= 12 and len(set(items)) == len(items)
               and all(h.startswith("/") for h in items))
         # Site 1.2.9 (Rob: "get a matrix table going"): the comparison is a
@@ -2556,7 +2550,7 @@ def main():
         check("and says under it what the big packages still do better",
               '<p class="cmpnote">The big packages still do plenty this board does '
               "not yet: FidoNet-style message networks, door games, ZMODEM" in dif
-              and '<a href="/roadmap">The roadmap</a>' in dif.split('class="cmpnote"')[1])
+              and '<a href="/roadmap">The roadmap</a>' in dif.split('class="cmpnote"')[-1])
         check("and its camera row follows the firmware on disk",
               ("coming, on the camera boards" in cmp_t)
               == (not any(r["sort"] >= (1, 1, 0) for r in S.firmware_releases())))
@@ -2567,43 +2561,46 @@ def main():
               and "p.cmphint { display:none;" in dif
               # an upper-cased micro sign is a capital mu: MNLEASHED
               and "table.cmp thead th.us { text-transform:none;" in dif)
+        # Site 1.3.0 (Rob): the second table, against the places people
+        # build a community today, fair to them: they win on reach, and the
+        # note under it says so. Every column's heading links to the page
+        # its cells were checked against, and µnleashed's column is lit.
+        today = dif.split('<table class="cmp today">')[1].split("</table>")[0] \
+            if '<table class="cmp today">' in dif else ""
+        check("/different compares with the apps people use now, fairly and with sources",
+              '<div class="cmpwrap" role="region" aria-label="How it compares with '
+              'the apps" tabindex="0">' in dif
+              and all(f'<a href="{h}">' in today for _n, h in S.COMPARE_TODAY_COLS)
+              and all(h.startswith(("https://", "/")) for _n, h in S.COMPARE_TODAY_COLS)
+              and all("e.g." in n for n, _h in S.COMPARE_TODAY_COLS[1:])
+              and today.count("<tr>") == len(S.COMPARE_TODAY_ROWS) + 1
+              and all(len(c) == len(S.COMPARE_TODAY_COLS) for _l, c in S.COMPARE_TODAY_ROWS)
+              and today.count('<td class="us">') == len(S.COMPARE_TODAY_ROWS)
+              and "They win on reach and ease" in dif
+              and "Easy for new people to find" in today
+              and "Encrypted on the way" in today
+              and dif.index('class="cmp today"') < dif.index('<table class="cmp">'))
+        check("and says what is on those sites, from their own pages, and on ours",
+              has_h(dif, 2, "What is on those sites")
+              and 'href="https://discord.com/privacy"' in dif
+              and 'href="https://www.facebook.com/terms.php"' in dif
+              and "This website runs no analytics" in " ".join(dif.split())
+              and 'href="/privacy">What that means in practice' in dif)
+        check("the BBS table says it in plain words, no computer-you-supply",
+              "a computer you supply" not in dif
+              and "none built in: it runs on a PC you already have" in cmp_t
+              and "not built in" in cmp_t)
         home = get("/")[1]
-        check("the home page has one button to it and nothing more",
+        check("the front page links to it once, from its history",
               home.count('href="/different"') == 1
-              and '<p class="next tease"><a class="go" href="/different">' in home
-              and home.index('href="/different"') < home.index('class="runcard"'))
-        # Site 1.2.8 (Rob): the button opens the page, under two sentences
-        # saying why to press it, and a line and a rule lead into the list.
-        check("and it opens the page: the pitch, then the button, before the "
-              "directory's heading, with a rule between them",
-              '<div class="listtop"><div class="intro"><p class="pitch">A whole BBS '
-              "on a board the size of a stick of gum, for about $5." in home
-              and "Commodore" not in home.split('<p class="pitch">')[1].split("</p>")[0]
-              and 0 <= home.find('<p class="pitch">') < home.find('href="/different"')
-              < home.find('<p class="tryit">Try out any of the boards in the '
-                          "directory below.</p>")
-              < home.find('<hr class="dirrule">') < home.find("<h1>BBS directory</h1>")
-              and home.count('<hr class="dirrule">') == 1
-              and '<hr class="dirrule"><h1>BBS directory</h1>' in home)
-        check("the rule is the footer's hairline, in --rule",
-              "hr.dirrule { border:0; border-top:1px solid var(--rule);" in home)
-        # Site 1.2.9 (Rob): the line into the list is the foot of the left
-        # column on a desktop, so it does not float under the button, and
-        # follows the card on a phone.
-        check("the line into the list sits in the opening row, after the card",
-              S.RUN_CARD + S.HOME_TRY + '</div><hr class="dirrule">' in home
-              and ".listtop p.tryit { grid-column:1; grid-row:2; align-self:end;" in home
-              and ".runcard { margin:0; grid-column:2; grid-row:1 / span 2; }" in home)
-        # Site 1.2.9 (Rob: "slightly larger, different font"): the pitch in a
-        # display face served from here, never from a font service, with its
-        # licence beside it and in the notices.
+              and home.index('id="before-social-media"') < home.index('href="/different"'))
         face, _w = S.PITCH_FONTS[S.PITCH_FONT]
         fcode, fctype, fblob = fetch("/font/" + face)
         lcode, _lt, lblob = fetch("/font/OFL-" + face.split("-")[0].split(".")[0] + ".txt")
         notices = open("THIRD_PARTY_NOTICES.md", encoding="utf-8").read()
         check("the pitch is set in its own face, served from here, with its licence",
               '@font-face { font-family:"Pitch"; src:url("/font/' + face + '")' in home
-              and '.listtop p.pitch { color:var(--ink); margin:0; font-family:"Pitch",' in home
+              and '.front h1.hero { font-family:"Pitch",' in home
               and fcode == 200 and fctype.startswith("font/") and len(fblob) > 4000
               and lcode == 200 and b"SIL OPEN FONT LICENSE Version 1.1" in lblob
               and "googleapis" not in home and "gstatic" not in home
@@ -2673,7 +2670,7 @@ def main():
         check("the terminal page renders its tables",
               "<table>" in page and "SyncTERM" in page)
         check("and the menu carries it on every page",
-              ">Terminals</a>" in page)
+              ">Apps for joining</a>" in page)
         code, page = get("/dialing")
         check("the dialing page leads with the fix, not the registry",
               page.index("SyncTERM") < page.index("Registry"))
@@ -2706,7 +2703,7 @@ def main():
                         " VALUES(?,?,?,?)", (bid, h, 42, busy * 42))
         con.commit()
         con.close()
-        _, page = get("/", host="boards.example")
+        _, page = get("/directory", host="boards.example")
         check("a board with a day of beats gets a busy-hours chart",
               "class='spark'" in page or 'class="spark"' in page)
         check("and is described by when it is actually busy",
@@ -2729,7 +2726,7 @@ def main():
         # stylesheet edit being dropped by a later rewrite and shipping
         # unstyled with every grep still passing.
         print("The layout rules reach the page")
-        _, page = get("/", host="boards.example")
+        _, page = get("/directory", host="boards.example")
         check("the board list stops being a table on a phone",
               "@media (max-width: 900px)" in page
               and "main > table, main > table > tbody" in page)
@@ -2737,7 +2734,7 @@ def main():
               "@media (min-width: 901px)" in page
               and "table-layout:fixed" in page)
         check("the cells carry their own labels, not the column order",
-              "data-label='State'" in page and "data-label='Dial'" in page)
+              "data-label='State'" in page and "data-label='Address'" in page)
         check("activity is two deliberate lines, not one that wraps anywhere",
               "calls<br>" in page and "connected</span>" in page)
         # Three columns, not six. Six of them wrapped once the type grew, and
@@ -2748,7 +2745,7 @@ def main():
         # callers on it. Measured in Chrome at 1920 and 1366: all four state
         # lines start at the same x and each is one line.
         check("the board list is three columns, not six",
-              "<th>Board</th><th>Dial</th><th>State</th></tr>" in page
+              "<th>Board</th><th>Address</th><th>State</th></tr>" in page
               and "<th>Sysop</th>" not in page)
         check("and a stacked value says what it is rather than relying on "
               "its position",
@@ -2906,7 +2903,7 @@ def main():
         # The day chart's viewBox is sized to the column it lives in. A 720
         # unit box in a 412px cell scaled by 0.57, so an 11px label rendered
         # at 6.3px and the expanded chart was 110px tall.
-        _, page = get("/", host="boards.example")
+        _, page = get("/directory", host="boards.example")
         check("the day chart is drawn at the size of the column it sits in",
               'viewBox="0 0 380 300"' in page)
         check("and its hour labels are set large enough to read",
@@ -3058,7 +3055,7 @@ def main():
         check("and it resumes the listing it already earned",
               back.get("state") == "online")
         check("with no probation to serve again", back.get("public_in") == 0)
-        _, page = get("/", host="boards.example")
+        _, page = get("/directory", host="boards.example")
         check("so it is back on the public page", "The Napping Board" in page)
 
         # Gone long enough and it serves the hours again. That is the spam
@@ -3072,7 +3069,7 @@ def main():
               stale.get("state") == "pending")
         check("and is told how long it has to wait",
               stale.get("public_in", 0) > 0)
-        _, page = get("/", host="boards.example")
+        _, page = get("/directory", host="boards.example")
         check("and is not on the page while it waits",
               "The Napping Board" not in page)
 
@@ -3534,8 +3531,8 @@ def main():
         # button that goes somewhere says where it goes: only the button on
         # /install says Install, because only that one installs.
         print("Calls to action")
-        for path, alt in (("/build", "#getting-it-running"),
-                          ("/setup", "/build#getting-it-running")):
+        for path, alt in (("/build", "#for-developers-build-from-source"),
+                          ("/setup", "/build#for-developers-build-from-source")):
             pg = get(path)[1]
             body = pg.split("</nav>")[1]
             check(f"{path}: Visit the web installer, and Build from source beside it",
@@ -3546,7 +3543,7 @@ def main():
             check(f"{path}: and no button there says Install",
                   not re.search(r'class="btn2?"[^>]*>[^<]*Install', body))
         check("the from-source button lands on a heading that exists",
-              'id="getting-it-running"' in get("/build")[1])
+              'id="for-developers-build-from-source"' in get("/build")[1])
         css_c = get("/build")[1].split("<style>")[1]
         check("on a phone the two stack, the filled one first, full width",
               ".cta .acts { flex-direction:column; align-items:stretch; }" in css_c
@@ -3559,90 +3556,63 @@ def main():
         check("and on /setup before the drawing",
               setp.index('class="btn"') < setp.index('class="art steps"'))
         # The board list is the other way round (0.20.1, Rob: "This seems a
-        # bit big for a button there in the middle"). No full size button
-        # anywhere in its flow; the way to a board of your own is a small
-        # card beside the heading, with two compact buttons in it.
+        # bit big for a button there in the middle"): no full size button
+        # anywhere in its flow. It is /directory since site 1.3.0.
+        dirp = get("/directory")[1]
+        dbody_ = dirp.split("</nav>")[1].split("<footer")[0]
+        check("the board list has no full size button in its flow",
+              'class="btn"' not in dbody_ and 'class="btn2"' not in dbody_
+              and 'class="cta"' not in dbody_)
+        # Site 1.3.0 (Rob, marketing round 3): the front page is the pitch.
+        # What it is in today's words first, then the hook, then the proof;
+        # the words BBS and sysop arrive with their glossary notes.
         home = get("/")[1]
         hbody = home.split("</nav>")[1].split("<footer")[0]
-        check("the board list has no full size button in its flow",
-              'class="btn"' not in hbody and 'class="btn2"' not in hbody
-              and 'class="cta"' not in hbody)
-        check("it has the Run your own board card instead, with its two ways in",
-              '<aside class="runcard" aria-labelledby="run-your-own">'
-              '<h2 id="run-your-own">Run your own board</h2>'
-              '<p class="say">An ESP32 board, a USB cable, five minutes.</p>'
-              '<p class="acts"><a class="fill" href="/install">Web installer</a>'
-              '<a class="line" href="/build#getting-it-running">Build from source</a>'
-              in hbody and hbody.count('class="runcard"') == 1)
-        check("and neither of its buttons says Install",
-              not re.search(r'class="(fill|line)"[^>]*>[^<]*Install', hbody))
-        lst = hbody.find('<table id="boards"')
-        lst = lst if lst >= 0 else hbody.find("No boards listed yet")
-        # Site 1.2.8 (Rob): the card sits beside the pitch in the opening
-        # row, and the directory's heading and lead follow the rule.
-        check("the card follows the pitch and its button, then the rule, the "
-              "heading, the lead and the list",
-              0 <= hbody.find('<p class="pitch">') < hbody.find('<p class="next tease">')
-              < hbody.find('<aside class="runcard"') < hbody.find('<hr class="dirrule">')
-              < hbody.find("<h1>BBS directory</h1>") < hbody.find('<p class="lead">') < lst)
+        hflat = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", hbody)).split())
+        check("the front page opens with the kicker and the headline",
+              '<p class="kicker">Social, before social media</p>'
+              '<h1 class="hero">Your own online community, on a device that '
+              "<em>fits in your hand</em>.</h1>" in hbody
+              and hbody.find('<section class="hero">') < hbody.find('<p class="kicker">'))
+        check("and the sub-head says where it runs and what people join from",
+              "It runs at home or at work" in hflat
+              and "People join from a PC, an Android phone or an iPhone with a free app, "
+                  "and from old computers and terminals too." in hflat)
+        check("two ways on, twice: Build yours and Try one first, neither saying Install",
+              hbody.count('<a class="b1" href="/install">Build yours</a>') == 2
+              and hbody.count('<a class="b2" href="/directory">Try one first</a>') == 2
+              and not re.search(r'class="b[12]"[^>]*>[^<]*Install', hbody))
+        check("a line of facts, and a drawing of the board that says it is one",
+              "About $5 · About five minutes · No subscription · Free software" in hflat
+              and 'role="img" aria-label="Drawing of the ESP32 board' in hbody
+              and "(Photo to come.)" in hbody)
+        order = [hbody.find(f'id="{k}"') for k in (
+            "what-it-is", "who-builds-one", "three-steps", "before-social-media", "see-one")]
+        check("the sections in the approved order",
+              all(i > 0 for i in order) and order == sorted(order))
+        who_ = hbody[order[1]:order[2]]
+        check("six examples, each a situation headed For example, with no names or quotes",
+              who_.count('<p class="eg">For example</p>') == 6
+              and "&ldquo;" not in who_ and "\u201c" not in who_
+              and "&quot;" not in who_)
+        check("the history is the sourced one: CBBS in 1978, about 60,000 at the peak",
+              "<dt>1978</dt>" in hbody and "<dt>1990s</dt>" in hbody
+              and "About 60,000 of them in the United States alone." in hbody
+              and "CBBS, Chicago, 16 February 1978" in hbody)
+        check("BBS and sysop come with their glossary notes, nothing else is a script",
+              hbody.count('class="gl"') >= 4 and "<script" not in home
+              and 'aria-describedby="gl' in hbody)
+        check("and developers get one quiet line, to a heading that exists",
+              '<a href="/build#for-developers-build-from-source">build from source</a>'
+              in hbody)
         css_h = home.split("<style>")[1]
-        check("beside them from 901px as a grid column, not a float",
-              ".listtop { display:grid; grid-template-columns:minmax(0, 1fr) 19.5rem;"
-              in css_h and not re.search(r"\.runcard[^{]*\{[^}]*float", css_h))
-        check("its buttons are the compact ones, in the installer card's shape",
-              ".runcard a.fill, .runcard a.line { display:inline-block; font-size:0.75rem;"
-              in css_h
-              and "border-radius:0.5rem;\n        padding:1.125rem 1.25rem;" in css_h)
-        check("and on a phone the card is its title and the two buttons",
-              ".runcard .say { display:none; }" in css_h)
-        # 0.20.2 (Rob): the card stands out. A wash of --dial over the page
-        # rather than a flat block, its border the same blue, and three
-        # lamps going slowly round the edge, in CSS alone.
-        check("the card is washed in --dial, its border the same blue",
-              ".runcard { position:relative; background:rgba(127, 212, 255, 0.12);"
-              in css_h and "border:1px solid rgba(127, 212, 255, 0.6);" in css_h
-              and "--dial:#7fd4ff;" in css_h)
-        # 0.22.0, to the UX spec: two lamps half a lap apart, each a head and
-        # three beads of tail, instead of three lamps a third of a lap apart,
-        # which looked scattered on a rectangle.
-        check("two lamps on its edge, each a head and three beads, hidden from a "
-              "screen reader",
-              all(f'<span class="dot {lamp}{bead}" aria-hidden="true"></span>' in hbody
-                  for lamp in ("la", "lb") for bead in ("", " t1", " t2", " t3"))
-              and hbody.count('class="dot ') == 8)
-        run_moving = css_h[css_h.find("@media (prefers-reduced-motion: no-preference) {\n"
-                                      "  @supports (offset-path"):]
-        run_moving = run_moving[:run_moving.find("\n}\n")]
-        check("they follow the card's own rounded edge, half a lap apart",
-              "offset-path:inset(0 round 0.5rem);" in css_h
-              and ".runcard .la { offset-distance:0%; }" in css_h
-              and ".runcard .lb { offset-distance:50%; }" in css_h)
-        check("and move only where reduced motion does not stop them, 20s a lap, "
-              "linear",
-              run_moving.startswith("@media (prefers-reduced-motion: no-preference)")
-              and ".runcard .dot { animation:runlap 20s linear infinite; }" in run_moving
-              and "@keyframes runlap" in run_moving
-              and css_h.count("animation:runlap") == 1
-              and css_h.count("@keyframes runlap") == 1)
-        delays = re.findall(r"\.runcard \.(l[ab](?:\.t\d)?) \{ animation-delay:(-?[\d.]+)s;",
-                            run_moving)
-        got_d = {k: float(v) for k, v in delays}
-        check("every delay at or below zero, so nothing jumps at load, the tails "
-              "0.12s apart behind their heads and B half a lap behind A",
-              len(got_d) == 8 and all(v <= 0 for v in got_d.values())
-              and all(abs(got_d["la"] - got_d[f"la.t{i}"] + 0.12 * i) < 1e-9
-                      for i in (1, 2, 3))
-              and all(abs(got_d[k.replace("la", "lb")] - got_d[k] + 10) < 1e-9
-                      for k in ("la", "la.t1", "la.t2", "la.t3")))
-        check("the beads are invisible outside the motion block",
-              ".runcard .t1, .runcard .t2, .runcard .t3 { opacity:0;" in css_h
-              and not re.search(r"\.runcard \.l[ab]\.t\d \{[^}]*opacity",
-                                css_h.replace(run_moving, ""))
-              and ".runcard .la.t1 { animation-delay:-0.24s; opacity:0.7; }" in run_moving)
-        check("a browser without offset-path gets two still lamps at the corners",
-              ".runcard .la { top:-0.25rem; left:0.5rem; }" in css_h
-              and ".runcard .lb { bottom:-0.25rem; right:0.5rem; }" in css_h
-              and "@supports (offset-path: inset(0 round 0.5rem)) {" in css_h)
+        check("the front page's rules reach it, one column on a phone",
+              '.front section.hero { border-top:0; padding-top:1rem; display:grid;' in css_h
+              and ".front .fcards, .front ol.fsteps { grid-template-columns:1fr;" in css_h
+              and ".front section.hero, .front section.then { display:block; }" in css_h)
+        check("and the old front page's pieces are gone",
+              not hasattr(S, "RUN_CARD") and 'class="runcard"' not in home
+              and "listtop" not in css_h and "dirrule" not in css_h)
 
         # ------------------------------------------------------------------
         # Upgrading a board that already runs the BBS (0.20.2, Rob: "make
@@ -3700,7 +3670,8 @@ def main():
                             get("/", host="data.example")[1])))
         # N1, site 1.2.1: /hardware is in the footer, after Build one.
         check("and Hardware is in it, after Build one, on every face",
-              all(re.search(r'<span class="lbl">Get started</span><a href="[^"]*/build">'
+              all(re.search(r'<span class="lbl">Get started</span><a href="[^"]*/directory">'
+                            r'Find a community</a><a href="[^"]*/build">'
                             r'Build one</a><a href="[^"]*/hardware">Hardware</a>', p)
                   for p in (home, inst_now, get("/", host="about.example")[1],
                             get("/", host="data.example")[1])))
@@ -4071,12 +4042,39 @@ def main():
               code == 200 and ctype == "image/png" and png_size(blob) == (512, 512))
         faces_a = [get("/")[1], get("/setup")[1], get("/", host="about.example")[1],
                    get("/", host="data.example")[1]]
-        check("every face names it for link previews, by an absolute address",
-              all(re.search(r'<meta property="og:image" content="https://[^"]+/avatar\.png">', p)
-                  and '<meta name="twitter:card" content="summary">' in p
-                  and re.search(r'<meta name="twitter:image" content="https://[^"]+/avatar\.png">', p)
-                  and '<meta property="og:image:alt" content="' in p
+        # Site 1.3.0: link previews use the 1200 x 630 card, large, and the
+        # avatar stays the home-screen icon.
+        check("every face names the card for link previews, large, by an absolute address",
+              all(re.search(r'<meta property="og:image" content="https://[^"]+/og-card\.png">', p)
+                  and '<meta property="og:image:width" content="1200">' in p
+                  and '<meta property="og:image:height" content="630">' in p
+                  and '<meta property="og:image:type" content="image/png">' in p
+                  and '<meta name="twitter:card" content="summary_large_image">' in p
+                  and re.search(r'<meta name="twitter:image" content="https://[^"]+/og-card\.png">', p)
+                  and '<meta property="og:image:alt" content="The \u00b5nleashed wordmark' in p
+                  and '<meta property="og:title" content="' in p
+                  and '<meta property="og:description" content="' in p
                   for p in faces_a))
+        code, ctype, blob = fetch("/og-card.png")
+        check("and og:image resolves to a 1200 x 630 PNG",
+              code == 200 and ctype == "image/png" and png_size(blob) == (1200, 630)
+              and os.path.isfile(os.path.join("brand", "make_ogcard.py")))
+        # The pages the round 3 specification gives words of their own.
+        def og(path, prop):
+            m = re.search(r'<meta property="og:%s" content="([^"]*)">' % prop, get(path)[1])
+            return html.unescape(m.group(1)) if m else None
+        check("the front page's preview says what it is, not a board count",
+              og("/", "title") == "\u00b5nleashed: your own online community, on a "
+                                  "device that fits in your hand"
+              and og("/", "description").startswith("Chat and messages for your class")
+              and "listed" not in og("/", "description"))
+        check("/directory's preview carries the live figures",
+              og("/directory", "title") == "Communities running right now"
+              and re.search(r"^\d+ communit(y|ies) online and \d+ (person|people) "
+                            r"connected right now\.", og("/directory", "description")))
+        check("and every page in the table has its own title and words",
+              all(og(p_, "title") == t_ and (d_ is None or og(p_, "description") == d_)
+                  for p_, (t_, d_) in S.OG_PAGES.items()))
         check("and as the icon a phone puts on its home screen",
               all('<link rel="apple-touch-icon" href="/apple-touch-icon.png">' in p
                   for p in faces_a))
@@ -4087,7 +4085,7 @@ def main():
               and not any("avatar" in n for n in os.listdir("static")))
 
         print("Every other page is still script-free")
-        scripted = [p for p in ("/about", "/data", "/build", "/whofor",
+        scripted = [p for p in ("/", "/different", "/about", "/data", "/build", "/whofor",
                                 "/terminals", "/firstcall", "/forward", "/how",
                                 "/rules", "/privacy", "/kids", "/teachers",
                                 "/sdcard", "/dialing", "/author", "/donate",
@@ -4099,7 +4097,7 @@ def main():
         # The board list and /badges carry the badge filter and search
         # (0.22.0): one inline script each, this site's own, pinned to the
         # text in server.py, and doing nothing but reading and hiding.
-        for path in ("/", "/badges", "/?b=petscii&b=ham"):
+        for path in ("/directory", "/badges", "/?b=petscii&b=ham"):
             pg = get(path)[1]
             scr = re.findall(r"<script[^>]*>(.*?)</script>", pg, re.S)
             check(f"{path}: its one script is the badge script written here, with no src",
@@ -4289,7 +4287,7 @@ def main():
         # usually cannot without its administrator, Chrome alone never can.
         flat_t = " ".join(term.split())
         check("the Chromebook section leads with who controls it",
-              "A Chromebook you control can usually call a board" in flat_t
+              "A Chromebook you control can usually join a board" in flat_t
               and "Chrome on its own never can" in flat_t
               and "A Chromebook can call a board. Chrome cannot." not in flat_t)
         check("and dates the Chrome Apps change the way Google does",
@@ -4546,8 +4544,83 @@ def main():
         # The freedoms beside the wordmark. The board's own words from its
         # welcome screen, on every page, one at a time for a reader who
         # does not mind motion and standing still for one who does.
+        # ------------------------------------------------------------------
+        # Site 1.3.0 (Rob: "bridge them into the lingo for BBSes ... pop-ups
+        # with dotted underline for terms"). One table of definitions, a
+        # BBS word marked where a page wants it explained, no script and no
+        # title attribute, and a definition a screen reader is pointed at.
+        print("The glossary")
+        glossed = {}
+        for f in sorted(pathlib.Path("pages").glob("*.md")):
+            for m in re.finditer(r"\[\[([^\[\]]+)\]\]", f.read_text(encoding="utf-8")):
+                glossed.setdefault(m.group(1), f.name)
+        unknown = [f"{w} ({f})" for w, f in glossed.items() if S.gloss_key(w) is None]
+        check("every [[term]] in the pages has an entry in the table"
+              + ("" if not unknown else "  <- " + ", ".join(unknown)),
+              glossed and not unknown)
+        check("and every entry is one sentence or two, short enough for the box",
+              all(20 <= len(d) <= 160 and d.endswith(".") for d in S.GLOSSARY.values())
+              and all(S.gloss_key(k) is not None for k in S.GLOSSARY_FORMS)
+              and set(S.GLOSSARY_FORMS.values()) <= set(S.GLOSSARY))
+        leaked = [p_ for p_ in ("/", "/directory", "/whofor", "/firstcall", "/build",
+                                "/terminals", "/forward", "/install", "/hardware",
+                                "/different", "/privacy", "/teachers", "/setup")
+                  if "[[" in get(p_)[1].split("</nav>")[1]]
+        check("no page shows the markup instead of the term"
+              + ("" if not leaked else "  <- " + ", ".join(leaked)), not leaked)
+        fc = get("/firstcall")[1]
+        term = re.search(r'<span class="gl" tabindex="0" aria-describedby="(gl\d+)">'
+                         r'sysop<span class="gt" role="tooltip" id="(gl\d+)">([^<]+)</span></span>',
+                         fc)
+        check("a term is focusable, points a screen reader at its definition, and says it",
+              term is not None and term.group(1) == term.group(2)
+              and term.group(3) == html.escape(S.GLOSSARY["sysop"])
+              and " title=" not in fc.split("<article>")[1])
+        css_g = fc.split("<style>")[1]
+        check("the definition shows on focus and a tap, and on hover only with a mouse",
+              ".gl:focus .gt { display:block; }" in css_g
+              and "@media (hover: hover) and (pointer: fine) {\n  .gl:hover .gt { display:block; }"
+                  in css_g
+              and ".gl .gt { display:none;" in css_g
+              and ".gl { position:relative; border-bottom:1px dotted currentColor;" in css_g)
+        check("and on a phone it is a bar across the foot of the screen, not off its edge",
+              ".gl .gt { position:fixed; left:1rem; right:1rem; top:auto; bottom:1rem;" in css_g)
+        ids = re.findall(r'aria-describedby="(gl\d+)"', get("/different")[1])
+        check("ids are unique on a page", ids and len(ids) == len(set(ids)))
+
+        # The one step between "Try one first" and a board.
+        print("Joining, on /directory")
+        dj = get("/directory")[1]
+        js_ = dj.split('<div class="joinstep"')[1].split("</div>")[0] \
+            if '<div class="joinstep"' in dj else ""
+        check("/directory says, before the list, what app to join with",
+              "First time? You need a free app to join" in js_
+              and dj.index('class="joinstep"') < dj.index('id="nq"')
+              and 'href="https://play.google.com/store/apps/details?id=com.terminator.android"'
+                  in js_
+              and 'href="https://apps.apple.com/us/app/terminator-bbs-terminal/id6759012939"'
+                  in js_
+              and 'href="https://apps.apple.com/us/app/muffinterm/id1583236494"' in js_
+              and 'href="https://syncterm.bbsdev.net/"' in js_
+              and 'href="/terminals">Apps for joining</a>' in js_
+              and 'class="gl"' in js_)
+        check("the menu's first entry is Find a community, and the wordmark goes home",
+              '<nav><a href="/directory">Find a community</a>' in get("/whofor")[1]
+              and '<a class="home" href="/"' in get("/whofor")[1])
+
+        # The Telnet BBS Guide, on /how.
+        hw = get("/how")[1]
+        check("/how says how to list on the Telnet BBS Guide too, in steps",
+              '<h2 id="the-telnet-bbs-guide">List your community on the Telnet BBS '
+              "Guide too</h2>" in hw
+              and hw.count("<li>", hw.index('id="the-telnet-bbs-guide"')) >= 5
+              and "<b>Add Your BBS</b>" in hw and "<b>Contact Us</b>" in hw
+              and 'href="https://www.telnetbbsguide.com/faqs/how-to-add-your-bbs-listing/"'
+                  in hw
+              and 'href="#the-telnet-bbs-guide"' in hw)
+
         print("The freedoms in the header")
-        faces = {"the board list": get("/")[1],
+        faces = {"the board list": get("/directory")[1],
                  "a page from the menu": get("/terminals")[1],
                  "the manifesto": man,
                  "the data face": get("/", host="data.example")[1]}
@@ -4565,24 +4638,30 @@ def main():
         check("every face carries the panel beside the wordmark",
               all(re.search(r'<div class="masthead"><a class="home" [^>]*><svg class="logo"', p)
                   and ticker_of(p) for p in faces.values()))
-        check("with all eight freedoms, each with the line saying what it means",
-              len(wanted) == 8
+        check("with all ten freedoms, each with the line saying what it means",
+              len(wanted) == 10
               and all(all(f"<b>{l}</b> <i>{n}</i>" in ticker_of(p)
                           for l, n in wanted) for p in faces.values()))
         check("in one list, named for a screen reader",
-              all(ticker_of(p).count("<li>") == 8
+              all(ticker_of(p).count("<li>") == 10
                   and '<ul aria-label="Electronic freedom">' in ticker_of(p)
                   for p in faces.values()))
-        # The frame, the heading drawn over it and the eight icons. The
+        # The frame, the heading drawn over it and the ten icons. The
         # words are never hidden: the fade is opacity, which leaves every
         # item in the accessibility tree, where visibility would take it out.
         check("and every picture in it hidden from one, and no word",
-              all(ticker_of(p).count('aria-hidden="true"') == 10
+              all(ticker_of(p).count('aria-hidden="true"') == 12
                   for p in faces.values())
               and "visibility" not in resting and "visibility" not in moving)
         check("the board's own welcome line and licence are among them",
-              all(w in labels for w in ("No web", "No cloud", "No browser",
-                                        "Real hardware", "GPL v3 or later")))
+              all(w in labels for w in ("No ads", "No cloud", "Old and new",
+                                        "Real hardware", "Free software")))
+        # Site 1.3.0 (Rob): "No web" read as a contradiction on a website,
+        # and three more were added. Each is true of the board as it ships.
+        check("and the ones added for a newcomer, with no web left in them",
+              all(w in labels for w in ("No platforms", "No hosting fees",
+                                        "No outside costs"))
+              and "No web" not in labels and "No browser" not in labels)
         # The board list carries the badge script since 0.22.0; it never
         # touches the panel, and no other face carries a script at all.
         check("and nothing on any face runs a script to move them",
@@ -4602,16 +4681,16 @@ def main():
         # Eight freedoms, four seconds each: every item's delay is four
         # seconds after the one before, on one 32 second timeline.
         delays = [float(d) for d in re.findall(
-            r"\.ticker li:nth-child\(\d\), \.tf \.sg\d \{ animation-delay:(-?[\d.]+)s; \}",
+            r"\.ticker li:nth-child\(\d+\), \.tf \.sg\d+ \{ animation-delay:(-?[\d.]+)s; \}",
             moving)]
-        check("eight on one 32 second timeline, four seconds apart",
-              "tkshow 32s" in moving and "tkseg 32s" in moving
-              and len(delays) == 8
+        check("ten on one 40 second timeline, four seconds apart",
+              "tkshow 40s" in moving and "tkseg 40s" in moving
+              and len(delays) == 10
               and all(abs(b - a - 4) < 1e-9 for a, b in zip(delays, delays[1:])))
         # Each section of the menu opens on a different freedom, or a reader
         # clicking round would only ever see the first two.
         firsts = []
-        for path, host in (("/", None), ("/", "about.example"), ("/whofor", None),
+        for path, host in (("/directory", None), ("/", "about.example"), ("/whofor", None),
                            ("/terminals", None), ("/firstcall", None),
                            ("/build", None), ("/forward", None), ("/how", None)):
             first = re.search(r"<li>.*?<b>(.*?)</b>",
@@ -5239,13 +5318,12 @@ def main():
                       'class="banner"' not in get("/")[1])
                 # Absent means absent: the heading follows the menu directly,
                 # with no empty box and no margin standing in for one.
-                check("and nothing takes its place: the opening row follows the menu",
-                      '</nav><div class="listtop"><div class="intro"><p class="pitch">'
-                      in home2
-                      and '</nav><div class="listtop">' in get("/")[1])
+                check("and nothing takes its place: the pitch follows the menu",
+                      '</nav><div class="front"><section class="hero">' in home2
+                      and '</nav><div class="front">' in get("/")[1])
                 check("and the page has no full size button without it either",
                       'class="btn"' not in home2.split("</nav>")[1]
-                      and 'class="runcard"' in home2)
+                      and 'class="b1"' in home2)
                 put("1.0.0", "esp32", whole)
                 home2 = fetch("/", base2)[2].decode("utf-8")
                 bn = (home2.split('<div class="banner"')[1].split("</div>")[0]
@@ -5254,10 +5332,14 @@ def main():
                       '<div class="banner" role="note"><p>\u00b5nleashed BBS 1.0.0 is out. '
                       '<a href="/install">Install it from your browser.</a></p></div>'
                       in home2)
-                check("above the directory heading, straight under the menu",
+                dir2 = fetch("/directory", base2)[2].decode("utf-8")
+                check("above the pitch and the directory heading, straight under the menu",
                       '</nav><div class="banner"' in home2
                       and home2.index('<div class="banner"')
-                          < home2.index("<h1>BBS directory</h1>"))
+                          < home2.index('<div class="front">')
+                      and '</nav><div class="banner"' in dir2
+                      and dir2.index('<div class="banner"')
+                          < dir2.index("<h1>Find a community BBS</h1>"))
                 check("one sentence and one link: no buttons and no drawing",
                       bn.count("<a ") == 1 and "btn" not in bn and "<svg" not in bn
                       and 'class="btn"' not in home2.split("</nav>")[1])
@@ -5395,7 +5477,7 @@ def main():
                 time.sleep(max(0.0, 2.5 - (time.time() - t_listed)))
                 post_from(dict(behind, token=tb.get("token", "")), "192.0.2.61", base2)
                 post_from(dict(other, token=to.get("token", "")), "192.0.2.62", base2)
-                home3 = fetch("/", base2)[2].decode("utf-8")
+                home3 = fetch("/directory", base2)[2].decode("utf-8")
                 brow3, orow3 = badge_row(home3, "Behind Board"), badge_row(home3, "Other Board")
                 check("on the list, the board behind carries the arrow and the other "
                       "software does not",
@@ -5421,7 +5503,7 @@ def main():
                       and S.ART["boot-button"] not in inst42
                       and "goes back to the last network that worked" not in inst42)
                 check("and the update arrow follows the newest release on disk",
-                      "1.0.0 → 1.0.2." in badge_row(fetch("/", base2)[2].decode("utf-8"),
+                      "1.0.0 → 1.0.2." in badge_row(fetch("/directory", base2)[2].decode("utf-8"),
                                                          "Behind Board"))
                 put("1.1.0", "esp32", whole)
                 inst5 = fetch("/install", base2)[2].decode("utf-8")
@@ -5448,7 +5530,7 @@ def main():
                       and "is no longer on the directory unless you restore a backup."
                           in boot)
                 check("and the arrow now says 1.1.0",
-                      "1.0.0 → 1.1.0." in badge_row(fetch("/", base2)[2].decode("utf-8"),
+                      "1.0.0 → 1.1.0." in badge_row(fetch("/directory", base2)[2].decode("utf-8"),
                                                          "Behind Board"))
                 fwd5 = " ".join(fetch("/forward", base2)[2].decode("utf-8").split())
                 set5 = fetch("/setup", base2)[2].decode("utf-8")

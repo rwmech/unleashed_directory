@@ -1,7 +1,10 @@
-# Terminal software
+<!-- Site 1.3.0 (Rob, marketing round 3): "Apps for joining" in the menu and the title, with the hobby's words, telnet client and terminal, explained where they first appear. The phone apps were checked on their stores on 2026-09-25: TERMinator (Phil Whittemore) on the App Store, free, iPhone and iPad; the Play Store listing could not be fetched from here, and the firmware's README and CLIENTS.md already name it for Android. MuffinTerm (Molly Black), free on the App Store for iPhone, iPad and Mac. -->
+# Apps for joining
 
-What you call a board with. Any telnet client works, but some are built for
-this and look a great deal better doing it.
+What you join a board with: a [[telnet client]], the free app that connects
+to a board's address and shows its screens. BBS people also call it a
+[[terminal]]. Any one works, but some are built for this and look a great
+deal better doing it.
 
 ::: art
 term-modern
@@ -10,7 +13,7 @@ term-modern
 ## Just tell me what to install
 
 **[SyncTERM](https://syncterm.bbsdev.net/)**, on Windows, macOS or Linux. It is
-made for calling boards: it speaks ANSI and CP437 properly, handles file
+made for joining boards: it speaks ANSI and CP437 properly, handles file
 transfers, keeps a dialling directory, and understands `telnet://` links so
 clicking an address on this site actually works. If you install one thing,
 install this.
@@ -19,14 +22,14 @@ install this.
 [Get SyncTERM](https://syncterm.bbsdev.net/)
 :::
 
-On a phone,
-**[TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android)**
-on Android and
-**[MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494)** on iOS
-and macOS both do the job and render ANSI art correctly.
+On a phone, **TERMinator** on
+[Android](https://play.google.com/store/apps/details?id=com.terminator.android)
+or [iPhone](https://apps.apple.com/us/app/terminator-bbs-terminal/id6759012939),
+and **[MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494)** on
+iPhone, iPad and Mac, both do the job and render ANSI art correctly.
 
 A Chromebook is the one machine where none of that installs straight into the
-browser. It can call a board through its Linux environment or an Android app,
+browser. It can join a board through its Linux environment or an Android app,
 and on a school or work Chromebook both are settings somebody else owns. It has
 its own section further down.
 
@@ -38,7 +41,7 @@ its own section further down.
 | [NetRunner](https://www.mysticbbs.com/downloads.html) | Windows, Linux | From the Mystic BBS author. Good ANSI. No Mac or Android build. |
 | [mTelnet](https://mt32.bbses.info/) | Windows | Small, fast, built for BBSes. |
 | [MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494) | iOS, macOS | Handles PETSCII as well as ANSI. |
-| [TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android) | Android, ChromeOS with the Play Store | CP437 art, classic fonts, ZMODEM transfers. |
+| [TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android) | Android, iPhone and iPad, ChromeOS with the Play Store | CP437 art, classic fonts, ZMODEM transfers. |
 | [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) | Windows, Linux | Everywhere already, but set the character set to CP437 or the art will be wrong. Not built for this. |
 | `telnet` | Linux, macOS, BSD | `telnet unleashed.local 6400`. Fine and plain. On Debian or Ubuntu: `sudo apt -y install inetutils-telnet`. |
 | `nc` | anywhere | `nc host 6400`. Works, negotiates nothing, and looks it. |
@@ -59,7 +62,7 @@ default and it renders ANSI poorly. Use something else.
 term-chromebook
 :::
 
-A Chromebook you control can usually call a board. A school or work
+A Chromebook you control can usually join a board. A school or work
 Chromebook usually cannot, until whoever manages it switches something on.
 Chrome on its own never can: no web page and no Chrome extension is allowed to
 open the kind of plain network connection telnet needs, so every route below
@@ -82,7 +85,7 @@ This is the route that works, and it ends with an ordinary terminal.
 2. Next to **Linux development environment**, select **Set up**, and answer the few questions it asks. Google says setup takes ten minutes or more, and that is about right.
 3. A **Terminal** window opens when it finishes. What you are looking at is Debian.
 4. Install a telnet client: `sudo apt -y install inetutils-telnet`
-5. Call a board: `telnet 192.168.1.50 6400`, with the address and port from the listing.
+5. Join a board: `telnet 192.168.1.50 6400`, with the address and port from the listing.
 
 Use the numeric address rather than a `.local` name. The Linux side looks
 names up for itself and does not always see what ChromeOS can see, so a name
@@ -111,7 +114,7 @@ if you ask for the setting by name instead of asking for Linux.
 - **A Chrome extension cannot do this**, and that is worth knowing before you spend an afternoon looking for one. Google's own Secure Shell is an SSH client and does not speak telnet. Nothing else can either: opening a plain connection was a Chrome Apps ability, not an extension one, and ChromeOS 138, in July 2025, was the last release to support Chrome Apps a user installed themselves. Google's newer route for web apps that need a raw connection, Isolated Web Apps, installs only through an administrator's policy, so it is the administrator's decision like everything else here.
 - **A terminal that runs in a web page needs a helper in the middle.** A page cannot open a telnet connection, so clients like [fTelnet](https://www.ftelnet.ca/) connect over WebSocket to a proxy and the proxy makes the telnet connection for them. It works. It also means that proxy reads everything in both directions, which on a telnet board is everything, your password included. Running the proxy yourself on your own network is a fair trade. Using somebody else's is a public conversation with one more listener in it.
 
-If none of those is available to you, a Chromebook cannot call a board, and
+If none of those is available to you, a Chromebook cannot join a board, and
 there is no trick that gets round it. The machine is doing exactly what it was
 set up to do. Borrow a Windows, Mac or Linux computer for the evening, or ask
 for the Linux setting, which is the smallest of the three requests.
@@ -126,7 +129,7 @@ that](/dialing).
 The address is ordinary text inside the link, on purpose, so selecting it and
 pasting it into a terminal always works, whatever your machine does.
 
-## Calling from something older
+## Joining from something older
 
 This is the more interesting half. A board answers anything that can open a
 telnet session, and with a bridge that includes machines built before the
@@ -216,6 +219,6 @@ dollars. A real modem and a real phone line also still work, if you have both.
 ## What the board does with all this
 
 It works out what it is talking to when you connect and draws itself to
-suit, so an Amiga, a TRS-80 and a modern laptop can be in the same chat room
+suit, so an Amiga, a TRS-80, a phone and a modern laptop can be in the same chat room
 and each see something that looks right to it. The first call page says [how, and what
 it may ask](/firstcall#it-works-out-what-you-are).

@@ -34,10 +34,10 @@ the web existed.
 
 !! try.png | A pixel drawing of a phone and a laptop dialling out
 
-You do not have to build anything first. You can call a board that somebody
+You do not have to build anything first. You can join a board that somebody
 else is already running, in about two minutes, on a computer you already have.
 
-[Pick one from the list](/) and [here is how to call it](/firstcall).
+[Pick one from the list](/directory) and [here is how to join it](/firstcall).
 
 ?? What if nothing happens when I click an address?
 
@@ -69,7 +69,7 @@ This is the part to decide on purpose, because the two options are different.
 reach it. Your family, and friends who come round. This is a complete board
 and most people should stop here.
 
-**Open to the internet.** Anybody in the world can find it and call it.
+**Open to the internet.** Anybody in the world can find it and join it.
 Somebody has to change a setting on your home internet box to do that, and
 that is a real decision about your whole family's network. **That decision
 belongs to the adult**, not to you.
@@ -177,6 +177,6 @@ and the sysop has to switch them on, so not every board has them yet.
 
 - [Build one](/build), the real steps. Written for grown-ups, so use it with
   one.
-- [What to call a board with](/terminals).
-- [Which boards are up right now](/).
+- [What to join a board with](/terminals).
+- [Which boards are up right now](/directory).
 :::

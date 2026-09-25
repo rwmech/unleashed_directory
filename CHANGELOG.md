@@ -14,6 +14,70 @@
 
 # Changelog
 
+## 1.3.0, 2026-09-25
+
+A new front page for somebody who has never heard of a BBS, and a pass over
+the words on every page (marketing round 3, as Rob approved it). The live
+board list moves to /directory. The BBS words stay, and are explained where a
+newcomer first meets them.
+
+- **The front page is the pitch.** "Social, before social media" over "Your
+  own online community, on a device that fits in your hand.", a sub-head that
+  says it runs at home or at work and that people join from a PC, an Android
+  phone or an iPhone with a free app, and from old computers and terminals
+  too, **Build yours** (to /install) and **Try one first** (to /directory),
+  and a line of facts. Then what it is (three cards), who builds one (six
+  "For example" situations, no names and no quotes), three steps, the history
+  (CBBS in Chicago on 16 February 1978, about 60,000 boards in the US at the
+  peak, from the firmware README's sources) and a closing band with the two
+  buttons again. `front_html()`, `FRONT_*` in server.py. The Run your own
+  board card, the pitch and the lamps are gone with the old top.
+- **/directory is the board list**, headed "Find a community BBS", with the
+  figures in plain words ("3 communities listed, with 5 people connected right
+  now") and, before the search, one step for somebody who has never joined a
+  board: the free app to use (TERMinator for Android or iPhone, MuffinTerm for
+  iPhone, SyncTERM on a computer), linked to its store. `/?b=` and `/?q=`
+  still arrive there. The table's Dial column is Address.
+- **The menu**: Find a community (to /directory, first), What this is, Who
+  builds one, Apps for joining (/terminals), First call, Build one, Let
+  others in (/forward), Get listed, Data, Donate. The wordmark goes home. The
+  cells are narrower so it stays one row at 1366 in Consolas. The footer's
+  Get started row opens with Find a community.
+- **A glossary**: a BBS word (BBS, board, sysop, caller, telnet, telnet
+  client, terminal, door, ANSI, PETSCII, flashing, firmware, port forwarding,
+  handle) gets a dotted underline and a one-line definition on hover, focus
+  or a tap, from one table, `GLOSSARY`. Written `[[sysop]]` in a page and
+  `gl("sysop")` in server.py; no script, no title attribute, the definition
+  pointed at with aria-describedby, a bar across the foot of a phone's
+  screen.
+- **The words, site-wide**: the hobby's terms paired with plain ones the
+  first time on a page ("a telnet client, a free app for joining", "the
+  sysop, the host", "install the software by flashing it"), callers become
+  visitors or members where a page is giving instructions, and "dial" becomes
+  connect or join. /whofor is "Who builds one", /forward "Let people outside
+  your home join", /install "Set up your board", /hardware "Which board to
+  buy", /terminals "Apps for joining", /different "What a board can do", and
+  /build's source route is "For developers: build from source". /setup's
+  CONFIG reference and the router pages keep their technical words.
+- **The freedoms panel** has ten: No ads, No platforms, No hosting fees and
+  No outside costs are new, "No web" and "No browser" became No ads and Old
+  and new, and "Run your own directory" came off. 40 seconds a lap.
+- **/different has a second comparison**, against the places people build a
+  community today (a chat app server, a social media group, a hosted forum, a
+  fediverse server, each with one example), fair about where they win, every
+  column checked against the company's own terms and linked, and a "What is on
+  those sites" section with the same for this board, the plain-text part
+  included. The first table's cells are in plain words.
+- **/how** says how to list a board on the Telnet BBS Guide as well, in five
+  steps, checked against the Guide's own page.
+- **Link previews**: a 1200 x 630 card (`brand/make_ogcard.py`, served at
+  `/og-card.png`), `twitter:card` summary_large_image, and a title and a
+  sentence of their own for the front page, /directory (with its live
+  figures), /whofor, /different, /install, /hardware, /build, /firstcall and
+  /terminals (`OG_PAGES`).
+- `site_url()` keeps a list-face path when there is no list domain, so a
+  menu link to /directory from another face is not sent to /.
+
 ## 1.2.9, 2026-09-25
 
 Ready for firmware 1.1.0: a third image set and the Freenove on the

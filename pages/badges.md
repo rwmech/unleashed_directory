@@ -1,6 +1,6 @@
 # What the badges mean
 
-The small marks under a board's name on the [board list](/). Some are sent by the board itself, and the rest are worked out here, from this directory's own record of that board. Point at one, or tap it, and it says what it is. The **Filter** button above the list shows only the boards carrying the badges you pick.
+The small marks under a board's name on the [board list](/directory). Some are sent by the board itself, and the rest are worked out here, from this directory's own record of that board. Point at one, or tap it, and it says what it is. The **Filter** button above the list shows only the boards carrying the badges you pick.
 
 Under each name, the first line is what the board is: the software and its version, then the machine it runs on. The second line is the rest, in the same order on every board, so each badge sits in the same place as you scroll: PETSCII, guests, what is running and the SD card, what this directory worked out, then the causes and the interests, those two in alphabetical order.
 

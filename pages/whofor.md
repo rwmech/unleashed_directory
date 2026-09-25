@@ -1,4 +1,5 @@
-# Who it's for
+<!-- Site 1.3.0 (Rob, marketing round 3): the title matches the front page's "Who builds one", and the BBS words are bridged in with the glossary rather than removed. -->
+# Who builds one
 
 > [!TIP]
 > **Under 18? This is the good bit.** There is a page written for
@@ -6,8 +7,8 @@
 > spent, and how to do it with a grown-up at home.
 > [It starts here](/kids).
 
-Everyone. That is not a dodge, it is the answer: a board is a room, and all you
-need to run one is to want a room.
+Everyone. That is not a dodge, it is the answer: a [[board]] is a room, and all
+you need to run one is to want a room.
 
 What follows is who is already well served by that, and why. If you are not on
 the list, the list is not the point. The point is that a chip the size of a
@@ -21,8 +22,8 @@ school computer or from a phone, and what they are using is not an app with a
 company behind it. It is a machine somebody in the room owns, running software
 they can read.
 
-- **It is the internet with the lid off.** A caller opens a socket to an
-  address and a port, types, and the characters come back. That is the whole
+- **It is the internet with the lid off.** A student connects to an address
+  and a port, types, and the words come back. That is the whole
   of it, and it is the same thing underneath every website they have ever
   used. One lesson on a board explains more about how the internet works than
   a term of using it.
@@ -36,13 +37,14 @@ they can read.
   are a text file. A class can read the source, change a screen, add a
   command, and put the changed board back on the air inside one lesson.
   Nothing is hidden behind an account or an API key.
-- **It costs less than a set of textbooks.** One board takes ten callers at
+- **It costs less than a set of textbooks.** Ten people can be on one board at
   once, so a class works in pairs or threes, or runs a second board. Old
-  machines out of the back of a supply closet can call it, which is often the
+  machines out of the back of a supply closet can join it, which is often the
   best part of the lesson.
 
 > [!NOTE]
-> A board is a closed room unless somebody opens a port on purpose. Run it on
+> A board is a closed room unless somebody sets up [[port forwarding]] on
+> purpose, which lets people outside the building in. Run it on
 > the school network and it is reachable from the school and nowhere else,
 > which for a classroom is usually the right answer. [What opening it up
 > means](/forward).
@@ -74,7 +76,7 @@ hardware.
 The same shape fits any group that meets sometimes and wants somewhere to be in
 between:
 
-- Retro computing and vintage machine groups, who can call it with the
+- Retro computing and vintage machine groups, who can join it from the
   hardware the board was built to answer.
 - Makerspaces and hackerspaces, for the door code, the tool list, and the
   argument about who broke the laser cutter.
@@ -97,16 +99,17 @@ no seats to buy and nobody's terms of service to agree to.
 It works on anything with a terminal, which in an office means every machine
 there is: a laptop, a workstation, a server you already ssh into,
 the ancient thing in the corner that runs the one piece of software nobody will
-replace. There is no rollout. A telnet client is a small free program, often
-already on the machine, and anybody who can open one can join. They are
-listed on [the terminals page](/terminals).
+replace. There is no rollout. A [[telnet client]], the free app for joining,
+is small, often already on the machine, and anybody who can open one can join.
+They are listed on [the apps for joining page](/terminals).
 
 - **Group discussion that stays in the building.** Put it on the local network
   and it never touches the internet at all.
 - **It does not go down when a service does.** There is no service.
 - **Nothing is being retained for anybody's purposes but yours.** No analytics,
   no third party, no export to a company you have never dealt with. The
-  sysop's caller log is the whole record and it is yours.
+  host's log of who connected, the [[sysop]]'s caller log, is the whole record
+  and it is yours.
 - Labs, workshops and machine rooms that already have serial consoles
   everywhere are the easiest sell of all: the board speaks the same language
   as the switch in the rack.
@@ -117,8 +120,9 @@ Plenty of boards are one person and eleven friends. That was true in 1985 and
 it is true now.
 
 Run a file area for the things you collect: a micro SD card of up to 32 GB
-holds a lifetime of disk images, text files and utilities for the machines that
-call in, every one a download by XMODEM or YMODEM. Run a chat room for the
+holds a shared library of disk images, text files and utilities, every one a
+download even to a computer from the 1980s (by XMODEM or YMODEM, the way those
+machines always did it). Run a chat room for the
 people you actually want to talk to. Leave mail for each other. Keep a board of your own
 notes that you can reach from anything, anywhere, without a browser and without
 a third party in the middle. The only record of who called and for how long is
@@ -133,23 +137,23 @@ you and the machine. A socket and some characters.
 ::: until 1.1.0
 Coming soon, [two boards with a camera on
 them](/hardware#freenove-esp32-camera-board) let a board look out of the
-window. A caller types `SNAPSHOT`, from a laptop or from an 8-bit machine, and
-the board takes a photo of whatever it is pointed at, ready to download. (An
-8-bit machine can take the picture. Looking at it is a job for a PC.)
+window. A visitor types `SNAPSHOT`, from a laptop or from an 8-bit machine,
+and the board takes a photo of whatever it is pointed at, ready to download.
+(An 8-bit machine can take the picture. Looking at it is a job for a PC.)
 :::
 
 ::: from 1.1.0
 [The Freenove camera board](/hardware#freenove-esp32-camera-board) lets a
 board look out of the window, and an ESP32-S3 camera board follows once it
-has been tested. A caller types `SNAPSHOT`, from a laptop or from an 8-bit
+has been tested. A visitor types `SNAPSHOT`, from a laptop or from an 8-bit
 machine, and the board takes a photo of whatever it is pointed at, ready to
 download. (An 8-bit machine can take the picture. Looking at it is a job for
 a PC.)
 :::
 
 - **Outdoors.** On a porch, in a shed window, beside a weather station:
-  callers dial in to see whether it is raining where the board is.
-- **Wildlife.** Point it at a feeder, a trail or a nest box and let callers
+  visitors connect to see whether it is raining where the board is.
+- **Wildlife.** Point it at a feeder, a trail or a nest box and let visitors
   catch the visitors. Set it to take a picture every few minutes, and a
   spring on a nest box becomes a timelapse.
 - **Motion.** A PIR motion sensor on a spare pin sees something move, and the
@@ -191,10 +195,12 @@ list. There
 is no hosting bill, no domain required, no provider to ask, and no account with
 anybody.
 
-You flash it, you give it your Wi-Fi, and it answers. Forward one port and
-strangers can call it from anywhere in the world. Leave that port closed and it
-serves your house, your club room or your classroom and nothing else. Both are
-a real board and you can change your mind either way in a minute.
+You install the software by [[flashing]] it from your browser, give it your
+Wi-Fi, and it is ready. Change one setting on your router, forwarding one port,
+and people outside your home can join it from anywhere in the world. Leave that
+port closed and it serves your house, your club room or your classroom and
+nothing else. Both are a real board and you can change your mind either way in
+a minute.
 
 The whole thing takes an afternoon, most of which is deciding what to call it.
 If you know the BBS software that runs on a PC, [what is different about this
@@ -204,5 +210,5 @@ one](/different) fits on a page.
 [Build one](/build)
 :::
 
-Call it with [any terminal program](/terminals), and see [who is up right
-now](/). Yours could be on that list by the weekend.
+Join one with [a free app](/terminals), and [find a community](/directory)
+that is up right now. Yours could be on that list by the weekend.

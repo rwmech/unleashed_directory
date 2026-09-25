@@ -54,6 +54,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import html
 import ipaddress
+import itertools
 import json
 import os
 import pathlib
@@ -78,8 +79,8 @@ SITE_URL      = os.environ.get("DIRECTORY_URL", "https://unleashedbbs.com")
 # What a paste of the link says about itself, in a forum, a chat or a search
 # result. A directory spreads by somebody pasting it somewhere, and until
 # now that paste produced a bare link with no title card at all.
-SITE_DESC     = ("Bulletin board systems that are up right now. Dial one with "
-                 "any telnet client. No account, no tracking, no web.")
+SITE_DESC     = ("Community bulletin boards (BBSes) you can run on a $5 device "
+                 "and join with a free app. No ads, no tracking, no platform.")
 
 # One server, three faces, chosen by the Host header. A deployment with a
 # single domain serves the other two under /about and /data, so none of this
@@ -430,7 +431,11 @@ def site_url(target, role, path="/"):
     if target == role:
         return path
     if not host:
-        return {"list": "/", "about": "/about", "data": "/data"}.get(target, path)
+        # The list face's pages keep their paths (/directory, site 1.3.0);
+        # the other two faces live under /about and /data.
+        if target == "list":
+            return path
+        return {"about": "/about", "data": "/data"}.get(target, path)
     return f"https://{host}{path}"
 
 
@@ -451,13 +456,22 @@ def site_url(target, role, path="/"):
 # more, which was measured when it was written and is not true of this one:
 # at 390px "Donate" lands on the row "Get listed" and "Data" already share,
 # and at 1366 and 1920 the menu is still one row.
-NAV = (("list",  "/",          "Boards"),
+#
+# Site 1.3.0 (Rob, marketing round 3): the front page is the pitch and the
+# wordmark takes you there, so the menu has no entry for it. The list moved
+# to /directory, "Find a community" in the menu and "Find a community BBS"
+# as its heading, which is where the word BBS is bridged in. The rest say
+# what a newcomer will do there: "Apps for joining" is /terminals (whose
+# heading still says telnet clients, with the plain words beside it), "Let
+# others in" is /forward. "First call" stays: it is the hobby's own word,
+# and the page explains it in its first line.
+NAV = (("list",  "/directory", "Find a community"),
        ("about", "/",          "What this is"),
-       ("list",  "/whofor",    "Who it's for"),
-       ("list",  "/terminals", "Terminals"),
+       ("list",  "/whofor",    "Who builds one"),
+       ("list",  "/terminals", "Apps for joining"),
        ("list",  "/firstcall", "First call"),
        ("list",  "/build",     "Build one"),
-       ("list",  "/forward",   "Go public"),
+       ("list",  "/forward",   "Let others in"),
        ("list",  "/how",       "Get listed"),
        ("data",  "/",          "Data"),
        ("list",  "/donate",    "Donate"))
@@ -509,13 +523,10 @@ NAV_SECTION = {
     "/forward-asus":    "/forward",
     "/forward-xfinity": "/forward",
     "/forward-mesh":    "/forward",
-    # The key to the board list belongs to the board list. Written with its
-    # face because "/" alone is every face's own home, and on the about
-    # face that would light "What this is" for a page about badges.
-    "/badges":          "list:/",
-    # Every board, with the search and the filter (site 1.2.8): the board
-    # list itself, only whole, so it lights Boards.
-    "/directory":       "list:/",
+    # The key to the board list belongs to the board list, which is
+    # /directory since site 1.3.0. Written with its face, so it lights the
+    # same entry on every face.
+    "/badges":          "list:/directory",
 }
 
 
@@ -589,11 +600,12 @@ def foot_html(role, extra=""):
     # every wrapped row used to end in a dangling " ·".
     start = "".join(
         f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
+            ("/directory", "Find a community"),
             ("/build", "Build one"), ("/hardware", "Hardware"),
             ("/install", "Install"), ("/upgrade", "Upgrade"),
             ("/setup", "Set up"),
-            ("/terminals", "Terminals"), ("/dialing", "Dial links"),
-            ("/forward", "Go public"), ("/how", "Get listed")))
+            ("/terminals", "Apps for joining"), ("/dialing", "Dial links"),
+            ("/forward", "Let others in"), ("/how", "Get listed")))
     # "Donate", first in its row and in the warm colour, as well as last in
     # the menu, because Rob looked for it and could not find it. It was
     # "Support", in the middle of the row, the same colour as everything
@@ -1099,12 +1111,106 @@ _MD_STEP   = re.compile(r"^\d{1,2}\. ")
 _MD_GATE   = re.compile(r"^::: (from|until) (\d+)\.(\d+)\.(\d+)\s*$")
 
 
+# --------------------------------------------------------------------------
+# The glossary (site 1.3.0, Rob: "we need to bridge them into the lingo for
+# BBSes ... even have those pop-ups with dotted underline for terms").
+#
+# A BBS word keeps its place on the page and is explained where a newcomer
+# first meets it: a dotted underline, and a one-line definition that shows
+# on hover, on keyboard focus and on a tap (a tap focuses it). One table,
+# so a term is always explained in the same words, and each page marks the
+# first use it wants explained, in Markdown as [[sysop]] and in this file
+# with gl("sysop"). The words inside the brackets are what shows, so a
+# plural or another form is written as it reads ([[callers]], [[flashing]])
+# and GLOSSARY_FORMS finds its entry. No "|" form, so a term can sit in a
+# table cell.
+#
+# No script and no title attribute, for the badges' reason: title draws
+# the browser's own tooltip over ours on a desktop and nothing on a phone.
+# The definition is a span inside the term, display:none until wanted, and
+# the term points at it with aria-describedby, which a screen reader reads
+# even while it is hidden. A term that is not in the table renders as its
+# words alone, and the suite fails on one in any page.
+# --------------------------------------------------------------------------
+GLOSSARY = {
+    "BBS": "A bulletin board system: a small online community on one "
+           "computer, which people connect to from theirs to chat, leave "
+           "messages and share files.",
+    "board": "Short for bulletin board, a BBS. On this site, one µnleashed "
+             "device and the community that meets on it.",
+    "sysop": "The system operator: the host who runs a board, sets its "
+             "rules and looks after it.",
+    "caller": "Someone connected to a board: a visitor or a member. The word "
+              "is from the days when you phoned a board to reach it.",
+    "telnet": "The plain way of connecting to a board over a network. It is "
+              "not encrypted, so what you type could be read on the way.",
+    "telnet client": "A free app for joining a board: it connects to the "
+                     "board's address and shows its screens.",
+    "terminal": "What you type into a board from: a telnet client on a "
+                "phone or PC, an old computer, or a real terminal.",
+    "door": "A game or program that a board hands you over to, and brings "
+            "you back from when you finish.",
+    "ANSI": "The colour and line-drawing codes that PC boards use to draw "
+            "their screens.",
+    "PETSCII": "The Commodore computers' own character set, with its block "
+               "graphics. The board speaks it natively.",
+    "flashing": "Writing the software onto the board's chip over a USB "
+                "cable. Here your browser does it for you.",
+    "firmware": "The software that lives on the board's chip. µnleashed is "
+                "firmware: the board runs nothing else.",
+    "port forwarding": "A router setting that lets people outside your home "
+                       "reach one device inside it, on one numbered port.",
+    "handle": "The nickname you use on a board.",
+}
+# Other ways a term is written on a page, lower case, to its entry.
+GLOSSARY_FORMS = {
+    "bbses": "BBS", "bulletin board": "BBS", "bulletin boards": "BBS",
+    "bulletin board system": "BBS", "boards": "board",
+    "sysops": "sysop", "callers": "caller",
+    "telnet clients": "telnet client", "terminals": "terminal",
+    "terminal software": "terminal",
+    "doors": "door", "door games": "door",
+    "flash": "flashing", "flashed": "flashing", "flash it": "flashing",
+    "forward a port": "port forwarding", "forwarding a port": "port forwarding",
+    "forward one port": "port forwarding",
+    "handles": "handle",
+}
+_GL_SEQ = itertools.count(1)
+_MD_GLOSS = re.compile(r"\[\[([^\[\]|]{1,40})\]\]")
+
+
+def gloss_key(words):
+    """The GLOSSARY entry a written form belongs to, or None."""
+    w = " ".join(words.split())
+    for key in GLOSSARY:
+        if key.lower() == w.lower():
+            return key
+    return GLOSSARY_FORMS.get(w.lower())
+
+
+def gl(words):
+    """A term as it reads on the page, with its definition to hand. The
+    words are escaped here; a term not in GLOSSARY is the words alone."""
+    key = gloss_key(words)
+    shown = html.escape(words)
+    if key is None:
+        return shown
+    tid = f"gl{next(_GL_SEQ)}"
+    return (f'<span class="gl" tabindex="0" aria-describedby="{tid}">{shown}'
+            f'<span class="gt" role="tooltip" id="{tid}">'
+            f"{html.escape(GLOSSARY[key])}</span></span>")
+
+
 def md_inline(s):
     """Escape first, then the handful of inline forms we allow."""
     s = html.escape(s)
     s = _MD_CODE.sub(lambda m: f"<code>{m.group(1)}</code>", s)
     s = _MD_BOLD.sub(lambda m: f"<b>{m.group(1)}</b>", s)
     s = _MD_ITAL.sub(lambda m: f"<i>{m.group(1)}</i>", s)
+    # The glossary, before links, so a term never ends up inside one. The
+    # words are already escaped, so they are unescaped once before gl()
+    # escapes them again.
+    s = _MD_GLOSS.sub(lambda m: gl(html.unescape(m.group(1))), s)
 
     def link(m):
         text, href = m.group(1), m.group(2)
@@ -1178,7 +1284,7 @@ CARD_BLOCKS = ("cards", "hero")
 # "compare" is /different's table (site 1.2.9, COMPARE_ROWS).
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
                              "installer-terms", "badges", "badgefind", "board",
-                             "next", "early", "compare")
+                             "next", "early", "compare", "compare-today")
 
 
 # --------------------------------------------------------------------------
@@ -1229,8 +1335,8 @@ def md_block(kind, lines):
         return badge_find_html()
     if kind == "board":
         return board_html(lines)
-    if kind == "compare":
-        return compare_html()
+    if kind in ("compare", "compare-today"):
+        return compare_html(kind)
     if kind == "early":
         note = early_note()
         return '<p class="early">' + html.escape(note) + "</p>" if note else ""
@@ -1846,7 +1952,7 @@ def md_meta(text):
             if line.startswith("<!--"):
                 continue
             if line and not line.startswith(("#", ">", "-", "|", "`", "*")):
-                desc = re.sub(r"[*`]|\[|\]\([^)]*\)", "", line)[:180]
+                desc = re.sub(r"[*`]|\[|\]\]|\]\([^)]*\)", "", line)[:180]
                 break
     return title, desc
 
@@ -2946,77 +3052,209 @@ COMPARE_COLS = (
     ("WWIV", "https://docs.wwivbbs.org/"),
     ("espbbs", "https://github.com/snazzware/espbbs"),
 )
-_PC = "software for a computer you supply"
+# Site 1.3.0 (Rob: "WTF does that mean? If I don't get it, they won't"):
+# every cell in plain words a newcomer gets at a glance. The facts and the
+# sources are the ones above, unchanged; only the wording moved.
+_BUILTIN = "none built in: it runs on a PC you already have"
 COMPARE_ROWS = (
     ("Runs on", (
-        ("y", "a $5 ESP32 board, as its firmware"),
-        (None, "Windows, Linux, macOS or a Raspberry Pi"),
-        (None, "Windows, Linux, macOS or a Raspberry Pi"),
-        (None, "Node.js on Linux, the BSDs, macOS or Windows"),
-        (None, "Windows or Linux"),
+        ("y", "a $5 ESP32 board, on its own"),
+        (None, "a PC or a Raspberry Pi, with Windows, Linux or macOS"),
+        (None, "a PC or a Raspberry Pi, with Windows, Linux or macOS"),
+        (None, "a PC with Linux, BSD, macOS or Windows, and Node.js"),
+        (None, "a PC with Windows or Linux"),
         (None, "an ESP8266 board, the Wemos D1 mini"))),
-    ("No operating system to keep patched", (
-        ("y", "none under it"),
-        ("n", "the one it runs on"),
-        ("n", "the one it runs on"),
-        ("n", "the one it runs on"),
-        ("n", "the one it runs on"),
-        ("y", "none under it"))),
-    ("What it costs to run", (
-        ("y", "about $5 for the board"),
+    ("Nothing else to keep updated", (
+        ("y", "nothing: the board is the whole computer"),
+        ("n", "the PC's own operating system"),
+        ("n", "the PC's own operating system"),
+        ("n", "the PC's own operating system"),
+        ("n", "the PC's own operating system"),
+        ("y", "nothing: the board is the whole computer"))),
+    ("What you need to buy", (
+        ("y", "a board, about $5"),
         (None, "a PC, or a Raspberry Pi"),
         (None, "a PC, or a Raspberry Pi"),
-        (None, "a computer that runs Node.js"),
+        (None, "a PC"),
         (None, "a Windows or Linux PC"),
         (None, "an ESP8266 board"))),
     ("Power while it waits", (
         ("y", "about half a watt"),
-        (None, "what the computer draws"),
-        (None, "what the computer draws"),
-        (None, "what the computer draws"),
-        (None, "what the computer draws"),
+        (None, "whatever the PC uses"),
+        (None, "whatever the PC uses"),
+        (None, "whatever the PC uses"),
+        (None, "whatever the PC uses"),
         ("?", "not stated"))),
-    ("Installed", (
+    ("How you install it", (
         ("y", "from a web browser, in about five minutes"),
-        (None, "an installer on Windows, a Unix install, or Docker"),
-        (None, "a download for each system"),
-        (None, "an install script, or Docker"),
-        (None, "install guides for Windows and Linux"),
-        (None, "an Arduino sketch to build and flash"))),
-    ("One port for every terminal, PETSCII detected as you connect", (
-        ("y", "ANSI, UTF-8, PETSCII at 40 or 80 columns, and ASCII"),
-        ("n", "PETSCII \u201ccannot be automatically detected\u201d: it has ports of its own"),
+        (None, "an installer on Windows, an install on Linux, or Docker"),
+        (None, "a download for your system"),
+        (None, "a setup script, or Docker"),
+        (None, "setup guides for Windows and Linux"),
+        (None, "you build it yourself with Arduino tools"))),
+    ("Works out which computer you joined from", (
+        ("y", "yes, old or new: ANSI, UTF-8, PETSCII at 40 or 80 columns, ASCII"),
+        ("n", "PETSCII \u201ccannot be automatically detected\u201d: it needs a port of its own"),
         ("?", "not listed"),
-        (None, "ANSI, CP437 and UTF-8"),
+        (None, "PCs and modern terminals: ANSI, CP437 and UTF-8"),
         ("?", "not listed"),
         ("?", "not stated"))),
-    ("Hardware of its own to watch", (
-        ("y", "an optional drive light and pixel strip, and a status screen on the S3"),
-        (None, _PC), (None, _PC), (None, _PC), (None, _PC),
+    ("Lights or a screen of its own", (
+        ("y", "an optional drive light and light strip, and a status screen on the S3"),
+        (None, _BUILTIN), (None, _BUILTIN), (None, _BUILTIN), (None, _BUILTIN),
         ("?", "not stated"))),
     ("A camera callers can use", (
         None,                                   # compare_html fills this in
-        (None, _PC), (None, _PC), (None, _PC), (None, _PC),
+        (None, "not built in"), (None, "not built in"), (None, "not built in"),
+        (None, "not built in"),
         ("?", "not stated"))),
-    ("Storage", (
+    ("Where the files live", (
         ("y", "a micro SD card of up to 32 GB, on the board"),
-        (None, "the computer's own disk"),
-        (None, "the computer's own disk"),
-        (None, "the computer's own disk"),
-        (None, "the computer's own disk"),
-        (None, "SD card support planned"))),
+        (None, "the PC's own disk"),
+        (None, "the PC's own disk"),
+        (None, "the PC's own disk"),
+        (None, "the PC's own disk"),
+        (None, "an SD card is planned"))),
     ("Licence", (
-        ("y", "GPL v3 or later"),
-        ("y", "GPL, with LGPL libraries"),
-        ("n", "freeware, closed source"),
-        ("y", "BSD 2-clause"),
-        ("y", "Apache 2.0"),
-        ("y", "MIT"))),
+        ("y", "free software: GPL v3 or later"),
+        ("y", "free software: GPL, with LGPL libraries"),
+        ("n", "free to use, but closed source"),
+        ("y", "free software: BSD 2-clause"),
+        ("y", "free software: Apache 2.0"),
+        ("y", "free software: MIT"))),
 )
 COMPARE_NOTE = ("The big packages still do plenty this board does not yet: "
                 "FidoNet-style message networks, door games, ZMODEM, and many "
                 "more callers at once. [The roadmap](/roadmap) says what is "
                 "coming.")
+
+# --------------------------------------------------------------------------
+# The second comparison on /different (site 1.3.0, Rob): against the places
+# people build a community today, which is what the new front page is really
+# up against. Categories, each with one example named as "e.g.", no logos.
+# Fair on purpose: they win on reach, and on needing no hardware, and the
+# table says so, as the first one says what the big BBS packages still do
+# better. Every cell was checked on 2026-09-25 against the company's own
+# page, which its column heading links:
+#   Discord    discord.com/terms: "at least 13 years old"; "suspend or
+#              terminate your account ... with or without notice"; "add or
+#              remove features ... or stop offering some services
+#              entirely"; "Your content is yours, but you give us a
+#              license". discord.com/privacy (updated 2025-08-29): "We use
+#              your information to help us surface sponsored content (like
+#              Quests ...)". Age checks for every account from Wednesday
+#              23 September 2026: TechCrunch, 2026-09-22, "Discord's
+#              age-verification era is upon us", most accounts classed from
+#              account activity rather than an ID.
+#   Facebook   facebook.com/terms.php: businesses "pay us to show you
+#              ads"; "You are under 13 years old" bars an account; "We can
+#              remove or restrict access to content ... suspend or disable
+#              your account"; a "worldwide license to host, use,
+#              distribute" what is posted. Public posts by adults train
+#              Meta's AI: about.fb.com, 2025-04-14, "Making AI Work Harder
+#              for Europeans".
+#   Discourse  discourse.org/pricing: a free plan (two staff, 500k page
+#              views a month), Pro $100 a month; "Your data always belongs
+#              to you. Back up all your Discourse data".
+#   Mastodon   joinmastodon.org: "We will never serve ads"; servers/:
+#              "Every server is operated by an independent organization or
+#              individual"; "you can easily move your profile to a different
+#              server"; "you can create your own server".
+# --------------------------------------------------------------------------
+COMPARE_TODAY_COLS = (
+    ("\u00b5nleashed", "/hardware"),
+    ("A chat app server, e.g. Discord", "https://discord.com/terms"),
+    ("A social media group, e.g. Facebook Groups", "https://www.facebook.com/terms.php"),
+    ("A hosted forum, e.g. Discourse", "https://www.discourse.org/pricing"),
+    ("A fediverse server, e.g. Mastodon", "https://joinmastodon.org/servers"),
+)
+COMPARE_TODAY_ROWS = (
+    ("Who owns it", (
+        ("y", "you do"),
+        (None, "Discord: you run a server on it"),
+        (None, "Meta: you run a group on it"),
+        (None, "the host runs it, and you rent a place on it"),
+        (None, "whoever runs the server, which can be you"))),
+    ("Ads", (
+        ("y", "none"),
+        ("n", "yes: sponsored Quests, chosen using your information"),
+        ("n", "yes: ads are how it is paid for"),
+        (None, "depends on the host and the plan"),
+        ("y", "none: Mastodon says it will never serve them"))),
+    ("What you post, used for ads or AI", (
+        ("y", "no"),
+        ("n", "your information helps choose what is promoted to you"),
+        ("n", "for personalised ads, and public posts by adults to train Meta's AI"),
+        (None, "depends on the host"),
+        (None, "no ads; each server has its own policy"))),
+    ("Monthly cost", (
+        ("y", "none: about $5 once, and a little power"),
+        ("y", "free, with paid extras"),
+        ("y", "free"),
+        (None, "Discourse: a free plan, then $100 a month"),
+        (None, "free to join; your own server needs a computer on the internet"))),
+    ("Members need an account with a big company", (
+        ("y", "no: they sign up on your board"),
+        ("n", "yes, a Discord account"),
+        ("n", "yes, a Facebook account"),
+        ("y", "no: an account on that forum"),
+        ("y", "no: an account on that server"))),
+    ("Where it runs", (
+        ("y", "on your shelf, at home or at work"),
+        (None, "Discord's servers"),
+        (None, "Meta's servers"),
+        (None, "the host's servers"),
+        (None, "the server owner's computer"))),
+    ("What is said stays with you", (
+        ("y", "yes, on the board"),
+        ("n", "no: Discord keeps it, under a licence members give it"),
+        ("n", "no: Meta keeps it, under a licence members give it"),
+        ("y", "with the host, and Discourse lets you download a backup"),
+        (None, "with whoever runs the server; accounts can move"))),
+    ("Join from old computers and terminals too", (
+        ("y", "yes, as well as PCs and phones"),
+        ("n", "no: the app or a modern browser"),
+        ("n", "no: the app or a modern browser"),
+        ("n", "no: a modern browser"),
+        ("n", "no: an app or a modern browser"))),
+    ("Age or ID checks set by someone else", (
+        ("y", "none: your house rules, and the law where you are"),
+        ("n", "age checks on every account from September 2026"),
+        (None, "13 or over, by Meta's terms"),
+        (None, "the host's terms"),
+        (None, "each server's own rules"))),
+    ("Can be shut or changed by someone else", (
+        ("y", "no: only by you"),
+        ("n", "yes: Discord can remove content or accounts, or change the service"),
+        ("n", "yes: Meta can remove content or disable accounts"),
+        ("n", "yes: the host, under its terms"),
+        (None, "yes, by its owner, unless that is you"))),
+    ("Easy for new people to find", (
+        ("n", "no: they need your address, or this directory"),
+        ("y", "yes: millions already use it"),
+        ("y", "yes: millions already use it"),
+        ("y", "yes: search engines find it"),
+        (None, "through the fediverse and its search"))),
+    ("Hardware to look after", (
+        ("n", "a $5 board, on your Wi-Fi"),
+        ("y", "none"),
+        ("y", "none"),
+        ("y", "none"),
+        (None, "none to join; a computer to run your own"))),
+    ("Encrypted on the way", (
+        ("n", "no: plain text, so say only what you would say in public"),
+        ("y", "yes"),
+        ("y", "yes"),
+        ("y", "yes"),
+        ("y", "yes"))),
+)
+COMPARE_TODAY_NOTE = ("They win on reach and ease: millions of people already "
+                      "have the apps, strangers can find you, and nobody has to "
+                      "plug anything in. A board is for a community that would "
+                      "rather have a place of its own. Each column was checked "
+                      "against its company's own pages in September 2026, and "
+                      "its heading links to them. [What travelling in plain "
+                      "text means](/privacy).")
 
 _CMP_TICK = ('<svg class="cm y" viewBox="0 0 16 16" role="img" aria-label="Yes">'
              '<path d="M3 8.5 L6.5 12 L13 4.5"/></svg>')
@@ -3026,26 +3264,37 @@ _CMP_ASK = ('<span class="cm q" role="img" aria-label="Not in its own '
             'documentation">?</span>')
 
 
-def compare_html():
+def compare_html(kind="compare"):
     """The ::: compare block: COMPARE_ROWS as a table, the µnleashed column
     first and lit, then the one sentence that keeps it honest. In a wrapper
-    that scrolls sideways on a phone, the row names held still at the left."""
-    rels = firmware_releases()
-    camera = (("y", "on the Freenove camera board") if rels and rels[0]["sort"] >= (1, 1, 0)
-              else ("y", "coming, on the camera boards"))
+    that scrolls sideways on a phone, the row names held still at the left.
+    ::: compare-today is the same shape for COMPARE_TODAY_ROWS (site 1.3.0)."""
+    if kind == "compare-today":
+        cols, rows, note, label = (COMPARE_TODAY_COLS, COMPARE_TODAY_ROWS,
+                                   COMPARE_TODAY_NOTE, "How it compares with the apps")
+        camera = None
+    else:
+        cols, rows, note, label = (COMPARE_COLS, COMPARE_ROWS, COMPARE_NOTE,
+                                   "How it compares")
+        rels = firmware_releases()
+        camera = (("y", "on the Freenove camera board") if rels and rels[0]["sort"] >= (1, 1, 0)
+                  else ("y", "coming, on the camera boards"))
+    others = {4: "four", 5: "five"}.get(len(cols) - 1, str(len(cols) - 1))
     marks = {"y": _CMP_TICK, "n": _CMP_CROSS, "?": _CMP_ASK}
     out = ['<p class="cmphint" aria-hidden="true">The table scrolls sideways: '
-           'swipe for the other five.</p>'
-           '<div class="cmpwrap" role="region" aria-label="How it compares" '
-           'tabindex="0"><table class="cmp"><thead><tr><th scope="col">'
+           f'swipe for the other {others}.</p>'
+           f'<div class="cmpwrap" role="region" aria-label="{label}" '
+           'tabindex="0"><table class="cmp'
+           + (' today' if kind == "compare-today" else "")
+           + '"><thead><tr><th scope="col">'
            '<span class="vh">What</span></th>']
     us = ' class="us"'
-    for j, (name, href) in enumerate(COMPARE_COLS):
+    for j, (name, href) in enumerate(cols):
         out.append('<th scope="col"' + (us if j == 0 else "") + ">"
                    f'<a href="{html.escape(href, quote=True)}">{html.escape(name)}</a></th>')
     out.append("</tr></thead><tbody>")
-    for label, cells in COMPARE_ROWS:
-        out.append(f'<tr><th scope="row">{html.escape(label)}</th>')
+    for label_, cells in rows:
+        out.append(f'<tr><th scope="row">{html.escape(label_)}</th>')
         for j, cell in enumerate(cells):
             mark, words = cell if cell is not None else camera
             out.append("<td" + (us if j == 0 else "") + ">"
@@ -3053,7 +3302,7 @@ def compare_html():
                        + f'<span class="cw">{html.escape(words)}</span></td>')
         out.append("</tr>")
     out.append("</tbody></table></div>")
-    out.append('<p class="cmpnote">' + md_inline(COMPARE_NOTE) + "</p>")
+    out.append('<p class="cmpnote">' + md_inline(note) + "</p>")
     return "".join(out)
 
 
@@ -3422,12 +3671,14 @@ PAGE = """<!doctype html>
 <meta property="og:type" content="website">
 <meta property="og:url" content="@CANONICAL@">
 <link rel="canonical" href="@CANONICAL@">
-<meta property="og:image" content="@AVATAR_URL@">
-<meta property="og:image:width" content="1024">
-<meta property="og:image:height" content="1024">
-<meta property="og:image:alt" content="The µnleashed wordmark inside a circle, over the words Electronic freedom.">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="@AVATAR_URL@">
+<meta property="og:image" content="@OG_CARD_URL@">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="@OG_CARD_ALT@">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="@OG_CARD_URL@">
+<meta name="twitter:image:alt" content="@OG_CARD_ALT@">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 {refresh}<link rel="alternate" type="application/rss+xml" title="New boards" href="/feed.xml">
@@ -3565,8 +3816,9 @@ svg.logo {{ display:block; width:min(35rem, calc(100vw - 2.5rem)); height:auto;
 .ticker svg.ti .d {{ opacity:0.6; }}
 .ticker svg.ti .xb {{ stroke:var(--bg); stroke-width:4.5; opacity:1; }}
 .ticker svg.ti .pn {{ fill:var(--bg); }}
-/* Eight freedoms, four seconds each. Every item runs the same 32 second
-   timeline and starts four seconds after the one before it. The change is
+/* Ten freedoms, four seconds each (eight until site 1.3.0). Every item
+   runs the same 40 second timeline and starts four seconds after the one
+   before it. The change is
    out and then in, 0.3 seconds each, rather than both at once: two lines
    of different words at half strength on top of each other read as a
    smudge, not as a change. The first starts 0.6 seconds in, so a page
@@ -3578,8 +3830,8 @@ svg.logo {{ display:block; width:min(35rem, calc(100vw - 2.5rem)); height:auto;
    markup's resting state: the first freedom, its segment lit, nothing
    moving. */
 @media (prefers-reduced-motion: no-preference) {{
-  .ticker li {{ opacity:0; animation:tkshow 32s linear infinite both; }}
-  .tf .sg {{ animation:tkseg 32s linear infinite both; }}
+  .ticker li {{ opacity:0; animation:tkshow 40s linear infinite both; }}
+  .tf .sg {{ animation:tkseg 40s linear infinite both; }}
   .ticker li:nth-child(1), .tf .sg1 {{ animation-delay:-0.6s; }}
   .ticker li:nth-child(2), .tf .sg2 {{ animation-delay:3.4s; }}
   .ticker li:nth-child(3), .tf .sg3 {{ animation-delay:7.4s; }}
@@ -3588,15 +3840,17 @@ svg.logo {{ display:block; width:min(35rem, calc(100vw - 2.5rem)); height:auto;
   .ticker li:nth-child(6), .tf .sg6 {{ animation-delay:19.4s; }}
   .ticker li:nth-child(7), .tf .sg7 {{ animation-delay:23.4s; }}
   .ticker li:nth-child(8), .tf .sg8 {{ animation-delay:27.4s; }}
+  .ticker li:nth-child(9), .tf .sg9 {{ animation-delay:31.4s; }}
+  .ticker li:nth-child(10), .tf .sg10 {{ animation-delay:35.4s; }}
   .tf .ct {{ animation:tkcaret 4s linear -0.6s infinite; }}
   .tf .sc {{ animation:tkscan 2.6s ease-in-out infinite; }}
   @keyframes tkshow {{
-    0%, 0.9375% {{ opacity:0; }}  1.875%, 12.5% {{ opacity:1; }}
-    13.4375%, 100% {{ opacity:0; }}
+    0%, 0.75% {{ opacity:0; }}  1.5%, 10% {{ opacity:1; }}
+    10.75%, 100% {{ opacity:0; }}
   }}
   @keyframes tkseg {{
-    0%, 0.9375% {{ opacity:0.2; }}  1.875%, 12.5% {{ opacity:1; }}
-    13.4375%, 100% {{ opacity:0.2; }}
+    0%, 0.75% {{ opacity:0.2; }}  1.5%, 10% {{ opacity:1; }}
+    10.75%, 100% {{ opacity:0.2; }}
   }}
   @keyframes tkcaret {{
     from {{ transform:translateX(0); }}
@@ -3622,8 +3876,14 @@ nav {{ margin:0.625rem 0 1.5rem; padding:0.625rem 0; display:flex; flex-wrap:wra
    gap. Nothing on this site used to be one: the menu was 26px and the dial
    link, which is the primary action of the whole directory, was 21px with
    no padding at all. */
+/* Site 1.3.0: the labels say what a newcomer will do ("Find a community",
+   "Apps for joining"), 21 characters longer in all, so the cell's sides
+   went from 0.75 to 0.5rem and the letter-spacing halved to keep the menu
+   one row at 1366 (measured in Consolas; Menlo, a little wider, wraps
+   there and fits at 1440). The height, and so the tap target, is as it
+   was. */
 nav a {{ color:var(--dim); text-decoration:none; font-size:0.75rem;
-        letter-spacing:0.0625rem; text-transform:uppercase; padding:0.6875rem 0.75rem;
+        letter-spacing:0.03125rem; text-transform:uppercase; padding:0.6875rem 0.5rem;
         white-space:nowrap; }}
 nav a:hover, nav a:focus {{ background:var(--ink); color:var(--bg); }}
 nav a.here {{ background:var(--name); color:var(--bg);
@@ -3645,6 +3905,32 @@ nav a.here {{ background:var(--name); color:var(--bg);
 h1 {{ color:var(--ink); font-size:1.25rem; font-weight:normal; letter-spacing:0.125rem;
      margin:0 0 0.375rem; text-transform:uppercase; }}
 p.lead {{ color:var(--dim); margin:0 0 1.25rem; }}
+/* The glossary (site 1.3.0): a BBS word with a dotted underline, and its
+   one-line definition under it on hover, on focus and on a tap. The
+   definition is in the markup and display:none until wanted, so it costs
+   no layout; aria-describedby reads it to a screen reader either way.
+   From the breakpoint down it is a bar fixed across the foot of the
+   screen, because a box hanging from a word near the right edge of a phone
+   would run off it. Hover lives inside the fine-pointer query, so a tap
+   cannot leave one showing; focus is what a tap gives, and it clears when
+   the reader taps anywhere else. */
+.gl {{ position:relative; border-bottom:1px dotted currentColor; cursor:help; }}
+.gl:focus {{ outline:none; }}
+.gl:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.gl .gt {{ display:none; position:absolute; left:0; top:100%; z-index:20;
+       margin-top:0.375rem; width:max-content; max-width:18rem; padding:0.5rem 0.75rem;
+       background:#15151d; border:1px solid #4a7a99; border-radius:0.375rem;
+       color:var(--ink); font-size:0.75rem; line-height:1.5; font-weight:normal;
+       font-style:normal; letter-spacing:0; text-transform:none; text-align:left;
+       white-space:normal; box-shadow:0 0.25rem 1rem rgba(0, 0, 0, 0.6); }}
+.gl:focus .gt {{ display:block; }}
+@media (hover: hover) and (pointer: fine) {{
+  .gl:hover .gt {{ display:block; }}
+}}
+@media (max-width: 900px) {{
+  .gl .gt {{ position:fixed; left:1rem; right:1rem; top:auto; bottom:1rem;
+         width:auto; max-width:none; margin:0; }}
+}}
 /* The board list's figures, as a sentence under its heading rather than a
    run of small faint numbers beside it: "Unleashed is hosting 3 boards
    with 5 callers on right now." The two figures are --live, the colour
@@ -3652,40 +3938,6 @@ p.lead {{ color:var(--dim); margin:0 0 1.25rem; }}
    the line. */
 p.stat {{ color:var(--ink); margin:0 0 0.5rem; }}
 p.stat .n {{ color:var(--live); }}
-/* The top of the board list (site 1.2.8, Rob): the pitch and the button to
-   /different on the left, the "Run your own board" card on the right, as
-   the page's opening row; then a line into the list, a rule, and the
-   directory itself, its heading, figures and lead unchanged. From the
-   site's one breakpoint up the row is a grid, the way /install's card is,
-   and not a float; the card is top aligned, level with the pitch. Below it
-   everything stacks in reading order: the pitch and its button, the card,
-   the line into the list, the rule, the directory.
-
-   19.5rem rather than 18: at 18 the two buttons stacked, which made the
-   card half as tall again as the text beside it and pushed the list down
-   by the difference. 19.5 holds both on one row, and the line of copy on
-   one line, in Menlo, the widest face the font stack reaches (0.602em a
-   character against Consolas's 0.55). */
-.listtop {{ margin:0 0 0.75rem; }}
-/* The pitch (site 1.2.9, Rob: "the text is lost there"): a size and a half
-   step up from the text round it, in the display face PITCH_FONT names,
-   served from /font/ (see FONT_DIR). The monospace stack stays as the
-   fallback, so a reader who blocks fonts gets the page's own face, not a
-   stranger's serif. */
-.listtop p.pitch {{ color:var(--ink); margin:0; font-family:"Pitch",ui-monospace,Menlo,Consolas,monospace;
-        font-size:1.375rem; line-height:1.35; letter-spacing:0.01em; }}
-.listtop p.tease {{ margin:1rem 0 0; }}
-/* The line into the list, and the rule under it in the footer's style: a
-   hairline in --rule, the page's own divider, nothing heavier. On a phone
-   it follows the card; from the breakpoint up it is the foot of the left
-   column, level with the card's foot, so it never floats in the gap the
-   taller card leaves under the button. */
-p.tryit {{ color:var(--dim); margin:1rem 0 0; }}
-hr.dirrule {{ border:0; border-top:1px solid var(--rule); margin:0 0 1.25rem; }}
-/* The front page's ten (site 1.2.8): a line saying so over the table, and
-   the way to all of them under it, a section's next step. */
-p.topn {{ color:var(--dim); font-size:0.8125rem; margin:0 0 0.375rem; }}
-p.allb {{ margin:1rem 0 0.5rem; }}
 /* /directory's search: the badge search's box and label, with a button in
    the Filter button's outline, and under it a line saying what it found. */
 .findbar.bsearch {{ max-width:36rem; margin:0 0 0.75rem; }}
@@ -3702,93 +3954,101 @@ p.qline {{ color:var(--dim); font-size:0.8125rem; margin:-0.25rem 0 0.75rem; }}
   .bsearch label {{ flex-basis:100%; }}
 }}
 p.qline a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
-/* The card stands out in --dial, the colour of things you can act on (Rob,
-   0.20.2): a wash of it over the page rather than a flat bright block, and
-   its border in the same blue. rgba() rather than the variable because a
-   custom property cannot take an alpha; 127, 212, 255 is --dial. */
-.runcard {{ position:relative; background:rgba(127, 212, 255, 0.12);
-        border:1px solid rgba(127, 212, 255, 0.6); border-radius:0.5rem;
-        padding:1.125rem 1.25rem; margin:1rem 0 0; }}
-/* Two lamps going slowly round the card's edge, half a lap apart, each
-   with a short tail of three beads (0.22.0, to the UX spec). Three lamps a
-   third of a lap apart looked scattered, because a rectangle has no
-   three-fold symmetry; two half a lap apart are always the reflection of
-   each other through the card's centre, so on any card shape they read as
-   a pair. The head is the row hover's lamp exactly: the same object at a
-   different tempo, 20s a lap and linear, because easing lurches at a
-   loop's seam.
-
-   Each follows the card's own rounded rectangle with offset-path, on the
-   border line. The tail is three beads on the same path rather than a
-   gradient bar, because a bar pokes out past every corner and beads bend
-   round it. All delays are negative, so nothing jumps at load, and the
-   beads are invisible outside the motion block: standing still, with
-   reduced motion or without offset-path, it is two lamps, just past the
-   top left and bottom right corners, like corner marks. */
-.runcard .dot {{ position:absolute; width:0.375rem; height:0.375rem; border-radius:50%;
-        background:var(--dial); box-shadow:0 0 0.375rem rgba(127, 212, 255, 0.8);
-        pointer-events:none; }}
-.runcard .dot.t1 {{ width:0.25rem; height:0.25rem; }}
-.runcard .dot.t2 {{ width:0.1875rem; height:0.1875rem; }}
-.runcard .dot.t3 {{ width:0.125rem; height:0.125rem; }}
-.runcard .t1, .runcard .t2, .runcard .t3 {{ opacity:0;
-        box-shadow:0 0 0.25rem rgba(127, 212, 255, 0.6); }}
-.runcard .la {{ top:-0.25rem; left:0.5rem; }}
-.runcard .lb {{ bottom:-0.25rem; right:0.5rem; }}
-@supports (offset-path: inset(0 round 0.5rem)) {{
-  .runcard .dot {{ top:0; left:0; right:auto; bottom:auto;
-        offset-path:inset(0 round 0.5rem); offset-anchor:center; offset-rotate:0deg; }}
-  .runcard .la {{ offset-distance:0%; }}
-  .runcard .lb {{ offset-distance:50%; }}
-}}
-@media (prefers-reduced-motion: no-preference) {{
-  @supports (offset-path: inset(0 round 0.5rem)) {{
-    .runcard .dot {{ animation:runlap 20s linear infinite; }}
-    .runcard .la {{ animation-delay:-0.36s; }}
-    .runcard .la.t1 {{ animation-delay:-0.24s; opacity:0.7; }}
-    .runcard .la.t2 {{ animation-delay:-0.12s; opacity:0.45; }}
-    .runcard .la.t3 {{ animation-delay:0s; opacity:0.2; }}
-    .runcard .lb {{ animation-delay:-10.36s; }}
-    .runcard .lb.t1 {{ animation-delay:-10.24s; opacity:0.7; }}
-    .runcard .lb.t2 {{ animation-delay:-10.12s; opacity:0.45; }}
-    .runcard .lb.t3 {{ animation-delay:-10s; opacity:0.2; }}
-  }}
-  @keyframes runlap {{ from {{ offset-distance:0%; }} to {{ offset-distance:100%; }} }}
-}}
-.runcard h2 {{ color:var(--struct); font-size:0.875rem; font-weight:normal;
-        margin:0 0 0.125rem; }}
-.runcard p {{ margin:0; }}
-.runcard .say {{ color:var(--dim); font-size:0.75rem; }}
-.runcard .acts {{ display:flex; flex-wrap:wrap; gap:0.5rem; margin:0.625rem 0 0; }}
-/* Compact, on purpose: the card is a way off the page for the few who
-   came to build one, and the board list is what the page is for. The
-   installer's full size button lives on /install, where it is the point. */
-.runcard a.fill, .runcard a.line {{ display:inline-block; font-size:0.75rem;
-        border-radius:0.375rem; padding:0.3125rem 0.5625rem; text-decoration:none;
-        text-align:center; white-space:nowrap; }}
-.runcard a.fill {{ color:#04212c; background:var(--dial); border:1px solid #9fdfff; }}
-.runcard a.fill:hover {{ background:#a7e2ff; }}
-.runcard a.line {{ color:var(--dial); background:transparent; border:1px solid #4a7a99; }}
-.runcard a.line:hover {{ border-color:var(--dial); }}
-.runcard a.fill:focus-visible, .runcard a.line:focus-visible {{
-        outline:3px solid #ffd35c; outline-offset:2px; }}
-@media (min-width: 901px) {{
-  .listtop {{ display:grid; grid-template-columns:minmax(0, 1fr) 19.5rem;
-        grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}
-  .listtop .intro {{ grid-column:1; grid-row:1; }}
-  .runcard {{ margin:0; grid-column:2; grid-row:1 / span 2; }}
-  .listtop p.tryit {{ grid-column:1; grid-row:2; align-self:end; margin:1rem 0 0; }}
-}}
+/* The front page (site 1.3.0, Rob's approved round 3 mockup): the pitch,
+   and nothing else. The board list moved to /directory. Six sections, each
+   under a hairline in --rule: the hero (a kicker, the headline in PITCH_FONT,
+   the sub-head, two buttons, a line of facts, and the drawing of the board
+   beside it), what it is, who builds one, three steps, the history, and a
+   closing band with the two buttons again. From the one breakpoint down
+   everything is one column in reading order: the drawing follows the
+   buttons, the timeline follows its paragraph. */
+.front {{ margin:0.5rem 0 0; }}
+.front section {{ padding:2.25rem 0; border-top:1px solid var(--rule); }}
+.front section.hero {{ border-top:0; padding-top:1rem; display:grid;
+        grid-template-columns:minmax(0, 1fr) 22rem; column-gap:2.5rem; align-items:center; }}
+.front h2.sec {{ font-family:"Pitch",ui-monospace,Menlo,Consolas,monospace; font-weight:500;
+        color:#eeeaf8; font-size:1.375rem; letter-spacing:0.005em; text-transform:none;
+        margin:0 0 0.375rem; }}
+.front p.seclead {{ color:var(--dim); font-size:0.8125rem; margin:0 0 1.125rem; max-width:44rem; }}
+.front p.kicker {{ color:var(--struct); text-transform:uppercase; letter-spacing:0.14em;
+        font-size:0.6875rem; margin:0 0 0.75rem; }}
+.front h1.hero {{ font-family:"Pitch",ui-monospace,Menlo,Consolas,monospace; font-weight:500;
+        color:#eeeaf8; font-size:2.375rem; line-height:1.15; letter-spacing:0.005em;
+        text-transform:none; margin:0 0 0.875rem; }}
+.front h1.hero em {{ font-style:normal; color:var(--dial); }}
+.front p.sub {{ color:var(--ink); font-size:0.9375rem; line-height:1.6; margin:0; max-width:44rem; }}
+.front p.btns {{ display:flex; flex-wrap:wrap; gap:0.75rem; margin:1.375rem 0 0; }}
+.front a.b1, .front a.b2 {{ font-size:0.875rem; border-radius:0.375rem;
+        padding:0.625rem 1.25rem; text-decoration:none; text-align:center; }}
+.front a.b1 {{ color:#04212c; background:var(--dial); border:1px solid #9fdfff; }}
+.front a.b1:hover {{ background:#a7e2ff; }}
+.front a.b2 {{ color:var(--dial); border:1px solid #4a7a99; background:rgba(127, 212, 255, 0.06); }}
+.front a.b2:hover {{ border-color:var(--dial); }}
+.front a.b1:focus-visible, .front a.b2:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+.front p.facts {{ color:var(--faint); font-size:0.6875rem; letter-spacing:0.06em; margin:0.875rem 0 0; }}
+.front p.facts b {{ color:var(--dim); font-weight:normal; }}
+.front figure.board {{ margin:0; text-align:center; }}
+.front figure.board svg {{ width:100%; height:auto; max-width:22rem; }}
+.front figure.board figcaption {{ color:var(--faint); font-size:0.625rem; margin:0.5rem 0 0; }}
+.front .fcards {{ display:grid; gap:0.875rem; grid-template-columns:repeat(3, minmax(0, 1fr)); }}
+.front .fcard {{ border:1px solid #23232e; border-top:2px solid var(--fc, var(--struct));
+        background:rgba(255, 255, 255, 0.02); border-radius:0.375rem; padding:0.875rem 1rem 1rem; }}
+.front .fcard h3 {{ color:#e6e6ee; font-size:0.875rem; font-weight:600; margin:0 0 0.375rem;
+        text-transform:none; letter-spacing:0; }}
+.front .fcard p {{ color:var(--dim); font-size:0.75rem; line-height:1.55; margin:0; }}
+.front .c1 {{ --fc:var(--struct); }} .front .c2 {{ --fc:var(--dial); }} .front .c3 {{ --fc:var(--name); }}
+.front .c4 {{ --fc:var(--warm); }} .front .c5 {{ --fc:var(--live); }} .front .c6 {{ --fc:var(--busy); }}
+.front .fcard p.eg {{ color:var(--fc); font-size:0.625rem; letter-spacing:0.12em;
+        text-transform:uppercase; margin:0 0 0.375rem; }}
+.front ol.fsteps {{ list-style:none; padding:0; margin:0; display:grid; gap:0.875rem;
+        grid-template-columns:repeat(3, minmax(0, 1fr)); }}
+.front ol.fsteps li {{ position:relative; padding:0.25rem 0 0 3.25rem; }}
+.front ol.fsteps .n {{ position:absolute; left:0; top:0; font-family:"Pitch",ui-monospace,Menlo,Consolas,monospace;
+        font-weight:500; font-size:2rem; line-height:1; color:var(--dial); }}
+.front ol.fsteps h3 {{ color:#e6e6ee; font-size:0.9375rem; font-weight:600; margin:0.25rem 0 0.375rem;
+        text-transform:none; letter-spacing:0; }}
+.front ol.fsteps p {{ color:var(--dim); font-size:0.75rem; line-height:1.55; margin:0; }}
+.front section.then {{ display:grid; grid-template-columns:minmax(0, 1fr) 20rem;
+        column-gap:2.5rem; align-items:center; }}
+.front section.then p {{ color:var(--ink); font-size:0.8125rem; line-height:1.65;
+        margin:0 0 0.75rem; max-width:44rem; }}
+.front section.then p.mut {{ color:var(--dim); }}
+.front .crt {{ border:1px solid #2c2c38; border-radius:0.75rem; padding:0.875rem 1rem;
+        background:#07070a; box-shadow:inset 0 0 1.5rem rgba(127, 212, 255, 0.06); }}
+.front .crt dl {{ margin:0; font-size:0.6875rem; line-height:1.5; color:var(--dim);
+        display:grid; grid-template-columns:auto minmax(0, 1fr); gap:0.625rem 0.75rem; }}
+.front .crt dt {{ color:var(--struct); }}
+.front .crt dd {{ margin:0; }}
+.front .crt i {{ color:var(--warm); font-style:normal; }}
+.front .crt p.cap {{ color:var(--faint); font-size:0.5625rem; letter-spacing:0.1em;
+        text-transform:uppercase; margin:0.625rem 0 0; }}
+.front section.end {{ text-align:center; }}
+.front section.end h2.sec {{ font-size:1.625rem; }}
+.front section.end p.seclead {{ margin-left:auto; margin-right:auto; }}
+.front section.end p.btns {{ justify-content:center; }}
+.front section.end p.dev {{ color:var(--faint); font-size:0.6875rem; margin:1rem 0 0; }}
+.front section.end p.dev a {{ color:var(--dim); }}
 @media (max-width: 900px) {{
-  .listtop p.pitch {{ font-size:1.1875rem; }}
+  .front section {{ padding:1.75rem 0; }}
+  .front section.hero, .front section.then {{ display:block; }}
+  .front h1.hero {{ font-size:1.75rem; }}
+  .front p.sub {{ font-size:0.875rem; }}
+  .front figure.board {{ margin:1.5rem 0 0; }}
+  .front figure.board svg {{ max-width:16rem; }}
+  .front .fcards, .front ol.fsteps {{ grid-template-columns:1fr; gap:0.625rem; }}
+  .front ol.fsteps li {{ padding-left:2.75rem; }}
+  .front .crt {{ margin:1rem 0 0; }}
+  .front p.btns a {{ flex:1 1 100%; }}
 }}
-/* On a phone the card is the title and the two buttons: the line of copy
-   is left out, so the list keeps its place on the first screen. */
-@media (max-width: 900px) {{
-  .runcard {{ padding:0.75rem 1rem; }}
-  .runcard .say {{ display:none; }}
-  .runcard .acts {{ margin:0.5rem 0 0; }}
-}}
+/* /directory's first step for somebody who has never joined a board: the
+   app to use, in one box, before the search and the list (site 1.3.0).
+   The quiet blue of the aside, not the amber of a warning. */
+.joinstep {{ border:1px solid #35566b; background:rgba(127, 212, 255, 0.06);
+        border-radius:0.5rem; padding:0.875rem 1.125rem; margin:0 0 1.25rem; max-width:48rem; }}
+.joinstep h2 {{ color:var(--struct); font-size:0.875rem; font-weight:normal; margin:0 0 0.25rem;
+        text-transform:none; letter-spacing:0; }}
+.joinstep p {{ margin:0.25rem 0 0; color:var(--ink); font-size:0.8125rem; }}
+.joinstep p.more {{ color:var(--dim); }}
 /* A link in the text is --dial on --ink, and the two are 1.02:1 apart in
    luminance: no blue that is also 4.5:1 on the page can be 3:1 from the
    text, so colour alone can never tell a reader which words are links. The
@@ -4257,6 +4517,12 @@ table.cmp .cm.q {{ color:var(--faint); text-align:center; font-weight:bold; line
   table.cmp tr:hover td, table.cmp tr:hover th {{ background:#111; }}
   table.cmp tr:hover td.us {{ background:rgba(127, 212, 255, 0.16); }}
 }}
+/* The second table (site 1.3.0): its column names are categories with an
+   example, too long to hold on one line, so they wrap, and every column
+   has a floor so the lit one is never squeezed to a word a line. */
+table.cmp.today thead th {{ white-space:normal; }}
+table.cmp.today td, table.cmp.today thead th[scope=col] {{ min-width:8.5rem; }}
+table.cmp.today td.us, table.cmp.today thead th.us {{ min-width:11rem; }}
 p.cmpnote {{ color:var(--dim); font-size:0.8125rem; margin:0.5rem 0 1.5rem; }}
 /* On a phone the row names narrow, so µnleashed's column and the next are
    both in view beside them, and a line over the table says it scrolls. */
@@ -4266,6 +4532,8 @@ p.cmphint {{ display:none; color:var(--faint); font-size:0.75rem; margin:0.75rem
   article table.cmp {{ min-width:44rem; font-size:0.75rem; }}
   table.cmp th[scope=row] {{ width:6.5rem; min-width:6.5rem; }}
   table.cmp th, table.cmp td {{ padding:0.4375rem 0.5rem; }}
+  table.cmp.today td, table.cmp.today thead th[scope=col] {{ min-width:8rem; }}
+  table.cmp.today td.us, table.cmp.today thead th.us {{ min-width:9rem; }}
 }}
 .vh {{ position:absolute; width:0.0625rem; height:0.0625rem; overflow:hidden; clip:rect(0 0 0 0);
         white-space:nowrap; }}
@@ -5118,15 +5386,26 @@ def logo_html(home="/"):
 # without this a reader clicking round the site would see the first two of
 # eight and never the rest. Data is ninth and wraps round to the first.
 # --------------------------------------------------------------------------
+#
+# Site 1.3.0 (Rob): "No web: a BBS, not a website" read as a contradiction
+# to somebody standing on a website, so it became No ads, and three more
+# were added in the same spirit: No platforms, No hosting fees and No
+# outside costs. Each is true of the board as it ships: it runs on its
+# host's own network and power, nothing sits between a caller and it, the
+# listing here is free, and nothing is paid for by the month. "Old and new"
+# replaced "No browser" for the same reason as No ads, and "Run your own
+# directory" came off: it matters to very few readers.
 FREEDOMS = (
-    ("web", "No web", "a BBS, not a website"),
+    ("ads", "No ads", "no one sells your time"),
+    ("platform", "No platforms", "nobody in the middle"),
+    ("fees", "No hosting fees", "it runs at your place"),
+    ("costs", "No outside costs", "your power, your Wi-Fi"),
     ("cloud", "No cloud", "nobody else's server"),
-    ("browser", "No browser", "a 1980s computer can call in"),
+    ("oldnew", "Old and new", "a 1980s computer can join"),
     ("chip", "Real hardware", "a chip on your shelf"),
-    ("gpl", "GPL v3 or later", "free software"),
+    ("gpl", "Free software", "GPL v3 or later"),
     ("lan", "No internet needed", "a local network is enough"),
     ("rules", "You write the rules", "and you are the appeal"),
-    ("list", "Run your own directory", "this one is free software"),
 )
 
 # 32 units square, drawn at 2.5rem. Stroke and colour come from the page
@@ -5136,20 +5415,33 @@ FREEDOMS = (
 # lines it is writing.
 _SLASH = '<path class="xb" d="M5 27 L27 5"/><path d="M5 27 L27 5"/>'
 TICKER_ICONS = {
-    # A globe, struck out.
-    "web": ('<circle cx="16" cy="16" r="11"/>'
-            '<ellipse cx="16" cy="16" rx="4.5" ry="11"/>'
-            '<path class="d" d="M5 16 H27 M6.5 10.5 H25.5 M6.5 21.5 H25.5"/>'
+    # A megaphone, struck out.
+    "ads": ('<path d="M6 13 V19 H10 L20 25 V7 L10 13 Z"/>'
+            '<path class="d" d="M23.5 12.5 A5 5 0 0 1 23.5 19.5"/>'
             + _SLASH),
+    # Three layers stacked, a platform, struck out.
+    "platform": ('<path d="M16 5 L28 11 L16 17 L4 11 Z"/>'
+                 '<path class="d" d="M4 16 L16 22 L28 16 M4 21 L16 27 L28 21"/>'
+                 + _SLASH),
+    # A coin with a dollar sign, struck out.
+    "fees": ('<circle cx="16" cy="16" r="11"/>'
+             '<path class="d" d="M19.5 12 C18.5 10.5 13 10.5 13 13.25 C13 16'
+             ' 19.5 15.5 19.5 18.75 C19.5 21.5 14 21.5 12.5 20 M16 8.5 V23.5"/>'
+             + _SLASH),
+    # A month on a calendar, the monthly bill, struck out.
+    "costs": ('<rect x="5" y="7" width="22" height="20" rx="1.5"/>'
+              '<path d="M5 12.5 H27 M10.5 4.5 V9 M21.5 4.5 V9"/>'
+              '<path class="d" d="M9.5 17 H11 M15 17 H16.5 M20.5 17 H22'
+              ' M9.5 21.5 H11 M15 21.5 H16.5"/>' + _SLASH),
+    # An old monitor on its stand beside a phone: both can join.
+    "oldnew": ('<rect x="3" y="7" width="16" height="13" rx="1.5"/>'
+               '<path d="M8 24 H14 M11 20 V24"/>'
+               '<rect x="21" y="10" width="8" height="15" rx="1.5"/>'
+               '<path class="d" d="M6 11 H13 M6 14 H11 M24 22 H26"/>'),
     # The cloud from the manifesto's "no internet" drawing, struck out.
     "cloud": ('<path transform="translate(-11.8 3.5)" d="M18.5 22 C14 22 14 15.5'
               ' 18.5 15.5 C19 10.5 25.5 9 28 12.5 C30 8 37 8.5 37.5 14 C42 14'
               ' 42 22 37.5 22 Z"/>' + _SLASH),
-    # A browser window with its three buttons, struck out.
-    "browser": ('<rect x="4" y="7" width="24" height="18" rx="1.5"/>'
-                '<path d="M4 11.5 H28"/>'
-                '<path d="M7 9.25 H7.01 M9.5 9.25 H9.51 M12 9.25 H12.01"/>'
-                '<path class="d" d="M8 15.5 H20 M8 19 H16"/>' + _SLASH),
     # A module the way a WROOM looks: the antenna trace across the top and
     # the metal can under it, with pins down both sides.
     "chip": ('<rect x="7" y="3" width="18" height="26" rx="1"/>'
@@ -5173,11 +5465,6 @@ TICKER_ICONS = {
               '<path class="d" d="M8.5 12 H19 M8.5 16 H19 M8.5 20 H14"/>'
               '<path class="pn" d="M16 25 L25.5 15.5 L28.5 18.5 L19 28 Z"/>'
               '<path d="M16 25 L14.5 29.5 L19 28"/>'),
-    # A listing: a heading rule and three rows, each with its marker.
-    "list": ('<rect x="4" y="5" width="24" height="22" rx="1.5"/>'
-             '<path d="M4 10 H28"/>'
-             '<path d="M8 14.5 H9.5 M8 19 H9.5 M8 23.5 H9.5"/>'
-             '<path class="d" d="M13 14.5 H24 M13 19 H24 M13 23.5 H20"/>'),
 }
 
 
@@ -5302,6 +5589,71 @@ TOUCH_PNG = _brand("unleashed-avatar-512.png")
 AVATAR_URL = ((f"https://{LIST_DOMAIN}" if LIST_DOMAIN else SITE_URL).rstrip("/")
               + "/avatar.png")
 PAGE = PAGE.replace("@AVATAR_URL@", html.escape(AVATAR_URL, quote=True))
+
+# The link preview card (site 1.3.0, marketing round 3): 1200 x 630, the
+# size the large preview wants, where the square avatar was shown as a small
+# thumbnail and the front page's description was a board count. Drawn by
+# brand/make_ogcard.py from LOGO_SVG, FRONT_BOARD_ART and the site's
+# palette and face, then screenshotted with headless Chrome; served from its
+# own route like the avatar, so it never joins the manifesto's gallery.
+# Every page shares it until photographs are taken; OG_PAGES gives the
+# pages that have one their own title and description.
+OG_CARD_PNG = _brand("unleashed-og-card-1200x630.png")
+OG_CARD_URL = ((f"https://{LIST_DOMAIN}" if LIST_DOMAIN else SITE_URL).rstrip("/")
+               + "/og-card.png")
+OG_CARD_ALT = ("The \u00b5nleashed wordmark and the words 'Your own online "
+               "community, on a device that fits in your hand', beside a "
+               "drawing of the board.")
+PAGE = (PAGE.replace("@OG_CARD_URL@", html.escape(OG_CARD_URL, quote=True))
+            .replace("@OG_CARD_ALT@", html.escape(OG_CARD_ALT, quote=True)))
+
+# What a shared link to these pages says about itself, from the round 3
+# specification: a title and a sentence written for somebody who has never
+# heard of a BBS, where the page's own <title> and first sentence were
+# written for the page. None keeps the page's own description (/directory
+# carries its live figures there). Applied at reply time, like the
+# canonical link, because only the request knows the path.
+OG_PAGES = {
+    "/directory": ("Communities running right now", None),
+    "/whofor": ("Who builds one",
+                "Classes, clubs, families, neighbourhoods and friends: what a "
+                "community of your own on a $5 device can look like."),
+    "/different": ("What a \u00b5nleashed board can do",
+                   "No computer needed, installed from your browser, works with "
+                   "any computer old or new, and lights and a screen if you "
+                   "want them."),
+    "/install": ("Set up your board from your browser",
+                 "Plug in a $5 ESP32 board, press Install in Chrome or Edge, and "
+                 "pick your Wi-Fi. About five minutes, no programming."),
+    "/hardware": ("Which board to buy",
+                  "Tested boards from about $5 to about $20. Pick by the "
+                  "picture; each installs from your browser."),
+    "/build": ("Build your own community board",
+               "Everything you need for a board of your own, and how to add a "
+               "memory card, lights and more."),
+    "/firstcall": ("Joining a board for the first time",
+                   "What happens when you connect: pick a nickname, register or "
+                   "come in as a guest, and say hello."),
+    "/terminals": ("Apps for joining a BBS",
+                   "The free apps for joining a board from a phone or a "
+                   "computer, and how older computers join too."),
+}
+_OG_TITLE = re.compile(r'<meta property="og:title" content="[^"]*">')
+_OG_DESC = re.compile(r'<meta property="og:description" content="[^"]*">')
+
+
+def og_fill(body, path):
+    """A page's own link preview title and description, when it has one."""
+    got = OG_PAGES.get(path)
+    if not got:
+        return body
+    title, desc = got
+    body = _OG_TITLE.sub(lambda m: '<meta property="og:title" content="'
+                         + html.escape(title, quote=True) + '">', body, count=1)
+    if desc:
+        body = _OG_DESC.sub(lambda m: '<meta property="og:description" content="'
+                            + html.escape(desc, quote=True) + '">', body, count=1)
+    return body
 # The pitch's face (site 1.2.9), from PITCH_FONT: one @font-face, doubled
 # braces because PAGE is formatted on every render. font-display:swap, so
 # the pitch shows at once in the page's own face and changes when the file
@@ -6741,7 +7093,7 @@ def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False, latest="
             + who_runs
             + ((charts or {}).get(r["id"]) or "")
             + "</td>"
-            f"<td class='addr' data-label='Dial'><a href='{dial}' "
+            f"<td class='addr' data-label='Address'><a href='{dial}' "
             f"title='Opens your terminal program, if one is registered for "
             f"telnet:// links.'>"
             f"{html.escape(where)} {r['port']}</a></td>"
@@ -6800,13 +7152,14 @@ def announcement_banner():
 
 
 # --------------------------------------------------------------------------
-# The board list's figures, as one sentence under its heading.
+# The directory's figures, as one sentence under its heading.
 #
-# "Unleashed is hosting 3 boards with 5 callers on right now." The boards
-# are every listed board, up or quiet, the same count as the page's
-# description; the callers are the sum of the callers-on figure the table
-# shows for each board that is up. Nothing here reaches the JSON or the
-# feed, which keep their own figures.
+# "3 communities listed, with 5 people connected right now." (site 1.3.0,
+# plain words; it was "Unleashed is hosting 3 boards with 5 callers on
+# right now".) The communities are every listed board, up or quiet, the
+# same count as the page's description; the people are the sum of the
+# callers-on figure the table shows for each board that is up. Nothing here
+# reaches the JSON or the feed, which keep their own figures.
 #
 # STAT_SUFFIX goes on the end of the sentence, before its full stop, for
 # the day there is something true to add. It is empty on purpose: "across
@@ -6820,63 +7173,204 @@ STAT_SUFFIX = ""
 def stat_line(boards, callers):
     """The sentence under the heading, with the two figures in --live."""
     if not boards:
-        return '<p class="stat">Unleashed is hosting no boards yet.</p>'
+        return '<p class="stat">No communities listed yet.</p>'
     b = (f"<span class='n'>{boards:,}</span> "
-         f"board{'' if boards == 1 else 's'}")
-    c = ("no callers" if not callers else
+         f"communit{'y' if boards == 1 else 'ies'} listed")
+    c = ("nobody connected" if not callers else
          f"<span class='n'>{callers:,}</span> "
-         f"caller{'' if callers == 1 else 's'}")
-    return (f'<p class="stat">Unleashed is hosting {b} with {c} on right now'
+         f"{'person' if callers == 1 else 'people'} connected")
+    return (f'<p class="stat">{b}, with {c} right now'
             + html.escape(STAT_SUFFIX) + ".</p>")
 
 
-# The way to a board of your own, as a small card beside the heading rather
-# than a pair of full size buttons across the page. The board list is the
-# product; this is the side door for the few who came to build one. The
-# buttons say where they go, and neither says Install: only the button on
-# /install does, because only that one installs.
-RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
-            '<h2 id="run-your-own">Run your own board</h2>'
-            '<p class="say">An ESP32 board, a USB cable, five minutes.</p>'
-            '<p class="acts"><a class="fill" href="/install">Web installer</a>'
-            '<a class="line" href="/build#getting-it-running">Build from source</a>'
-            "</p>"
-            # The two lamps that go round its edge, half a lap apart, each a
-            # head and three beads of tail (site 0.22.0, from the UX spec:
-            # three lamps a third of a lap apart looked scattered, because a
-            # rectangle has no three-fold symmetry, and two half a lap apart
-            # are always a pair through its centre). Decoration, so hidden
-            # from a screen reader, and after the words so they come first.
-            + "".join(f'<span class="dot {lamp}{bead}" aria-hidden="true"></span>'
-                      for lamp in ("la", "lb")
-                      for bead in ("", " t1", " t2", " t3"))
-            + "</aside>")
+# --------------------------------------------------------------------------
+# The front page (site 1.3.0, marketing round 3, as Rob approved it with one
+# addition: "we need to also say it runs at home or work and can connect
+# with PC/Android/iPhone"). What it is in today's words first, then the hook
+# (this is how people met online before social media), then the proof. The
+# words BBS and board arrive after the reader knows what the thing is, each
+# with its glossary note. The live list is on /directory.
+#
+# Every claim is true of the $5 ESP32 dev board with no card: chat and
+# messages are there without one, forums and the file library need a card
+# and say so. Joining from Android or an iPhone is true today through a free
+# telnet client (TERMinator on both, MuffinTerm on the iPhone; see
+# /terminals). The history is the firmware README's, which cites its
+# sources: CBBS in Chicago on 16 February 1978, and Wikipedia's estimate of
+# 60,000 boards in the United States at the peak in the mid 1990s. The
+# examples are situations, never people: no names, no quotes, and the lead
+# says they are examples. The machines named vary (Rob: no favourite), all
+# from the firmware's CLIENTS.md.
+# --------------------------------------------------------------------------
+
+# A line drawing of the dev board, in the site's stroke style: the pins down
+# both long edges, the USB socket, the module with its antenna trace, the
+# two buttons, the lit LED, and a scale bar. An illustration, not a photo:
+# the caption says a photo is to come. brand/make_ogcard.py draws the link
+# preview card with the same drawing.
+FRONT_BOARD_ART = (
+    '<svg viewBox="0 0 340 190" role="img" aria-label="Drawing of the ESP32 '
+    'board, about the size of a stick of gum">'
+    '<g fill="none" stroke-linecap="round" stroke-linejoin="round">'
+    '<rect x="20" y="40" width="290" height="110" rx="8" stroke="#4a7a99" stroke-width="2"/>'
+    '<g stroke="#6a6a72" stroke-width="1.4">'
+    + "".join(f'<rect x="{54 + i * 12.5:g}" y="46" width="6" height="6"/>'
+              f'<rect x="{54 + i * 12.5:g}" y="138" width="6" height="6"/>'
+              for i in range(19))
+    + "</g>"
+    '<rect x="6" y="80" width="22" height="30" rx="3" stroke="#8a8a8a" stroke-width="1.6"/>'
+    '<rect x="150" y="62" width="130" height="66" rx="4" stroke="#7fd4ff" stroke-width="2"/>'
+    '<path d="M280 68 H300 V76 H286 V84 H300 V92 H286 V100 H300 V108 H286 V116 H300 V122" '
+    'stroke="#7fd4ff" stroke-width="1.6"/>'
+    '<rect x="160" y="72" width="100" height="46" rx="2" stroke="#4ce0e0" stroke-width="1" opacity="0.6"/>'
+    '<circle cx="58" cy="72" r="6" stroke="#8a8a8a" stroke-width="1.4"/>'
+    '<circle cx="58" cy="118" r="6" stroke="#8a8a8a" stroke-width="1.4"/>'
+    '<rect x="84" y="80" width="30" height="30" rx="2" stroke="#6a6a72" stroke-width="1.4"/>'
+    "</g>"
+    '<circle cx="128" cy="72" r="9" fill="#7fd4ff" opacity="0.18"/>'
+    '<circle cx="128" cy="72" r="3.5" fill="#7fd4ff"/>'
+    '<path d="M20 172 H310 M20 166 V178 M310 166 V178" stroke="#4a4a58" stroke-width="1.2" fill="none"/>'
+    '<text x="165" y="186" text-anchor="middle" fill="#6a6a72" '
+    'font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11">about 5 cm</text>'
+    "</svg>")
+
+FRONT_TITLE = ("\u00b5nleashed: your own online community, on a device that "
+               "fits in your hand")
+FRONT_DESC = ("Chat and messages for your class, club, family or friends, on a "
+              "$5 device you own. No ads, no feed. Set it up from your browser "
+              "in about five minutes.")
+
+# The two ways on from the hero and from the closing band. Neither says
+# Install: only the button on /install does, because only that one does.
+FRONT_BUILD = '<a class="b1" href="/install">Build yours</a>'
+FRONT_TRY = '<a class="b2" href="/directory">Try one first</a>'
+
+# What it is: three cards.
+FRONT_IS = (
+    ("Yours, not a platform's",
+     "No ads, no feed, nobody selling what is said. You set the rules, and "
+     "the member list is yours."),
+    ("Everyone can join",
+     "With a free app, a [[telnet client]], on a PC, an Android phone or an "
+     "iPhone, or from a computer from the 1980s. Each visitor's screen is "
+     "drawn to suit what they joined from."),
+    ("Tiny, and always on",
+     "A $5 device on a shelf at home or at work, on about half a watt. No "
+     "computer to leave running, and nothing to rent."),
+)
+
+# Who builds one: six situations, each headed "For example".
+FRONT_WHO = (
+    ("A class",
+     "A teacher could have her class's community running before the bell: a "
+     "chat room and messages on the school network, for the class and nobody "
+     "else."),
+    ("A ham radio club",
+     "Net schedules, repeater notes and a swap list in one place, with a chat "
+     "room for the evenings between meetings."),
+    ("A retro computing group",
+     "Members connect from the machines they collect, an Amiga, an Apple II, "
+     "a VT220 terminal from 1983, side by side with laptops."),
+    ("A family",
+     "A family chat and message board that lives on a shelf at home, not on "
+     "somebody else's servers."),
+    ("A street or a building",
+     "Notices, lost and found, and a place to talk, run by a neighbour rather "
+     "than by an app."),
+    ("A group of friends",
+     "The group chat, but yours: nicknames, a room, messages, and house rules "
+     "you wrote."),
+)
+
+FRONT_STEPS = (
+    ("Get a board",
+     "An ESP32 board costs about $5. [Which one to buy](/hardware)."),
+    ("Install it from your browser",
+     "Plug it in with a USB cable, open the installer in Chrome or Edge, and "
+     "pick your Wi-Fi. The browser puts the software on the board, which the "
+     "hobby calls [[flashing]]. About five minutes."),
+    ("Invite your community",
+     "Share the address. People join with a free app on their computer or "
+     "phone. [How joining works](/firstcall)."),
+)
 
 
-# The home page's one line about what the board does that is new (site
-# 1.2.4). Rob's words were "See what µnleashed can do that other BBS
-# software can't"; the "can't" is not true of all BBS software (espbbs runs
-# on an ESP8266), so the button promises what the page can prove, and the
-# page names the programs it was checked against.
-HOME_TEASER = ('<p class="next tease"><a class="go" href="/different">'
-               "See what µnleashed can do</a></p>")
+def front_html():
+    """The front page's body, below the menu."""
+    def cards(items, eg=False):
+        return "".join(
+            f'<div class="fcard c{i + 1}">'
+            + ('<p class="eg">For example</p>' if eg else "")
+            + f"<h3>{html.escape(h)}</h3><p>{md_inline(t)}</p></div>"
+            for i, (h, t) in enumerate(items))
 
-# Above the button, the reason to press it (site 1.2.8, Rob), in two
-# sentences taken from /different, all of it true of the ESP32 dev board:
-# the size of a stick of gum, about $5, an old computer and a new one in one
-# chat room, and /hardware's half a watt while it waits. The S3 boards cost
-# and draw more, so this names the cheap one, as /different does. Site
-# 1.2.9: no one machine named (Rob: "we dont favour" the C64), and set in
-# PITCH_FONT, a little larger than the text round it.
-HOME_PITCH = ('<p class="pitch">A whole BBS on a board the size of a stick of '
-              "gum, for about $5. It answers an 8-bit computer from the "
-              "eighties and a laptop from this year in the same chat room, on "
-              "about half a watt.</p>")
+    steps = "".join(
+        f'<li><span class="n" aria-hidden="true">{i + 1}</span>'
+        f"<h3>{html.escape(h)}</h3><p>{md_inline(t)}</p></li>"
+        for i, (h, t) in enumerate(FRONT_STEPS))
+    return (
+        '<div class="front">'
+        '<section class="hero"><div>'
+        '<p class="kicker">Social, before social media</p>'
+        '<h1 class="hero">Your own online community, on a device that '
+        "<em>fits in your hand</em>.</h1>"
+        '<p class="sub">A place for your class, club, family or friends to '
+        "chat and leave each other messages, on a $5 device you own. It runs "
+        "at home or at work, with no ads, no feed and no platform in the "
+        "middle. People join from a PC, an Android phone or an iPhone with a "
+        "free app, and from old computers and terminals too.</p>"
+        f'<p class="btns">{FRONT_BUILD}{FRONT_TRY}</p>'
+        '<p class="facts"><b>About $5</b> &middot; <b>About five minutes</b> '
+        "&middot; <b>No subscription</b> &middot; <b>Free software</b></p>"
+        '</div><figure class="board">' + FRONT_BOARD_ART
+        + "<figcaption>About the size of a stick of gum. (Photo to come.)"
+        "</figcaption></figure></section>"
 
-# And after the opening row, the line into the list, which the rule then
-# separates from the directory itself.
-HOME_TRY = ('<p class="tryit">Try out any of the boards in the directory '
-            "below.</p>")
+        '<section aria-labelledby="what-it-is"><h2 class="sec" id="what-it-is">What it is</h2>'
+        '<p class="seclead">A community space online that belongs to you, the '
+        "kind people have called a " + gl("BBS") + ", a bulletin board, since "
+        "1978: a chat room and messages, and with a memory card added, "
+        "discussion forums and a shared file library. Up to ten people on at "
+        "once.</p>"
+        f'<div class="fcards">{cards(FRONT_IS)}</div></section>'
+
+        '<section aria-labelledby="who-builds-one"><h2 class="sec" id="who-builds-one">Who builds one</h2>'
+        '<p class="seclead">A few examples of what a community on a board '
+        "could be. When real ones write in, their stories go here. "
+        '<a href="/whofor">More about who it suits</a>.</p>'
+        f'<div class="fcards">{cards(FRONT_WHO, eg=True)}</div></section>'
+
+        '<section aria-labelledby="three-steps"><h2 class="sec" id="three-steps">Three steps</h2>'
+        '<p class="seclead">No programming and no tools to install.</p>'
+        f'<ol class="fsteps">{steps}</ol></section>'
+
+        '<section class="then" aria-labelledby="before-social-media"><div>'
+        '<h2 class="sec" id="before-social-media">Before social media, there '
+        "were bulletin boards</h2>"
+        "<p>In the 1980s and 90s, people met online by dialling into bulletin "
+        "boards, BBSes for short: one person's computer, a phone line, a chat "
+        "room and a message board. At the peak there were an estimated 60,000 "
+        "in the United States alone. The host, the " + gl("sysop") + ", was "
+        "somebody you could talk to, the regulars went by nicknames, and "
+        "nothing was trying to hold your attention.</p>"
+        '<p class="mut">\u00b5nleashed is that idea on a $5 device and your '
+        "Wi-Fi. Join from a laptop or a phone today, or from the computer you "
+        'had in 1985. <a href="/different">What it can do</a>.</p></div>'
+        '<div class="crt"><dl>'
+        "<dt>1978</dt><dd>The first bulletin board goes online, in Chicago.</dd>"
+        "<dt>1990s</dt><dd>About 60,000 of them in the United States alone.</dd>"
+        "<dt>Today</dt><dd>One fits in your hand, and you can run it. "
+        '<i aria-hidden="true">_</i></dd>'
+        '</dl><p class="cap">CBBS, Chicago, 16 February 1978</p></div></section>'
+
+        '<section class="end" aria-labelledby="see-one"><h2 class="sec" id="see-one">See one, then start yours</h2>'
+        '<p class="seclead">Visit a community that is running right now, or '
+        "set up your own this afternoon.</p>"
+        f'<p class="btns">{FRONT_TRY}{FRONT_BUILD}</p>'
+        '<p class="dev">Developers: <a href="/build#for-developers-build-from-source">'
+        "build from source</a> &middot; "
+        '<a href="https://github.com/rwmech/unleashed_BBS">GitHub</a></p>'
+        "</section></div>")
 
 
 # --------------------------------------------------------------------------
@@ -7047,13 +7541,6 @@ def index_data():
     return now, rows, charts, steady
 
 
-# The front page shows the busiest ten (site 1.2.8, Rob: "limit the front
-# page to 10 BBS systems, most active and popular"), in the order the list
-# has always had: up before quiet, then the caller-minutes a board shares
-# or, failing that, its callers on now counted as an hour each, then the
-# longest unbroken run up, then the name. Every board is on /directory.
-HOME_MAX = 10
-
 # The name search on /directory (site 1.2.8): a GET form, answered here.
 # What a reader types is cut to SEARCH_MAX characters after control and
 # format characters are dropped and runs of spaces are closed up, and it is
@@ -7097,7 +7584,7 @@ def list_html(rows, now, charts, steady, sel=(), any_=False, go=False, q="", say
     return (filter_bar_html(sel, any_, shown, len(rows), go, q)
             + (f'<p class="topn">{say}</p>' if say else "")
             + '<table id="boards"' + ("" if shown else " hidden") + ">"
-            "<tr><th>Board</th><th>Dial</th><th>State</th></tr>"
+            "<tr><th>Board</th><th>Address</th><th>State</th></tr>"
             + board_rows(rows, now, charts, steady, sel, any_, latest) + "</table>"
             + '<p class="none" id="fnone"' + (" hidden" if shown else "") + ">"
             + f"No board with {'any' if any_ else 'all'} of those yet.</p>")
@@ -7114,53 +7601,40 @@ LIST_FOOT = ("The 24 hour figures under a board's state are how many calls it "
 
 
 def index_page(data=None):
-    """The front page: the opening row, then the directory's heading and
-    figures, then the busiest HOME_MAX boards and the way to all of them.
+    """The front page (site 1.3.0): the pitch, front_html(), and no list.
     The same for everybody, so it is cached whole. A filter or a search
-    asked of it is sent on to /directory, which is where both live."""
-    now, rows, charts, steady = data or index_data()
-    live = [r for r in rows if r["state"] == "online"]
-    # The same figure each row's state shows as "N of M on", summed.
-    on = sum(r["busy"] or 0 for r in live)
+    asked of it is sent on to /directory, which is where both live. data is
+    accepted and unused, for callers from before the list moved."""
+    return PAGE.format(title=html.escape(FRONT_TITLE),
+                       desc=html.escape(FRONT_DESC, quote=True),
+                       body=head_html("list", "/") + announcement_banner() + front_html(),
+                       footer=foot_html("list"), refresh="", head="")
 
-    # The announcement, when there is one, sits above everything else the
-    # page says. Then the opening row (site 1.2.8, Rob): the pitch and the
-    # one button to what sets the board apart on the left, the small "Run
-    # your own board" card beside them. Then a line into the list, a rule,
-    # and the directory: its heading, its figures and the lead, then the
-    # list.
-    head = (head_html("list", "/")
-            + announcement_banner()
-            + '<div class="listtop"><div class="intro">'
-            + HOME_PITCH + HOME_TEASER + "</div>"
-            + RUN_CARD + HOME_TRY + "</div>"
-            + '<hr class="dirrule">'
-            + "<h1>BBS directory</h1>"
-            + stat_line(len(rows), on)
-            + '<p class="lead">Boards that are up right now. '
-            'Dial one with <a href="/terminals">any telnet client</a>, or click '
-            'an address if you have one installed. '
-            '<a href="/dialing">Nothing happened?</a> '
-            '<a href="/firstcall">Never called one before?</a></p>')
-    if rows:
-        top = rows[:HOME_MAX]
-        # One line saying what the list is, and it has to be true: "ten"
-        # only once there are more than ten to choose from.
-        what = ("The ten busiest boards right now." if len(rows) > HOME_MAX
-                else "Every board listed, the busiest first.")
-        n = len(rows)
-        body = (list_html(top, now, charts, steady, go=True, say=what)
-                + '<p class="next allb"><a class="go" href="/directory">'
-                + f"All {n:,} board{'' if n == 1 else 's'}, search and filters</a></p>"
-                + BADGE_JS)
-    else:
-        body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
-    desc = (f"{len(rows)} bulletin board{'' if len(rows) == 1 else 's'} listed, "
-            f"{len(live)} up right now, {on} caller{'' if on == 1 else 's'} on. "
-            "Dial one with any telnet client.")
-    return PAGE.format(title=html.escape(SITE_NAME), desc=html.escape(desc, quote=True),
-                       body=head + body, footer=foot_html("list", LIST_FOOT),
-                       refresh=LIST_REFRESH, head="")
+
+# The one step between "Try one first" and a board (site 1.3.0): joining
+# needs an app, and nothing on a phone or a computer opens a board by
+# itself. The apps are /terminals' picks, checked on their stores on
+# 2026-09-25: TERMinator (Phil Whittemore) on Google Play and on the App
+# Store, free on the App Store; MuffinTerm (Molly Black), free on the App
+# Store for iPhone, iPad and Mac; SyncTERM, free software, for Windows,
+# macOS and Linux.
+JOIN_STEP = ('<div class="joinstep" role="note"><h2>First time? You need a free '
+             "app to join</h2><p>" + md_inline(
+                 "A BBS is not a web page, so you join one with a [[telnet "
+                 "client]], a free app that connects to the board's address. "
+                 "On a phone: **TERMinator**, for "
+                 "[Android](https://play.google.com/store/apps/details?id=com.terminator.android) "
+                 "or [iPhone](https://apps.apple.com/us/app/terminator-bbs-terminal/id6759012939), "
+                 "or **MuffinTerm** for "
+                 "[iPhone](https://apps.apple.com/us/app/muffinterm/id1583236494). "
+                 "On a computer: **[SyncTERM](https://syncterm.bbsdev.net/)**, "
+                 "for Windows, macOS and Linux.")
+             + '</p><p class="more">' + md_inline(
+                 "Then type a board's address and port into the app, or click "
+                 "the address if your app is set up for links. "
+                 "[Apps for joining](/terminals) has more choices, and "
+                 "[First call](/firstcall) what to expect when you connect.")
+             + "</p></div>")
 
 
 def directory_page(sel=(), any_=False, q="", data=None):
@@ -7174,11 +7648,13 @@ def directory_page(sel=(), any_=False, q="", data=None):
     found = [r for r in rows if board_found(r, q)] if q else rows
     qe = html.escape(q, quote=True)
     head = (head_html("list", "/directory")
-            + "<h1>All boards</h1>"
+            + announcement_banner()
+            + "<h1>Find a community BBS</h1>"
             + stat_line(len(rows), on)
-            + '<p class="lead">Every board on the directory, the busiest first. '
-            'Dial one with <a href="/terminals">any telnet client</a>, or click '
-            "an address if you have one installed.</p>")
+            + '<p class="lead">Every community board listed here, the busiest '
+            'first. Pick one and connect. <a href="/dialing">Did not '
+            'connect?</a></p>'
+            + JOIN_STEP)
     if not rows:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
     else:
@@ -7190,7 +7666,7 @@ def directory_page(sel=(), any_=False, q="", data=None):
                '<label for="nq">Find a board</label>'
                f'<input type="search" id="nq" name="q" form="fform" value="{qe}"'
                f' maxlength="{SEARCH_MAX}" autocomplete="off" spellcheck="false"'
-               ' placeholder="name, sysop or description">'
+               ' placeholder="name, host or description">'
                '<button type="submit" form="fform">Search</button></div>')
         if q:
             keep = "".join("&b=" + urllib.parse.quote_plus(k) for k in sel)
@@ -7207,10 +7683,11 @@ def directory_page(sel=(), any_=False, q="", data=None):
             # No table at all: the filter is still there, and with nothing
             # to narrow, its chips go to the server with the search.
             body = (box + filter_bar_html(sel, any_, 0, 0, q=q) + BADGE_JS)
-    n = len(rows)
-    desc = (f"All {n} bulletin board{'' if n == 1 else 's'} on the directory, "
-            "with a search by name and a filter by badge.")
-    return PAGE.format(title=html.escape(f"All boards - {SITE_NAME}"),
+    n, up = len(rows), len(live)
+    desc = (f"{up:,} communit{'y' if up == 1 else 'ies'} online and {on:,} "
+            f"{'person' if on == 1 else 'people'} connected right now. Visit "
+            "one with a free app on your computer or phone.")
+    return PAGE.format(title=html.escape(f"Find a community BBS - {SITE_NAME}"),
                        desc=html.escape(desc, quote=True),
                        body=head + body, footer=foot_html("list", LIST_FOOT),
                        refresh=LIST_REFRESH, head="")
@@ -7349,7 +7826,9 @@ meant to.</p>
 # with the continuations missing and the following lines still indented as
 # if they were there. There are no other escapes in here.
 HOW = r"""<h1>How to get listed</h1>
-<p class="lead">Your board announces itself. You do not fill in a form.</p>
+<p class="lead">Your board announces itself. You do not fill in a form. (There
+is one other list worth being on, <a href="#the-telnet-bbs-guide">the Telnet
+BBS Guide</a>, and that one does have a form.)</p>
 @ART_CSS@
 <article>
 <pre>board_name  = The Rusty Modem
@@ -7428,6 +7907,32 @@ is exactly what a spammer will not do and exactly what a real board does anyway.
 <p>The full protocol, including every field and what the directory does with it,
 is in <a href="https://github.com/rwmech/unleashed_directory">the server
 repository</a>. It is one Python file and you are welcome to run your own.</p>
+
+<h2 id="the-telnet-bbs-guide">List your community on the Telnet BBS Guide too</h2>
+
+<p>The <a href="https://www.telnetbbsguide.com/">Telnet BBS Guide</a> has listed
+bulletin boards for more than twenty years, and it is where many people who
+enjoy them look for somewhere new to visit. A listing there is free. An
+administrator approves each one, so it may not appear straight away.</p>
+
+<ol>
+<li>Change the sysop password and <a href="/forward">let people outside your
+home join</a> first, the same as before listing here.</li>
+<li>Create an account on <a href="https://www.telnetbbsguide.com/">the
+Guide</a>.</li>
+<li>Check your board is not already there. If it is, use the Guide's
+<b>Contact Us</b> button, say you are its sysop, and the admins link it to your
+account.</li>
+<li>Choose <b>Add Your BBS</b> and fill it in: your board's name, its address
+and port (use a name that stays the same, not a home address that changes),
+and µnleashed BBS as the software.</li>
+<li>Say what your community is about first, and the software second.</li>
+</ol>
+
+<p>The Guide's own steps are on its page
+<a href="https://www.telnetbbsguide.com/faqs/how-to-add-your-bbs-listing/">How
+To Add Your BBS Listing</a>. It also offers its whole list as a download, so a
+listing there can travel further than the site itself.</p>
 </article>"""
 
 
@@ -9382,7 +9887,7 @@ HOW = HOW.replace("@ART_CSS@", ART_CSS).replace("@SKULL@", SKULL)
 # it used to start at h2, so it had no document outline, no heading for a
 # screen reader to land on, and nothing on screen saying what it was called.
 ABOUT = """<h1>What this is</h1>
-<p class="lead">Electronic freedom on a microcontroller. No web, no cloud, no browser.</p>
+<p class="lead">Electronic freedom on a microcontroller. No ads, no cloud, no platform in the middle.</p>
 
 <p class="byline">Written and built by <a class="author" href="/author">QuantumRob</a>, who has been doing this
 since the 4381 was the computer in the room. The argument below is his; the
@@ -9394,7 +9899,7 @@ not.</p>
 <p><b>A bulletin board is a machine that answers a phone number.</b> Somebody put a
 spare computer in a spare room, hung a modem off it, and other people called it.
 No terms of service. No algorithm deciding what you saw. No third party keeping a
-copy for later. The sysop was a person you could ring up and argue with, and if
+copy for later. The @GL sysop@ was a person you could ring up and argue with, and if
 you did not like how a board was run you started your own, because the barrier to
 entry was a second phone line.</p>
 
@@ -9469,8 +9974,8 @@ belonged to somebody you could name.</p>
 
 <h2>What this is</h2>
 
-<p>A telnet BBS that runs on a bare ESP32 and grows into an IoT terminal server
-through plugins. Nodes, handles, a user list, a chat room in the style of DDial and
+<p>A @GL telnet@ @GL BBS@ that runs on a bare ESP32 and grows into an IoT terminal server
+through plugins. Nodes, @GL handles@, a user list, a chat room in the style of DDial and
 Gtalk, mail between callers, file areas on an SD card, forums on the same card, a
 caller log, a sysop who can page you. The forums are topic areas a sysop sets
 up, with conversations inside each one, read at the same prompt as everything
@@ -9766,6 +10271,8 @@ the arguing was two-sided. Credit where it is due.</p>
 # prose, and a misspelt name is a KeyError at import instead of a hole on
 # somebody's screen.
 ABOUT = re.sub(r"@ICON (\w+)@", lambda m: ICONS[m.group(1)], ABOUT)
+# The glossary's dotted underline on a BBS word (site 1.3.0): @GL word@.
+ABOUT = re.sub(r"@GL (\w+)@", lambda m: gl(m.group(1)), ABOUT)
 
 
 # ----------------------------------------------------------------------
@@ -9993,6 +10500,7 @@ class Handler(BaseHTTPRequestHandler):
     def reply(self, code, body, ctype="text/html; charset=utf-8", extra=None):
         if isinstance(body, str) and "@CANONICAL@" in body:
             body = body.replace("@CANONICAL@", html.escape(self.canonical(), quote=True))
+            body = og_fill(body, self.path.split("?", 1)[0])
         raw = body.encode("utf-8") if isinstance(body, str) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)
@@ -10024,8 +10532,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.reply(302, "", "text/plain; charset=utf-8",
                                {"Location": "/directory?" + query})
                 else:
-                    self.reply(200, cached("index", PAGE_CACHE, lambda: index_page(
-                        cached("indexdata", PAGE_CACHE, index_data))))
+                    self.reply(200, cached("index", PAGE_CACHE, index_page))
         # Every board, with the name search and the badge filter (site
         # 1.2.8). A filtered or searched view is built for its own request,
         # from the same cached rows, so a thousand different filters cost a
@@ -10074,8 +10581,8 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.reply(200, COVER_SVG, "image/svg+xml",
                            {"Cache-Control": "public, max-age=86400"})
-        elif path in ("/avatar.png", "/apple-touch-icon.png"):
-            blob = AVATAR_PNG if path == "/avatar.png" else TOUCH_PNG
+        elif path in ("/avatar.png", "/apple-touch-icon.png", "/og-card.png"):
+            blob = {"/avatar.png": AVATAR_PNG, "/og-card.png": OG_CARD_PNG}.get(path, TOUCH_PNG)
             if blob is None:
                 self.reply(404, "no such file\n", "text/plain; charset=utf-8")
             else:

@@ -1,13 +1,13 @@
 # Set up your BBS
 
 Every setting on a µnleashed board can be changed from the board itself, while
-you are logged in as the sysop, with one command: `CONFIG`. Nothing needs a
+you are logged in as the [[sysop]], the host, with one command: `CONFIG`. Nothing needs a
 laptop, a text editor or a reflash. This page goes through every page CONFIG
 has, and what each setting on it does.
 
 ::: cta
 [Visit the web installer](/install)
-[Build from source](/build#getting-it-running)
+[Build from source](/build#for-developers-build-from-source)
 If the board is not on your network yet, start with one of those: the web
 installer puts the BBS on it and sets up its Wi-Fi.
 :::
@@ -357,7 +357,7 @@ page 3 in the board's message editor.
 ### announce
 
 The directory listing: a short message the board sends every few minutes so it
-appears on [the board list](/). **Off** as shipped, and the sysop's alone. It
+appears on [the board list](/directory). **Off** as shipped, and the sysop's alone. It
 sends the board's name, your name, the description, the port and how busy the
 board is, and nothing about who is calling. `ANNOUNCE TEST` shows exactly what
 it would send.

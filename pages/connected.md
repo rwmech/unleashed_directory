@@ -1,6 +1,6 @@
 # Your board is on the network
 
-The installer's last step sends you here with the board's address, and this is how to call it.
+The installer's last step sends you here with the board's address, and this is how to connect to it.
 
 <!-- The address arrives after the # in this page's link (/connected#192.168.0.109:6400), which never reaches the server; a few lines of script on the page read it. Everything inside "::: connected" is what shows when there is no address. Since site 1.0.0 the installer's dashboard always offers Telnet details, and sends a board it read before it joined Wi-Fi here with no address, so these three ways are what many readers will see. Facts from the firmware: mDNS <hostname>.local (main.cpp mdns_hostname_set), hostname "unleashed" as shipped (config.h BBS_HOSTNAME), the "online ... dial in:" line logged when Wi-Fi joins (main.cpp). -->
 ::: connected

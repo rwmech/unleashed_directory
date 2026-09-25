@@ -4,10 +4,12 @@ A board of your own, on hardware that costs less than lunch.
 
 ::: cta
 [Visit the web installer](/install)
-[Build from source](#getting-it-running)
+[Build from source](#for-developers-build-from-source)
 The web installer needs Chrome or Edge, a USB cable and about five minutes,
-and no toolchain. The same page sets up the board's Wi-Fi, and [the setup
-guide](/setup) covers every setting after that. Building from source is the
+and no programming tools. It installs the software, the [[firmware]], by
+[[flashing]] it onto the board, and the same page sets up the board's Wi-Fi.
+Every setting after that is in [the setup guide](/setup). Building from
+source is the
 longer road, and the one you want once you start changing things.
 :::
 
@@ -47,12 +49,13 @@ own:
 The other tested board, an ESP32-S3 board with a screen, needs neither: its
 card slot and its drive light are built in.
 
-Coming soon, two camera boards add a third: a camera on the board, so a caller
-can snap a picture of whatever it is pointed at, from any terminal. The
-boards are on [the tested boards page](/hardware#freenove-esp32-camera-board),
-and what callers can do with them is on [the camera page](/camera).
+Coming soon, two camera boards add a third: a camera on the board, so a
+visitor can snap a picture of whatever it is pointed at, from any computer that
+connects. The boards are on [the tested boards
+page](/hardware#freenove-esp32-camera-board), and what visitors can do with
+them is on [the camera page](/camera).
 
-## Getting it running
+## For developers: build from source
 
 You need [PlatformIO](https://platformio.org/) and git. For the ESP32 dev
 board:
@@ -93,15 +96,16 @@ A bare ESP32 module, without a dev board around it, also wants 3V3, ground, EN
 pulled up, GPIO0 to ground while you flash it, and a USB-serial adapter on the
 console pins.
 
-## Calling it
+## Joining it
 
-Any telnet client will do, and SyncTERM is the one worth installing if you have
-none. So does an Atari 800 through a FujiNet, an Apple II with an Uthernet
-card, or a VT220 on a serial adapter. Before you dial, read [what happens on your first
-call](/firstcall).
+Any [[telnet client]], a free app for joining, will do, and SyncTERM is the one
+worth installing on a computer if you have none; on a phone, TERMinator. So
+does an Atari 800 through a FujiNet, an Apple II with an Uthernet card, or a
+VT220 on a serial adapter. Before you connect, read [what happens on your
+first call](/firstcall).
 
 ::: next
-[Choose a terminal](/terminals)
+[Choose an app for joining](/terminals)
 :::
 
 ## Keeping it
@@ -111,12 +115,12 @@ A new version does not cost you the accounts, the settings or the mail:
 them. An update from the browser keeps them too, and [the upgrade
 page](/upgrade) says how, and how to take a backup first.
 
-## Putting it on the internet
+## Letting people outside your home join
 
-Forwarding a port on your router is what lets callers from outside reach the
-board. It opens a door in your network, and calls are not encrypted. The port
-forwarding page starts with what that risks, and [the privacy page](/privacy)
-says what it means for your callers.
+[[Port forwarding]], one setting on your router, is what lets people outside
+your home reach the board. It opens a door in your network, and what they type
+is not encrypted. The port forwarding page starts with what that risks, and
+[the privacy page](/privacy) says what it means for your visitors.
 
 ::: next
 [Read before you forward a port](/forward)

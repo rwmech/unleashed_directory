@@ -30,7 +30,7 @@ The software costs nothing to use. Making it costs something every month.
   visits or not, and the three domain names it answers to.
 - **Hardware to test on.** ESP32 boards, SD cards, [LEDs](/lights), and
   other ESP32-S3 boards. The Waveshare S3 runs the BBS because one was on the
-  bench, and a board goes on [Tested boards](/hardware) only once a build has
+  bench, and a board goes on [the tested boards page](/hardware) only once a build has
   run on it.
 
 ## The software of the future

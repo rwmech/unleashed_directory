@@ -48,7 +48,7 @@ trust.
 - **Optional, for the enclosure:** a 3D printer, or a print service, and a
   browser for TinkerCAD.
 
-A board answers ten callers at once, so you do not need one per student. For a
+A board answers ten people at once, so you do not need one per student. For a
 class of thirty that means working in pairs or in threes, or running two or
 three boards and letting them compare. One board plus everybody's laptops is
 still a complete first lesson.
@@ -93,8 +93,9 @@ and it is the one students ask to stay behind for.
 ### Session 1: Call a board
 
 **50 minutes. Needs:** one board already running on the classroom network,
-which you set up beforehand, and a terminal program on each machine. Ten
-callers fit on a board at once, so pair the class up or put a second board on
+which you set up beforehand, and a [[telnet client]], a free app for
+joining, on each machine. Ten
+people fit on a board at once, so pair the class up or put a second board on
 the network.
 
 Students connect to an address and a port, choose a handle, and end up in the
@@ -117,7 +118,7 @@ installer](/install) in Chrome or Edge. No toolchain.
 Each group installs the firmware, gives the board the classroom Wi-Fi from the
 same page, and reads the address the board came up on. Then they call their
 own board from the machine next to them. A group that wants to see the source
-turned into firmware can [build it themselves](/build#getting-it-running)
+turned into firmware can [build it themselves](/build#for-developers-build-from-source)
 afterwards.
 
 The moment a group calls their own board for the first time is the lesson. Do
@@ -168,7 +169,7 @@ mounted. Stackable. Fits in a pocket. Looks like it came out of 1984.
 
 **50 minutes. Needs:** the boards from the sessions above.
 
-Each group becomes the sysop of their own board. They write the welcome
+Each group becomes the [[sysop]], the host, of their own board. They write the welcome
 screen, decide the rules, set who is allowed to do what, and look at the
 caller log to see who has been on.
 

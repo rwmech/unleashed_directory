@@ -9,7 +9,7 @@ Here is why, and the fixes, in the order to try them.
 ## The short version
 
 Install [SyncTERM](https://syncterm.bbsdev.net/) and let its installer take the
-telnet association. It is the right terminal for calling boards anyway, it
+telnet association. It is the right app for joining boards anyway, it
 understands `telnet://` links including a non-standard port, and it saves
 whatever was registered before so uninstalling puts it back.
 

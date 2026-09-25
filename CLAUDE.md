@@ -441,10 +441,44 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   browser shows as a broken image. `_photo()` only builds 500 and 960, and
   the suite checks every width on the page. There is no CSP on this site;
   a comment used to say there was.
-- **The wordmark is a link to the board list** on every page and every
+- **The wordmark is a link to the front page** on every page and every
   face (0.16.0), `site_url("list", role, "/")`, with an `aria-label` of its
   own because a link whose only content is a picture is announced as the
-  picture.
+  picture. The front page was the board list until site 1.3.0; the list
+  is /directory now.
+- **The front page is the pitch (site 1.3.0, marketing round 3, Rob's
+  approved mockup).** `front_html()` and the `FRONT_*` constants: kicker,
+  headline, a sub-head that says it runs at home or at work and that people
+  join from a PC, an Android phone or an iPhone with a free app, and from old
+  computers and terminals; Build yours (/install) and Try one first
+  (/directory), twice; what it is, who builds one (six "For example"
+  situations, never names or quotes), three steps, the history (sourced from
+  the firmware README), a closing band. No list, no script, no meta refresh.
+  The drawing of the board is `FRONT_BOARD_ART`, shared with the link
+  preview card. Rules for its copy: true claims only, no favourite machine,
+  "your community" never "your people", coming-soon features marked.
+- **/directory is the board list**, headed "Find a community BBS", and the
+  menu's first entry is "Find a community". Before the search sits
+  `JOIN_STEP`, the free app to join with (TERMinator, MuffinTerm, SyncTERM,
+  checked on their stores 2026-09-25). `site_url()` keeps a list-face path
+  when there is no list domain (it used to send every list link to "/").
+- **The glossary (site 1.3.0, Rob: bridge newcomers into the BBS words,
+  do not remove them).** `GLOSSARY` is the one table of definitions and
+  `GLOSSARY_FORMS` maps plurals and other forms to it. A page marks the
+  first use it wants explained, `[[sysop]]` in Markdown and `gl("sysop")` in
+  server.py (`@GL sysop@` in the manifesto). It renders a focusable span with
+  a dotted underline and the definition in a `role="tooltip"` span pointed
+  at by aria-describedby, shown on :focus (a tap) and on :hover only inside
+  the fine-pointer query, and fixed across the foot of the screen below
+  901px. No title attribute and no script. The suite fails on a `[[term]]`
+  with no entry and on markup left showing.
+- **Link previews (site 1.3.0)**: every page names `/og-card.png`, 1200 x
+  630, with `twitter:card` summary_large_image. `brand/make_ogcard.py`
+  writes `brand/unleashed-og-card.html` from LOGO_SVG and FRONT_BOARD_ART,
+  and the PNG is that page screenshotted in headless Chrome at exactly
+  1200x630 (the command is in the script). `OG_PAGES` gives the pages that
+  have them their own og:title and og:description, applied at reply time
+  like the canonical link. The avatar stays the apple-touch-icon.
 - **The announcement banner** (0.20.1, Rob: "a banner up there for
   announcements ... above the directory, it should be elegant") is one
   slim yellow line between the menu and the board list's heading: a
@@ -461,7 +495,8 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   (`#ffd35c`) is used for nothing else on the site apart from focus rings:
   amber is a warning and the tip box an invitation. Call it the
   announcement banner in docs.
-- **The top of the board list** (0.20.1) is a grid from 901px: the
+- **Gone in site 1.3.0, kept for the history: the top of the board
+  list** (0.20.1) was a grid from 901px: the
   heading, its figures and the lead on the left, and `RUN_CARD` on the
   right, "Run your own board" in the install card's box with two compact
   buttons (Web installer, Build from source; classes `fill` and `line`, not
