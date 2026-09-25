@@ -2586,6 +2586,23 @@ def main():
               and 'href="https://www.facebook.com/terms.php"' in dif
               and "This website runs no analytics" in " ".join(dif.split())
               and 'href="/privacy">What that means in practice' in dif)
+        # Site 1.3.1: where encryption comes up, SSH is said to be coming on
+        # the S3 boards, and never as a thing already there.
+        flat_today = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", today)).split())
+        flat_dif = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", dif)).split())
+        check("the encryption row and the honest paragraph say SSH is coming on the S3",
+              "not yet: plain text, so say only what you would say in public. SSH, "
+              "encrypted, is coming on the S3 boards" in flat_today
+              and "An encrypted way in, SSH" in flat_dif
+              and "is coming on the ESP32-S3 boards, beside telnet rather than instead "
+                  "of it; it is on the roadmap and not built yet." in flat_dif
+              and "SSH is supported" not in flat_dif)
+        rmp = get("/roadmap")[1]
+        check("the roadmap keeps SSH under Later, on the S3 boards",
+              "<b>An encrypted way in, on the S3 boards.</b>" in rmp
+              and rmp.index("An encrypted way in") > rmp.index('id="later"')
+              and "SSH on the S3" in S.ROADMAP_LABEL
+              and 'href="/hardware#waveshare-esp32-s3-lcd-1-47"' in rmp)
         check("the BBS table says it in plain words, no computer-you-supply",
               "a computer you supply" not in dif
               and "none built in: it runs on a PC you already have" in cmp_t
@@ -3570,10 +3587,22 @@ def main():
         hbody = home.split("</nav>")[1].split("<footer")[0]
         hflat = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", hbody)).split())
         check("the front page opens with the kicker and the headline",
-              '<p class="kicker">Social, before social media</p>'
+              '<p class="kicker">Social, before social media'
+              '<span class="k2"><span class="kd" aria-hidden="true"> &middot; </span>'
+              '<a href="/different#what-is-on-those-sites">Privacy forward</a></span></p>'
               '<h1 class="hero">Your own online community, on a device that '
               "<em>fits in your hand</em>.</h1>" in hbody
               and hbody.find('<section class="hero">') < hbody.find('<p class="kicker">'))
+        # Site 1.3.1 (Rob): "Privacy forward" with the kicker, linked to the
+        # place on /different that backs it, one line on a desktop and two
+        # on a phone, the dot going.
+        difp = get("/different")[1]
+        check("and Privacy forward links to where /different backs it",
+              'id="what-is-on-those-sites"' in difp
+              and "No ads, no trackers and no outside scripts" in difp
+              and ".front p.kicker .k2 { display:block;" in home
+              and ".front p.kicker .kd { display:none; }" in home
+              and "Social, before social media · Privacy forward" in hflat)
         check("and the sub-head says where it runs and what people join from",
               "It runs at home or at work" in hflat
               and "People join from a PC, an Android phone or an iPhone with a free app, "
@@ -4382,6 +4411,42 @@ def main():
               and [d for d, v in S.BOARD_SEAL.items() if v == "wire"] == ["esp32-sd"]
               and "<b>Flash &amp; go</b>:" in hw5 and "<b>A little wiring</b>:" in hw5
               and "svg.art.seal .rb {" in hwp and "article .hwb .hwpic svg.art.seal {" in hwp)
+        # Site 1.3.1, Rob: a lock ribbon, "Secure communications", on the
+        # two S3 boards' pictures and nowhere else, saying coming while SSH
+        # is still to ship; each S3 entry says SSH is coming in words, and
+        # the classic ESP32 entries say nothing about it.
+        hsecs = {sid: hw5.split(f'id="{sid}"')[1].split("<h2")[0]
+                 for sid in ("esp32-dev-board-base",
+                             "esp32-dev-board-base-sd-card-for-storage",
+                             "waveshare-esp32-s3-lcd-1-47",
+                             "freenove-esp32-camera-board", "esp32-s3-camera-board")}
+        locks = re.findall(r'<div class="hwpic">.*?(<svg class="art lockr[^"]*"[^>]*>.*?</svg>)',
+                           hw5, re.S)
+        s3w, s3c = hsecs["waveshare-esp32-s3-lcd-1-47"], hsecs["esp32-s3-camera-board"]
+        check("the lock ribbon is on the two S3 boards' pictures only, and says coming",
+              len(locks) == 2 and hw5.count('class="art lockr') == 2
+              and all('<svg class="art lockr soon"' in x and ">COMING</text>" in x
+                      and "SECURE</text>" in x and "COMMUNICATIONS</text>" in x
+                      and 'role="img" aria-label="Secure communications, coming' in x
+                      and "SUPPORTED" not in x for x in locks)
+              and 'class="art lockr' in s3w and 'class="art lockr' in s3c
+              and all('class="art lockr' not in hsecs[k]
+                      for k in ("esp32-dev-board-base",
+                                "esp32-dev-board-base-sd-card-for-storage",
+                                "freenove-esp32-camera-board"))
+              and "svg.art.lockr .rb {" in hwp and "svg.art.lockr.soon text.lk2 {" in hwp
+              and "article .hwb .hwpic svg.art.lockr {" in hwp
+              and "<b>Secure communications</b>, marked <b>coming</b>"
+                  in " ".join(hw5.split()))
+        check("and each S3 entry says SSH is coming, in words, with its glossary note",
+              "<b>Encrypted connections, coming.</b>" in s3w
+              and "SSH" in s3w and 'class="gl"' in s3w
+              and "<b>coming</b> and not built yet" in " ".join(s3c.split())
+              and all("SSH" not in re.sub(r"<[^>]+>", "", hsecs[k])
+                      for k in ("esp32-dev-board-base",
+                                "esp32-dev-board-base-sd-card-for-storage",
+                                "freenove-esp32-camera-board"))
+              and "encrypted" in S.GLOSSARY["SSH"].lower())
         # Site 1.2.7, Rob: "esp32 is misleading with flash and go, it has to
         # have an sd card". The bare board says what it does without one and
         # points at the second entry, which summarises and links /sdcard.
@@ -4604,6 +4669,19 @@ def main():
               and 'href="https://syncterm.bbsdev.net/"' in js_
               and 'href="/terminals">Apps for joining</a>' in js_
               and 'class="gl"' in js_)
+        # Site 1.3.1 (Rob's own app on Android): Termius, beside TERMinator,
+        # on the join step and on /terminals.
+        tp = get("/terminals")[1]
+        check("Termius is on the join step and on /terminals, free, with telnet",
+              "<b>Termius</b>, free for" in js_ and "works well too." in js_
+              and 'href="https://play.google.com/store/apps/details?id=com.server.auditor.ssh.client"'
+                  in js_
+              and 'href="https://apps.apple.com/us/app/termius-modern-ssh-client/id549039908"'
+                  in js_
+              and js_.index("TERMinator") < js_.index("Termius") < js_.index("SyncTERM")
+              and '<a href="https://termius.com/">Termius</a>' in tp
+              and "Telnet is in the free plan." in tp
+              and "telnet is in its free plan" in " ".join(tp.split()))
         check("the menu's first entry is Find a community, and the wordmark goes home",
               '<nav><a href="/directory">Find a community</a>' in get("/whofor")[1]
               and '<a class="home" href="/"' in get("/whofor")[1])
@@ -5129,6 +5207,18 @@ def main():
                       and "arrives with firmware 1.1 for the camera boards" in cam0
                       and "is on <a href=\"/install\">the installer</a>" not in cam0
                       and S.early_note() == "" and '<p class="meta early' not in pick0)
+                # Site 1.3.1: the lock ribbon turns to SUPPORTED on a release
+                # only. With SSH marked as from 1.1.0 and only a 1.1.0
+                # preview carrying the S3, it still says coming.
+                was_ssh = dict(S.BOARD_SSH)
+                try:
+                    S.BOARD_SSH["esp32s3"] = (1, 1, 0)
+                    check("the lock ribbon ignores a preview carrying SSH",
+                          S.ssh_state("esp32s3") == "coming"
+                          and ">COMING</text>" in S.lock_html("esp32s3"))
+                finally:
+                    S.BOARD_SSH.clear()
+                    S.BOARD_SSH.update(was_ssh)
 
                 # 1.1.0 lands, with all three sets.
                 put110("1.1.0", "esp32", "1.1.0")
@@ -5175,6 +5265,40 @@ def main():
                               ("storage.bin", 3932160)]
                       and S.firmware_file("1.1.0/esp32-fncam/firmware.bin") is not None
                       and S.firmware_file("1.1.0/esp32-fncam/../esp32/firmware.bin") is None)
+                # Site 1.3.1, Rob: the lock ribbon, on the S3's row of the
+                # picker only, saying coming while SSH has not shipped; and
+                # SUPPORTED by itself once BOARD_SSH names a release that is
+                # on disk carrying the board's set, and not before.
+                rows1 = pick1.split('<label class="bopt">')[1:]
+                was_ssh = dict(S.BOARD_SSH)
+                try:
+                    S.BOARD_SSH["esp32s3"] = (1, 1, 0)
+                    S.BOARD_SSH["esp32s3-cam"] = (1, 1, 0)
+                    shipped = (S.ssh_state("esp32s3"), S.lock_html("esp32s3"),
+                               S.lock_html("esp32s3", "row"), S.ssh_state("esp32s3-cam"))
+                    S.BOARD_SSH["esp32s3"] = (1, 2, 0)
+                    later = S.ssh_state("esp32s3")
+                finally:
+                    S.BOARD_SSH.clear()
+                    S.BOARD_SSH.update(was_ssh)
+                check("the lock ribbon is on the S3's picker row alone, and says coming",
+                      len(rows1) == 3
+                      and ['class="art lockr' in r for r in rows1] == [False, True, False]
+                      and pick1.count('class="art lockr') == 1
+                      and '<svg class="art lockr soon row"' in rows1[1]
+                      and 'aria-label="Secure communications, coming: SSH' in rows1[1]
+                      and "SECURE COMMUNICATIONS</text>" in rows1[1]
+                      and ">COMING</text>" in rows1[1] and "SUPPORTED" not in rows1[1])
+                check("and turns to supported by itself when a release carrying SSH "
+                      "is on disk, the S3 camera board staying coming with no set",
+                      shipped[0] == "supported"
+                      and ">SUPPORTED</text>" in shipped[1] and "soon" not in shipped[1]
+                      and 'aria-label="Secure communications supported' in shipped[1]
+                      and ">SUPPORTED</text>" in shipped[2]
+                      and shipped[3] == "coming" and later == "coming"
+                      and S.BOARD_SSH == {"esp32s3": None, "esp32s3-cam": None}
+                      and S.lock_html("esp32") == "" and S.lock_html("esp32-fncam") == ""
+                      and S.lock_html("esp32-sd") == "")
                 check("each board's version line says 1.1.0 is out early, and no other",
                       pick1.count('<p class="meta early r0">' + early + "</p>") == 3
                       and '<p class="meta early r1">' not in pick1

@@ -1161,6 +1161,10 @@ GLOSSARY = {
     "port forwarding": "A router setting that lets people outside your home "
                        "reach one device inside it, on one numbered port.",
     "handle": "The nickname you use on a board.",
+    # Site 1.3.1: SSH is coming on the S3 boards, and the words that say so
+    # need it explained where a newcomer meets them.
+    "SSH": "An encrypted way of connecting to a board, beside telnet: what "
+           "you type is scrambled on the way, so only the board can read it.",
 }
 # Other ways a term is written on a page, lower case, to its entry.
 GLOSSARY_FORMS = {
@@ -2744,6 +2748,91 @@ def seal_html(kind):
             + "</svg>")
 
 
+# The lock ribbon (site 1.3.1, Rob): "Secure communications" on the S3
+# boards, the ones queued to take SSH beside telnet (the firmware's
+# CLAUDE.md, "An encrypted option ... Queued as an S3 option, not started").
+# The same ribbon as the seal, laid on under the picture on /hardware and at
+# the end of the board's row in /install's picker. The classic ESP32 boards
+# are not in the table, because SSH is not planned for them, so they carry
+# no ribbon at all.
+#
+# The value is the first firmware version that carries SSH for that board,
+# None until it is known. While it is None, or while no release on disk at
+# or after it carries the board's image set, the ribbon says COMING. When
+# SSH ships, put that version here as a tuple, e.g. (1, 2, 0), and the
+# ribbon turns to SUPPORTED by itself the day that release is on disk.
+# Releases only: a preview never counts, the same rule as a "::: from" gate.
+BOARD_SSH = {"esp32s3": None, "esp32s3-cam": None}
+
+
+def ssh_state(d):
+    """"supported", "coming", or None for a board SSH is not planned for."""
+    if d not in BOARD_SSH:
+        return None
+    since = BOARD_SSH[d]
+    if since is None:
+        return "coming"
+    img = BOARD_BY_DIR.get(d, {}).get("image", d)
+    if any(tuple(r["sort"]) >= tuple(since) and img in r["sets"]
+           for r in firmware_releases()):
+        return "supported"
+    return "coming"
+
+
+# The padlock, line art in the ribbon's stroke: a shackle and a body with a
+# keyhole, drawn round the origin and moved into place by each ribbon.
+_LOCK_ART = ('<path class="lk" d="M-3.5 -1 V-4 A3.5 3.5 0 0 1 3.5 -4 V-1"/>'
+             '<rect class="lk" x="-6" y="-1" width="12" height="10" rx="1.5"/>'
+             '<path class="lk" d="M0 2.6 V5.6"/>')
+
+
+def lock_html(d, where="pic"):
+    """The lock ribbon for board d, or "" for a board with no SSH planned.
+    where="pic" is the three-line ribbon laid under a picture on /hardware;
+    where="row" is one line, for the end of a picker row. The last word is
+    COMING in amber until SSH ships for the board, and SUPPORTED in the
+    seal's green after. role="img" with the state said in words, because
+    the ribbon is the only place it is shown."""
+    st = ssh_state(d)
+    if st is None:
+        return ""
+    ok = st == "supported"
+    word = "SUPPORTED" if ok else "COMING"
+    wl = len(word) * 5.1
+    label = ("Secure communications supported: this board takes encrypted "
+             "connections over SSH, beside telnet" if ok else
+             "Secure communications, coming: SSH, an encrypted way to "
+             "connect, is planned for this board and not yet released")
+    cls = "art lockr" + ("" if ok else " soon") + (" row" if where == "row" else "")
+    if where == "row":
+        # One line: the lock, 21 characters, a dot, then the state.
+        w = 20 + 110 + 10 + wl + 12
+        return (f'<svg class="{cls}" viewBox="0 0 {w:g} 20" role="img" '
+                f'aria-label="{label}">'
+                f'<path class="rb" d="M1 1 H{w - 1:g} L{w - 7:g} 10 L{w - 1:g} 19 H1 Z"/>'
+                f'<g transform="translate(11 9.5) scale(0.8)">{_LOCK_ART}</g>'
+                '<text class="lk1" x="20" y="13.5" font-size="8.5" '
+                'textLength="110" lengthAdjust="spacingAndGlyphs">'
+                "SECURE COMMUNICATIONS</text>"
+                f'<text class="lk1" x="{20 + 110 + 5:g}" y="13.5" font-size="8.5" '
+                'text-anchor="middle">·</text>'
+                f'<text class="lk2" x="{20 + 110 + 10:g}" y="13.5" font-size="8.5" '
+                f'textLength="{wl:g}" lengthAdjust="spacingAndGlyphs">'
+                f"{word}</text></svg>")
+    # Three lines, as narrow as the seal's type allows: the lock on the left,
+    # SECURE, COMMUNICATIONS, and the state under them.
+    return (f'<svg class="{cls}" viewBox="0 0 112 44" role="img" '
+            f'aria-label="{label}">'
+            '<path class="rb" d="M1 1 H111 L105 22 L111 43 H1 Z"/>'
+            f'<g transform="translate(12 21)">{_LOCK_ART}</g>'
+            '<text class="lk1" x="24" y="14" font-size="8.5" textLength="30.6" '
+            'lengthAdjust="spacingAndGlyphs">SECURE</text>'
+            '<text class="lk1" x="24" y="25" font-size="8.5" textLength="71.4" '
+            'lengthAdjust="spacingAndGlyphs">COMMUNICATIONS</text>'
+            f'<text class="lk2" x="24" y="36" font-size="8.5" textLength="{wl:g}" '
+            f'lengthAdjust="spacingAndGlyphs">{word}</text></svg>')
+
+
 def board_version(rel, chip):
     """The version one board's image set says it is, for a reader: exactly as
     the board shows it for a release ("1.0.3", "1.1.0 (S3 1.0.0)"), and
@@ -2820,7 +2909,8 @@ def installer_html(lines=()):
                       if b.get("pick") else
                       '<span class="tell">' + html.escape(b["tell"]) + "</span>")
                    + '<span class="bv' + ("" if o else " soon") + '">'
-                   + html.escape(ver) + "</span></span></label>")
+                   + html.escape(ver) + "</span></span>"
+                   + lock_html(b["dir"], "row") + "</label>")
     out.append("</fieldset>")
 
     for j, (b, o) in enumerate(offers):
@@ -2988,7 +3078,7 @@ def board_html(lines):
     seal = seal_html(BOARD_SEAL[b["dir"]]) if b["dir"] in BOARD_SEAL else ""
     return ('<div class="hwb"><div class="hwpic">'
             + b["art"].replace('class="art board', 'class="art board big', 1)
-            + seal + "</div>"
+            + lock_html(b["dir"]) + seal + "</div>"
             + "<dl>"
             + "<dt>Firmware</dt><dd>" + build + "</dd>"
             + "<dt>Chip</dt><dd>" + html.escape(b["part"]) + "</dd>"
@@ -3242,7 +3332,8 @@ COMPARE_TODAY_ROWS = (
         ("y", "none"),
         (None, "none to join; a computer to run your own"))),
     ("Encrypted on the way", (
-        ("n", "no: plain text, so say only what you would say in public"),
+        ("n", "not yet: plain text, so say only what you would say in "
+              "public. SSH, encrypted, is coming on the S3 boards"),
         ("y", "yes"),
         ("y", "yes"),
         ("y", "yes"),
@@ -3972,6 +4063,15 @@ p.qline a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 .front p.seclead {{ color:var(--dim); font-size:0.8125rem; margin:0 0 1.125rem; max-width:44rem; }}
 .front p.kicker {{ color:var(--struct); text-transform:uppercase; letter-spacing:0.14em;
         font-size:0.6875rem; margin:0 0 0.75rem; }}
+/* Site 1.3.1: the second phrase is a link to where it is backed, drawn in
+   the kicker's own colour with a dotted rule so it stays one line of type. */
+.front p.kicker a {{ color:inherit; text-decoration:underline dotted; text-underline-offset:0.25em; }}
+.front p.kicker a:hover {{ color:var(--dial); }}
+.front p.kicker a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+@media (max-width: 900px) {{
+  .front p.kicker .k2 {{ display:block; margin-top:0.375rem; }}
+  .front p.kicker .kd {{ display:none; }}
+}}
 .front h1.hero {{ font-family:"Pitch",ui-monospace,Menlo,Consolas,monospace; font-weight:500;
         color:#eeeaf8; font-size:2.375rem; line-height:1.15; letter-spacing:0.005em;
         text-transform:none; margin:0 0 0.875rem; }}
@@ -5160,6 +5260,11 @@ article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}
 article .installer .bopt .tell.pick {{ color:var(--ink); }}
 article .installer .bopt .bv {{ color:var(--dial); font-size:0.75rem; }}
 article .installer .bopt .bv.soon {{ color:var(--faint); }}
+/* The lock ribbon (site 1.3.1) at the end of an S3 board's row, where the
+   row has room; on a phone it wraps to a line of its own under the words. */
+article .installer .bopt {{ flex-wrap:wrap; }}
+article .installer .bopt svg.art.lockr {{ flex:none; width:auto; height:1.375rem;
+        margin:0 0 0 auto; }}
 article .installer .bsec {{ display:flex; flex-direction:column; gap:0.5rem; }}
 article .installer .bsec > * {{ margin:0; }}
 /* What a board needs done before either button: an instruction rather than
@@ -5229,6 +5334,10 @@ article .hwb dd .exp {{ color:var(--dim); }}
 article .hwb .hwpic {{ position:relative; flex:none; padding:0.5rem 0 0 0.5rem; }}
 article .hwb .hwpic svg.art.seal {{ position:absolute; left:0; top:0;
         width:5.25rem; height:auto; margin:0; }}
+/* The lock ribbon (site 1.3.1) under the picture, laid over its lower edge
+   and out to the same left edge as the seal above it, at the seal's scale. */
+article .hwb .hwpic svg.art.lockr {{ display:block; width:8.1667rem; height:auto;
+        margin:-0.25rem 0 0 -0.5rem; position:relative; }}
 /* A page's one primary action, drawn like the installer's button, with
    the other way round beside it outlined, the way the installer card draws
    a kept older release, and a note under both. On a phone the two stack,
@@ -7234,6 +7343,11 @@ FRONT_BOARD_ART = (
     'font-family="ui-monospace,Menlo,Consolas,monospace" font-size="11">about 5 cm</text>'
     "</svg>")
 
+FRONT_KICKER = ('<p class="kicker">Social, before social media'
+                '<span class="k2"><span class="kd" aria-hidden="true"> &middot; </span>'
+                '<a href="/different#what-is-on-those-sites">Privacy forward</a>'
+                "</span></p>")
+
 FRONT_TITLE = ("\u00b5nleashed: your own online community, on a device that "
                "fits in your hand")
 FRONT_DESC = ("Chat and messages for your class, club, family or friends, on a "
@@ -7311,7 +7425,13 @@ def front_html():
     return (
         '<div class="front">'
         '<section class="hero"><div>'
-        '<p class="kicker">Social, before social media</p>'
+        # Site 1.3.1 (Rob): "Privacy forward" beside the kicker, linked to
+        # /different's list of what is on each kind of site, which is where
+        # the claim is backed: no ads, no trackers, no outside scripts, and
+        # what members write stays on the host's board. One line on a
+        # desktop; on a phone the second phrase takes a line of its own and
+        # the dot between them goes.
+        + FRONT_KICKER +
         '<h1 class="hero">Your own online community, on a device that '
         "<em>fits in your hand</em>.</h1>"
         '<p class="sub">A place for your class, club, family or friends to '
@@ -7617,7 +7737,11 @@ def index_page(data=None):
 # 2026-09-25: TERMinator (Phil Whittemore) on Google Play and on the App
 # Store, free on the App Store; MuffinTerm (Molly Black), free on the App
 # Store for iPhone, iPad and Mac; SyncTERM, free software, for Windows,
-# macOS and Linux.
+# macOS and Linux. Termius (site 1.3.1, Rob's own on Android), checked on
+# 2026-09-25: termius.com/pricing lists Telnet in every plan, the free
+# Starter included, and its App Store listing says the free plan connects
+# "with SSH, Mosh, Telnet, Port Forwarding, and SFTP"; termius.com/download
+# offers Android, iPhone, iPad, Windows, macOS and Linux.
 JOIN_STEP = ('<div class="joinstep" role="note"><h2>First time? You need a free '
              "app to join</h2><p>" + md_inline(
                  "A BBS is not a web page, so you join one with a [[telnet "
@@ -7627,6 +7751,10 @@ JOIN_STEP = ('<div class="joinstep" role="note"><h2>First time? You need a free 
                  "or [iPhone](https://apps.apple.com/us/app/terminator-bbs-terminal/id6759012939), "
                  "or **MuffinTerm** for "
                  "[iPhone](https://apps.apple.com/us/app/muffinterm/id1583236494). "
+                 "**Termius**, free for "
+                 "[Android](https://play.google.com/store/apps/details?id=com.server.auditor.ssh.client) "
+                 "and [iPhone](https://apps.apple.com/us/app/termius-modern-ssh-client/id549039908), "
+                 "works well too. "
                  "On a computer: **[SyncTERM](https://syncterm.bbsdev.net/)**, "
                  "for Windows, macOS and Linux.")
              + '</p><p class="more">' + md_inline(
@@ -8313,6 +8441,16 @@ svg.art.seal .rb { fill:var(--bg); stroke:var(--live); stroke-width:1.4;
         stroke-linejoin:round; }
 svg.art.seal text.sl1 { fill:var(--live); font-weight:bold; letter-spacing:0.04em; }
 svg.art.seal text.sl2 { fill:var(--dim); }
+/* The lock ribbon (site 1.3.1): the seal's ribbon, with a padlock in its
+   stroke. The state is the last word: SUPPORTED in the seal's green, and
+   COMING in amber while SSH is still to ship, so the ribbon cannot be read
+   as a promise already kept. */
+svg.art.lockr .rb { fill:var(--bg); stroke:var(--live); stroke-width:1.4;
+        stroke-linejoin:round; }
+svg.art.lockr .lk { fill:none; stroke:var(--live); stroke-width:1.4;
+        stroke-linejoin:round; stroke-linecap:round; }
+svg.art.lockr text.lk1, svg.art.lockr text.lk2 { fill:var(--live); font-weight:bold; }
+svg.art.lockr.soon text.lk2 { fill:var(--warm); }
 
 /* The machines on /terminals, one strip under each heading. Narrower
    than the first call strip, because there are eight of them on one page

@@ -44,8 +44,9 @@ board with firmware 1.1.0, together with everything under Now.
 
 - **The board updates itself.** It fetches a new version, checks that it is
   genuine, and puts it on when the sysop says yes. No USB cable.
-- **An encrypted way in, on the S3.** SSH beside telnet, for callers whose
-  machines can do it. Telnet stays, for the machines that cannot, and
+- **An encrypted way in, on the S3 boards.** [[SSH]] beside telnet, for
+  callers whose machines can do it, on the [Waveshare and the S3 camera
+  board](/hardware#waveshare-esp32-s3-lcd-1-47). Telnet stays, for the machines that cannot, and
   [the privacy page](/privacy) says why that matters.
 - **Sensors.** Temperature, humidity, light, motion and switches on the board's
   pins, named and shown on screen without writing any code.

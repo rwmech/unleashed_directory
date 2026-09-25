@@ -1,4 +1,4 @@
-<!-- Site 1.3.0 (Rob, marketing round 3): "Apps for joining" in the menu and the title, with the hobby's words, telnet client and terminal, explained where they first appear. The phone apps were checked on their stores on 2026-09-25: TERMinator (Phil Whittemore) on the App Store, free, iPhone and iPad; the Play Store listing could not be fetched from here, and the firmware's README and CLIENTS.md already name it for Android. MuffinTerm (Molly Black), free on the App Store for iPhone, iPad and Mac. -->
+<!-- Site 1.3.0 (Rob, marketing round 3): "Apps for joining" in the menu and the title, with the hobby's words, telnet client and terminal, explained where they first appear. The phone apps were checked on their stores on 2026-09-25: TERMinator (Phil Whittemore) on the App Store, free, iPhone and iPad; the Play Store listing could not be fetched from here, and the firmware's README and CLIENTS.md already name it for Android. MuffinTerm (Molly Black), free on the App Store for iPhone, iPad and Mac. Site 1.3.1 (Rob: "I love Terminus on Android personally", meaning Termius), checked 2026-09-25: termius.com/pricing lists Telnet in every plan including the free Starter; its App Store listing says the free plan connects "with SSH, Mosh, Telnet, Port Forwarding, and SFTP"; termius.com/download offers Android, iPhone, iPad, Windows, macOS and Linux. It is a general SSH and telnet app, not one made for BBSes. -->
 # Apps for joining
 
 What you join a board with: a [[telnet client]], the free app that connects
@@ -27,6 +27,11 @@ On a phone, **TERMinator** on
 or [iPhone](https://apps.apple.com/us/app/terminator-bbs-terminal/id6759012939),
 and **[MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494)** on
 iPhone, iPad and Mac, both do the job and render ANSI art correctly.
+**Termius**, free for
+[Android](https://play.google.com/store/apps/details?id=com.server.auditor.ssh.client)
+and [iPhone](https://apps.apple.com/us/app/termius-modern-ssh-client/id549039908),
+works well too. It is a general app for connecting to servers rather than one
+made for boards, and telnet is in its free plan.
 
 A Chromebook is the one machine where none of that installs straight into the
 browser. It can join a board through its Linux environment or an Android app,
@@ -42,6 +47,7 @@ its own section further down.
 | [mTelnet](https://mt32.bbses.info/) | Windows | Small, fast, built for BBSes. |
 | [MuffinTerm](https://apps.apple.com/us/app/muffinterm/id1583236494) | iOS, macOS | Handles PETSCII as well as ANSI. |
 | [TERMinator](https://play.google.com/store/apps/details?id=com.terminator.android) | Android, iPhone and iPad, ChromeOS with the Play Store | CP437 art, classic fonts, ZMODEM transfers. |
+| [Termius](https://termius.com/) | Android, iPhone and iPad, Windows, macOS, Linux | A general SSH and telnet app, not made for boards. Telnet is in the free plan. |
 | [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/) | Windows, Linux | Everywhere already, but set the character set to CP437 or the art will be wrong. Not built for this. |
 | `telnet` | Linux, macOS, BSD | `telnet unleashed.local 6400`. Fine and plain. On Debian or Ubuntu: `sudo apt -y install inetutils-telnet`. |
 | `nc` | anywhere | `nc host 6400`. Works, negotiates nothing, and looks it. |

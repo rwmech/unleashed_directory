@@ -14,6 +14,39 @@
 
 # Changelog
 
+## 1.3.1, 2026-09-25
+
+Three small changes from Rob, and a fourth app for joining. The front page
+below the hero is exactly as 1.3.0.
+
+- **"Privacy forward" in the kicker**: "Social, before social media ·
+  Privacy forward", one line on a desktop and two on a phone, where the dot
+  goes. The second phrase links to /different's "What is on those sites",
+  where it is backed: no ads, no trackers, no outside scripts, and what
+  members write stays on the host's board. `FRONT_KICKER` in server.py.
+- **SSH is coming on the S3 boards**, and says so: a line on the Waveshare's
+  entry and on the S3 camera board's on /hardware, the roadmap's Later entry
+  naming both boards, the "Encrypted on the way" row of the comparison with
+  the apps ("not yet ... SSH, encrypted, is coming on the S3 boards"), and a
+  sentence under /different's honest paragraph. SSH has a glossary entry:
+  an encrypted way of connecting to a board, beside telnet. It is queued in
+  the firmware for the S3 profiles only and not started, so every mention
+  says coming.
+- **A lock ribbon on the S3 boards**, the seal's ribbon with a line-art
+  padlock: "Secure communications" and the state, laid over the foot of the
+  picture on /hardware and at the end of the Waveshare's row in /install's
+  picker. The state is COMING, in amber, until SSH ships. `BOARD_SSH` in
+  server.py holds the boards and, for each, the first firmware version that
+  carries SSH (None until it is known): set it to that version as a tuple
+  when SSH ships, and the ribbon reads SUPPORTED, in green, by itself on the
+  day a release at or after it carrying the board's image set is on disk. A
+  preview never counts. The classic ESP32 boards are not in the table and
+  carry no ribbon.
+- **Termius** on /directory's join step and on /terminals, beside
+  TERMinator (Rob's own app on Android): free for Android and iPhone, with
+  telnet in its free plan, checked on termius.com's pricing page and its App
+  Store listing on 2026-09-25.
+
 ## 1.3.0, 2026-09-25
 
 A new front page for somebody who has never heard of a BBS, and a pass over
