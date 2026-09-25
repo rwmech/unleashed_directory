@@ -1,9 +1,9 @@
-<!-- The camera page (site 1.2.4, Rob), in the shape of /sdcard and /lights. Every fact is from the firmware repository's internal/PLAN-freenove-cam.md as of 2026-09-24, and only from the sections Rob decided: "Snapshot command, self-timer and timelapse", "Limits, notices and naming" and "Retention", plus the privacy points in the brief. Since site 1.2.7 the sensor and the resolution are stated, from the firmware's FNCAM 1.0.2 (CHANGELOG, COMMANDS.md and src/board.h, 2026-09-25): the Freenove's sensor varies between batches, Freenove document an OV2640 and Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no JPEG encoder, the board encodes: 3.6 to 3.9 s from SNAPSHOT to saved); both drivers are built, and CONFIG offers qvga or vga on either, vga as shipped (off until switched on, staff told of every snap, a lens cap the only real guarantee). Deliberately not stated, because the plan leaves them open: the quality default, the brightness default, the default count limits, the shortest timelapse interval (to be measured), exact wording of the board's messages other than "Download it now? (y/N)", which is Rob's, and the text-art preview (a stretch without a go). The Photos area is readable by everyone as shipped (Rob, in the 1.2.4 brief; the plan's proposal was users). The "until 1.1.0" note follows /lights; if the camera slips past 1.1.0, move the gate to the release that carries it. -->
+<!-- The camera page (site 1.2.4, Rob), in the shape of /sdcard and /lights. Every fact is from the firmware repository's internal/PLAN-freenove-cam.md as of 2026-09-24, and only from the sections Rob decided: "Snapshot command, self-timer and timelapse", "Limits, notices and naming" and "Retention", plus the privacy points in the brief. Since site 1.2.7 the sensor and the resolution are stated, from the firmware's FNCAM 1.0.2 (CHANGELOG, COMMANDS.md and src/board.h, 2026-09-25): the Freenove's sensor varies between batches, Freenove document an OV2640 and Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no JPEG encoder, the board encodes: 3.6 to 3.9 s from SNAPSHOT to saved); both drivers are built, and CONFIG offers qvga or vga on either, vga as shipped (off until switched on, staff told of every snap, a lens cap the only real guarantee). Deliberately not stated, because the plan leaves them open: the quality default, the brightness default, the default count limits, the shortest timelapse interval (to be measured), exact wording of the board's messages other than "Download it now? (y/N)", which is Rob's, and the text-art preview (a stretch without a go). The Photos area is readable by everyone as shipped (Rob, in the 1.2.4 brief; the plan's proposal was users). The "until 1.1.0" note follows /lights; if the camera slips past 1.1.0, move the gate to the release that carries it. Since site 1.2.9 the settings, the download question, the flash and the timelapse are the firmware's as built, from COMMANDS.md "camera" and src/plugins/camera.cpp at 1.1.0-dev.15 (FNCAM 1.0.2): off until enabled (no PF_ON), staff told "Node n took a photo.", "Download it now?  [Y]es  [X]modem  [N]o", quality 12 on 4 to 40, 200 kept of each kind, flash off as shipped (the Freenove has no pixel), timelapse every 10 s at the least into area 13. The "from 1.1.0" note says which camera board the installer carries. -->
 # Camera
 
 A camera on the board, and any caller you allow can take a picture with it.
 Point the board at a bird feeder, a garden or a workbench, and a caller on a
-laptop, or on a Commodore 64 from 1982, types `SNAPSHOT` and has the photo a
+laptop, or on an Atari 800 from 1979, types `SNAPSHOT` and has the photo a
 few seconds later.
 
 ::: until 1.1.0
@@ -11,6 +11,13 @@ few seconds later.
 > **The camera arrives with firmware 1.1 for the camera boards**, which is not
 > released yet, and neither board is on the installer. This page describes it
 > as it has been designed, so you can plan a board around it.
+:::
+
+::: from 1.1.0
+> [!NOTE]
+> **The Freenove camera board is on [the installer](/install)** from firmware
+> 1.1.0. The ESP32-S3 camera board is not yet: it goes on once it has been
+> tested.
 :::
 
 ::: art
@@ -42,15 +49,15 @@ Type `SNAPSHOT`, or `SNAP` for short, at the main prompt.
   photo is saved about 4 seconds later, because the board encodes it itself.
 - **It tells you the photo's file name**, that it is in the Photos file area,
   and how many more you may take this hour and today.
-- **It asks `Download it now? (y/N)`.** Y sends the photo at once by YMODEM or
-  XMODEM, the same way as any download from the file areas, so the picture is
-  on your machine seconds after you asked for it. N takes you back to the
-  prompt, and the photo stays in Photos.
+- **It asks `Download it now? [Y]es [X]modem [N]o`.** Y sends the photo at
+  once by YMODEM and X by plain XMODEM, the same way as any download from the
+  file areas, so the picture is on your machine seconds after you asked for
+  it. N takes you back to the prompt, and the photo stays in Photos.
 
 A caller who may take pictures but not download them is told where the photo
 went and is not asked. A photo is a JPEG, which a PC terminal can save and
-open: a Commodore 64 can take the picture, and looking at it is a job for a
-PC.
+open: an 8-bit machine can take the picture, and looking at it is a job for
+a PC.
 
 ## Photos, file area 12
 
@@ -80,8 +87,10 @@ getting right before any of the settings below.
   on, and then, as shipped, only staff may take a picture.
 - **Staff hear about every snap.** Each member of staff on the board sees a
   line naming the node that took one.
-- **The room can see it too.** With **Use flash LED?** on, as shipped, the
-  board's pixel lights white for as long as a picture takes.
+- **A light can tell the room.** The camera can light a pixel, or an LED on
+  a spare pin, while it takes a picture. The Freenove board has no light of
+  its own for this, so it is off as shipped: wire one and switch it on if the
+  people in the room should know when a picture is taken.
 - **The pictures stay on your card**, not on anybody's server. A picture leaves
   the board when a caller downloads it, and from their machine it can go
   anywhere, like any file.
@@ -94,37 +103,36 @@ Low risk is not no risk, and the difference is what is in frame.
 
 ## Settings
 
-`CONFIG camera`, the sysop's alone. Where the last column says **not settled
-yet**, the firmware has not fixed a value and this page will say it once it
-has.
+`CONFIG camera`, the sysop's alone. The flash, the timelapse and the
+picture adjustments are pages of their own inside it.
 
 | Setting | What it does | As shipped |
 |---|---|---|
 | On | Whether the camera runs at all. | Off |
 | Snapshot level | Who may take a picture, from everybody, guests included, up to the sysop alone. | Staff |
-| Photos level | Who may see and download the photos in area 12. | Everybody |
+| Photos level | Who may see and download the photos in areas 12 and 13. | Everybody |
 | Resolution | 320x240 or 640x480, on either camera. A GC0308 goes no higher. | 640x480 |
-| Quality | How sharp the JPEG is. | Not settled yet |
-| Flip, mirror, brightness | For a camera mounted upside down, looking through a mirror, or in a dim room. | Not settled yet |
-| Use flash LED? | Lights the board's pixel white while a picture is taken, callers' pictures and the timelapse's alike. | Yes |
+| Quality | How sharp the JPEG is, 4 to 40, where lower is sharper. | 12 |
+| Watermark | The board's name, the date and who took it, in a corner. | On |
 | Name snaps | By date, by date and handle, or a folder for each handle. | By date |
-| Auto photo every | A picture every so many seconds, up to 86,400, which is a day. 0 is off. | Off |
 | Keep caller snaps for | Days before a caller's photo is removed. 0 keeps them however old. | 30 days |
-| Keep timelapse for | The same for the timelapse's pictures. | 7 days |
-| Max caller snaps, max timelapse shots | How many of each are kept. 0 is no limit. | Not settled yet |
+| Max caller snaps | How many callers' photos are kept. 0 is no limit. | 200 |
 | Card space floor | Free space the camera always leaves on the card for the file areas, the forums and the backups. | 10% of the card or 512 MB, whichever is smaller |
+| Flash | Off, a pixel lit white, or a pin driven high for an LED, a relay or a flash unit, while a picture is taken. | Off |
+| Timelapse every | Minutes and seconds between the board's own pictures, up to a day. 0 is off, and anything under 10 seconds is 10. | Off |
+| Keep timelapse for, max timelapse shots | The same two rules for the timelapse's pictures. | 7 days, 200 |
+| Flip, mirror, brightness, contrast, colour, exposure, white balance, effect | For a camera mounted upside down, looking through a mirror, or in a dim room. | Off, or the sensor's own |
 
 The oldest photos go first when any of the last four rules bites, and the
 timelapse's go before callers' pictures when the card is short of room.
 
 ## Timelapse
 
-Set **Auto photo every** and the board takes pictures by itself: once a minute
+Set **Timelapse every** and the board takes pictures by itself: once a minute
 for an afternoon of clouds going over, once an hour for a month of a garden
-growing. They go into a timelapse folder of their own inside Photos, with
-their own keep rules, so a fast timelapse never pushes out the pictures
-callers took. The shortest interval the board allows is still being measured
-on the bench.
+growing. They go into **Timelapse**, file area 13, with their own keep rules,
+so a fast timelapse never pushes out the pictures callers took. The shortest
+interval is 10 seconds, because the camera has to start up for each picture.
 
 Later, a motion sensor on a spare pin will be able to take a picture the
 moment something moves, for the visitor at the feeder nobody was watching

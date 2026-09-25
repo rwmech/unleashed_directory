@@ -5,6 +5,10 @@ A board that already runs µnleashed takes a new version from [the installer](/i
 
 On [the board list](/), a µnleashed board older than the newest release here has a small up arrow on the end of its software badge, the one with its version in it, and pressing the arrow brings you to this page.
 
+<!-- "::: early" (site 1.2.9) is the early-testing line while the newest release on disk is a .0, from firmware 1.1.0 on, and nothing otherwise: see early_note() in server.py. -->
+::: early
+:::
+
 ## Back up first
 
 The update does not write where your accounts are kept, but a copy costs a minute and nothing else can put them back. Open [the backup window](/setup#backup) and download the zip. It holds the settings, the accounts and the screens.

@@ -2465,7 +2465,11 @@ def main():
         _, hwp4 = get("/hardware")
         hw4 = hwp4.split("<article>")[1].split("</article>")[0]
         soon_ok = True
-        for b in S.SOON_BOARDS:
+        # Site 1.2.9: the Freenove is in BOARDS, marked to wait for a
+        # release, and is coming soon here while no release carries it,
+        # which is the case with this suite's firmware/ (0.23.0).
+        fncam = S.BOARD_BY_DIR["esp32-fncam"]
+        for b in S.SOON_BOARDS + (fncam,):
             anchor = b["page"].split("#")[1]
             sec = hw4.split(f'id="{anchor}"')[1].split("<h2")[0] if f'id="{anchor}"' in hw4 else ""
             soon_ok = soon_ok and (S.board_html([b["dir"]]) in sec
@@ -2477,26 +2481,33 @@ def main():
         # Site 1.2.5, Rob: both camera boards gained a buy link, shown the
         # way the tested boards show theirs, and stay coming soon.
         check("/hardware lists both camera boards as coming soon, each with its buy link",
-              len(S.SOON_BOARDS) == 2 and soon_ok
+              len(S.SOON_BOARDS) == 1 and soon_ok
               and "tested when it arrives" in " ".join(hw4.split())
-              and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw4)
+              and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw4
+              and "<b>ESP32-WROVER: yes, on one board.</b>" not in hw4)
         _, inst4 = get("/install")
         check("and neither is offered on the installer's picker",
-              all(b["name"] not in inst4 for b in S.SOON_BOARDS)
-              and all(b["dir"] not in {x["dir"] for x in S.BOARDS} for b in S.SOON_BOARDS))
+              all(b["name"] not in inst4 for b in S.SOON_BOARDS + (fncam,))
+              and all(b["dir"] not in {x["dir"] for x in S.BOARDS} for b in S.SOON_BOARDS)
+              and fncam.get("previews") is False
+              and fncam not in S.picker_boards()
+              and 'id="on-the-freenove-camera-board"' not in inst4)
         code, cam = get("/camera")
         flat_c = " ".join(cam.split())
         check("/camera renders, with its drawing and the commands",
               code == 200 and has_h(cam, 1, "Camera")
               and S.ART["camera-snap"] in cam
               and "<code>SNAPSHOT</code>" in cam and "<code>SNAP</code>" in cam
-              and "<code>Download it now? (y/N)</code>" in cam)
+              and "<code>Download it now? [Y]es [X]modem [N]o</code>" in cam)
+        # Site 1.2.9: the settings as the firmware built them (COMMANDS.md
+        # "camera" at 1.1.0-dev.15), not as the plan left them open.
         check("and says the rules Rob set: area 12, the limits, the card, the defaults",
-              "file area 12" in flat_c
+              "file area 12" in flat_c and "file area 13" in flat_c
               and "10 pictures an hour and 20 a day" in flat_c
               and "without one the camera does not start" in flat_c
-              and "up to 86,400" in flat_c
-              and "Not settled yet" in cam
+              and "<td>12</td>" in cam and "<td>200</td>" in cam
+              and "anything under 10 seconds is 10" in flat_c
+              and "Not settled yet" not in cam and "not settled" not in flat_c.lower()
               and "A lens cap is the only real guarantee." in flat_c
               and "There is no countdown" in flat_c)
         check("and carries the coming-soon note until a 1.1.0 release is on disk",
@@ -2520,14 +2531,42 @@ def main():
         items = re.findall(r'<li><b><a href="([^"]+)">', dbody)
         check("/different renders its list, each line linked to its proof",
               code == 200 and has_h(dif, 1, "What makes it different")
-              and 6 <= len(items) <= 8 and len(set(items)) == len(items)
+              and 10 <= len(items) <= 12 and len(set(items)) == len(items)
               and all(h.startswith("/") for h in items))
-        check("and compares with sources, claiming no 'only'",
-              "https://wiki.synchro.net/howto:petscii" in dif
-              and "https://github.com/snazzware/espbbs" in dif
-              and "It is not the only BBS on a microcontroller" in dif
+        # Site 1.2.9 (Rob: "get a matrix table going"): the comparison is a
+        # table, µnleashed's column first and lit, every rival's column
+        # linked to its own pages, and under it the one line that says what
+        # the big packages still do better.
+        cmp_t = dif.split('<table class="cmp">')[1].split("</table>")[0] \
+            if '<table class="cmp">' in dif else ""
+        check("and compares in a table, with sources, claiming no 'only'",
+              '<div class="cmpwrap" role="region" aria-label="How it compares" '
+              'tabindex="0">' in dif
+              and '<th scope="col" class="us"><a href="/hardware">\u00b5nleashed</a></th>'
+                  in cmp_t
+              and all(f'<a href="{h}">' in cmp_t for _n, h in S.COMPARE_COLS[1:])
+              and "https://github.com/snazzware/espbbs" in cmp_t
+              and cmp_t.count("<tr>") == len(S.COMPARE_ROWS) + 1
+              and all(len(c) == len(S.COMPARE_COLS) for _l, c in S.COMPARE_ROWS)
+              and cmp_t.count('<td class="us">') == len(S.COMPARE_ROWS)
+              and 'aria-label="Yes"' in cmp_t and 'aria-label="No"' in cmp_t
+              and 'aria-label="Not in its own documentation">?</span>' in cmp_t
               and " the only BBS that" not in dif.lower()
               and "can't" not in dbody and "cannot do" not in dbody)
+        check("and says under it what the big packages still do better",
+              '<p class="cmpnote">The big packages still do plenty this board does '
+              "not yet: FidoNet-style message networks, door games, ZMODEM" in dif
+              and '<a href="/roadmap">The roadmap</a>' in dif.split('class="cmpnote"')[1])
+        check("and its camera row follows the firmware on disk",
+              ("coming, on the camera boards" in cmp_t)
+              == (not any(r["sort"] >= (1, 1, 0) for r in S.firmware_releases())))
+        check("and the table scrolls on a phone with the row names held still",
+              "table.cmp th[scope=row] { position:sticky; left:0;" in dif
+              and ".cmpwrap { overflow-x:auto;" in dif
+              and '<p class="cmphint" aria-hidden="true">The table scrolls sideways' in dif
+              and "p.cmphint { display:none;" in dif
+              # an upper-cased micro sign is a capital mu: MNLEASHED
+              and "table.cmp thead th.us { text-transform:none;" in dif)
         home = get("/")[1]
         check("the home page has one button to it and nothing more",
               home.count('href="/different"') == 1
@@ -2539,6 +2578,7 @@ def main():
               "directory's heading, with a rule between them",
               '<div class="listtop"><div class="intro"><p class="pitch">A whole BBS '
               "on a board the size of a stick of gum, for about $5." in home
+              and "Commodore" not in home.split('<p class="pitch">')[1].split("</p>")[0]
               and 0 <= home.find('<p class="pitch">') < home.find('href="/different"')
               < home.find('<p class="tryit">Try out any of the boards in the '
                           "directory below.</p>")
@@ -2547,6 +2587,32 @@ def main():
               and '<hr class="dirrule"><h1>BBS directory</h1>' in home)
         check("the rule is the footer's hairline, in --rule",
               "hr.dirrule { border:0; border-top:1px solid var(--rule);" in home)
+        # Site 1.2.9 (Rob): the line into the list is the foot of the left
+        # column on a desktop, so it does not float under the button, and
+        # follows the card on a phone.
+        check("the line into the list sits in the opening row, after the card",
+              S.RUN_CARD + S.HOME_TRY + '</div><hr class="dirrule">' in home
+              and ".listtop p.tryit { grid-column:1; grid-row:2; align-self:end;" in home
+              and ".runcard { margin:0; grid-column:2; grid-row:1 / span 2; }" in home)
+        # Site 1.2.9 (Rob: "slightly larger, different font"): the pitch in a
+        # display face served from here, never from a font service, with its
+        # licence beside it and in the notices.
+        face, _w = S.PITCH_FONTS[S.PITCH_FONT]
+        fcode, fctype, fblob = fetch("/font/" + face)
+        lcode, _lt, lblob = fetch("/font/OFL-" + face.split("-")[0].split(".")[0] + ".txt")
+        notices = open("THIRD_PARTY_NOTICES.md", encoding="utf-8").read()
+        check("the pitch is set in its own face, served from here, with its licence",
+              '@font-face { font-family:"Pitch"; src:url("/font/' + face + '")' in home
+              and '.listtop p.pitch { color:var(--ink); margin:0; font-family:"Pitch",' in home
+              and fcode == 200 and fctype.startswith("font/") and len(fblob) > 4000
+              and lcode == 200 and b"SIL OPEN FONT LICENSE Version 1.1" in lblob
+              and "googleapis" not in home and "gstatic" not in home
+              and all(n in notices for n in ("Oxanium", "Chakra Petch", "Orbitron",
+                                             "SIL Open Font License 1.1"))
+              and all(os.path.isfile(os.path.join("static", "fonts", f))
+                      for f, _ in S.PITCH_FONTS.values())
+              and fetch("/font/..%2Fserver.py")[0] == 404
+              and fetch("/font/server.py")[0] == 404)
         code, rmp = get("/roadmap")
         art_r = rmp.split("svg.art { display:block;")[1].split("</style>")[0]
         still_r, moving_r = art_r.split("@media (prefers-reduced-motion: no-preference) {")
@@ -2590,7 +2656,7 @@ def main():
         code, page = get("/hardware")
         body = page.split("<article>")[1].split("</article>")[0] if "<article>" in page else ""
         check("the tested boards page draws each board, its build and where to buy it",
-              code == 200 and '<h2 id="esp32-dev-board">' in body
+              code == 200 and '<h2 id="esp32-dev-board-base">' in body
               and '<h2 id="waveshare-esp32-s3-lcd-1-47">' in body
               and body.count('<div class="hwb">')
                   == len(S.BOARDS) + len(S.SHOWN_BOARDS) + len(S.SOON_BOARDS)
@@ -3403,17 +3469,19 @@ def main():
             # name and "how to tell" line, and one version line for each
             # release a board is offered; a board with nothing on disk says
             # "Coming soon" and has no buttons.
-            offered = sum(len(S.board_offers(b["dir"])) for b in S.BOARDS)
+            offered = sum(len(S.board_offers(b["dir"])) for b in S.picker_boards())
             check("and it carries the board picker, a picture a board, and a version "
                   "line for each release offered",
                   '<fieldset class="boards"><legend>Your board <a href="/hardware">'
                   "which is mine?</a></legend>" in top
                   and all(b["art"] in top and html.escape(b["name"]) in top
-                          and html.escape(b["tell"]) in top for b in S.BOARDS)
-                  and top.count('<input type="radio" name="fwboard"') == len(S.BOARDS)
+                          and html.escape(b.get("pick") or b["tell"]) in top
+                          for b in S.picker_boards())
+                  and top.count('<input type="radio" name="fwboard"')
+                      == len(S.picker_boards())
                   and top.count('class="meta ver ') == offered
                   and top.count("Coming soon") == sum(
-                      1 for b in S.BOARDS if not S.board_offers(b["dir"]))
+                      1 for b in S.picker_boards() if not S.board_offers(b["dir"]))
                   and '<svg class="art mini"' not in top)
             check("the installer's own licence is under Doing it the other way",
                   S.EWT_BASE + "LICENSE" in inst2.split('id="doing-it-the-other-way"')[1]
@@ -4269,7 +4337,7 @@ def main():
         spec = S.ART["hardware-spectrum"]
         check("the tested boards page opens with the spectrum",
               spec in hwp
-              and hwp.index(spec) < hwp.index('id="esp32-dev-board"')
+              and hwp.index(spec) < hwp.index('id="esp32-dev-board-base"')
               and spec.startswith('<svg class="art spectrum" viewBox="-4 -2 362 160"')
               and all(f">{s[1]}</text>" in spec and f">{s[3]}</text>" in spec
                       and f">{s[4]}</text>" in spec for s in S.SPECTRUM_STOPS))
@@ -4312,15 +4380,15 @@ def main():
               and 'role="img" aria-label="A little wiring' in wire[0]
               and sum(">expected</text>" in x for x in seals) == 1
               and ">expected</text>" in S.seal_html(S.BOARD_SEAL["esp32s3-cam"])
-              and all(S.BOARD_SEAL[b["dir"]] == "go" for b in S.BOARDS + S.SOON_BOARDS[:1])
+              and all(S.BOARD_SEAL[b["dir"]] == "go" for b in S.BOARDS)
               and [d for d, v in S.BOARD_SEAL.items() if v == "wire"] == ["esp32-sd"]
               and "<b>Flash &amp; go</b>:" in hw5 and "<b>A little wiring</b>:" in hw5
               and "svg.art.seal .rb {" in hwp and "article .hwb .hwpic svg.art.seal {" in hwp)
         # Site 1.2.7, Rob: "esp32 is misleading with flash and go, it has to
         # have an sd card". The bare board says what it does without one and
         # points at the second entry, which summarises and links /sdcard.
-        sda = "esp32-dev-board-sd-card-for-storage"
-        bare = hw5.split('id="esp32-dev-board"')[1].split("<h2")[0]
+        sda = "esp32-dev-board-base-sd-card-for-storage"
+        bare = hw5.split('id="esp32-dev-board-base"')[1].split("<h2")[0]
         sdsec = hw5.split(f'id="{sda}"')[1].split("<h2")[0] if f'id="{sda}"' in hw5 else ""
         flat_sd = " ".join(sdsec.split())
         check("the dev board with an SD card is an entry of its own, a little wiring",
@@ -4366,7 +4434,9 @@ def main():
               "under way" not in S.board_html(["esp32-fncam"]) and "under way" not in flat_fn
               and "running on Rob's bench" in S.board_html(["esp32-fncam"])
               and "coming soon to" in S.board_html(["esp32-fncam"])
-              and "esp32-fncam" not in {b["dir"] for b in S.BOARDS})
+              # Site 1.2.9: in BOARDS, but waiting for a release, so not on
+              # the picker while none on disk carries it.
+              and "esp32-fncam" not in {b["dir"] for b in S.picker_boards()})
         _, diff5 = get("/different")
         check("and nowhere else",
               "(expected" not in diff5 and "Fastest" not in diff5)
@@ -4377,15 +4447,15 @@ def main():
         stops = re.findall(r'<a class="stp s\d" href="([^"]+)" aria-label="([^"]+)">', spec)
         check("and each stop is a link, told to a screen reader in words",
               'role="group" aria-label="Three ways to build a board"' in spec.split(">")[0]
-              and [h for h, _ in stops] == ["#esp32-dev-board",
-                                          "#esp32-dev-board-sd-card-for-storage",
+              and [h for h, _ in stops] == ["#esp32-dev-board-base",
+                                          "#esp32-dev-board-base-sd-card-for-storage",
                                           "#waveshare-esp32-s3-lcd-1-47"]
               and all("About $" in a for _, a in stops)
-              and 'id="esp32-dev-board"' in hwp
+              and 'id="esp32-dev-board-base"' in hwp
               and 'id="waveshare-esp32-s3-lcd-1-47"' in hwp)
         check("the overview says ESP32-S3 board, never the brand",
               ">ESP32-S3 board</text>" in spec and "Waveshare" not in spec
-              and "Waveshare" not in hwp.split('id="esp32-dev-board"')[0])
+              and "Waveshare" not in hwp.split('id="esp32-dev-board-base"')[0])
         # The motion: every piece of it declared where reduced motion stops
         # it, the lamp at rest on the middle stop, transforms and opacity only.
         art_all = hwp.split("svg.art { display:block;")[1].split("</style>")[0]
@@ -4765,16 +4835,29 @@ def main():
             # Site 1.2.7, Rob: the dev board with a card is a second entry on
             # /hardware and a display split only. The picker still has one
             # ESP32, and the new entry names the ESP32's own firmware.
+            # Site 1.2.9 (Rob): the dev board is the Base choice, with or
+            # without a card, and says so under its name. The Freenove is
+            # in BOARDS but waits for a release, so with none carrying it
+            # the picker has the same two rows as before.
             check("the picker still offers exactly one ESP32, and the card entry "
                   "takes the ESP32's firmware",
-                  shown.count('<input type="radio" name="fwboard"') == len(S.BOARDS) == 2
-                  and shown.count("<b>ESP32 dev board</b>") == 1
+                  shown.count('<input type="radio" name="fwboard"') == 2
+                  and shown.count("<b>ESP32 dev board (Base)</b>") == 1
+                  and '<span class="tell pick">With or without an SD card: one '
+                      "image</span>" in shown
+                  and "Two rows of pins and a USB socket" not in shown
+                  and all(len(b.get("pick", "")) <= 39 for b in S.BOARDS)
                   and "SD card, for storage" not in shown
-                  and [b["dir"] for b in S.BOARDS] == ["esp32", "esp32s3"]
+                  and "Freenove" not in shown
+                  and [b["dir"] for b in S.BOARDS] == ["esp32", "esp32s3", "esp32-fncam"]
+                  and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3"]
                   and all("image" not in b for b in S.BOARDS)
                   and "<dt>Firmware</dt><dd>0.19.2 <a href=\"/install\">on the "
-                      "installer</a>. The same image as the bare board.</dd>"
-                      in S.board_html(["esp32-sd"]))
+                      "installer</a>. The same image as the bare board: choose ESP32 "
+                      "dev board (Base) on the installer.</dd>"
+                      in S.board_html(["esp32-sd"])
+                  and "Each image is for its own chip." in shown
+                  and '<p class="meta early' not in shown)
             # Site 1.0.0: a symbol on each button, a fresh chip with a
             # sparkle and a chip in an arrow going round it. Decoration: the
             # words say it, so a screen reader is not told twice.
@@ -4916,6 +4999,152 @@ def main():
                 shutil.rmtree(os.path.join(fwroot, gone), ignore_errors=True)
             check("and with them gone the card is as it was",
                   S.installer_html() == shown)
+
+            # --------------------------------------------------------------
+            # Site 1.2.9: firmware 1.1.0, the release that carries three
+            # image sets, the Freenove's among them. Before it, nothing of
+            # the Freenove shows; with it on disk, the picker offers it, the
+            # S3 is a release rather than a preview, /hardware says tested,
+            # the "from 1.1.0" gates open, and a .0 release says it is out
+            # early for testing until its .1 arrives.
+            print("Firmware 1.1.0: three boards, the gates, the early line")
+            fw110 = tempfile.mkdtemp(prefix="dirfw110")
+
+            def put110(version, chip, shown, date="2026-09-26"):
+                d = os.path.join(fw110, version, chip)
+                os.makedirs(d, exist_ok=True)
+                for n in whole:
+                    with open(os.path.join(d, n), "w") as fh:
+                        fh.write("placeholder, not firmware\n")
+                with open(os.path.join(d, "version.txt"), "w") as fh:
+                    fh.write(shown + "\n")
+                with open(os.path.join(fw110, version, "release.txt"), "w") as fh:
+                    fh.write(date + "\n")
+
+            def render(name):
+                return S.md_render(open(os.path.join("pages", name + ".md"),
+                                        encoding="utf-8").read())
+
+            put110("1.0.3", "esp32", "1.0.3", "2026-09-23")
+            # A preview carrying the Freenove, and the S3, before 1.1.0.
+            put110("1.1.0-dev.15", "esp32s3", "1.1.0-dev.15 (S3 1.1.0)")
+            put110("1.1.0-dev.15", "esp32-fncam", "1.1.0-dev.15 (FNCAM 1.0.2)")
+            S.FIRMWARE_DIR = pathlib.Path(fw110)
+            try:
+                pick0 = S.installer_html()
+                hw0, inst0, cam0 = render("hardware"), render("install"), render("camera")
+                check("before 1.1.0 the Freenove shows nowhere on the installer, "
+                      "even with a preview carrying it",
+                      S.board_offers("esp32-fncam") == []
+                      and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3"]
+                      and "Freenove" not in pick0 and "esp32-fncam" not in pick0
+                      and S.firmware_file("1.1.0-dev.15/esp32-fncam/manifest.json") is None
+                      and S.firmware_file("1.1.0-dev.15/esp32-fncam/firmware.bin") is None
+                      and 'id="on-the-freenove-camera-board"' not in inst0
+                      and "Each image is for its own chip." in pick0)
+                check("and /hardware still calls it coming soon, the S3 a preview",
+                      "coming soon to" in S.board_html(["esp32-fncam"])
+                      and "<b>Coming soon.</b> Freenove" in hw0
+                      and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw0
+                      and "1.1.0 preview (S3 1.1.0)" in S.board_html(["esp32s3"])
+                      and "arrives with firmware 1.1 for the camera boards" in cam0
+                      and "is on <a href=\"/install\">the installer</a>" not in cam0
+                      and S.early_note() == "" and '<p class="meta early' not in pick0)
+
+                # 1.1.0 lands, with all three sets.
+                put110("1.1.0", "esp32", "1.1.0")
+                put110("1.1.0", "esp32s3", "1.1.0 (S3 1.1.0)")
+                put110("1.1.0", "esp32-fncam", "1.1.0 (FNCAM 1.0.2)")
+                pick1 = S.installer_html()
+                hw1, inst1, cam1 = render("hardware"), render("install"), render("camera")
+                setup1, sd1, lights1 = render("setup"), render("sdcard"), render("lights")
+                upg1, who1, dif1 = render("upgrade"), render("whofor"), render("different")
+                early = ("1.1.0 is out early for testing; it has not been through the "
+                         "full regression yet. 1.1.1 follows with anything it finds.")
+                check("with 1.1.0 on disk the picker offers three boards, the "
+                      "Freenove by its picture and a line saying why",
+                      [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3", "esp32-fncam"]
+                      and pick1.count('<input type="radio" name="fwboard"') == 3
+                      and '<input type="radio" name="fwboard" id="fwb2">'
+                          + S.BOARD_ART_FNCAM in pick1
+                      and "<b>Freenove ESP32 camera board</b>" in pick1
+                      and '<span class="tell pick">Same chip as the dev board: see '
+                          "picture</span>" in pick1
+                      and '<span class="bv">Firmware 1.1.0 (FNCAM 1.0.2)</span>' in pick1
+                      and 'manifest="/install/1.1.0/esp32-fncam/manifest.json"' in pick1
+                      and 'manifest="/install/1.1.0/esp32-fncam/manifest-update.json"' in pick1
+                      and '<p class="first"><b>Check the picture:</b> the installer '
+                          "cannot tell this board from the dev board." in pick1
+                      and ".installer:has(#fwb2:checked) .bsec.b2{display:flex}" in pick1)
+                check("and says the dev board and the Freenove share a chip, by name",
+                      "Each image is for its own chip." not in pick1
+                      and "The ESP32 dev board (Base) and the Freenove ESP32 camera "
+                          "board have the same chip, so between those the picture is "
+                          "the only check." in pick1)
+                check("the S3 is a released board now, not a preview",
+                      [r["version"] for r in S.board_offers("esp32s3")] == ["1.1.0"]
+                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)</span>' in pick1
+                      and "preview" not in pick1
+                      and S.firmware_file("1.1.0-dev.15/esp32s3/manifest.json") is None)
+                man = S.firmware_manifest("1.1.0", chip="esp32-fncam")
+                check("the Freenove's manifest holds its own build, at the ESP32's offsets",
+                      man is not None and man["version"] == "1.1.0 (FNCAM 1.0.2)"
+                      and [b["chipFamily"] for b in man["builds"]] == ["ESP32"]
+                      and [(p["path"], p["offset"]) for p in man["builds"][0]["parts"]]
+                          == [("bootloader.bin", 4096), ("partitions.bin", 32768),
+                              ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
+                              ("storage.bin", 3932160)]
+                      and S.firmware_file("1.1.0/esp32-fncam/firmware.bin") is not None
+                      and S.firmware_file("1.1.0/esp32-fncam/../esp32/firmware.bin") is None)
+                check("each board's version line says 1.1.0 is out early, and no other",
+                      pick1.count('<p class="meta early r0">' + early + "</p>") == 3
+                      and '<p class="meta early r1">' not in pick1
+                      and '<p class="early">' + early + "</p>" in upg1)
+                fnsec = hw1.split('id="freenove-esp32-camera-board"')[1].split("<h2")[0]
+                check("/hardware calls the Freenove tested, with its firmware and "
+                      "installer link, and keeps the GC0308",
+                      "<dt>Firmware</dt><dd>1.1.0 (FNCAM 1.0.2) <a href=\"/install\">on "
+                      "the installer</a></dd>" in fnsec
+                      and "coming soon" not in fnsec.lower()
+                      and "GC0308" in fnsec
+                      and 'href="/install#on-the-freenove-camera-board"' in fnsec
+                      and "<b>ESP32-WROVER: yes, on one board.</b>" in hw1
+                      and "should work, not yet tested" not in hw1
+                      and "coming soon to" in S.board_html(["esp32s3-cam"]))
+                check("/install has the Freenove's own steps and the closed board",
+                      '<h2 id="on-the-freenove-camera-board">On the Freenove camera '
+                      "board</h2>" in inst1
+                      and "A new board starts closed." in inst1
+                      and "<b>Temporarily stop taking calls</b>" in inst1
+                      and "the Freenove camera board has neither" in inst1
+                      and "A new board starts closed." not in inst0
+                      and "Until you open it, the board is closed to everybody else"
+                          in setup1)
+                check("the 1.1.0 gates read as released: /camera, /lights, "
+                      "backups, the camera row",
+                      "arrives with firmware 1.1 for the camera boards" not in cam1
+                      and "The Freenove camera board is on" in cam1
+                      and "arrive with firmware 1.1.0" not in lights1
+                      and "The card can also keep the board" in sd1
+                      and "Firmware 1.1.0 gives the card one more job" not in sd1
+                      and "on the Freenove camera board" in dif1.split('class="cmp"')[1]
+                      and "coming, on the camera boards" not in dif1
+                      and "The Freenove camera board</a> lets a" in who1
+                      and "SCREENS INSTALL" not in sd1)
+
+                # The .1 lands, for the ESP32 alone: the early line goes
+                # everywhere, and the other boards stay on 1.1.0.
+                put110("1.1.1", "esp32", "1.1.1", "2026-09-30")
+                pick2 = S.installer_html()
+                check("and the early line goes once 1.1.1 is on disk, "
+                      "and SCREENS INSTALL appears",
+                      S.early_note() == "" and "early for testing" not in pick2
+                      and '<p class="early">' not in render("upgrade")
+                      and [r["version"] for r in S.board_offers("esp32-fncam")] == ["1.1.0"]
+                      and "<code>SCREENS INSTALL</code>" in render("sdcard"))
+            finally:
+                S.FIRMWARE_DIR = pathlib.Path(fwroot)
+                shutil.rmtree(fw110, ignore_errors=True)
 
             # The same, end to end, over HTTP: a second server pointed at
             # the scratch releases, so the route, the content types and the
@@ -5627,6 +5856,47 @@ def main():
             check("the newest release is the highest version, not the last published",
                   rc == 0 and "Installed firmware" not in out
                   and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"])
+            # Site 1.2.9: the Freenove's set, esp32-fncam, from firmware
+            # 1.1.0. It waits for a release: a pre-release carrying it is
+            # never installed for it, so nothing of it shows early.
+            list_release("v1.4.0-dev.1", ("esp32", "esp32s3", "esp32-fncam"), pre=True,
+                         versions={"esp32-fncam": "1.4.0-dev.1 (FNCAM 1.0.2)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            fetch_src = open(os.path.join("deploy", "fetch_release.py"), encoding="utf-8").read()
+            check("a pre-release is never taken for the Freenove's set",
+                  rc == 0 and 'FAMILIES = ("esp32", "esp32s3", "esp32-fncam")' in fetch_src
+                  and 'NO_PREVIEW = ("esp32-fncam",)' in fetch_src
+                  and tree("1.4.0-dev.1") is None
+                  and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"])
+            list_release("v1.4.0", ("esp32", "esp32s3", "esp32-fncam"),
+                         versions={"esp32": "1.4.0\n", "esp32s3": "1.4.0 (S3 1.1.0)\n",
+                                   "esp32-fncam": "1.4.0 (FNCAM 1.0.2)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            t140 = tree("1.4.0") or {}
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                fn_offers = [r["version"] for r in S.board_offers("esp32-fncam")]
+                fn_man = S.firmware_manifest("1.4.0", chip="esp32-fncam")
+                fn_part = S.firmware_file("1.4.0/esp32-fncam/firmware.bin")
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("a release carrying all three installs the Freenove's set, "
+                  "from its prefixed assets",
+                  rc == 0 and "Installed firmware 1.4.0 for the browser installer." in out
+                  and all("esp32-fncam/" + n in t140 for n in (
+                      "bootloader.bin", "partitions.bin", "ota_data_initial.bin",
+                      "firmware.bin", "storage.bin"))
+                  and t140.get("esp32-fncam/version.txt") == b"1.4.0 (FNCAM 1.0.2)\n"
+                  and t140.get("esp32-fncam/firmware.bin", b"").startswith(b"esp32-fncamfirmware.bin")
+                  and fn_offers == ["1.4.0"]
+                  and fn_man is not None and fn_man["version"] == "1.4.0 (FNCAM 1.0.2)"
+                  and [b["chipFamily"] for b in fn_man["builds"]] == ["ESP32"]
+                  and fn_man["builds"][0]["parts"][0] == {"path": "bootloader.bin",
+                                                          "offset": 4096}
+                  and fn_part is not None)
         finally:
             relsrv.shutdown()
             shutil.rmtree(relroot, ignore_errors=True)

@@ -123,19 +123,39 @@ installer can lose the port when it does. If the Wi-Fi step does not appear:
 
 Once it is on your network, the board's screen shows the address to dial.
 
+<!-- The Freenove section (site 1.2.9), from firmware 1.1.0, the first release to carry its image set (the firmware's tools/release.py, BUILDS: esp32-fncam, chipFamily ESP32). Facts from the firmware repo: internal/PLAN-freenove-cam.md section 8 (either image on the other board is "survivable", the WROOM image drives its SPI card pins against the camera's data lines), src/board.h (no activity LED, BBS_LED_GPIO -1) and CHANGELOG 1.1.0-dev.15 (CH340). Not stated, because nobody has checked it: whether the board installs with a card in its slot (GPIO 2 is the card's D0 and a boot strap). -->
+::: from 1.1.0
+## On the Freenove camera board
+
+The [Freenove ESP32 camera board](/hardware#freenove-esp32-camera-board) has
+the same chip as the ESP32 dev board. The installer reads the chip, finds the
+same thing on both, and cannot tell which board it is writing to, so the
+picture in the card is the only check. Choose the camera board for the long
+board with a camera on a ribbon in the middle and a USB-C socket at one end.
+
+- **The wrong image does not work properly** on either board. The dev board's
+  drives pins the camera uses; the camera board's finds no camera on a dev
+  board. If you picked the wrong one, install again with the right choice.
+- **Nothing lights when it is listening.** Its one LED shares a pin with the
+  card slot, so it has no activity LED: find it by **Telnet details** at the
+  end, or in your router's list of devices.
+- **It has a CH340 USB-serial chip**, which Windows and macOS sometimes need a
+  driver for: see [when the board does not appear](#when-the-board-does-not-appear).
+:::
+
 ## Before you start
 
 There is nothing to install and no account to make. The installer uses Web
 Serial, a feature built into the browser, so the browser is the one thing on
 your computer that has to be right.
 
-- **One of the boards in the card.** An ESP32 dev board with 4 MB of flash:
-  the reference board is a bare ESP32-WROOM-32E, and any dev board with that
-  module and a USB socket works, for about the price of a sandwich. Or a
-  Waveshare ESP32-S3-LCD-1.47, the USB stick with a screen. There is a
-  picture of each on [the tested boards page](/hardware). A name with letters
-  after it, such as ESP32-C3 or ESP32-S2, is a different chip, and the same
-  page says [which chips can run a board](/hardware#other-chips).
+- **One of the boards in the card**, each shown with its picture. The
+  reference is an ESP32 dev board with 4 MB of flash: a bare ESP32-WROOM-32E,
+  and any dev board with that module and a USB socket works, for about the
+  price of a sandwich. There is a picture of each board on [the tested boards
+  page](/hardware). A name with letters after it, such as ESP32-C3 or
+  ESP32-S2, is a different chip, and the same page says [which chips can run
+  a board](/hardware#other-chips).
 - **Chrome or Edge, on a desktop or laptop.** Other browsers are below this
   list.
 - **A USB cable that carries data.** This is the most common reason the board
@@ -246,13 +266,31 @@ too. Keep backups somewhere private.
 
 ## After it boots
 
+::: until 1.1.0
 The board joins your network and listens for calls on port 6400. The activity
 LED holds on for a second once it is listening; the Waveshare S3 has no
 activity LED, and shows the address to dial on its screen instead. In your
 router's list of connected devices it is called `unleashed`.
+:::
+
+::: from 1.1.0
+The board joins your network and listens for calls on port 6400. The activity
+LED holds on for a second once it is listening. The Waveshare S3 has no
+activity LED and shows the address to dial on its screen instead; the
+Freenove camera board has neither. In your router's list of connected devices
+it is called `unleashed`.
+:::
 
 Call it with any telnet client. If this is your first time, read [what to
 expect on a first call](/firstcall): it takes two minutes.
+
+<!-- Closed until opened: the firmware repo's CLAUDE.md, "A board is closed until its sysop opens it" (Rob, 2026-09-25, for 1.1.0), a plan at the time of writing, not yet built. The label is the plan's; check it against CONFIG board once it is. -->
+::: from 1.1.0
+A new board starts closed. Until you open it, everybody who calls gets the
+busy message except the first caller, who signs up and takes the board over,
+as [the sysop password](#the-sysop-password) below describes. Once it is set
+up, open it: `CONFIG board`, and turn **Temporarily stop taking calls** off.
+:::
 
 ::: next
 [Choose a terminal](/terminals)
@@ -323,9 +361,9 @@ right with a reset, and your accounts and settings stay where they are.
 2. Then press **BOOT** and keep holding it. Holding BOOT while RESET is let go
    starts the chip's own flashing mode instead, which is why RESET comes first.
 3. Let go at the stage you want. On the ESP32 dev board the activity LED shows
-   each stage. The Waveshare S3 has no plain activity LED, so count the seconds
-   while you hold. Either board also prints each stage on its serial console,
-   for anybody watching one on the cable.
+   each stage. The Waveshare S3 and the Freenove camera board have no plain
+   activity LED, so count the seconds while you hold. Every board also prints
+   each stage on its serial console, for anybody watching one on the cable.
 
 ::: art
 boot-button

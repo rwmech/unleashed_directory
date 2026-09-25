@@ -19,13 +19,13 @@ board with firmware 1.1.0, together with everything under Now.
 - **[An S3 board with its own screen](/hardware#waveshare-esp32-s3-lcd-1-47).**
   A USB stick with a colour screen that shows who is on, the address to dial
   and how long the board has been up.
-- **[Lights](/lights).** A drive light that flickers as the board works, and a
+- **[Lights](/lights).** An optional drive light that flickers as the board works, and a
   strip of pixels that lights up as callers arrive. A board in a case looks
   alive.
 - **[Backups to the SD card](/sdcard).** Every night once you switch them on,
   and a restore from the card that waits until nobody is on.
 - **80-column screens.** Forms, lists and menus use the whole width of a PC
-  terminal, while a Commodore 64 keeps a layout made for its 40.
+  terminal, while a 40-column machine keeps a layout made for its screen.
 
 ## Now, with firmware 1.1.0
 
@@ -54,9 +54,10 @@ board with firmware 1.1.0, together with everything under Now.
 - **Doors on a second board.** Programs a caller can go into, running on a
   second small board plugged into the first, the way big BBSes once ran their
   doors on machines of their own.
-- **Linked boards.** Two boards joined so their chat rooms become one, the way
+- **Linked chat, one superchat.** Chat rooms joined across boards, the way
   [Diversi-DIAL](https://www.ddial.com/archives.php) linked its systems, so a
-  quiet board borrows company from a busy one.
+  quiet board borrows company from a busy one: µnleashed boards, and
+  Diversi-DIAL and GTalk-style systems, in one room.
 
 Want to be on the air when the next station opens? A board takes an
 afternoon, and most of that is deciding what to call it.

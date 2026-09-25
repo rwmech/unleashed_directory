@@ -24,7 +24,8 @@ The contract, which the firmware side publishes to (its tools/release.py):
   - one image set per board, five parts each. The reference ESP32's are
     bootloader.bin, partitions.bin, ota_data_initial.bin, firmware.bin and
     storage.bin; another board's carry its folder as a prefix,
-    esp32s3-bootloader.bin and so on (FAMILIES below).
+    esp32s3-bootloader.bin, esp32-fncam-bootloader.bin and so on (FAMILIES
+    below).
   - optionally, since firmware 1.1.0, each set's version.txt (the S3's as
     esp32s3-version.txt): one line, the version as that board shows it,
     "1.0.3" or "1.1.0 (S3 1.0.0)".
@@ -41,6 +42,8 @@ Which releases, since site 1.2.0. Each board is served on its own:
     which the site shows as a preview and never counts as the newest
     release. That is how the Waveshare S3 arrives before 1.1.0 is released,
     while the ESP32 stays on the latest release.
+  - except a board in NO_PREVIEW, which waits for a release: the Freenove
+    camera board, which is to show nowhere before firmware 1.1.0.
 
 What it does, for each release it wants, in the order that keeps a bad
 download harmless:
@@ -95,8 +98,13 @@ SUMS = "SHA256SUMS"
 # in, which is the firmware's own name for the build (tools/release.py) and
 # a board in the site's BOARDS. The first is the reference ESP32, whose
 # assets carry no prefix, as every release before 1.1.0 had them; any other
-# set's are "<folder>-<part>".
-FAMILIES = ("esp32", "esp32s3")
+# set's are "<folder>-<part>". esp32-fncam is the Freenove ESP32-WROVER
+# camera board, from firmware 1.1.0: the ESP32's chip family, a set of its
+# own.
+FAMILIES = ("esp32", "esp32s3", "esp32-fncam")
+# Sets never taken from a pre-release, and never kept for one: the site
+# offers them from a release or not at all (server.py, "previews": False).
+NO_PREVIEW = ("esp32-fncam",)
 KEEP = 2
 TAG = re.compile(r"^v(\d{1,3})\.(\d{1,3})\.(\d{1,4})"
                  r"(?:-([0-9A-Za-z-]{1,20}(?:\.[0-9A-Za-z-]{1,20}){0,3}))?$")
@@ -361,7 +369,8 @@ def prune(dest, keep_also=()):
     for fam in FAMILIES:
         full = [n for _k, n, pre in found
                 if not pre and set_complete(os.path.join(dest, n, fam))]
-        pre = [n for _k, n, p in found if p and set_complete(os.path.join(dest, n, fam))]
+        pre = [n for _k, n, p in found if p and fam not in NO_PREVIEW
+               and set_complete(os.path.join(dest, n, fam))]
         if full or pre:
             keep.add((full or pre)[0])
     gone = []
@@ -493,7 +502,8 @@ def main():
         candidates.append((version_key(tag[1:]), r, tag[1:], fams))
     candidates.sort(key=lambda c: c[0], reverse=True)
     for _k, r, version, fams in candidates:
-        needed = [f for f in fams if f not in served and f not in claimed]
+        needed = [f for f in fams
+                  if f not in served and f not in claimed and f not in NO_PREVIEW]
         if needed:
             wanted.append((r, version, fams, needed, True))
             served.update(needed)

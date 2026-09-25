@@ -17,7 +17,7 @@
 
 ## What is in this repository
 
-Its own code, and one other program's browser build, which is described in the next section. There is no `node_modules`, no lockfile and no build step. Every other file here was written for this project and is under the GNU General Public License v3 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
+Its own code, one other program's browser build and three fonts, which are described in the next two sections. There is no `node_modules`, no lockfile and no build step. Every other file here was written for this project and is under the GNU General Public License v3 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
 
 That is a deliberate choice rather than an accident of scale. A directory that anybody can run has to be a directory anybody can read, and a dependency tree is the fastest way to make a small program unauditable.
 
@@ -32,6 +32,18 @@ What it costs, exactly:
 - **`/install` alone.** Every other page stays HTML and one inline stylesheet, and the server will not emit the script tag for any of them.
 - **Only when there is something to install.** With `firmware/` empty the page explains itself instead of offering a button, and no script tag is emitted at all.
 - **From this machine.** It used to load from unpkg, pinned to an exact version. Serving it from here means nobody else learns that somebody opened the installer, and nothing it runs can change between one reader and the next unless this repository changes.
+
+### Three display faces, in static/fonts/, served by /font/
+
+The front page's pitch is set in a display face, served from this machine and never from a font service (site 1.2.9). Three faces are kept so that the choice between them is one word in `server.py` (`PITCH_FONT`); the page loads only the chosen one. All three are from [github.com/google/fonts](https://github.com/google/fonts) and under the **SIL Open Font License 1.1**, whose text is beside each face as `OFL-<name>.txt`:
+
+| File | Face | Copyright | Changes |
+|---|---|---|---|
+| `Oxanium-latin.woff` | [Oxanium](https://github.com/sevmeyer/oxanium) | 2019 The Oxanium Project Authors | subset to Basic Latin and Latin-1, weight 500, as WOFF |
+| `ChakraPetch-latin.woff` | [Chakra Petch](https://github.com/m4rc1e/Chakra-Petch) | 2018 The Chakra Petch Project Authors | subset to Basic Latin and Latin-1, Medium, as WOFF |
+| `Orbitron.ttf` | [Orbitron](https://github.com/theleagueof/orbitron) | 2018 The Orbitron Project Authors, Reserved Font Name "Orbitron" | none: the upstream `Orbitron[wght].ttf` as published, because a subset is a Modified Version under the licence and may not carry a Reserved Font Name |
+
+Neither Oxanium nor Chakra Petch reserves its name, so their subsets keep it. None of the three is sold, alone or otherwise.
 
 The exception is `firmware/`, when it has anything in it. Those are compiled images of [µnleashed BBS](https://github.com/rwmech/unleashed_BBS), also GPL v3 or later (firmware before 1.1.0 was v2 or later), and each release directory carries its own `THIRD_PARTY_NOTICES.md` describing the code compiled into it, ESP-IDF and its components among them. That file travels with the binaries rather than pointing at a moving target, and the installer page links it beside each version.
 
@@ -64,6 +76,6 @@ Caddy is optional. The server speaks plain HTTP on its own and will run behind n
 
 ## What it does not use
 
-No web framework, no ORM, no template engine, no web fonts, no analytics, no tracking of any kind. A page is HTML and one inline stylesheet.
+No web framework, no ORM, no template engine, no font service, no analytics, no tracking of any kind. A page is HTML and one inline stylesheet, and the one web font, the pitch's, comes from this machine.
 
 Three things qualify that, and all are named rather than buried: `/install` runs ESP Web Tools, served from this machine, when there is a firmware image to install, because a web page cannot reach a serial port without it; `/connected` runs a dozen lines written here, inline, to read the board's address out of the part of its own link that never reaches the server; and `/author` shows photographs from Wikimedia Commons. Apart from those photographs, nothing a visitor loads comes from anywhere but the machine you installed this on.

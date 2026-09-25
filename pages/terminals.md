@@ -216,6 +216,6 @@ dollars. A real modem and a real phone line also still work, if you have both.
 ## What the board does with all this
 
 It works out what it is talking to when you connect and draws itself to
-suit, so a C64 and a modern laptop can be in the same chat room and both see
-something that looks right to them. The first call page says [how, and what
+suit, so an Amiga, a TRS-80 and a modern laptop can be in the same chat room
+and each see something that looks right to it. The first call page says [how, and what
 it may ask](/firstcall#it-works-out-what-you-are).

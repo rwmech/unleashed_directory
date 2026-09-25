@@ -116,8 +116,10 @@ listed on [the terminals page](/terminals).
 Plenty of boards are one person and eleven friends. That was true in 1985 and
 it is true now.
 
-Run a file area for the things you collect. Run a chat room for the people you
-actually want to talk to. Leave mail for each other. Keep a board of your own
+Run a file area for the things you collect: a micro SD card of up to 32 GB
+holds a lifetime of disk images, text files and utilities for the machines that
+call in, every one a download by XMODEM or YMODEM. Run a chat room for the
+people you actually want to talk to. Leave mail for each other. Keep a board of your own
 notes that you can reach from anything, anywhere, without a browser and without
 a third party in the middle. The only record of who called and for how long is
 the board's own caller log, and the board is yours.
@@ -128,11 +130,22 @@ you and the machine. A socket and some characters.
 
 ## A board with a camera
 
+::: until 1.1.0
 Coming soon, [two boards with a camera on
 them](/hardware#freenove-esp32-camera-board) let a board look out of the
-window. A caller types `SNAPSHOT`, from a laptop or from a Commodore 64, and
-the board takes a photo of whatever it is pointed at, ready to download. (The
-Commodore can take the picture. Looking at it is a job for a PC.)
+window. A caller types `SNAPSHOT`, from a laptop or from an 8-bit machine, and
+the board takes a photo of whatever it is pointed at, ready to download. (An
+8-bit machine can take the picture. Looking at it is a job for a PC.)
+:::
+
+::: from 1.1.0
+[The Freenove camera board](/hardware#freenove-esp32-camera-board) lets a
+board look out of the window, and an ESP32-S3 camera board follows once it
+has been tested. A caller types `SNAPSHOT`, from a laptop or from an 8-bit
+machine, and the board takes a photo of whatever it is pointed at, ready to
+download. (An 8-bit machine can take the picture. Looking at it is a job for
+a PC.)
+:::
 
 - **Outdoors.** On a porch, in a shed window, beside a weather station:
   callers dial in to see whether it is raining where the board is.
@@ -164,7 +177,9 @@ is](/about#freedoms-gained).
 **It is decentralized in the way that matters.** Every board is independent.
 There is no central server, no company, no network anybody owns. Boards do not
 talk to each other today, and that is the honest version: what there is
-instead of a network is that nobody needs one. The directory you are reading
+instead of a network is that nobody needs one. Chat rooms that link across
+boards are [on the roadmap](/roadmap), and a link will be two boards choosing
+each other, not a network anybody owns. The directory you are reading
 this on is optional, the protocol behind it is published, and you are welcome
 to run your own. That is the intended outcome, not a grudging permission.
 

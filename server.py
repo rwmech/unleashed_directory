@@ -186,7 +186,10 @@ FIRMWARE_KEEP = int(os.environ.get("DIRECTORY_FIRMWARE_KEEP", "2"))
 # one path component and can never be "..".
 FIRMWARE_VER  = re.compile(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,4})"
                            r"(?:-([0-9A-Za-z-]{1,20}(?:\.[0-9A-Za-z-]{1,20}){0,3}))?$")
-FIRMWARE_CHIP = re.compile(r"^[a-z][a-z0-9]{2,11}$")
+# A set's folder: the chip, then a board after one hyphen for a second
+# board on the same chip ("esp32-fncam", firmware 1.1.0). One path
+# component, so never "..".
+FIRMWARE_CHIP = re.compile(r"^[a-z][a-z0-9]{2,11}(?:-[a-z0-9]{2,11})?$")
 # A family's version.txt: one line, the version exactly as that board shows
 # it (SYS, ABOUT, Improv), which the firmware's tools/release.py writes from
 # BBS_VERSION_SHOWN. The core version alone for the reference ESP32 ("1.0.3"),
@@ -268,6 +271,10 @@ EWT_IMPROV_WAIT = 30
 # different board gets wrong.
 FLASH_FAMILIES = {
     "esp32":   ("ESP32",    0x1000),
+    # The Freenove ESP32-WROVER camera board (firmware 1.1.0): a second image
+    # set on the ESP32's chip family, so ESP Web Tools cannot choose between
+    # it and the dev board's by reading the chip. The picker asks instead.
+    "esp32-fncam": ("ESP32", 0x1000),
     "esp32s2": ("ESP32-S2", 0x1000),
     "esp32s3": ("ESP32-S3", 0x0),
     "esp32c3": ("ESP32-C3", 0x0),
@@ -1165,10 +1172,13 @@ CARD_BLOCKS = ("cards", "hero")
 # the search at the top of that page, with its script. Both are built from
 # the tables the board list draws with. "board" is one tested board's
 # picture and facts on /hardware, the board's folder name on the first line
-# inside it, built from BOARDS and what is on disk (site 1.2.0).
+# inside it, built from BOARDS and what is on disk (site 1.2.0). "early" is
+# the early-testing line for a .0 release, from what is on disk, and nothing
+# at all otherwise (site 1.2.9, see early_note()); it takes no lines.
+# "compare" is /different's table (site 1.2.9, COMPARE_ROWS).
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
                              "installer-terms", "badges", "badgefind", "board",
-                             "next")
+                             "next", "early", "compare")
 
 
 # --------------------------------------------------------------------------
@@ -1219,6 +1229,11 @@ def md_block(kind, lines):
         return badge_find_html()
     if kind == "board":
         return board_html(lines)
+    if kind == "compare":
+        return compare_html()
+    if kind == "early":
+        note = early_note()
+        return '<p class="early">' + html.escape(note) + "</p>" if note else ""
     return md_cards(kind, lines)
 
 
@@ -1886,6 +1901,37 @@ STATIC_OK  = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 STATIC_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
                 ".webp": "image/webp", ".gif": "image/gif", ".svg": "image/svg+xml"}
 
+# The display face for the front page's pitch (site 1.2.9, Rob: "slightly
+# larger, different font (I love technical/scifi looking google fonts)").
+# Served from here, never from Google: the site depends on no third-party
+# host, for readers' privacy and because a Pi-hole would block it. Three
+# faces from github.com/google/fonts, each under the SIL Open Font Licence
+# 1.1. Oxanium (500) and Chakra Petch (Medium) are subset to Basic Latin and
+# Latin-1 (the micro sign included) at one weight, as WOFF, about 11 KB
+# each: neither reserves its name, so a subset may keep it. Orbitron's
+# licence reserves the name "Orbitron", and a subset is a Modified Version
+# under the OFL, which may not carry a Reserved Font Name, so Orbitron is
+# the upstream file exactly as published (Orbitron[wght].ttf, 38 KB).
+# Each one's OFL.txt sits beside it in static/fonts/, and
+# THIRD_PARTY_NOTICES.md names all three. PITCH_FONT picks the one the page
+# uses; the other two are kept so the choice is a one-word change.
+# DIRECTORY_PITCH_FONT overrides it, for comparing them side by side.
+FONT_DIR = pathlib.Path(__file__).resolve().parent / "static" / "fonts"
+FONT_TYPES = {".woff": "font/woff", ".ttf": "font/ttf",
+              ".txt": "text/plain; charset=utf-8"}
+PITCH_FONTS = {"oxanium": ("Oxanium-latin.woff", 500),
+               "chakrapetch": ("ChakraPetch-latin.woff", 500),
+               "orbitron": ("Orbitron.ttf", 500)}
+PITCH_FONT = os.environ.get("DIRECTORY_PITCH_FONT", "oxanium")
+if PITCH_FONT not in PITCH_FONTS:
+    PITCH_FONT = "oxanium"
+
+
+def font_file(name):
+    """One file from static/fonts/, a face or its licence, or None, by the
+    same name check as static_file()."""
+    return static_file(name, FONT_DIR, FONT_TYPES)
+
 
 # Card art lives in its own folder rather than in static/, for two reasons.
 # gallery_html() shows everything in static/ on the manifesto page, and
@@ -1898,18 +1944,19 @@ STATIC_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"
 PIX_DIR = pathlib.Path(__file__).resolve().parent / "static" / "kids"
 
 
-def static_file(name, base=None):
+def static_file(name, base=None, types=None):
     """One file from static/, or None. Names are checked rather than paths:
     no directories, no dots to climb with, nothing but a plain filename."""
+    types = types or STATIC_TYPES
     if not STATIC_OK.match(name or ""):
         return None
     ext = pathlib.Path(name).suffix.lower()
-    if ext not in STATIC_TYPES:
+    if ext not in types:
         return None
     f = (base or STATIC_DIR) / name
     if not f.is_file():
         return None
-    return f.read_bytes(), STATIC_TYPES[ext]
+    return f.read_bytes(), types[ext]
 
 
 def pix_html(spec):
@@ -2154,12 +2201,54 @@ def board_offers(chip):
     full = [r for r in every if not r["pre"] and chip in r["sets"]]
     if full:
         return full[:FIRMWARE_KEEP]
+    # A board marked "previews": False (the Freenove, Rob: nothing of it
+    # shows before 1.1.0) waits for a release and is never offered one.
+    if not BOARD_BY_DIR.get(chip, {}).get("previews", True):
+        return []
     return [r for r in every if r["pre"] and chip in r["sets"]][:1]
+
+
+def picker_boards():
+    """The boards /install's picker lists, in BOARDS order: every board in
+    BOARDS, except one that waits for a release ("previews": False) while
+    no release on disk carries it. That board is not offered as "coming
+    soon" in the picker: /hardware says so, and a picker line for a board
+    with nothing to install is one more thing to read past."""
+    return [b for b in BOARDS
+            if b.get("previews", True) or board_offers(b["dir"])]
+
+
+# The early-testing line (site 1.2.9, Rob's release flow from firmware
+# 1.1.0): a .0 release is published before the full regression, for early
+# testing, and its .1 patches whatever the regression finds. Shown while the
+# newest release on disk is a .0 at or after EARLY_FROM, beside that
+# release's version on /install and in the "::: early" block; gone by
+# itself once the .1 is on disk. A preview never counts: it is never the
+# newest release.
+EARLY_FROM = (1, 1, 0)
+
+
+def early_note(version=None):
+    """The early-testing line for the newest release, or "". With version,
+    only when that is the newest release, so an older one kept beside it
+    never carries the line."""
+    rels = firmware_releases()
+    if not rels:
+        return ""
+    new = rels[0]
+    major, minor, patch = new["sort"]
+    if patch != 0 or new["sort"] < EARLY_FROM:
+        return ""
+    if version is not None and version != new["version"]:
+        return ""
+    v = new["version"]
+    return (f"{v} is out early for testing; it has not been through the full "
+            f"regression yet. {major}.{minor}.1 follows with anything it finds.")
 
 
 def firmware_offered():
     """Whether /install has anything to install at all, on any board."""
-    return any(board_offers(b["dir"]) for b in BOARDS)
+    return any(board_offers(b["dir"]) for b in picker_boards())
 
 
 def firmware_manifest(version, update=False, chip=None):
@@ -2305,37 +2394,6 @@ BOARD_ART_S3 = (
     '<circle class="lf" cx="53.5" cy="48.5" r="1.1"/>'
     "</svg>")
 
-# The boards /install offers, in the order its picker lists them. A board
-# is an image set, the folder a release keeps that board's five parts in,
-# which is the firmware's own name for the build (tools/release.py, BUILDS).
-# A second board on the same chip would be a second folder and a second row
-# here, never a second name for one folder: the manifest picks a build by
-# chip family alone.
-#
-# "tell" is the one line that says which board a reader has, beside the
-# picture, and it is short on purpose: the card is 26rem wide. "before" is
-# what a board needs done before either button, in the card's own Markdown,
-# and the steps on /install say why. "buy" is where Rob bought the one that
-# was tested, for the tested boards page.
-BOARDS = (
-    {"dir": "esp32", "name": "ESP32 dev board",
-     "part": "ESP32-WROOM-32E, 4 MB flash",
-     "tell": "Two rows of pins and a USB socket",
-     "art": BOARD_ART_ESP32,
-     "page": "/hardware#esp32-dev-board",
-     "buy": "https://link.amazon/B08MTidlU",
-     "before": ""},
-    {"dir": "esp32s3", "name": "Waveshare ESP32-S3-LCD-1.47",
-     "part": "ESP32-S3R8, 16 MB flash, 8 MB PSRAM",
-     "tell": "A USB stick with a colour screen",
-     "art": BOARD_ART_S3,
-     "page": "/hardware#waveshare-esp32-s3-lcd-1-47",
-     "buy": "https://link.amazon/B0bb1oJqt",
-     # From Rob's bench: the stick has no USB-serial chip, and on his PC the
-     # installer's automatic reset did not reach it.
-     "before": ("**First:** hold **BOOT**, tap **RESET**, let go of BOOT. "
-                "**When it is done:** press **RESET**. [Why](#on-the-waveshare-s3)")},
-)
 # The camera boards (site 1.2.4, Rob): two boards with a camera on them,
 # coming to the firmware and not yet on the installer. Drawn in the same
 # hand and at the same size as the two above. The Freenove, from Freenove's
@@ -2344,7 +2402,8 @@ BOARDS = (
 # the other, the camera on its ribbon in the middle and the NeoPixel beside
 # the socket. The S3 camera board is drawn generically, because clone
 # boards sold under that name differ: a camera, the S3's can, two USB-C
-# sockets on one edge and a lead to an external antenna.
+# sockets on one edge and a lead to an external antenna (BOARD_ART_S3CAM,
+# after BOARDS).
 BOARD_ART_FNCAM = (
     '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
     'preserveAspectRatio="xMidYMid meet">'
@@ -2370,6 +2429,73 @@ BOARD_ART_FNCAM = (
     '<circle class="lf" cx="18.25" cy="36.75" r="1.2"/>'
     "</svg>")
 
+# The boards /install offers, in the order its picker lists them. A board
+# is an image set, the folder a release keeps that board's five parts in,
+# which is the firmware's own name for the build (tools/release.py, BUILDS).
+# A second board on the same chip would be a second folder and a second row
+# here, never a second name for one folder: the manifest picks a build by
+# chip family alone.
+#
+# "tell" is the one line that says which board a reader has, beside the
+# picture, and it is short on purpose: the card is 26rem wide. "pick", when
+# there is one, is the line the picker shows instead (site 1.2.9): what a
+# reader choosing between the rows needs told, one line of about 38
+# characters, so three rows still leave both buttons on the first screen at
+# 1366 x 768. /hardware shows "tell" as Looks like, whatever "pick" says. "before"
+# is what a board needs done before either button, in the card's own
+# Markdown, and the steps on /install say why. "buy" is where Rob bought
+# the one that was tested, for the tested boards page.
+#
+# "previews": False (site 1.2.9) is a board that waits for a release: no
+# preview is ever offered for it, and the picker leaves it out until a
+# release on disk carries it. Its "status" is what /hardware's Firmware row
+# says until then. The Freenove is the first, because nothing of it is to
+# show on the installer before firmware 1.1.0.
+BOARDS = (
+    # "(Base)", site 1.2.9 (Rob): the dev board is one choice with or
+    # without an SD card wired to it, and someone with a card module should
+    # not have to wonder which row is theirs.
+    {"dir": "esp32", "name": "ESP32 dev board (Base)",
+     "part": "ESP32-WROOM-32E, 4 MB flash",
+     "pick": "With or without an SD card: one image",
+     "tell": "Two rows of pins and a USB socket",
+     "art": BOARD_ART_ESP32,
+     "page": "/hardware#esp32-dev-board-base",
+     "buy": "https://link.amazon/B08MTidlU",
+     "before": ""},
+    {"dir": "esp32s3", "name": "Waveshare ESP32-S3-LCD-1.47",
+     "part": "ESP32-S3R8, 16 MB flash, 8 MB PSRAM",
+     "tell": "A USB stick with a colour screen",
+     "art": BOARD_ART_S3,
+     "page": "/hardware#waveshare-esp32-s3-lcd-1-47",
+     "buy": "https://link.amazon/B0bb1oJqt",
+     # From Rob's bench: the stick has no USB-serial chip, and on his PC the
+     # installer's automatic reset did not reach it.
+     "before": ("**First:** hold **BOOT**, tap **RESET**, let go of BOOT. "
+                "**When it is done:** press **RESET**. [Why](#on-the-waveshare-s3)")},
+    # The Freenove (coming soon since site 1.2.4; on the installer once a
+    # release carries its set, firmware 1.1.0). Its set shares the dev
+    # board's chip family, so the installer reads "ESP32" off either board
+    # and cannot tell them apart: the picture and the name are the check,
+    # and its picker line says so. Last in the picker, as it is last of the
+    # tested boards on /hardware.
+    {"dir": "esp32-fncam", "name": "Freenove ESP32 camera board",
+     "part": "ESP32-WROVER-E, 4 MB flash, 8 MB PSRAM",
+     "pick": "Same chip as the dev board: see picture",
+     "tell": "A camera on a ribbon, a card slot and a USB-C socket",
+     "art": BOARD_ART_FNCAM,
+     # Site 1.2.7: the sensor varies between batches. Freenove document an
+     # OV2640; Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no
+     # JPEG encoder), and the firmware (FNCAM 1.0.2) drives both.
+     "camera": "varies by batch: OV2640, or a GC0308 at 640x480 as on Rob's",
+     "page": "/hardware#freenove-esp32-camera-board",
+     "buy": "https://link.amazon/B04Ehvw2R",
+     "previews": False,
+     "status": 'coming soon to <a href="/install">the installer</a>; '
+               "running on Rob's bench, camera and card included",
+     "before": ("**Check the picture:** the installer cannot tell this board "
+                "from the dev board. [Why](#on-the-freenove-camera-board)")},
+)
 BOARD_ART_S3CAM = (
     '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
     'preserveAspectRatio="xMidYMid meet">'
@@ -2392,27 +2518,14 @@ BOARD_ART_S3CAM = (
     '<circle class="lf" cx="45.5" cy="42" r="1.1"/>'
     "</svg>")
 
-# Boards on the way, shown on /hardware under Coming soon by the same
-# ::: board block, and deliberately NOT in BOARDS: BOARDS is the
-# installer's picker and the fetcher's list of image sets, and a board goes
-# there once a release carries an image for it (the Freenove shares the
-# ESP32's chip family, so the picker will have to ask which board). "buy"
-# since site 1.2.5, Rob's affiliate links, so people can get one ahead of
-# the installer; the Firmware row still says coming soon. "status" is what
-# the Firmware row says in place of a version.
+# Boards on the way, shown on /hardware by the same ::: board block, and
+# deliberately NOT in BOARDS: BOARDS is the installer's picker and the
+# fetcher's list of image sets, and a board goes there once the firmware
+# builds an image for it (the Freenove moved there in site 1.2.9, marked
+# to wait for a release). "buy" since site 1.2.5, Rob's affiliate links, so
+# people can get one ahead of the installer; the Firmware row still says
+# coming soon. "status" is what the Firmware row says in place of a version.
 SOON_BOARDS = (
-    {"dir": "esp32-fncam", "name": "Freenove ESP32 camera board",
-     "part": "ESP32-WROVER-E, 4 MB flash, 8 MB PSRAM",
-     "tell": "A camera on a ribbon, a card slot and a USB-C socket",
-     "art": BOARD_ART_FNCAM,
-     # Site 1.2.7: the sensor varies between batches. Freenove document an
-     # OV2640; Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no
-     # JPEG encoder), and the firmware (FNCAM 1.0.2) drives both.
-     "camera": "varies by batch: OV2640, or a GC0308 at 640x480 as on Rob's",
-     "page": "/hardware#freenove-esp32-camera-board",
-     "buy": "https://link.amazon/B04Ehvw2R",
-     "status": 'coming soon to <a href="/install">the installer</a>; '
-               "running on Rob's bench, camera and card included"},
     {"dir": "esp32s3-cam", "name": "ESP32-S3 camera board",
      "part": "ESP32-S3 N16R8, 16 MB flash, 8 MB PSRAM",
      "tell": "A camera, two USB-C sockets and an antenna lead",
@@ -2457,11 +2570,11 @@ BOARD_ART_ESP32_SD = (
 # after it for what is bought beside the board.
 SHOWN_BOARDS = (
     {"dir": "esp32-sd", "image": "esp32",
-     "name": "ESP32 dev board + SD card, for storage",
+     "name": "ESP32 dev board (Base) + SD card, for storage",
      "part": "ESP32-WROOM-32E, 4 MB flash, and a micro SD card module",
      "tell": "The dev board with a card module wired beside it",
      "art": BOARD_ART_ESP32_SD,
-     "page": "/hardware#esp32-dev-board-sd-card-for-storage",
+     "page": "/hardware#esp32-dev-board-base-sd-card-for-storage",
      "buy": "https://link.amazon/B08MTidlU",
      "buy_more": "the SD card module is a couple of dollars anywhere"},
 )
@@ -2566,7 +2679,7 @@ def installer_html(lines=()):
     link, in that order on a desktop. On a phone the stylesheet reorders it
     so the picker and the buttons come first.
     """
-    offers = [(b, board_offers(b["dir"])) for b in BOARDS]
+    offers = [(b, board_offers(b["dir"])) for b in picker_boards()]
     if not any(o for _b, o in offers):
         # No button, and no element for a button to live in: a control that
         # cannot do anything is a puzzle, and a reader who presses it learns
@@ -2597,7 +2710,9 @@ def installer_html(lines=()):
                    + (" checked" if j == first else "") + ">"
                    + b["art"]
                    + '<span class="bt"><b>' + html.escape(b["name"]) + "</b>"
-                   + '<span class="tell">' + html.escape(b["tell"]) + "</span>"
+                   + ('<span class="tell pick">' + html.escape(b["pick"]) + "</span>"
+                      if b.get("pick") else
+                      '<span class="tell">' + html.escape(b["tell"]) + "</span>")
                    + '<span class="bv' + ("" if o else " soon") + '">'
                    + html.escape(ver) + "</span></span></label>")
     out.append("</fieldset>")
@@ -2671,6 +2786,11 @@ def installer_html(lines=()):
             elif rel["date"]:
                 meta += ", released " + html.escape(rel["date"])
             out.append(f'<p class="meta ver r{i}">' + meta + ".</p>")
+            # Beside the version, for the newest release while it is a .0
+            # (site 1.2.9): see early_note().
+            early = early_note(rel["version"]) if not rel["pre"] else ""
+            if early:
+                out.append(f'<p class="meta early r{i}">' + html.escape(early) + "</p>")
         for i, rel in enumerate(o):
             if rel["notices"]:
                 out.append(f'<p class="meta notices r{i}"><a href="/install/'
@@ -2679,9 +2799,23 @@ def installer_html(lines=()):
                            "what terms</a></p>")
         out.append("</div>")
 
-    out.append('<p class="meta fam">Each image is for its own chip. The installer '
-               "reads the board first and stops, writing nothing, if it is the "
-               "other kind.</p>")
+    # Two boards on one chip family (the dev board and the Freenove, from
+    # firmware 1.1.0) are the case the installer cannot check, so the line
+    # says which, by name, rather than promising a check it cannot make.
+    fams = {}
+    for b, o in offers:
+        if o:
+            fams.setdefault(FLASH_FAMILIES[b["dir"]][0], []).append(b["name"])
+    alike = next((names for names in fams.values() if len(names) > 1), None)
+    if alike:
+        out.append('<p class="meta fam">The installer reads the chip first and '
+                   "stops, writing nothing, if it is the wrong kind. The "
+                   + html.escape(" and the ".join(alike)) + " have the same chip, "
+                   "so between those the picture is the only check.</p>")
+    else:
+        out.append('<p class="meta fam">Each image is for its own chip. The installer '
+                   "reads the board first and stops, writing nothing, if it is the "
+                   "other kind.</p>")
     # The amber box comes after the buttons since site 1.2.0, on a desktop
     # as it already did on a phone: the picker took the room it had, and
     # Rob's rule for the card is both buttons on the first screen at 1366 x
@@ -2722,14 +2856,19 @@ def board_html(lines):
     if b is None:
         return ""
     # A board on its way (SOON_BOARDS) has no image set to look for: its
-    # Firmware row says what is happening instead, and it has a Camera row
-    # and no buy link.
+    # Firmware row says what is happening instead, and it has a Camera row.
+    # A board in BOARDS that waits for a release (the Freenove) says its
+    # "status" the same way until a release on disk carries it, and then
+    # its version, like any tested board.
     # A board in SHOWN_BOARDS runs another board's image, named by "image",
     # and says so.
     img = b.get("image", b["dir"])
-    o = [] if "status" in b else board_offers(img)
-    same = " The same image as the bare board." if img != b["dir"] else ""
-    if "status" in b:
+    o = board_offers(img) if img in FLASH_FAMILIES else []
+    same = ""
+    if img != b["dir"]:
+        same = (" The same image as the bare board: choose "
+                + html.escape(BOARD_BY_DIR[img]["name"]) + " on the installer.")
+    if "status" in b and not o:
         build = b["status"]
     elif o:
         ver = board_version(o[0], img)
@@ -2759,6 +2898,163 @@ def board_html(lines):
                   if b.get("buy_more") else "") + "</dd>"
                if b.get("buy") else "")
             + "</dl></div>")
+
+
+# --------------------------------------------------------------------------
+# "How it compares" on /different, as a table (site 1.2.9, Rob: "get a
+# matrix table going and I want us to look awesome in it"). Only rows where
+# every cell was checked against the project's own pages, in September 2026,
+# and a cell that could not be says "?". A rival is never marked "no" on a
+# guess: where a thing does not apply to software that runs on a computer
+# you supply, the cell says that in words. Sources, one a project:
+#
+#   Synchronet  wiki.synchro.net (Windows, Linux, macOS, Docker, Raspberry
+#               Pi); wiki.synchro.net/install:index (a Windows installer, a
+#               Unix install, Docker); wiki.synchro.net/howto:petscii
+#               ("PETSCII cannot be automatically detected during
+#               connection", Pet40Port and Pet80Port); synchro.net/
+#               copyright.html (GPL, with LGPL libraries).
+#   Mystic      wiki.mysticbbs.com (Windows, Linux, macOS, ARM Linux such as
+#               the Raspberry Pi); mysticbbs.com/downloads.html (a download
+#               for each); en.wikipedia.org/wiki/Mystic_BBS ("Proprietary
+#               freeware"; 1.10a30 was the last open source version,
+#               github.com/FIDOSOFT/mysticbbs). Its terminals are not
+#               listed on either page: "?".
+#   ENiGMA½     github.com/NuSkooler/enigma-bbs README (Node.js on Linux,
+#               FreeBSD, OpenBSD, macOS and Windows; an install script or
+#               Docker; ANSI-BBS, CP437 and UTF-8; BSD 2-clause).
+#   WWIV        github.com/wwivbbs/wwiv README and docs.wwivbbs.org
+#               (Windows and Linux, install guides for each; Apache 2.0 in
+#               its LICENSE). Its terminals are not listed: "?".
+#   espbbs      github.com/snazzware/espbbs README (an ESP8266, "specifically
+#               the WEMOS D1 Mini", up to four users, SD card support
+#               planned, MIT). The repository is one Arduino sketch,
+#               espbbs.ino. Terminals and power are not stated: "?".
+#
+# µnleashed's own cells are this site's: /hardware (about $5, about half a
+# watt), /install, /firstcall, /sdcard (32 GB, FAT32), /lights, the S3's
+# screen, /camera, and the firmware's GPL v3 or later. The camera cell
+# follows the firmware on disk, like a "::: from" gate.
+#
+# A cell is (mark, words): "y" draws a tick, "n" a cross, "?" a question
+# mark that says what it means, None nothing, and the words always follow.
+COMPARE_COLS = (
+    ("\u00b5nleashed", "/hardware"),
+    ("Synchronet", "https://wiki.synchro.net/"),
+    ("Mystic", "https://wiki.mysticbbs.com/"),
+    ("ENiGMA\u00bd", "https://github.com/NuSkooler/enigma-bbs"),
+    ("WWIV", "https://docs.wwivbbs.org/"),
+    ("espbbs", "https://github.com/snazzware/espbbs"),
+)
+_PC = "software for a computer you supply"
+COMPARE_ROWS = (
+    ("Runs on", (
+        ("y", "a $5 ESP32 board, as its firmware"),
+        (None, "Windows, Linux, macOS or a Raspberry Pi"),
+        (None, "Windows, Linux, macOS or a Raspberry Pi"),
+        (None, "Node.js on Linux, the BSDs, macOS or Windows"),
+        (None, "Windows or Linux"),
+        (None, "an ESP8266 board, the Wemos D1 mini"))),
+    ("No operating system to keep patched", (
+        ("y", "none under it"),
+        ("n", "the one it runs on"),
+        ("n", "the one it runs on"),
+        ("n", "the one it runs on"),
+        ("n", "the one it runs on"),
+        ("y", "none under it"))),
+    ("What it costs to run", (
+        ("y", "about $5 for the board"),
+        (None, "a PC, or a Raspberry Pi"),
+        (None, "a PC, or a Raspberry Pi"),
+        (None, "a computer that runs Node.js"),
+        (None, "a Windows or Linux PC"),
+        (None, "an ESP8266 board"))),
+    ("Power while it waits", (
+        ("y", "about half a watt"),
+        (None, "what the computer draws"),
+        (None, "what the computer draws"),
+        (None, "what the computer draws"),
+        (None, "what the computer draws"),
+        ("?", "not stated"))),
+    ("Installed", (
+        ("y", "from a web browser, in about five minutes"),
+        (None, "an installer on Windows, a Unix install, or Docker"),
+        (None, "a download for each system"),
+        (None, "an install script, or Docker"),
+        (None, "install guides for Windows and Linux"),
+        (None, "an Arduino sketch to build and flash"))),
+    ("One port for every terminal, PETSCII detected as you connect", (
+        ("y", "ANSI, UTF-8, PETSCII at 40 or 80 columns, and ASCII"),
+        ("n", "PETSCII \u201ccannot be automatically detected\u201d: it has ports of its own"),
+        ("?", "not listed"),
+        (None, "ANSI, CP437 and UTF-8"),
+        ("?", "not listed"),
+        ("?", "not stated"))),
+    ("Hardware of its own to watch", (
+        ("y", "an optional drive light and pixel strip, and a status screen on the S3"),
+        (None, _PC), (None, _PC), (None, _PC), (None, _PC),
+        ("?", "not stated"))),
+    ("A camera callers can use", (
+        None,                                   # compare_html fills this in
+        (None, _PC), (None, _PC), (None, _PC), (None, _PC),
+        ("?", "not stated"))),
+    ("Storage", (
+        ("y", "a micro SD card of up to 32 GB, on the board"),
+        (None, "the computer's own disk"),
+        (None, "the computer's own disk"),
+        (None, "the computer's own disk"),
+        (None, "the computer's own disk"),
+        (None, "SD card support planned"))),
+    ("Licence", (
+        ("y", "GPL v3 or later"),
+        ("y", "GPL, with LGPL libraries"),
+        ("n", "freeware, closed source"),
+        ("y", "BSD 2-clause"),
+        ("y", "Apache 2.0"),
+        ("y", "MIT"))),
+)
+COMPARE_NOTE = ("The big packages still do plenty this board does not yet: "
+                "FidoNet-style message networks, door games, ZMODEM, and many "
+                "more callers at once. [The roadmap](/roadmap) says what is "
+                "coming.")
+
+_CMP_TICK = ('<svg class="cm y" viewBox="0 0 16 16" role="img" aria-label="Yes">'
+             '<path d="M3 8.5 L6.5 12 L13 4.5"/></svg>')
+_CMP_CROSS = ('<svg class="cm n" viewBox="0 0 16 16" role="img" aria-label="No">'
+              '<path d="M4 4 L12 12 M12 4 L4 12"/></svg>')
+_CMP_ASK = ('<span class="cm q" role="img" aria-label="Not in its own '
+            'documentation">?</span>')
+
+
+def compare_html():
+    """The ::: compare block: COMPARE_ROWS as a table, the µnleashed column
+    first and lit, then the one sentence that keeps it honest. In a wrapper
+    that scrolls sideways on a phone, the row names held still at the left."""
+    rels = firmware_releases()
+    camera = (("y", "on the Freenove camera board") if rels and rels[0]["sort"] >= (1, 1, 0)
+              else ("y", "coming, on the camera boards"))
+    marks = {"y": _CMP_TICK, "n": _CMP_CROSS, "?": _CMP_ASK}
+    out = ['<p class="cmphint" aria-hidden="true">The table scrolls sideways: '
+           'swipe for the other five.</p>'
+           '<div class="cmpwrap" role="region" aria-label="How it compares" '
+           'tabindex="0"><table class="cmp"><thead><tr><th scope="col">'
+           '<span class="vh">What</span></th>']
+    us = ' class="us"'
+    for j, (name, href) in enumerate(COMPARE_COLS):
+        out.append('<th scope="col"' + (us if j == 0 else "") + ">"
+                   f'<a href="{html.escape(href, quote=True)}">{html.escape(name)}</a></th>')
+    out.append("</tr></thead><tbody>")
+    for label, cells in COMPARE_ROWS:
+        out.append(f'<tr><th scope="row">{html.escape(label)}</th>')
+        for j, cell in enumerate(cells):
+            mark, words = cell if cell is not None else camera
+            out.append("<td" + (us if j == 0 else "") + ">"
+                       + (marks[mark] if mark else "")
+                       + f'<span class="cw">{html.escape(words)}</span></td>')
+        out.append("</tr>")
+    out.append("</tbody></table></div>")
+    out.append('<p class="cmpnote">' + md_inline(COMPARE_NOTE) + "</p>")
+    return "".join(out)
 
 
 def installer_terms_html():
@@ -3161,6 +3457,7 @@ PAGE = """<!doctype html>
    has width to spend on larger type and a phone has none. 115% is the same
    change in kind, 14px to 16.1px, at 36 characters a line. One number each,
    and both easy to move. */
+@PITCH_FACE@
 :root {{ color-scheme: dark; font-size:133%;
   --bg:#0b0b0f; --ink:#c8c8c8; --dim:#8a8a8a; --faint:#6a6a72; --rule:#1e1e26;
   --live:#5ddc7a;   /* up, and nothing else */
@@ -3369,12 +3666,21 @@ p.stat .n {{ color:var(--live); }}
    by the difference. 19.5 holds both on one row, and the line of copy on
    one line, in Menlo, the widest face the font stack reaches (0.602em a
    character against Consolas's 0.55). */
-.listtop {{ margin:0 0 1.25rem; }}
-.listtop p.pitch {{ color:var(--ink); margin:0; }}
-.listtop p.tease {{ margin:0.875rem 0 0; }}
+.listtop {{ margin:0 0 0.75rem; }}
+/* The pitch (site 1.2.9, Rob: "the text is lost there"): a size and a half
+   step up from the text round it, in the display face PITCH_FONT names,
+   served from /font/ (see FONT_DIR). The monospace stack stays as the
+   fallback, so a reader who blocks fonts gets the page's own face, not a
+   stranger's serif. */
+.listtop p.pitch {{ color:var(--ink); margin:0; font-family:"Pitch",ui-monospace,Menlo,Consolas,monospace;
+        font-size:1.375rem; line-height:1.35; letter-spacing:0.01em; }}
+.listtop p.tease {{ margin:1rem 0 0; }}
 /* The line into the list, and the rule under it in the footer's style: a
-   hairline in --rule, the page's own divider, nothing heavier. */
-p.tryit {{ color:var(--dim); margin:0 0 0.75rem; }}
+   hairline in --rule, the page's own divider, nothing heavier. On a phone
+   it follows the card; from the breakpoint up it is the foot of the left
+   column, level with the card's foot, so it never floats in the gap the
+   taller card leaves under the button. */
+p.tryit {{ color:var(--dim); margin:1rem 0 0; }}
 hr.dirrule {{ border:0; border-top:1px solid var(--rule); margin:0 0 1.25rem; }}
 /* The front page's ten (site 1.2.8): a line saying so over the table, and
    the way to all of them under it, a section's next step. */
@@ -3468,8 +3774,13 @@ p.qline a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
         outline:3px solid #ffd35c; outline-offset:2px; }}
 @media (min-width: 901px) {{
   .listtop {{ display:grid; grid-template-columns:minmax(0, 1fr) 19.5rem;
-        column-gap:2rem; align-items:start; }}
-  .runcard {{ margin:0; }}
+        grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}
+  .listtop .intro {{ grid-column:1; grid-row:1; }}
+  .runcard {{ margin:0; grid-column:2; grid-row:1 / span 2; }}
+  .listtop p.tryit {{ grid-column:1; grid-row:2; align-self:end; margin:1rem 0 0; }}
+}}
+@media (max-width: 900px) {{
+  .listtop p.pitch {{ font-size:1.1875rem; }}
 }}
 /* On a phone the card is the title and the two buttons: the line of copy
    is left out, so the list keeps its place on the first screen. */
@@ -3907,6 +4218,57 @@ article figure, article .wide {{ max-width:none; margin:1.25rem 0; }}
 .gallery figcaption {{ color:var(--dim); font-size:0.75rem; margin-top:0.375rem; }}
 .tablewrap {{ overflow-x:auto; margin:1rem 0; }}
 article table td {{ vertical-align:top; }}
+/* /different's comparison (site 1.2.9). A table that scrolls sideways
+   inside its own box on a narrow screen, the row names held at the left
+   edge so a cell is never read without its question. The µnleashed column
+   lit with the --dial wash the run card uses, and its name in --dial. The
+   marks are line art at the text's size: a tick in --live, a cross in
+   --risk, a question mark in --faint, each with its meaning for a screen
+   reader. */
+.cmpwrap {{ overflow-x:auto; margin:0.75rem 0 0.5rem; border:1px solid var(--rule);
+        border-radius:0.375rem; }}
+.cmpwrap:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+article table.cmp {{ width:100%; min-width:52rem; border-collapse:separate;
+        border-spacing:0; font-size:0.8125rem; }}
+table.cmp th, table.cmp td {{ padding:0.5rem 0.625rem; border-bottom:1px solid var(--rule);
+        vertical-align:top; text-align:left; }}
+table.cmp tbody tr:last-child th, table.cmp tbody tr:last-child td {{ border-bottom:0; }}
+table.cmp thead th {{ color:var(--struct); font-size:0.75rem; letter-spacing:0.0625rem;
+        text-transform:uppercase; white-space:nowrap; }}
+table.cmp thead th a {{ color:inherit; }}
+table.cmp th[scope=row] {{ position:sticky; left:0; z-index:1; background:var(--bg);
+        color:var(--ink); width:11rem; min-width:9rem; font-weight:normal;
+        border-right:1px solid var(--rule); }}
+table.cmp thead th:first-child {{ position:sticky; left:0; z-index:2; background:var(--bg); }}
+table.cmp td {{ color:var(--dim); }}
+table.cmp .us {{ background:rgba(127, 212, 255, 0.10); color:var(--ink); }}
+table.cmp thead th.us, table.cmp thead th.us a {{ color:var(--dial); }}
+/* Not in capitals: an upper-cased micro sign is a Greek capital mu, and
+   the name would read MNLEASHED. */
+table.cmp thead th.us {{ text-transform:none; letter-spacing:0; font-size:0.8125rem; }}
+table.cmp .cm {{ display:inline-block; width:0.9375rem; height:0.9375rem;
+        margin:0 0.375rem 0 0; vertical-align:-0.125rem; }}
+table.cmp svg.cm path {{ fill:none; stroke-width:2; stroke-linecap:round;
+        stroke-linejoin:round; }}
+table.cmp svg.cm.y path {{ stroke:var(--live); }}
+table.cmp svg.cm.n path {{ stroke:var(--risk); }}
+table.cmp .cm.q {{ color:var(--faint); text-align:center; font-weight:bold; line-height:0.9375rem; }}
+@media (hover: hover) and (pointer: fine) {{
+  table.cmp tr:hover td, table.cmp tr:hover th {{ background:#111; }}
+  table.cmp tr:hover td.us {{ background:rgba(127, 212, 255, 0.16); }}
+}}
+p.cmpnote {{ color:var(--dim); font-size:0.8125rem; margin:0.5rem 0 1.5rem; }}
+/* On a phone the row names narrow, so µnleashed's column and the next are
+   both in view beside them, and a line over the table says it scrolls. */
+p.cmphint {{ display:none; color:var(--faint); font-size:0.75rem; margin:0.75rem 0 -0.5rem; }}
+@media (max-width: 900px) {{
+  p.cmphint {{ display:block; }}
+  article table.cmp {{ min-width:44rem; font-size:0.75rem; }}
+  table.cmp th[scope=row] {{ width:6.5rem; min-width:6.5rem; }}
+  table.cmp th, table.cmp td {{ padding:0.4375rem 0.5rem; }}
+}}
+.vh {{ position:absolute; width:0.0625rem; height:0.0625rem; overflow:hidden; clip:rect(0 0 0 0);
+        white-space:nowrap; }}
 article table td:first-child {{ color:var(--ink); white-space:nowrap; }}
 /* A label column that will not wrap is right where there is width to spare
    and wrong on a phone, where it is what turns a table that fitted into one
@@ -4527,6 +4889,7 @@ article .installer .bopt .bt {{ display:flex; flex-direction:column; min-width:0
 article .installer .bopt .bt b {{ color:var(--ink); }}
 article .installer .bopt svg.art.board {{ width:4rem; height:2.5rem; }}
 article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}
+article .installer .bopt .tell.pick {{ color:var(--ink); }}
 article .installer .bopt .bv {{ color:var(--dial); font-size:0.75rem; }}
 article .installer .bopt .bv.soon {{ color:var(--faint); }}
 article .installer .bsec {{ display:flex; flex-direction:column; gap:0.5rem; }}
@@ -4758,7 +5121,7 @@ def logo_html(home="/"):
 FREEDOMS = (
     ("web", "No web", "a BBS, not a website"),
     ("cloud", "No cloud", "nobody else's server"),
-    ("browser", "No browser", "a C64 can call in"),
+    ("browser", "No browser", "a 1980s computer can call in"),
     ("chip", "Real hardware", "a chip on your shelf"),
     ("gpl", "GPL v3 or later", "free software"),
     ("lan", "No internet needed", "a local network is enough"),
@@ -4939,6 +5302,15 @@ TOUCH_PNG = _brand("unleashed-avatar-512.png")
 AVATAR_URL = ((f"https://{LIST_DOMAIN}" if LIST_DOMAIN else SITE_URL).rstrip("/")
               + "/avatar.png")
 PAGE = PAGE.replace("@AVATAR_URL@", html.escape(AVATAR_URL, quote=True))
+# The pitch's face (site 1.2.9), from PITCH_FONT: one @font-face, doubled
+# braces because PAGE is formatted on every render. font-display:swap, so
+# the pitch shows at once in the page's own face and changes when the file
+# arrives, about 10 KB, rather than staying blank.
+_face, _weight = PITCH_FONTS[PITCH_FONT]
+PAGE = PAGE.replace("@PITCH_FACE@", (
+    '@font-face {{ font-family:"Pitch"; src:url("/font/%s") format("%s"); '
+    'font-weight:%d; font-style:normal; font-display:swap; }}'
+    % (_face, "truetype" if _face.endswith(".ttf") else "woff", _weight)))
 
 
 def human_ago(seconds):
@@ -6190,7 +6562,7 @@ def badge_find_html():
     return ('<p class="findbar" data-js hidden><label for="bq">Find a badge</label>'
             '<input type="search" id="bq" data-find="article" data-count="bqn"'
             ' data-noun="badges" autocomplete="off" spellcheck="false"'
-            ' placeholder="c64, radio, chat">'
+            ' placeholder="retro, radio, chat">'
             '<span class="fqn" id="bqn" aria-live="polite"></span></p>'
             + BADGE_JS)
 
@@ -6491,12 +6863,15 @@ HOME_TEASER = ('<p class="next tease"><a class="go" href="/different">'
 
 # Above the button, the reason to press it (site 1.2.8, Rob), in two
 # sentences taken from /different, all of it true of the ESP32 dev board:
-# the size of a stick of gum, about $5, a Commodore 64 and a laptop in one
+# the size of a stick of gum, about $5, an old computer and a new one in one
 # chat room, and /hardware's half a watt while it waits. The S3 boards cost
-# and draw more, so this names the cheap one, as /different does.
+# and draw more, so this names the cheap one, as /different does. Site
+# 1.2.9: no one machine named (Rob: "we dont favour" the C64), and set in
+# PITCH_FONT, a little larger than the text round it.
 HOME_PITCH = ('<p class="pitch">A whole BBS on a board the size of a stick of '
-              "gum, for about $5. It answers a Commodore 64 and a laptop in the "
-              "same chat room, on about half a watt.</p>")
+              "gum, for about $5. It answers an 8-bit computer from the "
+              "eighties and a laptop from this year in the same chat room, on "
+              "about half a watt.</p>")
 
 # And after the opening row, the line into the list, which the rule then
 # separates from the directory itself.
@@ -6634,7 +7009,7 @@ def filter_bar_html(sel, any_, shown, total, go=False, q=""):
             '<p class="findbar" data-js hidden><label for="fq">Find a badge</label>'
             '<input type="search" id="fq" data-find="#fgrid" data-count="fqn"'
             ' data-noun="badges" autocomplete="off" spellcheck="false"'
-            ' placeholder="c64, radio, chat">'
+            ' placeholder="retro, radio, chat">'
             '<span class="fqn" id="fqn" aria-live="polite"></span></p>'
             '<fieldset class="fmode"><legend>Boards with</legend>' + radios
             + "</fieldset></div>"
@@ -6758,8 +7133,8 @@ def index_page(data=None):
             + announcement_banner()
             + '<div class="listtop"><div class="intro">'
             + HOME_PITCH + HOME_TEASER + "</div>"
-            + RUN_CARD + "</div>"
-            + HOME_TRY + '<hr class="dirrule">'
+            + RUN_CARD + HOME_TRY + "</div>"
+            + '<hr class="dirrule">'
             + "<h1>BBS directory</h1>"
             + stat_line(len(rows), on)
             + '<p class="lead">Boards that are up right now. '
@@ -8403,11 +8778,11 @@ LIGHTS_STRIP = _lights_strip()
 SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work,
                     # where it links, what a screen reader is told, speed
     (52, "bare ESP32", ("functional,", "lowest cost"), "about $5", "about 5 min",
-     "no wiring", "#esp32-dev-board",
+     "no wiring", "#esp32-dev-board-base",
      "A bare ESP32 dev board: functional, lowest cost. About $5, about 5 "
      "minutes, no wiring. Expected to be fast, not yet measured.", "fast"),
     (170, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
-     "wiring the card", "#esp32-dev-board-sd-card-for-storage",
+     "wiring the card", "#esp32-dev-board-base-sd-card-for-storage",
      "An ESP32 dev board with an SD card: economical and usable. About $8, "
      "about 30 minutes, most of it wiring the card. Expected to be fast, "
      "not yet measured.", "fast"),
@@ -9333,9 +9708,10 @@ industrial controllers and test gear, and its framing survives on nearly every
 microcontroller made since as a
 <a href="https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter">TTL-level
 UART</a>. More than sixty years on, the way a machine from 1982 talks is still the way you
-talk to the switch in the rack. That is why a
-<a href="https://en.wikipedia.org/wiki/Commodore_64">Commodore 64</a> and a laptop
-bought this year can both call one of these boards, and why a board can turn round and
+talk to the switch in the rack. That is why an
+<a href="https://en.wikipedia.org/wiki/Apple_II">Apple II</a>, a
+<a href="https://en.wikipedia.org/wiki/VT220">VT220</a> on a serial line and a laptop
+bought this year can all call one of these boards, and why a board can turn round and
 drive whatever is hanging off its own serial port.</p>
 
 <h2>Why the micro sign</h2>
@@ -9705,6 +10081,20 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.send_response(200)
                 self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(blob)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(blob)
+        elif path.startswith("/font/"):
+            # The pitch's face and its licence (site 1.2.9). A day's cache,
+            # like the icons: a face does not change under its name.
+            got = font_file(path[len("/font/"):])
+            if got is None:
+                self.reply(404, "no such file\n", "text/plain; charset=utf-8")
+            else:
+                blob, ctype = got
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(blob)))
                 self.send_header("Cache-Control", "public, max-age=86400")
                 self.end_headers()

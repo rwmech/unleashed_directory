@@ -14,8 +14,8 @@ back. ANSI with CP437 or UTF-8, PETSCII at 40 or 80 columns, or plain ASCII. A
 modern terminal answers the probe and you are asked nothing. If yours stays
 silent, the board asks you to press DEL or BACKSPACE, which tells it whether
 you are on a Commodore or a plain ASCII terminal, and a Commodore is then asked
-whether it has 40 or 80 columns. A Commodore 64 gets a C64 screen and a laptop
-gets a laptop one, and the two can sit in the same chat room.
+whether it has 40 or 80 columns. Each machine gets screens made for it, and
+they can all sit in the same chat room.
 
 If a board looks like line noise, the probe guessed wrong. Hang up, set your
 terminal's character set to CP437, and call again.

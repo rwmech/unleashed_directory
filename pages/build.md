@@ -96,8 +96,8 @@ console pins.
 ## Calling it
 
 Any telnet client will do, and SyncTERM is the one worth installing if you have
-none. A Commodore 64 with a TeensyROM works too, and so does a VT220 on a
-serial adapter. Before you dial, read [what happens on your first
+none. So does an Atari 800 through a FujiNet, an Apple II with an Uthernet
+card, or a VT220 on a serial adapter. Before you dial, read [what happens on your first
 call](/firstcall).
 
 ::: next

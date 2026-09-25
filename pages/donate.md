@@ -7,7 +7,7 @@ cover
 µnleashed BBS is free software, and it stays free. This page is how to help pay for making it, if you would like to.
 
 It is a bulletin board system that runs on an ESP32, a microcontroller that
-costs a few dollars. Callers reach a board over telnet from a Commodore 64, an
+costs a few dollars. Callers reach a board over telnet from an Apple II, an
 old PC, a VT220 or a laptop bought this year, for chat, forums, mail and file
 areas, with no web and no cloud in between.
 
@@ -22,7 +22,7 @@ The software costs nothing to use. Making it costs something every month.
 
 - **AI tools.** µnleashed BBS is built by one person, [Rob](/author), with AI
   doing a great deal of the development, the writing and the design: the
-  firmware, the screens a Commodore 64 draws, and the page you are reading.
+  firmware, the screens a 40-column machine draws, and the page you are reading.
   The decisions are his. The tools are a monthly bill, and not a small one.
   The page about the project, [what this is](/about), says the same, because
   it is better said than found out.
@@ -38,8 +38,8 @@ The software costs nothing to use. Making it costs something every month.
 That is Rob's phrase for it, and the claim is narrower than it sounds. Software
 you own, on hardware you can hold in one hand, that nobody can switch off from
 a data centre. Old machines as callers in their own right rather than as a
-novelty: a Commodore 64 gets a Commodore screen, not an approximation of one,
-and sits in the same chat room as a laptop bought this year. Nothing in it
+novelty: a Commodore gets real PETSCII and a serial terminal gets text that
+fits it, and both sit in the same chat room as a laptop bought this year. Nothing in it
 depends on a company still being there next year, which is more than most
 software written this year can say.
 
@@ -86,7 +86,7 @@ more than a coffee does.
   [its own](https://github.com/rwmech/unleashed_directory/issues). What you
   did, what you expected and what happened instead is most of the work of
   fixing it.
-- **Tell somebody.** A friend who still has a Commodore 64 in the loft, a club
+- **Tell somebody.** A friend who still has an Atari or an Amiga in the loft, a club
   that wants somewhere to be between meetings, a teacher who would like a
   network the class can hold. Send them [who it's for](/whofor).
 

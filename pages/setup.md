@@ -46,6 +46,13 @@ After that, a short tour of the settings, and then the sysop's prompt:
 shot-newsysop-1
 :::
 
+<!-- Closed until opened (firmware 1.1.0): the firmware repo's CLAUDE.md, "A board is closed until its sysop opens it", a plan when this was written. Check the label against CONFIG board once it is built. -->
+::: from 1.1.0
+Until you open it, the board is closed to everybody else: other callers get
+the busy message. When you have finished setting it up, open it on the board
+page of `CONFIG` by turning **Temporarily stop taking calls** off.
+:::
+
 After that, on any call, you become the sysop by typing `BYE` and your password
 at the prompt. The board moves you to its sysop node, and the prompt starts
 with `[S]`. A wrong password is an ordinary log off, and three wrong from one
@@ -433,7 +440,8 @@ start and then costs nothing.
 The card holds file areas, the forums and your own screens. The accounts, the
 settings and the caller log stay on the board, so a card that fails loses none
 of them. On the ESP32 dev board the wiring is on [the SD card
-page](/sdcard); the Waveshare S3 has a slot.
+page](/sdcard); the Waveshare S3 has a slot. What happens to your own screens
+when the card is out is under [screens of your own](/sdcard#screens-of-your-own).
 
 <!-- Only a pointer until the 1.1.0 setup copy is written (review item F7, held): the lights plugin ships in firmware 1.1.0. -->
 ::: from 1.1.0

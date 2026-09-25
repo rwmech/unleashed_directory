@@ -142,3 +142,17 @@ drawn for 40 or 80 columns.
 
 Set `screens = no` in the config if you would rather the card were ignored
 for this.
+
+Your screens are played straight from the card, and nothing copies them into
+the board. Pull the card and the board goes back to the stock screens it
+shipped with: nothing breaks, but your own screens are gone until the card is
+back.
+
+<!-- SCREENS INSTALL (Rob, site 1.2.9): from firmware 1.1.1, so gated on it; the words are Rob's description of the command, not yet checked against a build. The 256 KB is the board's storage partition (partitions.csv), which holds the screens. -->
+::: from 1.1.1
+To keep them without the card, type `SCREENS INSTALL` as the sysop. It copies
+the card's screens into the board itself, after checking they fit in its
+256 KB of screen space; if they do not, it refuses and copies nothing, rather
+than installing half of them. `SCREENS INSTALL STOCK` puts the stock set back,
+and so does the next firmware update.
+:::

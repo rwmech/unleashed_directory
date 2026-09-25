@@ -1,4 +1,4 @@
-<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board is listed as tested only once a build has run on it. Since site 1.2.4 the two camera boards wait at the foot of the page, drawn from SOON_BOARDS in server.py with no version (the buy links are Rob's, given for 1.2.5); their facts come from the firmware repository's internal/PLAN-freenove-cam.md: the Freenove FNK0060 (pinout 3.0, ESP32-WROVER-E, OV2640, SDMMC slot, CH340, no NeoPixel: Rob's photo shows only the IO2, RX, TX and ON LEDs; the pixel he meant is on another S3 board, and GPIO 13, 32 and 33 free) (the camera varies between batches: Freenove document an OV2640, and Rob's kit, on his bench 2026-09-25, carries a GalaxyCore GC0308, 640x480 at most with no JPEG encoder, which the firmware's FNCAM 1.0.2 captures raw and encodes on the board in 3.6 to 3.9 s; the firmware supports both, and since site 1.2.7 the Freenove is running there, core, card and camera, though no release carries it yet) and the ESP32-S3-CAM Rob has on order (N16R8, OV3660, two USB-C, an external antenna). The S3 camera board has not run a build yet. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The speeds (site 1.2.5) are Rob's expectation, not a measurement: fast, faster for the Freenove's PSRAM, fastest for the S3; replace them with measured figures once the benchmark has run on all three. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. The seal on each board's picture (site 1.2.5) is Rob's: flash & go for every board here, the S3 camera board expected until tested. Since site 1.2.7 the dev board is two entries (Rob: "esp32 is misleading with flash and go, it has to have an sd card"): bare, flash & go, and with an SD card, the first to wear a little wiring. Both run the one ESP32 image, so the second is drawn from SHOWN_BOARDS in server.py and never reaches the installer's picker. What needs a card is the firmware's own: files and forums are PF_SD (src/plugins/files.cpp, forums.cpp), and backups to the card came in 1.1.0. -->
+<!-- The tested boards page (site 1.2.0). Each "::: board" block is drawn from BOARDS in server.py and from the firmware on disk, so the picture, the build on offer and the buy link here are always the ones the installer's picker shows. The prose under each block is what was tested and what the board adds; the facts in it come from the firmware repository: ESP32_BOARD_CHOICE.md, README.md "Other boards", src/board.h and src/plugins/panel.cpp at 1.1.0-dev, and Rob's bench on 2026-09-24. A board is listed as tested only once a build has run on it. Since site 1.2.4 the two camera boards wait at the foot of the page, drawn from SOON_BOARDS in server.py with no version (the buy links are Rob's, given for 1.2.5); their facts come from the firmware repository's internal/PLAN-freenove-cam.md: the Freenove FNK0060 (pinout 3.0, ESP32-WROVER-E, OV2640, SDMMC slot, CH340, no NeoPixel: Rob's photo shows only the IO2, RX, TX and ON LEDs; the pixel he meant is on another S3 board, and GPIO 13, 32 and 33 free) (the camera varies between batches: Freenove document an OV2640, and Rob's kit, on his bench 2026-09-25, carries a GalaxyCore GC0308, 640x480 at most with no JPEG encoder, which the firmware's FNCAM 1.0.2 captures raw and encodes on the board in 3.6 to 3.9 s; the firmware supports both, and since site 1.2.7 the Freenove is running there, core, card and camera, though no release carries it yet) and the ESP32-S3-CAM Rob has on order (N16R8, OV3660, two USB-C, an external antenna). The S3 camera board has not run a build yet. Since site 1.2.1 this page also owns the facts /build used to carry: the chip list, the dev board's memory and power (ESP32-WROOM-32E datasheet v2.1, table 16: 379 mA peak on 802.11b transmit, a 0.5 A supply), and the spectrum at the top. The speeds (site 1.2.5) are Rob's expectation, not a measurement: fast, faster for the Freenove's PSRAM, fastest for the S3; replace them with measured figures once the benchmark has run on all three. The spectrum's prices are Rob's, 2026-09-24: a WROOM dev board about $5, the Waveshare about $20, plus an SD module about $2 and jumpers for the middle stop. Re-check them when they look wrong. The seal on each board's picture (site 1.2.5) is Rob's: flash & go for every board here, the S3 camera board expected until tested. Since site 1.2.7 the dev board is two entries (Rob: "esp32 is misleading with flash and go, it has to have an sd card"): bare, flash & go, and with an SD card, the first to wear a little wiring. Both run the one ESP32 image, so the second is drawn from SHOWN_BOARDS in server.py and never reaches the installer's picker. What needs a card is the firmware's own: files and forums are PF_SD (src/plugins/files.cpp, forums.cpp), and backups to the card came in 1.1.0. Since site 1.2.9 (Rob) both dev board entries are "(Base)": one choice on the installer, with or without a card. The Freenove moved into BOARDS in server.py, marked to wait for a release, so its entry is coming soon until a release on disk carries its image set (esp32-fncam, firmware 1.1.0) and tested from then, by the gates below and by what is on disk. -->
 # Tested boards
 
 The boards this firmware has actually run on, each with its own image on [the
@@ -12,10 +12,10 @@ hardware-spectrum
 
 Three ways to build one. Each is a choice, not a step on a ladder:
 
-- **[A bare ESP32 dev board](#esp32-dev-board)**: functional, and the lowest
+- **[A bare ESP32 dev board](#esp32-dev-board-base)**: functional, and the lowest
   cost. About $5, and about five minutes from the browser. Chat, mail,
   accounts and a directory listing; file areas and forums need a card.
-- **[The same board with an SD card](#esp32-dev-board-sd-card-for-storage)**: economical and usable. About
+- **[The same board with an SD card](#esp32-dev-board-base-sd-card-for-storage)**: economical and usable. About
   $8 with the card module and jumper wires, and about half an hour, most of
   it wiring the card.
 - **[An ESP32-S3 board](#waveshare-esp32-s3-lcd-1-47)**: advanced
@@ -23,9 +23,18 @@ Three ways to build one. Each is a choice, not a step on a ladder:
   board, and no wiring. It does need BOOT and RESET pressed by hand to install, which is
   why it takes a little longer than the bare board.
 
+::: until 1.1.0
 Camera boards are next: [two boards with a camera on
 them](#freenove-esp32-camera-board), coming soon, so a caller can take a picture of
 whatever the board is looking at and download it.
+:::
+
+::: from 1.1.0
+And one with a camera: [the Freenove camera
+board](#freenove-esp32-camera-board), so a caller can take a picture of whatever
+the board is looking at and download it. A second camera board, on the
+ESP32-S3, follows once it has been tested.
+:::
 
 The prices are typical listings in September 2026, and they move. A micro SD
 card is extra on either board that takes one. The times are for somebody
@@ -44,14 +53,15 @@ listing for the board that was tested, or for a camera board, the one being
 tested, and any board that matches the picture and the chip will do, bought
 anywhere.
 
-## ESP32 dev board
+## ESP32 dev board (Base)
 
 ::: board
 esp32
 :::
 
 The reference board, and the one every release so far was built and tested
-on. A dev board round the ESP32-WROOM-32E module, with 4 MB of flash and a
+on. With a card wired to it or without, it installs the same image, from the
+one **ESP32 dev board (Base)** choice on the installer. A dev board round the ESP32-WROOM-32E module, with 4 MB of flash and a
 USB-serial chip beside its socket: most boards sold as "ESP32 DevKit" or
 "ESP32-WROOM-32" look like this. A long board, a row of pins down each side,
 the module's metal can at one end with its antenna past the edge, and the USB
@@ -61,7 +71,7 @@ socket at the other end between two buttons.
   pages and a directory listing, straight from the installer.
 - **What needs a card:** file areas, forums, backups kept on the card, and
   the photos on a camera board. With no card those are not offered at all.
-  The dev board with a card is [the next entry](#esp32-dev-board-sd-card-for-storage).
+  The dev board with a card is [the next entry](#esp32-dev-board-base-sd-card-for-storage).
 - **What was tested:** installing from this site, setting the Wi-Fi from the
   browser, the first-call setup, and callers from PuTTY, SyncTERM and a
   Commodore 64 through a TeensyROM.
@@ -79,20 +89,24 @@ socket at the other end between two buttons.
 [Go to the installer](/install)
 :::
 
-## ESP32 dev board + SD card, for storage
+## ESP32 dev board (Base) + SD card, for storage
 
 ::: board
 esp32-sd
 :::
 
 The same dev board with a micro SD card module wired to it, which is how every
-release so far was tested. It runs the same image from the installer: the card
-is what switches the rest of the board on.
+release so far was tested. It installs the same image, from the same **ESP32
+dev board (Base)** choice on the installer: the card is what switches the rest
+of the board on.
 
 - **What it does:** everything the BBS does. File areas callers can download
   from and upload to, forums, screens of your own, and from firmware 1.1.0
   the board's backups kept on the card, on top of everything the bare board
   does.
+- **What it holds:** a card of up to 32 GB is a library on one board: a
+  lifetime of disk images, text files and utilities for the machines that
+  call in, every one a download by XMODEM or YMODEM.
 - **What it costs:** about $8 with the card module and jumper wires, and
   about half an hour the first time, most of it wiring the card. A micro SD
   card of 32 GB or smaller is extra.
@@ -156,10 +170,24 @@ pressed by hand, in three steps on the installer page.
 esp32-fncam
 :::
 
+::: until 1.1.0
 **Coming soon.** Freenove's camera kit, FNK0060, and the first of two boards
 with a camera on them. It is running on Rob's bench: the board, its SD card
 and its camera all work, and callers can take photos with it. It goes on the
 installer once a release carries its build.
+:::
+
+::: from 1.1.0
+Freenove's camera kit, FNK0060, and the first board with a camera on it to go
+on the installer. Tested on Rob's bench in September 2026 with the 1.1.0
+development builds: the board, its SD card and its camera, with callers taking
+photos and downloading them.
+
+> **Same chip as the dev board.** The installer reads the chip, not the
+> board, so it cannot tell the two apart: the picture is the check. The
+> [steps for this board](/install#on-the-freenove-camera-board) say what
+> else is different about installing it.
+:::
 
 - **What it has:** an ESP32-WROVER-E with 4 MB of flash and 8 MB of PSRAM, a
   camera on a ribbon, a micro SD slot with a card in the box, a USB-C socket
@@ -208,6 +236,8 @@ board. It needs two processor cores and Wi-Fi built into the chip. The BBS
 runs on one core while Wi-Fi and the network run on the other, and that split
 is what stops the radio's work from making callers' lines lag.
 
+<!-- The same list twice, so each is one list: the WROVER line changes when a release carries the Freenove's image (firmware 1.1.0). Edit both until then, then drop the "until" one. -->
+::: until 1.1.0
 - **ESP32-WROOM-32E: yes, tested.** The dev board above. Every release is
   tested on it.
 - **ESP32-S3: yes, on one board.** The Waveshare above. Another S3 board needs
@@ -224,6 +254,26 @@ is what stops the radio's work from making callers' lines lag.
 - **ESP32-H2: no.** One core, and no Wi-Fi.
 - **ESP32-P4: no.** No Wi-Fi on the chip. It needs a second chip to reach a
   network.
+:::
+
+::: from 1.1.0
+- **ESP32-WROOM-32E: yes, tested.** The dev board above. Every release is
+  tested on it.
+- **ESP32-S3: yes, on one board.** The Waveshare above. Another S3 board needs
+  a build of its own, because the image carries the Waveshare's pins.
+- **ESP32-WROVER: yes, on one board.** The Freenove camera board above, with a
+  build of its own for its camera and card slot. The WROVER is the same
+  original ESP32 chip with PSRAM, a second memory chip, on the module, so
+  another WROVER board should run the dev board's image, which leaves the
+  PSRAM unused. That has not been tested.
+- **ESP32-S2, ESP32-C3 and ESP32-C5: no.** One core each, the C5 even with
+  its dual-band Wi-Fi.
+- **ESP32-C6: no.** One main core. Its second, low-power core cannot run the
+  board.
+- **ESP32-H2: no.** One core, and no Wi-Fi.
+- **ESP32-P4: no.** No Wi-Fi on the chip. It needs a second chip to reach a
+  network.
+:::
 
 A single-core chip could be made to run it, but the radio and the callers
 would take turns on one core and callers would feel it, and doing that

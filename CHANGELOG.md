@@ -14,6 +14,85 @@
 
 # Changelog
 
+## 1.2.9, 2026-09-25
+
+Ready for firmware 1.1.0: a third image set and the Freenove on the
+installer, all of it waiting until a 1.1.0 release is on disk. And a pass
+over the words: no one favourite machine, a comparison table, and the
+front page's pitch in a face of its own.
+
+- **The Freenove camera board's image set, `esp32-fncam`** (the firmware's
+  `tools/release.py`: assets `esp32-fncam-<part>`, `esp32-fncam-version.txt`,
+  folder `esp32-fncam/`, chip family ESP32). `deploy/fetch_release.py` learns
+  it, and never takes it from a pre-release (`NO_PREVIEW`). The server
+  accepts a set folder with one hyphen and offers the set at the ESP32's
+  offsets. It is in BOARDS marked `"previews": False`: the picker leaves it
+  out, and no preview is offered for it, until a release carries it.
+- **/install's picker with 1.1.0 on disk**: three boards. The Freenove's line
+  says "Same chip as the dev board: see picture", its section says to check
+  the picture, and the line under the card names the two boards the
+  installer cannot tell apart instead of promising a chip check. The
+  Waveshare S3 moves from preview to released by itself. A picker line now
+  takes the place of the look-alike line, so both buttons stay on the first
+  screen at 1366 x 768 with three rows.
+- **"ESP32 dev board (Base)"** (Rob), in the picker ("With or without an SD
+  card: one image") and on /hardware's two ESP32 entries, both of which say
+  they install the same image from that one choice. The anchors are now
+  `#esp32-dev-board-base` and `#esp32-dev-board-base-sd-card-for-storage`.
+- **/hardware, from 1.1.0**: the Freenove turns from coming soon to tested,
+  with its Firmware row and installer link and the GC0308 kept; the WROVER
+  line says "yes, on one board". /install gains "On the Freenove camera
+  board", gated the same way.
+- **The early-testing line** (Rob's release flow from 1.1.0): while the
+  newest release on disk is a .0, from 1.1.0 on, "1.1.0 is out early for
+  testing; it has not been through the full regression yet. 1.1.1 follows
+  with anything it finds." beside each board's version on /install, and on
+  /upgrade through a new `::: early` block. Gone by itself once the .1 is
+  on disk.
+- **A board is closed until its sysop opens it**, from 1.1.0, in two lines
+  on /install's "After it boots" and on /setup's first-setup section: other
+  callers get the busy message until **Temporarily stop taking calls** is
+  turned off in `CONFIG board`. Written from the firmware's plan.
+- **/camera matches the firmware as built** (COMMANDS.md at 1.1.0-dev.15):
+  the three-way download question, quality 12 on 4 to 40, 200 of each kind
+  kept, the flash off as shipped, the timelapse every 10 s at the least into
+  area 13, and no "not settled yet". From 1.1.0 it says the Freenove is on
+  the installer and the S3 camera board is not yet.
+- **/sdcard: your screens need the card.** They play from the card and are
+  not copied in; pull it and the stock screens come back. From firmware
+  1.1.1, `SCREENS INSTALL` and `SCREENS INSTALL STOCK`, behind a new
+  `::: from 1.1.1` gate. /setup points there.
+- **No favourite machine** (Rob: "we dont favour" the C64). The pitch,
+  /different, /donate, /build, /firstcall, /terminals, /whofor, /camera,
+  /roadmap, /badges, the manifesto and the freedom line now name a varied
+  set from the firmware's CLIENTS.md (an Apple II, an Atari 800, a TRS-80,
+  an Amiga, a VT220) or say "an 8-bit computer". Commodore stays where it is
+  a fact: PETSCII, the Commodore terminals, the light effects, the test log.
+- **The drive light is optional** wherever it is pitched, and **the S3's
+  status screen** is pitched on /different as the step up from the $5
+  board, from the firmware's 1.1.0-dev.10 entry.
+- **A library on a card**: up to 32 GB of disk images, text files and
+  utilities for the machines that call in, by XMODEM or YMODEM, on
+  /different, /hardware's + SD entry and /whofor.
+- **Linked chat, one superchat**, as coming: /different and /whofor point
+  at /roadmap, whose Later band names µnleashed boards and Diversi-DIAL and
+  GTalk-style systems in one room. Not built, and each says so.
+- **/different compares in a table** (Rob: "get a matrix table going"):
+  µnleashed, Synchronet, Mystic, ENiGMA½, WWIV and espbbs, over ten rows
+  checked against each project's own pages (sources beside COMPARE_ROWS in
+  server.py). A cell nobody documents says "?"; nothing is marked "no" on a
+  guess. Line-art ticks and crosses with words for a screen reader, the
+  µnleashed column lit, and on a phone a sideways scroll with the row names
+  held still. Under it, what the big packages still do better, and a link
+  to /roadmap.
+- **The front page's pitch** (Rob: "the text is lost there"): larger, in
+  Oxanium, served from `/font/` and never from a font service. Chakra Petch
+  and Orbitron are kept beside it so the choice is one word (`PITCH_FONT`),
+  each with its SIL OFL text and a section in THIRD_PARTY_NOTICES.md.
+  Orbitron reserves its name, so it is the upstream file unmodified; the
+  other two are Latin subsets of about 11 KB. The "Try out" line is the foot
+  of the opening row now, so it no longer floats under the button.
+
 ## 1.2.8, 2026-09-25
 
 The home page opens with the pitch and shows the busiest ten, every board
