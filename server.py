@@ -459,13 +459,13 @@ def site_url(target, role, path="/"):
 #
 # Site 1.3.0 (Rob, marketing round 3): the front page is the pitch and the
 # wordmark takes you there, so the menu has no entry for it. The list moved
-# to /directory, "Find a community" in the menu and "Find a community BBS"
+# to /directory, "Communities online" in the menu and "Communities online"
 # as its heading, which is where the word BBS is bridged in. The rest say
 # what a newcomer will do there: "Apps for joining" is /terminals (whose
 # heading still says telnet clients, with the plain words beside it), "Let
 # others in" is /forward. "First call" stays: it is the hobby's own word,
 # and the page explains it in its first line.
-NAV = (("list",  "/directory", "Find a community"),
+NAV = (("list",  "/directory", "Communities online"),
        ("about", "/",          "What this is"),
        ("list",  "/whofor",    "Who builds one"),
        ("list",  "/terminals", "Apps for joining"),
@@ -600,7 +600,7 @@ def foot_html(role, extra=""):
     # every wrapped row used to end in a dangling " ·".
     start = "".join(
         f'<a href="{site_url("list", role, p)}">{t}</a>' for p, t in (
-            ("/directory", "Find a community"),
+            ("/directory", "Communities online"),
             ("/build", "Build one"), ("/hardware", "Hardware"),
             ("/install", "Install"), ("/upgrade", "Upgrade"),
             ("/setup", "Set up"),
@@ -3967,7 +3967,7 @@ nav {{ margin:0.625rem 0 1.5rem; padding:0.625rem 0; display:flex; flex-wrap:wra
    gap. Nothing on this site used to be one: the menu was 26px and the dial
    link, which is the primary action of the whole directory, was 21px with
    no padding at all. */
-/* Site 1.3.0: the labels say what a newcomer will do ("Find a community",
+/* Site 1.3.0: the labels say what a newcomer will do ("Communities online",
    "Apps for joining"), 21 characters longer in all, so the cell's sides
    went from 0.75 to 0.5rem and the letter-spacing halved to keep the menu
    one row at 1366 (measured in Consolas; Menlo, a little wider, wraps
@@ -7777,7 +7777,7 @@ def directory_page(sel=(), any_=False, q="", data=None):
     qe = html.escape(q, quote=True)
     head = (head_html("list", "/directory")
             + announcement_banner()
-            + "<h1>Find a community BBS</h1>"
+            + "<h1>Communities online</h1>"
             + stat_line(len(rows), on)
             + '<p class="lead">Every community board listed here, the busiest '
             'first. Pick one and connect. <a href="/dialing">Did not '
@@ -7815,7 +7815,7 @@ def directory_page(sel=(), any_=False, q="", data=None):
     desc = (f"{up:,} communit{'y' if up == 1 else 'ies'} online and {on:,} "
             f"{'person' if on == 1 else 'people'} connected right now. Visit "
             "one with a free app on your computer or phone.")
-    return PAGE.format(title=html.escape(f"Find a community BBS - {SITE_NAME}"),
+    return PAGE.format(title=html.escape(f"Communities online - {SITE_NAME}"),
                        desc=html.escape(desc, quote=True),
                        body=head + body, footer=foot_html("list", LIST_FOOT),
                        refresh=LIST_REFRESH, head="")

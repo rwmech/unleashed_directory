@@ -210,5 +210,5 @@ one](/different) fits on a page.
 [Build one](/build)
 :::
 
-Join one with [a free app](/terminals), and [find a community](/directory)
+Join one with [a free app](/terminals), and [browse the communities online](/directory)
 that is up right now. Yours could be on that list by the weekend.

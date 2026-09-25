@@ -1174,11 +1174,11 @@ def badge_checks(S, db):
               == sorted(b["sort"] for b in S.ROW_INTERESTS)
           and [b["key"] for b in S.ROW_SUPPORT]
               == [b["key"] for b in S.BADGES if b["group"] == "support"])
-    check("it belongs to Find a community in the menu, on the list face",
-          '<a class="here" href="/directory">Find a community</a>' in leg)
+    check("it belongs to Communities online in the menu, on the list face",
+          '<a class="here" href="/directory">Communities online</a>' in leg)
     about_leg = get("/badges", host="about.example")[1]
     check("and on the about face, not to What this is",
-          '<a class="here" href="https://boards.example/directory">Find a community</a>'
+          '<a class="here" href="https://boards.example/directory">Communities online</a>'
           in about_leg
           and 'class="here" href="/">What this is' not in about_leg)
     check("How to get listed shows the fields, in codes, and links the legend",
@@ -1567,9 +1567,9 @@ def directory_checks(S):
         code, full = page("/directory")
         check("/directory shows all twelve, busiest first",
               code == 200 and [n for n, _k, _h in list_rows(full)] == names
-              and "<h1>Find a community BBS</h1>" in full)
-        check("and lights Find a community in the menu",
-              '<a class="here" href="/directory">Find a community</a>' in full)
+              and "<h1>Communities online</h1>" in full)
+        check("and lights Communities online in the menu",
+              '<a class="here" href="/directory">Communities online</a>' in full)
         check("with a search box that belongs to the filter's form",
               '<input type="search" id="nq" name="q" form="fform" value=""'
               f' maxlength="{S.SEARCH_MAX}"' in full
@@ -1794,9 +1794,9 @@ def main():
         # small numbers beside it. One board, reporting two callers on.
         print("The heading's figures")
         check("the heading is the heading, with nothing crammed beside it",
-              "<h1>Find a community BBS</h1>" in page and "listed &middot;" not in page)
+              "<h1>Communities online</h1>" in page and "listed &middot;" not in page)
         check("and the figures are a sentence under it, counted from the list",
-              '<h1>Find a community BBS</h1><p class="stat">'
+              '<h1>Communities online</h1><p class="stat">'
               "<span class='n'>1</span> community listed, with <span class='n'>2</span> "
               "people connected right now.</p>" in page)
         check("in --live, the colour that means up",
@@ -1862,7 +1862,7 @@ def main():
         _, page = get("/directory", host="boards.example")
         check("the list domain still lists boards", "Rusty Modem" in page)
         check("the list page owns the board-list heading",
-              "Find a community BBS" in page)
+              "Communities online" in page)
 
         # The board list's heading used to live in the shared page shell, so
         # it turned up above the manifesto as well. Every page brings its own.
@@ -3700,7 +3700,7 @@ def main():
         # N1, site 1.2.1: /hardware is in the footer, after Build one.
         check("and Hardware is in it, after Build one, on every face",
               all(re.search(r'<span class="lbl">Get started</span><a href="[^"]*/directory">'
-                            r'Find a community</a><a href="[^"]*/build">'
+                            r'Communities online</a><a href="[^"]*/build">'
                             r'Build one</a><a href="[^"]*/hardware">Hardware</a>', p)
                   for p in (home, inst_now, get("/", host="about.example")[1],
                             get("/", host="data.example")[1])))
@@ -4682,8 +4682,8 @@ def main():
               and '<a href="https://termius.com/">Termius</a>' in tp
               and "Telnet is in the free plan." in tp
               and "telnet is in its free plan" in " ".join(tp.split()))
-        check("the menu's first entry is Find a community, and the wordmark goes home",
-              '<nav><a href="/directory">Find a community</a>' in get("/whofor")[1]
+        check("the menu's first entry is Communities online, and the wordmark goes home",
+              '<nav><a href="/directory">Communities online</a>' in get("/whofor")[1]
               and '<a class="home" href="/"' in get("/whofor")[1])
 
         # The Telnet BBS Guide, on /how.
@@ -5463,7 +5463,7 @@ def main():
                           < home2.index('<div class="front">')
                       and '</nav><div class="banner"' in dir2
                       and dir2.index('<div class="banner"')
-                          < dir2.index("<h1>Find a community BBS</h1>"))
+                          < dir2.index("<h1>Communities online</h1>"))
                 check("one sentence and one link: no buttons and no drawing",
                       bn.count("<a ") == 1 and "btn" not in bn and "<svg" not in bn
                       and 'class="btn"' not in home2.split("</nav>")[1])

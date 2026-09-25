@@ -14,6 +14,10 @@
 
 # Changelog
 
+## 1.3.2, 2026-09-25
+
+- The board list is "Communities online" in the menu and as its heading (was "Find a community"), so the name says what the page is: the communities that are online right now.
+
 ## 1.3.1, 2026-09-25
 
 Three small changes from Rob, and a fourth app for joining. The front page
