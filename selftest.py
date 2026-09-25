@@ -3083,7 +3083,7 @@ def main():
               and don.split("<article>")[1].index('class="cover"')
                   < don.split("<article>")[1].index("is free software, and it stays free"))
         # A plain link, and the page says so: nothing from another origin.
-        srcs_d = re.findall(r'src="([^"]+)"', don)
+        srcs_d = re.findall(r'\bsrc="([^"]+)"', don)
         check("Buy Me a Coffee is a plain link, and nothing on the page is loaded from it",
               '<a href="https://buymeacoffee.com/unleashed_bbs">' in don
               and "<script" not in don and "<iframe" not in don
