@@ -1192,14 +1192,16 @@ def gloss_key(words):
     return GLOSSARY_FORMS.get(w.lower())
 
 
-def gl(words):
+def gl(words, tid=None):
     """A term as it reads on the page, with its definition to hand. The
-    words are escaped here; a term not in GLOSSARY is the words alone."""
+    words are escaped here; a term not in GLOSSARY is the words alone.
+    tid names the tooltip for markup that must render the same every time
+    (a board's facts, site 1.3.3); otherwise it is numbered."""
     key = gloss_key(words)
     shown = html.escape(words)
     if key is None:
         return shown
-    tid = f"gl{next(_GL_SEQ)}"
+    tid = tid or f"gl{next(_GL_SEQ)}"
     return (f'<span class="gl" tabindex="0" aria-describedby="{tid}">{shown}'
             f'<span class="gt" role="tooltip" id="{tid}">'
             f"{html.escape(GLOSSARY[key])}</span></span>")
@@ -2748,21 +2750,29 @@ def seal_html(kind):
             + "</svg>")
 
 
-# The lock ribbon (site 1.3.1, Rob): "Secure communications" on the S3
-# boards, the ones queued to take SSH beside telnet (the firmware's
-# CLAUDE.md, "An encrypted option ... Queued as an S3 option, not started").
-# The same ribbon as the seal, laid on under the picture on /hardware and at
-# the end of the board's row in /install's picker. The classic ESP32 boards
-# are not in the table, because SSH is not planned for them, so they carry
-# no ribbon at all.
+# The Secure seal (site 1.3.3, Rob: "that secure communications ribbon is
+# bigger than the board. How about 'Secure*', and the * in the body or on
+# the right that says coming in version x"). On the S3 boards, the ones
+# taking SSH beside telnet (the firmware's CLAUDE.md, "An encrypted option
+# ... Queued as an S3 option"), and Rob has set the version: SSH ships in
+# firmware 1.2.0. On /hardware it is a seal the size of FLASH & GO, a
+# padlock and SECURE*, in the picture's opposite corner, bottom right, so
+# the two never meet and it covers no more of the board than FLASH & GO
+# does. The asterisk's footnote is a row of the board's facts. On
+# /install's picker (Rob: "drop any seal or badge") it is only the word
+# Secure, with a lock no bigger than a letter, linking to the board's
+# section on /hardware, where the seal and the footnote are. The classic
+# ESP32 boards are not in the table, because SSH is not planned for them,
+# so they carry none of it. (Site 1.3.1 to 1.3.2 had a three-line
+# "Secure communications / coming" ribbon here, larger than the board.)
 #
 # The value is the first firmware version that carries SSH for that board,
-# None until it is known. While it is None, or while no release on disk at
-# or after it carries the board's image set, the ribbon says COMING. When
-# SSH ships, put that version here as a tuple, e.g. (1, 2, 0), and the
-# ribbon turns to SUPPORTED by itself the day that release is on disk.
-# Releases only: a preview never counts, the same rule as a "::: from" gate.
-BOARD_SSH = {"esp32s3": None, "esp32s3-cam": None}
+# as a tuple, or None while nobody knows. While no release on disk at or
+# after it carries the board's image set, the seal says SECURE* and the
+# footnote gives the version; the day that release is on disk, the seal
+# says SECURE and the footnote goes. Releases only: a preview never counts,
+# the same rule as a "::: from" gate.
+BOARD_SSH = {"esp32s3": (1, 2, 0), "esp32s3-cam": (1, 2, 0)}
 
 
 def ssh_state(d):
@@ -2779,58 +2789,81 @@ def ssh_state(d):
     return "coming"
 
 
-# The padlock, line art in the ribbon's stroke: a shackle and a body with a
-# keyhole, drawn round the origin and moved into place by each ribbon.
+def ssh_coming_words(d):
+    """ "coming in version 1.2.0", or "coming" with no version set."""
+    since = BOARD_SSH.get(d)
+    return ("coming in version " + ".".join(str(n) for n in since)
+            if since else "coming")
+
+
+# The padlock, line art in the seal's stroke: a shackle and a body with a
+# keyhole, drawn round the origin and moved into place where it is used.
 _LOCK_ART = ('<path class="lk" d="M-3.5 -1 V-4 A3.5 3.5 0 0 1 3.5 -4 V-1"/>'
              '<rect class="lk" x="-6" y="-1" width="12" height="10" rx="1.5"/>'
              '<path class="lk" d="M0 2.6 V5.6"/>')
 
 
-def lock_html(d, where="pic"):
-    """The lock ribbon for board d, or "" for a board with no SSH planned.
-    where="pic" is the three-line ribbon laid under a picture on /hardware;
-    where="row" is one line, for the end of a picker row. The last word is
-    COMING in amber until SSH ships for the board, and SUPPORTED in the
-    seal's green after. role="img" with the state said in words, because
-    the ribbon is the only place it is shown."""
+def secure_seal_html(d):
+    """The Secure seal for board d's picture on /hardware, or "" for a
+    board with no SSH planned. FLASH & GO's ribbon at its size, mirrored,
+    for the bottom right corner: a padlock and SECURE, with an amber
+    asterisk until SSH ships for the board. role="img" with the state in
+    words, because the seal and its footnote are drawn apart."""
     st = ssh_state(d)
     if st is None:
         return ""
     ok = st == "supported"
-    word = "SUPPORTED" if ok else "COMING"
-    wl = len(word) * 5.1
-    label = ("Secure communications supported: this board takes encrypted "
-             "connections over SSH, beside telnet" if ok else
-             "Secure communications, coming: SSH, an encrypted way to "
-             "connect, is planned for this board and not yet released")
-    cls = "art lockr" + ("" if ok else " soon") + (" row" if where == "row" else "")
-    if where == "row":
-        # One line: the lock, 21 characters, a dot, then the state.
-        w = 20 + 110 + 10 + wl + 12
-        return (f'<svg class="{cls}" viewBox="0 0 {w:g} 20" role="img" '
-                f'aria-label="{label}">'
-                f'<path class="rb" d="M1 1 H{w - 1:g} L{w - 7:g} 10 L{w - 1:g} 19 H1 Z"/>'
-                f'<g transform="translate(11 9.5) scale(0.8)">{_LOCK_ART}</g>'
-                '<text class="lk1" x="20" y="13.5" font-size="8.5" '
-                'textLength="110" lengthAdjust="spacingAndGlyphs">'
-                "SECURE COMMUNICATIONS</text>"
-                f'<text class="lk1" x="{20 + 110 + 5:g}" y="13.5" font-size="8.5" '
-                'text-anchor="middle">·</text>'
-                f'<text class="lk2" x="{20 + 110 + 10:g}" y="13.5" font-size="8.5" '
-                f'textLength="{wl:g}" lengthAdjust="spacingAndGlyphs">'
-                f"{word}</text></svg>")
-    # Three lines, as narrow as the seal's type allows: the lock on the left,
-    # SECURE, COMMUNICATIONS, and the state under them.
-    return (f'<svg class="{cls}" viewBox="0 0 112 44" role="img" '
+    label = ("Secure: this board takes encrypted connections over SSH, "
+             "beside telnet" if ok else
+             "Secure, with an asterisk: encrypted connections over SSH are "
+             + ssh_coming_words(d) + ", and not released yet")
+    # The lock is 7.4 wide at this scale, then a gap of 3, then the word at
+    # 6 units a letter; the whole is centred between the notch and the end.
+    word = 6 * 6 + (0 if ok else 6)
+    x0 = 7 + (64 - (7.4 + 3 + word)) / 2
+    return (f'<svg class="art seal sec" viewBox="0 0 72 24" role="img" '
             f'aria-label="{label}">'
-            '<path class="rb" d="M1 1 H111 L105 22 L111 43 H1 Z"/>'
-            f'<g transform="translate(12 21)">{_LOCK_ART}</g>'
-            '<text class="lk1" x="24" y="14" font-size="8.5" textLength="30.6" '
-            'lengthAdjust="spacingAndGlyphs">SECURE</text>'
-            '<text class="lk1" x="24" y="25" font-size="8.5" textLength="71.4" '
-            'lengthAdjust="spacingAndGlyphs">COMMUNICATIONS</text>'
-            f'<text class="lk2" x="24" y="36" font-size="8.5" textLength="{wl:g}" '
-            f'lengthAdjust="spacingAndGlyphs">{word}</text></svg>')
+            '<path class="rb" d="M71 1 H1 L7 12 L1 23 H71 Z"/>'
+            f'<g transform="translate({x0 + 3.7:g} 11.3) scale(0.62)">{_LOCK_ART}</g>'
+            f'<text class="sl1" x="{x0 + 10.4:g}" y="15.5" font-size="9.5" '
+            f'textLength="{word:g}" lengthAdjust="spacingAndGlyphs">SECURE'
+            + ("" if ok else '<tspan class="ast">*</tspan>')
+            + "</text></svg>")
+
+
+def secure_note_html(d):
+    """The seal's footnote, a row of the board's facts on /hardware, while
+    SSH is still to ship; "" once it has, and for a board with no SSH
+    planned. SSH carries its glossary entry and the version links to the
+    roadmap, apart, so neither sits inside the other."""
+    if ssh_state(d) != "coming":
+        return ""
+    return ("<dt>Secure</dt><dd>* Encrypted connections ("
+            + gl("SSH", "gl-ssh-" + d) + ") "
+            '<a href="/roadmap">' + ssh_coming_words(d) + "</a></dd>")
+
+
+# The lock beside the word on the picker: no taller than the letters.
+_LOCK_GLYPH = ('<svg class="lockg" viewBox="-7.5 -8.5 15 19" aria-hidden="true" '
+               f'focusable="false">{_LOCK_ART}</svg>')
+
+
+def secure_pick_html(b):
+    """The word Secure after the version in a board's row of /install's
+    picker, set off by a dot: a link to the board's own section on
+    /hardware, where the seal and its footnote are, or "" for a board with
+    no SSH planned. Its name for a screen reader starts with the word it
+    shows and says the rest."""
+    st = ssh_state(b["dir"])
+    if st is None or not b.get("page"):
+        return ""
+    label = ("Secure: encrypted connections over SSH, on the board's page"
+             if st == "supported" else
+             "Secure: encrypted connections over SSH, "
+             + ssh_coming_words(b["dir"]) + ", on the board's page")
+    return ('<span class="sep" aria-hidden="true"> · </span>'
+            f'<a class="secure" href="{html.escape(b["page"], quote=True)}" '
+            f'aria-label="{label}">{_LOCK_GLYPH}Secure</a>')
 
 
 def board_version(rel, chip):
@@ -2909,8 +2942,8 @@ def installer_html(lines=()):
                       if b.get("pick") else
                       '<span class="tell">' + html.escape(b["tell"]) + "</span>")
                    + '<span class="bv' + ("" if o else " soon") + '">'
-                   + html.escape(ver) + "</span></span>"
-                   + lock_html(b["dir"], "row") + "</label>")
+                   + html.escape(ver) + secure_pick_html(b) + "</span></span>"
+                   + "</label>")
     out.append("</fieldset>")
 
     for j, (b, o) in enumerate(offers):
@@ -3076,9 +3109,10 @@ def board_html(lines):
         build = 'coming soon to <a href="/install">the installer</a>' + (
             "." + same if same else "")
     seal = seal_html(BOARD_SEAL[b["dir"]]) if b["dir"] in BOARD_SEAL else ""
-    return ('<div class="hwb"><div class="hwpic">'
+    return ('<div class="hwb"><div class="hwpic'
+            + (" sec" if ssh_state(b["dir"]) else "") + '">'
             + b["art"].replace('class="art board', 'class="art board big', 1)
-            + lock_html(b["dir"]) + seal + "</div>"
+            + seal + secure_seal_html(b["dir"]) + "</div>"
             + "<dl>"
             + "<dt>Firmware</dt><dd>" + build + "</dd>"
             + "<dt>Chip</dt><dd>" + html.escape(b["part"]) + "</dd>"
@@ -3088,6 +3122,7 @@ def board_html(lines):
             + ("<dt>Speed</dt><dd>" + BOARD_SPEED[b["dir"]]
                + ' <span class="exp">(expected, not yet measured)</span></dd>'
                if b["dir"] in BOARD_SPEED else "")
+            + secure_note_html(b["dir"])
             + ('<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
                + '" rel="sponsored">Amazon</a> (affiliate link)'
                + (" for the board; " + html.escape(b["buy_more"])
@@ -3333,7 +3368,8 @@ COMPARE_TODAY_ROWS = (
         (None, "none to join; a computer to run your own"))),
     ("Encrypted on the way", (
         ("n", "not yet: plain text, so say only what you would say in "
-              "public. SSH, encrypted, is coming on the S3 boards"),
+              "public. SSH, encrypted, is coming on the S3 boards in "
+              "firmware 1.2.0"),
         ("y", "yes"),
         ("y", "yes"),
         ("y", "yes"),
@@ -5260,11 +5296,16 @@ article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}
 article .installer .bopt .tell.pick {{ color:var(--ink); }}
 article .installer .bopt .bv {{ color:var(--dial); font-size:0.75rem; }}
 article .installer .bopt .bv.soon {{ color:var(--faint); }}
-/* The lock ribbon (site 1.3.1) at the end of an S3 board's row, where the
-   row has room; on a phone it wraps to a line of its own under the words. */
+/* Secure (site 1.3.3) after an S3 board's version, in the row's own small
+   type, so the row is no taller for it; the lock no taller than its
+   letters. */
 article .installer .bopt {{ flex-wrap:wrap; }}
-article .installer .bopt svg.art.lockr {{ flex:none; width:auto; height:1.375rem;
-        margin:0 0 0 auto; }}
+article .installer .bopt .bv .sep {{ color:var(--faint); }}
+article .installer .bopt a.secure {{ white-space:nowrap; }}
+article .installer .bopt a.secure svg.lockg {{ width:0.6em; height:0.76em;
+        margin:0 0.3em 0 0; vertical-align:-0.06em; overflow:visible; }}
+article .installer .bopt a.secure svg.lockg .lk {{ fill:none; stroke:currentColor;
+        stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }}
 article .installer .bsec {{ display:flex; flex-direction:column; gap:0.5rem; }}
 article .installer .bsec > * {{ margin:0; }}
 /* What a board needs done before either button: an instruction rather than
@@ -5334,10 +5375,10 @@ article .hwb dd .exp {{ color:var(--dim); }}
 article .hwb .hwpic {{ position:relative; flex:none; padding:0.5rem 0 0 0.5rem; }}
 article .hwb .hwpic svg.art.seal {{ position:absolute; left:0; top:0;
         width:5.25rem; height:auto; margin:0; }}
-/* The lock ribbon (site 1.3.1) under the picture, laid over its lower edge
-   and out to the same left edge as the seal above it, at the seal's scale. */
-article .hwb .hwpic svg.art.lockr {{ display:block; width:8.1667rem; height:auto;
-        margin:-0.25rem 0 0 -0.5rem; position:relative; }}
+/* The Secure seal (site 1.3.3): FLASH & GO's size, in the opposite corner,
+   bottom right, sitting as far outside the picture as FLASH & GO does. */
+article .hwb .hwpic.sec {{ padding:0.5rem 0.5rem 0.5rem 0.5rem; }}
+article .hwb .hwpic svg.art.seal.sec {{ left:auto; top:auto; right:0; bottom:0; }}
 /* A page's one primary action, drawn like the installer's button, with
    the other way round beside it outlined, the way the installer card draws
    a kept older release, and a note under both. On a phone the two stack,
@@ -8441,16 +8482,12 @@ svg.art.seal .rb { fill:var(--bg); stroke:var(--live); stroke-width:1.4;
         stroke-linejoin:round; }
 svg.art.seal text.sl1 { fill:var(--live); font-weight:bold; letter-spacing:0.04em; }
 svg.art.seal text.sl2 { fill:var(--dim); }
-/* The lock ribbon (site 1.3.1): the seal's ribbon, with a padlock in its
-   stroke. The state is the last word: SUPPORTED in the seal's green, and
-   COMING in amber while SSH is still to ship, so the ribbon cannot be read
-   as a promise already kept. */
-svg.art.lockr .rb { fill:var(--bg); stroke:var(--live); stroke-width:1.4;
-        stroke-linejoin:round; }
-svg.art.lockr .lk { fill:none; stroke:var(--live); stroke-width:1.4;
+/* The Secure seal (site 1.3.3): the seal, with a padlock in its stroke,
+   and the asterisk in amber while SSH is still to ship, so the seal
+   cannot be read as a promise already kept. */
+svg.art.seal .lk { fill:none; stroke:var(--live); stroke-width:1.8;
         stroke-linejoin:round; stroke-linecap:round; }
-svg.art.lockr text.lk1, svg.art.lockr text.lk2 { fill:var(--live); font-weight:bold; }
-svg.art.lockr.soon text.lk2 { fill:var(--warm); }
+svg.art.seal tspan.ast { fill:var(--warm); }
 
 /* The machines on /terminals, one strip under each heading. Narrower
    than the first call strip, because there are eight of them on one page
@@ -9511,7 +9548,7 @@ ROADMAP = (
     ("now", "Now", "arriving with 1.1.0",
      ("Sysop dashboard", "Silent mode", "Camera boards", "Missed pages to mail")),
     ("later", "Later", "decided, not started",
-     ("Updates itself", "SSH on the S3", "Sensors", "Motion snapshots",
+     ("Updates itself", "SSH on the S3, 1.2.0", "Sensors", "Motion snapshots",
       "Doors on a second board", "Linked chat rooms")),
 )
 ROADMAP_LABEL = "The roadmap. " + " ".join(

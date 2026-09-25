@@ -2590,18 +2590,21 @@ def main():
         # the S3 boards, and never as a thing already there.
         flat_today = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", today)).split())
         flat_dif = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", dif)).split())
-        check("the encryption row and the honest paragraph say SSH is coming on the S3",
+        # Site 1.3.3: with the version Rob set, 1.2.0.
+        check("the encryption row and the honest paragraph say SSH is coming on "
+              "the S3, in firmware 1.2.0",
               "not yet: plain text, so say only what you would say in public. SSH, "
-              "encrypted, is coming on the S3 boards" in flat_today
+              "encrypted, is coming on the S3 boards in firmware 1.2.0" in flat_today
               and "An encrypted way in, SSH" in flat_dif
-              and "is coming on the ESP32-S3 boards, beside telnet rather than instead "
-                  "of it; it is on the roadmap and not built yet." in flat_dif
+              and "is coming on the ESP32-S3 boards in firmware 1.2.0, beside telnet "
+                  "rather than instead of it; it is on the roadmap and not released "
+                  "yet." in flat_dif
               and "SSH is supported" not in flat_dif)
         rmp = get("/roadmap")[1]
-        check("the roadmap keeps SSH under Later, on the S3 boards",
-              "<b>An encrypted way in, on the S3 boards.</b>" in rmp
+        check("the roadmap keeps SSH under Later, on the S3 boards, in 1.2.0",
+              "<b>An encrypted way in, on the S3 boards, in firmware 1.2.0.</b>" in rmp
               and rmp.index("An encrypted way in") > rmp.index('id="later"')
-              and "SSH on the S3" in S.ROADMAP_LABEL
+              and "SSH on the S3, 1.2.0" in S.ROADMAP_LABEL
               and 'href="/hardware#waveshare-esp32-s3-lcd-1-47"' in rmp)
         check("the BBS table says it in plain words, no computer-you-supply",
               "a computer you supply" not in dif
@@ -4395,7 +4398,7 @@ def main():
         # screen reader in words, and a line in the intro saying what it
         # means. Two levels only: "a little wiring" is for add-ons and no
         # board wears it.
-        seals = re.findall(r'<div class="hwpic">.*?(<svg class="art seal[^"]*"[^>]*>.*?</svg>)</div>',
+        seals = re.findall(r'<div class="hwpic[^"]*">.*?(<svg class="art seal[^"]*"[^>]*>.*?</svg>)</div>',
                            hw5, re.S)
         # Site 1.2.7: the dev board with a card wears the second level, a
         # little wiring, the first board to, and the intro says both.
@@ -4411,41 +4414,51 @@ def main():
               and [d for d, v in S.BOARD_SEAL.items() if v == "wire"] == ["esp32-sd"]
               and "<b>Flash &amp; go</b>:" in hw5 and "<b>A little wiring</b>:" in hw5
               and "svg.art.seal .rb {" in hwp and "article .hwb .hwpic svg.art.seal {" in hwp)
-        # Site 1.3.1, Rob: a lock ribbon, "Secure communications", on the
-        # two S3 boards' pictures and nowhere else, saying coming while SSH
-        # is still to ship; each S3 entry says SSH is coming in words, and
-        # the classic ESP32 entries say nothing about it.
+        # Site 1.3.3, Rob: the 1.3.1 ribbon was bigger than the board. A seal
+        # the size of FLASH & GO, a padlock and SECURE*, in the opposite
+        # corner, on the two S3 boards' pictures and nowhere else; its
+        # footnote a Secure row of the facts, SSH with its glossary note and
+        # the version linked to the roadmap. Each S3 entry says 1.2.0 in
+        # words, and the classic ESP32 entries say nothing about SSH.
         hsecs = {sid: hw5.split(f'id="{sid}"')[1].split("<h2")[0]
                  for sid in ("esp32-dev-board-base",
                              "esp32-dev-board-base-sd-card-for-storage",
                              "waveshare-esp32-s3-lcd-1-47",
                              "freenove-esp32-camera-board", "esp32-s3-camera-board")}
-        locks = re.findall(r'<div class="hwpic">.*?(<svg class="art lockr[^"]*"[^>]*>.*?</svg>)',
-                           hw5, re.S)
+        secs = re.findall(r'<svg class="art seal sec"[^>]*>.*?</svg>', hw5, re.S)
         s3w, s3c = hsecs["waveshare-esp32-s3-lcd-1-47"], hsecs["esp32-s3-camera-board"]
-        check("the lock ribbon is on the two S3 boards' pictures only, and says coming",
-              len(locks) == 2 and hw5.count('class="art lockr') == 2
-              and all('<svg class="art lockr soon"' in x and ">COMING</text>" in x
-                      and "SECURE</text>" in x and "COMMUNICATIONS</text>" in x
-                      and 'role="img" aria-label="Secure communications, coming' in x
-                      and "SUPPORTED" not in x for x in locks)
-              and 'class="art lockr' in s3w and 'class="art lockr' in s3c
-              and all('class="art lockr' not in hsecs[k]
-                      for k in ("esp32-dev-board-base",
-                                "esp32-dev-board-base-sd-card-for-storage",
-                                "freenove-esp32-camera-board"))
-              and "svg.art.lockr .rb {" in hwp and "svg.art.lockr.soon text.lk2 {" in hwp
-              and "article .hwb .hwpic svg.art.lockr {" in hwp
-              and "<b>Secure communications</b>, marked <b>coming</b>"
+        others = ("esp32-dev-board-base", "esp32-dev-board-base-sd-card-for-storage",
+                  "freenove-esp32-camera-board")
+        note = ('<dt>Secure</dt><dd>* Encrypted connections (<span class="gl"')
+        check("the Secure seal is on the two S3 boards' pictures only, FLASH & GO's "
+              "size, bottom right, with its asterisk",
+              len(secs) == 2 and "lockr" not in hw5
+              and all('viewBox="0 0 72 24"' in x
+                      and 'SECURE<tspan class="ast">*</tspan></text>' in x
+                      and 'role="img" aria-label="Secure, with an asterisk: encrypted '
+                          'connections over SSH are coming in version 1.2.0' in x
+                      for x in secs)
+              and '<div class="hwpic sec">' in s3w and '<div class="hwpic sec">' in s3c
+              and 'class="art seal sec"' in s3w and 'class="art seal sec"' in s3c
+              and all('class="art seal sec"' not in hsecs[k]
+                      and '<div class="hwpic">' in hsecs[k] for k in others)
+              and "article .hwb .hwpic svg.art.seal.sec {" in hwp
+              and "svg.art.seal tspan.ast {" in hwp
+              and S.BOARD_SSH == {"esp32s3": (1, 2, 0), "esp32s3-cam": (1, 2, 0)}
+              and "a padlock and <b>Secure</b>, with an asterisk for now"
                   in " ".join(hw5.split()))
-        check("and each S3 entry says SSH is coming, in words, with its glossary note",
-              "<b>Encrypted connections, coming.</b>" in s3w
+        check("and its footnote is a Secure row of each S3 board's facts, SSH "
+              "explained and the version linked to the roadmap",
+              all(note in x and '<a href="/roadmap">coming in version 1.2.0</a></dd>' in x
+                  and x.index(note) < x.index("</dl>") for x in (s3w, s3c))
+              and all("<dt>Secure</dt>" not in hsecs[k] for k in others))
+        check("and each S3 entry says SSH comes in firmware 1.2.0, in words",
+              "<b>Encrypted connections, coming in firmware 1.2.0.</b>" in s3w
               and "SSH" in s3w and 'class="gl"' in s3w
-              and "<b>coming</b> and not built yet" in " ".join(s3c.split())
-              and all("SSH" not in re.sub(r"<[^>]+>", "", hsecs[k])
-                      for k in ("esp32-dev-board-base",
-                                "esp32-dev-board-base-sd-card-for-storage",
-                                "freenove-esp32-camera-board"))
+              and "<b>coming in firmware 1.2.0</b> with the Waveshare"
+                  in " ".join(s3c.split())
+              and "not built yet" not in " ".join(hw5.split())
+              and all("SSH" not in re.sub(r"<[^>]+>", "", hsecs[k]) for k in others)
               and "encrypted" in S.GLOSSARY["SSH"].lower())
         # Site 1.2.7, Rob: "esp32 is misleading with flash and go, it has to
         # have an sd card". The bare board says what it does without one and
@@ -4982,7 +4995,7 @@ def main():
                   and '<input type="radio" name="fwboard" id="fwb1">' + S.BOARD_ART_S3
                       in shown
                   and '<span class="bv">Firmware 0.19.2</span>' in shown
-                  and '<span class="bv soon">Coming soon</span>' in shown
+                  and '<span class="bv soon">Coming soon<span class="sep"' in shown
                   and '<div class="bsec b1"><p class="soon">There is no image for this '
                       "board on this site yet." in shown
                   and ".installer .bsec.b1{display:none}"
@@ -5113,7 +5126,7 @@ def main():
             pick = S.installer_html()
             check("the picker says preview, and the line under the buttons the "
                   "exact version",
-                  '<span class="bv">Firmware 0.20.0 preview (S3 1.0.0)</span>' in pick
+                  '<span class="bv">Firmware 0.20.0 preview (S3 1.0.0)<span class="sep"' in pick
                   and '<p class="meta ver r0">Version 0.20.0-dev.3 (S3 1.0.0), a preview.'
                       "</p>" in pick
                   and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest.json"' in pick
@@ -5213,9 +5226,10 @@ def main():
                 was_ssh = dict(S.BOARD_SSH)
                 try:
                     S.BOARD_SSH["esp32s3"] = (1, 1, 0)
-                    check("the lock ribbon ignores a preview carrying SSH",
+                    check("the Secure seal ignores a preview carrying SSH",
                           S.ssh_state("esp32s3") == "coming"
-                          and ">COMING</text>" in S.lock_html("esp32s3"))
+                          and '<tspan class="ast">*</tspan>' in S.secure_seal_html("esp32s3")
+                          and "<dt>Secure</dt>" in S.secure_note_html("esp32s3"))
                 finally:
                     S.BOARD_SSH.clear()
                     S.BOARD_SSH.update(was_ssh)
@@ -5252,7 +5266,7 @@ def main():
                           "the only check." in pick1)
                 check("the S3 is a released board now, not a preview",
                       [r["version"] for r in S.board_offers("esp32s3")] == ["1.1.0"]
-                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)</span>' in pick1
+                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)<span class="sep"' in pick1
                       and "preview" not in pick1
                       and S.firmware_file("1.1.0-dev.15/esp32s3/manifest.json") is None)
                 man = S.firmware_manifest("1.1.0", chip="esp32-fncam")
@@ -5265,40 +5279,57 @@ def main():
                               ("storage.bin", 3932160)]
                       and S.firmware_file("1.1.0/esp32-fncam/firmware.bin") is not None
                       and S.firmware_file("1.1.0/esp32-fncam/../esp32/firmware.bin") is None)
-                # Site 1.3.1, Rob: the lock ribbon, on the S3's row of the
-                # picker only, saying coming while SSH has not shipped; and
-                # SUPPORTED by itself once BOARD_SSH names a release that is
-                # on disk carrying the board's set, and not before.
+                # Site 1.3.3, Rob: on the picker no seal or badge, only the
+                # word Secure with a letter-sized lock, a link to the board's
+                # section on /hardware, and no footnote. Once BOARD_SSH names
+                # a release on disk carrying the board's set, and not before,
+                # the seal loses its asterisk and the footnote goes.
                 rows1 = pick1.split('<label class="bopt">')[1:]
                 was_ssh = dict(S.BOARD_SSH)
                 try:
                     S.BOARD_SSH["esp32s3"] = (1, 1, 0)
                     S.BOARD_SSH["esp32s3-cam"] = (1, 1, 0)
-                    shipped = (S.ssh_state("esp32s3"), S.lock_html("esp32s3"),
-                               S.lock_html("esp32s3", "row"), S.ssh_state("esp32s3-cam"))
+                    shipped = (S.ssh_state("esp32s3"), S.secure_seal_html("esp32s3"),
+                               S.secure_pick_html(S.BOARD_BY_DIR["esp32s3"]),
+                               S.ssh_state("esp32s3-cam"), S.secure_note_html("esp32s3"),
+                               S.board_html(["esp32s3"]),
+                               S.secure_note_html("esp32s3-cam"))
                     S.BOARD_SSH["esp32s3"] = (1, 2, 0)
                     later = S.ssh_state("esp32s3")
                 finally:
                     S.BOARD_SSH.clear()
                     S.BOARD_SSH.update(was_ssh)
-                check("the lock ribbon is on the S3's picker row alone, and says coming",
+                check("the picker says Secure on the S3's row alone: a word and a "
+                      "small lock, linking to the board's section, no seal, no footnote",
                       len(rows1) == 3
-                      and ['class="art lockr' in r for r in rows1] == [False, True, False]
-                      and pick1.count('class="art lockr') == 1
-                      and '<svg class="art lockr soon row"' in rows1[1]
-                      and 'aria-label="Secure communications, coming: SSH' in rows1[1]
-                      and "SECURE COMMUNICATIONS</text>" in rows1[1]
-                      and ">COMING</text>" in rows1[1] and "SUPPORTED" not in rows1[1])
-                check("and turns to supported by itself when a release carrying SSH "
-                      "is on disk, the S3 camera board staying coming with no set",
+                      and ['class="secure"' in r for r in rows1] == [False, True, False]
+                      and pick1.count('class="secure"') == 1
+                      and '<a class="secure" href="/hardware#waveshare-esp32-s3-lcd-1-47" '
+                          'aria-label="Secure: encrypted connections over SSH, coming in '
+                          'version 1.2.0, on the board\'s page"><svg class="lockg"' in rows1[1]
+                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)<span class="sep" '
+                          'aria-hidden="true"> · </span><a class="secure"' in rows1[1]
+                      and "</svg>Secure</a></span></span></label>" in rows1[1]
+                      and "seal" not in pick1 and "lockr" not in pick1
+                      and "Encrypted connections" not in pick1 and "SECURE" not in pick1
+                      and "article .installer .bopt a.secure {{" in S.PAGE
+                      and "article .installer .bopt a.secure svg.lockg {{" in S.PAGE)
+                check("and SSH shipping takes the asterisk and the footnote away by "
+                      "itself, the S3 camera board staying coming with no set",
                       shipped[0] == "supported"
-                      and ">SUPPORTED</text>" in shipped[1] and "soon" not in shipped[1]
-                      and 'aria-label="Secure communications supported' in shipped[1]
-                      and ">SUPPORTED</text>" in shipped[2]
-                      and shipped[3] == "coming" and later == "coming"
-                      and S.BOARD_SSH == {"esp32s3": None, "esp32s3-cam": None}
-                      and S.lock_html("esp32") == "" and S.lock_html("esp32-fncam") == ""
-                      and S.lock_html("esp32-sd") == "")
+                      and ">SECURE</text>" in shipped[1] and "ast" not in shipped[1]
+                      and 'aria-label="Secure: this board takes encrypted' in shipped[1]
+                      and "</svg>Secure</a>" in shipped[2] and "coming" not in shipped[2]
+                      and shipped[3] == "coming" and shipped[4] == ""
+                      and "<dt>Secure</dt>" not in shipped[5]
+                      and ">SECURE</text>" in shipped[5]
+                      and "<dt>Secure</dt>" in shipped[6] and later == "coming"
+                      and S.BOARD_SSH == {"esp32s3": (1, 2, 0), "esp32s3-cam": (1, 2, 0)}
+                      and S.secure_seal_html("esp32") == ""
+                      and S.secure_seal_html("esp32-fncam") == ""
+                      and S.secure_seal_html("esp32-sd") == ""
+                      and S.secure_note_html("esp32") == ""
+                      and S.secure_pick_html(S.BOARD_BY_DIR["esp32"]) == "")
                 check("each board's version line says 1.1.0 is out early, and no other",
                       pick1.count('<p class="meta early r0">' + early + "</p>") == 3
                       and '<p class="meta early r1">' not in pick1

@@ -14,6 +14,30 @@
 
 # Changelog
 
+## 1.3.3, 2026-09-25
+
+One fix from Rob: "that secure communications ribbon is bigger than the
+board". SSH now has a version, too: Rob set it for firmware 1.2.0.
+
+- **/hardware**: the S3 boards' three-line "Secure communications ·
+  coming" ribbon is now a seal the same size as FLASH & GO, a padlock and
+  SECURE, in the opposite corner (bottom right), so the two never meet. An
+  amber asterisk stays on it until SSH ships. Its footnote is a row of the
+  board's facts: "Secure: * Encrypted connections (SSH) coming in version
+  1.2.0", with SSH's glossary note and the version linked to /roadmap.
+- **/install's picker**: no seal and no footnote. The Waveshare's row ends
+  with the word Secure in the row's small type, with a lock no taller than
+  the letters, linking to the board's section on /hardware.
+- Once a release carrying SSH for a board is on disk (`BOARD_SSH` in
+  server.py, now `(1, 2, 0)` for both S3 boards), the asterisk and the
+  footnote go by themselves. Releases only, never a preview, as before.
+- The roadmap, /hardware's S3 entries, /different and the comparison table
+  give firmware 1.2.0 wherever they say SSH is coming, and say "not
+  released yet" rather than "not built yet". The roadmap drawing's station
+  reads "SSH on the S3, 1.2.0".
+- Self-test: the 1.3.1 ribbon checks are replaced by checks on the seal, its
+  footnote, the picker's link and the day SSH ships.
+
 ## 1.3.2, 2026-09-25
 
 - The board list is "Communities online" in the menu and as its heading (was "Find a community"), so the name says what the page is: the communities that are online right now.

@@ -132,8 +132,9 @@ travel as plain text, the way they always did on a BBS. Anyone in a position
 to listen on the way could read them, the way the next table in a café could
 hear you. [What that means in practice](/privacy), and the short version: say
 what you would say in public, and use a password you use nowhere else. An
-encrypted way in, [[SSH]], is coming on the ESP32-S3 boards, beside telnet
-rather than instead of it; it is [on the roadmap](/roadmap) and not built yet.
+encrypted way in, [[SSH]], is coming on the ESP32-S3 boards in firmware
+1.2.0, beside telnet rather than instead of it; it is [on the
+roadmap](/roadmap) and not released yet.
 
 ## How it compares with other BBS software
 
