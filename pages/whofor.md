@@ -135,8 +135,8 @@ you and the machine. A socket and some characters.
 ## A board with a camera
 
 ::: until 1.1.0
-Coming soon, [two boards with a camera on
-them](/hardware#freenove-esp32-camera-board) let a board look out of the
+Coming soon, [boards with a camera on
+them](/hardware#choosing-a-camera-board) let a board look out of the
 window. A visitor types `SNAPSHOT`, from a laptop or from an 8-bit machine,
 and the board takes a photo of whatever it is pointed at, ready to download.
 (An 8-bit machine can take the picture. Looking at it is a job for a PC.)
@@ -144,8 +144,8 @@ and the board takes a photo of whatever it is pointed at, ready to download.
 
 ::: from 1.1.0
 [The Freenove camera board](/hardware#freenove-esp32-camera-board) lets a
-board look out of the window, and an ESP32-S3 camera board follows once it
-has been tested. A visitor types `SNAPSHOT`, from a laptop or from an 8-bit
+board look out of the window, and the ESP32-CAM and an ESP32-S3 camera
+board follow. A visitor types `SNAPSHOT`, from a laptop or from an 8-bit
 machine, and the board takes a photo of whatever it is pointed at, ready to
 download. (An 8-bit machine can take the picture. Looking at it is a job for
 a PC.)

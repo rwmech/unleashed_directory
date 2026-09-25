@@ -49,7 +49,7 @@ own:
 The other tested board, an ESP32-S3 board with a screen, needs neither: its
 card slot and its drive light are built in.
 
-Coming soon, two camera boards add a third: a camera on the board, so a
+Coming soon, camera boards add a third: a camera on the board, so a
 visitor can snap a picture of whatever it is pointed at, from any computer that
 connects. The boards are on [the tested boards
 page](/hardware#freenove-esp32-camera-board), and what visitors can do with

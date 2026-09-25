@@ -14,6 +14,37 @@
 
 # Changelog
 
+## 1.3.4, 2026-09-25
+
+Rob: "call out the ESP32-CAM has a better camera than the Freenove one in the
+documentation, include max pixel sizes and resolution on cam boards for users
+to pick, and make recommendations."
+
+- **/hardware: the ESP32-CAM**, coming soon to the installer with FLASH & GO,
+  between the Freenove and the S3 camera board. A new drawing: the camera
+  board seated on its ESP32-CAM-MB programmer, with the lens, the flash LED,
+  the card slot, the programmer's buttons and its micro USB socket. Its facts
+  are Rob's bench: an ESP32-D0WDQ6, 4 MB flash and 4 MB PSRAM, a genuine
+  OV2640 (2 MP, 1600x1200), a micro SD slot and a white flash LED, and no
+  BOOT button recovery, because GPIO 0 is the camera's clock. An affiliate
+  buy link for the Aideepen two-pack. No Secure seal: SSH is for the S3
+  boards.
+- **/hardware: "Choosing a camera board"**, before the camera boards: a small
+  table per board (sensor, megapixels, largest photo, price, what is on the
+  board, a verdict), then three recommendations: the ESP32-CAM for the best
+  camera for the money, the Freenove as the easiest, and the ESP32-S3 camera
+  board as the best overall once tested, marked expected. The Freenove's
+  entry says its camera can be swapped for a genuine OV2640, and that its
+  build still takes 640x480 at most.
+- **/camera: "What size photos can I take?"**, each board's largest photo,
+  and that a board offers only the sizes its camera and its build can take,
+  pointing at the table. The Resolution setting says which board it
+  describes, and the page's last link goes to the table.
+- The glossary gains sensor, megapixel and PSRAM. /build, /whofor and the
+  roadmap no longer count the camera boards as two.
+- Self-test: the ESP32-CAM entry and its buy link, the three tables, the
+  recommendations, the resolutions on /camera, and the counts that moved.
+
 ## 1.3.3, 2026-09-25
 
 One fix from Rob: "that secure communications ribbon is bigger than the

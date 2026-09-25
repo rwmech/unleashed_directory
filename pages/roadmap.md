@@ -35,7 +35,7 @@ board with firmware 1.1.0, together with everything under Now.
   the board controls, the S3's screen included, for a board that lives in a
   bedroom. (The power light is wired to the supply, and only tape stops that
   one.)
-- **[Camera boards](/camera).** Two boards with a camera on them. A caller types
+- **[Camera boards](/camera).** Boards with a camera on them. A caller types
   `SNAPSHOT` and downloads the picture.
 - **Missed pages go to mail.** Ring for the sysop when nobody answers, and your
   note is waiting in the sysop's mail.

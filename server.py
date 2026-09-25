@@ -1165,6 +1165,13 @@ GLOSSARY = {
     # need it explained where a newcomer meets them.
     "SSH": "An encrypted way of connecting to a board, beside telnet: what "
            "you type is scrambled on the way, so only the board can read it.",
+    # Site 1.3.4: choosing a camera board, in plain words.
+    "sensor": "The chip in a camera that turns light into a picture. How "
+              "many dots it has sets the largest photo it can take.",
+    "megapixel": "A million pixels, the dots a photo is made of. A "
+                 "2 megapixel photo is about 1600 dots across and 1200 down.",
+    "PSRAM": "A second memory chip beside the processor: slower than the "
+             "chip's own memory, and far larger.",
 }
 # Other ways a term is written on a page, lower case, to its entry.
 GLOSSARY_FORMS = {
@@ -1178,6 +1185,7 @@ GLOSSARY_FORMS = {
     "forward a port": "port forwarding", "forwarding a port": "port forwarding",
     "forward one port": "port forwarding",
     "handles": "handle",
+    "sensors": "sensor", "megapixels": "megapixel",
 }
 _GL_SEQ = itertools.count(1)
 _MD_GLOSS = re.compile(r"\[\[([^\[\]|]{1,40})\]\]")
@@ -2541,6 +2549,43 @@ BOARD_ART_FNCAM = (
     '<circle class="lf" cx="18.25" cy="36.75" r="1.2"/>'
     "</svg>")
 
+# The ESP32-CAM (site 1.3.4, Rob's bench, 2026-09-25): the AI-Thinker
+# design, seated on its ESP32-CAM-MB programmer board, drawn from above in
+# the same hand and at the same size as the boards before it. The camera
+# board lies over most of the programmer, camera side up: its two header
+# rows along the long edges, the camera module on its ribbon with the lens,
+# the white flash LED beside it, and the micro SD slot. The programmer
+# shows past its right-hand end: the IO0 and RST buttons, the CH340, a
+# power LED, and the micro USB socket at its edge.
+BOARD_ART_ESPCAM = (
+    '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
+    'preserveAspectRatio="xMidYMid meet">'
+    '<rect class="o" x="6" y="8" width="80" height="44" rx="2"/>'
+    '<rect class="gb" x="9" y="11" width="58" height="38" rx="1.5"/>'
+    '<rect class="g" x="11" y="12.5" width="54" height="4" rx="1"/>'
+    '<rect class="g" x="11" y="43.5" width="54" height="4" rx="1"/>'
+    '<path class="d" d="' + " ".join(
+        f"M{14.5 + i * 6.7:g} 14.5 h0.01 M{14.5 + i * 6.7:g} 45.5 h0.01" for i in range(8))
+    + '"/>'
+    '<rect class="o" x="14" y="20" width="19" height="19" rx="1.5"/>'
+    '<circle class="o" cx="23.5" cy="29.5" r="6.2"/>'
+    '<circle class="d" cx="23.5" cy="29.5" r="3.3"/>'
+    '<circle class="c1" cx="22" cy="28" r="0.9"/>'
+    '<rect class="o" x="35.5" y="20.5" width="4" height="4" rx="0.6"/>'
+    '<circle class="k" cx="37.5" cy="22.5" r="1.3"/>'
+    '<rect class="o" x="42" y="20" width="21" height="19" rx="0.8"/>'
+    '<rect class="k" x="44" y="22" width="17" height="15" rx="0.6"/>'
+    '<path class="d" d="M44 26 H61"/>'
+    '<rect class="o" x="70" y="15" width="5" height="5" rx="0.8"/>'
+    '<circle class="k" cx="72.5" cy="17.5" r="1.4"/>'
+    '<rect class="o" x="70" y="40" width="5" height="5" rx="0.8"/>'
+    '<circle class="k" cx="72.5" cy="42.5" r="1.4"/>'
+    '<rect class="d" x="69.5" y="25.5" width="7" height="9" rx="0.6"/>'
+    '<circle class="lf" cx="80" cy="17.5" r="1.1"/>'
+    '<rect class="gb" x="81" y="25" width="10" height="10" rx="1.2"/>'
+    '<path class="d" d="M83.5 28 H89 L88 32 H84.5 Z"/>'
+    "</svg>")
+
 # The boards /install offers, in the order its picker lists them. A board
 # is an image set, the folder a release keeps that board's five parts in,
 # which is the firmware's own name for the build (tools/release.py, BUILDS).
@@ -2638,6 +2683,25 @@ BOARD_ART_S3CAM = (
 # people can get one ahead of the installer; the Firmware row still says
 # coming soon. "status" is what the Firmware row says in place of a version.
 SOON_BOARDS = (
+    # The ESP32-CAM (site 1.3.4, Rob's bench, 2026-09-25): an Aideepen
+    # two-pack of the AI-Thinker design on ESP32-CAM-MB programmers. The
+    # firmware's board profile is being finished (BBS_BOARD_AI_ESP32CAM,
+    # ESPCAM 1.0.0 in its src/board.h): an ESP32-D0WDQ6, 4 MB flash, 4 MB
+    # PSRAM, a genuine OV2640 read over SCCB (PID 0x26, VER 0x42), UXGA
+    # frames taken on the bench, a white flash LED on GPIO 4, and GPIO 0
+    # the camera's clock, so no BOOT button for the firmware. Here until a
+    # release names its image set; then into BOARDS, marked to wait for a
+    # release, the way the Freenove went in site 1.2.9. No Secure seal:
+    # SSH is for the S3 boards only.
+    {"dir": "esp32-cam", "name": "ESP32-CAM",
+     "part": "ESP32-D0WDQ6, 4 MB flash, 4 MB PSRAM",
+     "tell": "A small camera board seated on a USB programmer board",
+     "art": BOARD_ART_ESPCAM,
+     "camera": "OV2640, 2 MP, genuine on Rob's",
+     "page": "/hardware#esp32-cam",
+     "buy": "https://link.amazon/B0enK4lpi",
+     "status": 'coming soon to <a href="/install">the installer</a>; '
+               "its build is being finished on Rob's bench"},
     {"dir": "esp32s3-cam", "name": "ESP32-S3 camera board",
      "part": "ESP32-S3 N16R8, 16 MB flash, 8 MB PSRAM",
      "tell": "A camera, two USB-C sockets and an antenna lead",
@@ -2700,6 +2764,7 @@ BOARD_BY_DIR = {b["dir"]: b for b in BOARDS + SHOWN_BOARDS + SOON_BOARDS}
 # more slowly than the S3 does, hence the middle tier. Kept apart from
 # BOARDS so the installer's picker is untouched.
 BOARD_SPEED = {"esp32": "Fast", "esp32-sd": "Fast", "esp32-fncam": "Faster",
+               "esp32-cam": "Faster",
                "esp32s3": "Fastest", "esp32s3-cam": "Fastest"}
 
 # The seal on a board's picture on /hardware (site 1.2.5, Rob: "So people
@@ -2716,7 +2781,7 @@ BOARD_SPEED = {"esp32": "Fast", "esp32-sd": "Fast", "esp32-fncam": "Faster",
 # 9.5 units at 5.25rem: about 11px on a phone, where a seal's curved type
 # would have been under 8.
 BOARD_SEAL = {"esp32": "go", "esp32-sd": "wire", "esp32s3": "go",
-              "esp32-fncam": "go", "esp32s3-cam": "go-expected"}
+              "esp32-fncam": "go", "esp32-cam": "go", "esp32s3-cam": "go-expected"}
 
 
 def seal_html(kind):

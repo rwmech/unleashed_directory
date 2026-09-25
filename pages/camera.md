@@ -1,4 +1,4 @@
-<!-- The camera page (site 1.2.4, Rob), in the shape of /sdcard and /lights. Every fact is from the firmware repository's internal/PLAN-freenove-cam.md as of 2026-09-24, and only from the sections Rob decided: "Snapshot command, self-timer and timelapse", "Limits, notices and naming" and "Retention", plus the privacy points in the brief. Since site 1.2.7 the sensor and the resolution are stated, from the firmware's FNCAM 1.0.2 (CHANGELOG, COMMANDS.md and src/board.h, 2026-09-25): the Freenove's sensor varies between batches, Freenove document an OV2640 and Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no JPEG encoder, the board encodes: 3.6 to 3.9 s from SNAPSHOT to saved); both drivers are built, and CONFIG offers qvga or vga on either, vga as shipped (off until switched on, staff told of every snap, a lens cap the only real guarantee). Deliberately not stated, because the plan leaves them open: the quality default, the brightness default, the default count limits, the shortest timelapse interval (to be measured), exact wording of the board's messages other than "Download it now? (y/N)", which is Rob's, and the text-art preview (a stretch without a go). The Photos area is readable by everyone as shipped (Rob, in the 1.2.4 brief; the plan's proposal was users). The "until 1.1.0" note follows /lights; if the camera slips past 1.1.0, move the gate to the release that carries it. Since site 1.2.9 the settings, the download question, the flash and the timelapse are the firmware's as built, from COMMANDS.md "camera" and src/plugins/camera.cpp at 1.1.0-dev.15 (FNCAM 1.0.2): off until enabled (no PF_ON), staff told "Node n took a photo.", "Download it now?  [Y]es  [X]modem  [N]o", quality 12 on 4 to 40, 200 kept of each kind, flash off as shipped (the Freenove has no pixel), timelapse every 10 s at the least into area 13. The "from 1.1.0" note says which camera board the installer carries. -->
+<!-- The camera page (site 1.2.4, Rob), in the shape of /sdcard and /lights. Every fact is from the firmware repository's internal/PLAN-freenove-cam.md as of 2026-09-24, and only from the sections Rob decided: "Snapshot command, self-timer and timelapse", "Limits, notices and naming" and "Retention", plus the privacy points in the brief. Since site 1.2.7 the sensor and the resolution are stated, from the firmware's FNCAM 1.0.2 (CHANGELOG, COMMANDS.md and src/board.h, 2026-09-25): the Freenove's sensor varies between batches, Freenove document an OV2640 and Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no JPEG encoder, the board encodes: 3.6 to 3.9 s from SNAPSHOT to saved); both drivers are built, and CONFIG offers qvga or vga on either, vga as shipped (off until switched on, staff told of every snap, a lens cap the only real guarantee). Deliberately not stated, because the plan leaves them open: the quality default, the brightness default, the default count limits, the shortest timelapse interval (to be measured), exact wording of the board's messages other than "Download it now? (y/N)", which is Rob's, and the text-art preview (a stretch without a go). The Photos area is readable by everyone as shipped (Rob, in the 1.2.4 brief; the plan's proposal was users). The "until 1.1.0" note follows /lights; if the camera slips past 1.1.0, move the gate to the release that carries it. Since site 1.2.9 the settings, the download question, the flash and the timelapse are the firmware's as built, from COMMANDS.md "camera" and src/plugins/camera.cpp at 1.1.0-dev.15 (FNCAM 1.0.2): off until enabled (no PF_ON), staff told "Node n took a photo.", "Download it now?  [Y]es  [X]modem  [N]o", quality 12 on 4 to 40, 200 kept of each kind, flash off as shipped (the Freenove has no pixel), timelapse every 10 s at the least into area 13. The "from 1.1.0" note says which camera board the installer carries. Since site 1.3.4 (Rob) the ESP32-CAM is a third camera board and "What size photos can I take?" gives each board's largest photo, the same figures as /hardware's "Choosing a camera board": the ESP32-CAM's 1600x1200 from Rob's bench (a genuine OV2640, UXGA) and its board profile being finished (BBS_CAM_SIZES qvga to uxga), the Freenove's 320x240 or 640x480 from its build on either sensor, the S3 camera board's 2048x1536 from the OV3660's datasheet, expected until tested. -->
 # Camera
 
 A camera on the board, and anyone you allow can take a picture with it.
@@ -9,15 +9,15 @@ few seconds later.
 ::: until 1.1.0
 > [!NOTE]
 > **The camera arrives with firmware 1.1 for the camera boards**, which is not
-> released yet, and neither board is on the installer. This page describes it
-> as it has been designed, so you can plan a board around it.
+> released yet, and no camera board is on the installer. This page describes
+> it as it has been designed, so you can plan a board around it.
 :::
 
 ::: from 1.1.0
 > [!NOTE]
 > **The Freenove camera board is on [the installer](/install)** from firmware
-> 1.1.0. The ESP32-S3 camera board is not yet: it goes on once it has been
-> tested.
+> 1.1.0. The ESP32-CAM goes on once a release carries its build, and the
+> ESP32-S3 camera board once it has been tested.
 :::
 
 ::: art
@@ -26,10 +26,12 @@ camera-snap
 
 ## What you need
 
-- **One of the two camera boards**: the [Freenove ESP32 camera
-  board](/hardware#freenove-esp32-camera-board) or an [ESP32-S3 camera
+- **One of the camera boards**: the [Freenove ESP32 camera
+  board](/hardware#freenove-esp32-camera-board), the
+  [ESP32-CAM](/hardware#esp32-cam) or an [ESP32-S3 camera
   board](/hardware#esp32-s3-camera-board). The camera is on the board, so
-  there is nothing to wire.
+  there is nothing to wire. They are side by side in [choosing a camera
+  board](/hardware#choosing-a-camera-board).
 - **Whichever camera your Freenove came with.** Its sensor varies between
   batches: Freenove's documents name an OV2640, and Rob's kit came
   with a GalaxyCore GC0308, which takes 640x480 pictures at most and has no
@@ -58,6 +60,21 @@ A caller who may take pictures but not download them is told where the photo
 went and is not asked. A photo is a JPEG, which a PC terminal can save and
 open: an 8-bit machine can take the picture, and looking at it is a job for
 a PC.
+
+## What size photos can I take?
+
+It depends on the camera on the board. A board offers only the sizes its
+camera, and its build, can take, and the sysop picks one of them under
+Resolution in the settings below.
+
+- **The ESP32-CAM:** up to 1600x1200, from its 2 megapixel OV2640.
+- **The Freenove camera board:** 320x240 or 640x480, whichever camera it
+  came with.
+- **The ESP32-S3 camera board:** up to 2048x1536 expected, from its
+  3 megapixel OV3660, once it has been tested.
+
+The three are side by side, with what each costs and what is on it, in
+[choosing a camera board](/hardware#choosing-a-camera-board).
 
 ## Photos, file area 12
 
@@ -111,7 +128,7 @@ picture adjustments are pages of their own inside it.
 | On | Whether the camera runs at all. | Off |
 | Snapshot level | Who may take a picture, from everybody, guests included, up to the sysop alone. | Staff |
 | Photos level | Who may see and download the photos in areas 12 and 13. | Everybody |
-| Resolution | 320x240 or 640x480, on either camera. A GC0308 goes no higher. | 640x480 |
+| Resolution | The sizes the board's camera can take. On the Freenove, 320x240 or 640x480, on either camera; a GC0308 goes no higher. | 640x480 on the Freenove |
 | Quality | How sharp the JPEG is, 4 to 40, where lower is sharper. | 12 |
 | Watermark | The board's name, the date and who took it, in a corner. | On |
 | Name snaps | By date, by date and handle, or a folder for each handle. | By date |
@@ -152,5 +169,5 @@ for. That arrives with the sensors, and [the roadmap](/roadmap) has it.
 - **The picture is upside down or back to front.** Turn on Flip or Mirror.
 
 ::: next
-[See the camera boards](/hardware#freenove-esp32-camera-board)
+[Choose a camera board](/hardware#choosing-a-camera-board)
 :::

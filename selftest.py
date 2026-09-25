@@ -2474,8 +2474,9 @@ def main():
                                    and 'href="/camera"' in sec)
         # Site 1.2.5, Rob: both camera boards gained a buy link, shown the
         # way the tested boards show theirs, and stay coming soon.
-        check("/hardware lists both camera boards as coming soon, each with its buy link",
-              len(S.SOON_BOARDS) == 1 and soon_ok
+        # Site 1.3.4: the ESP32-CAM joins them, coming soon with its own.
+        check("/hardware lists the camera boards as coming soon, each with its buy link",
+              [b["dir"] for b in S.SOON_BOARDS] == ["esp32-cam", "esp32s3-cam"] and soon_ok
               and "tested when it arrives" in " ".join(hw4.split())
               and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw4
               and "<b>ESP32-WROVER: yes, on one board.</b>" not in hw4)
@@ -4404,8 +4405,8 @@ def main():
         # little wiring, the first board to, and the intro says both.
         go = [x for x in seals if "FLASH &amp; GO</text>" in x]
         wire = [x for x in seals if ">A LITTLE</text>" in x and ">WIRING</text>" in x]
-        check("every board's picture wears its seal, four flash and go, one a little wiring",
-              len(seals) == 5 and len(go) == 4 and len(wire) == 1
+        check("every board's picture wears its seal, five flash and go, one a little wiring",
+              len(seals) == 6 and len(go) == 5 and len(wire) == 1
               and all('role="img" aria-label="Flash and go' in x for x in go)
               and 'role="img" aria-label="A little wiring' in wire[0]
               and sum(">expected</text>" in x for x in seals) == 1
@@ -4424,11 +4425,12 @@ def main():
                  for sid in ("esp32-dev-board-base",
                              "esp32-dev-board-base-sd-card-for-storage",
                              "waveshare-esp32-s3-lcd-1-47",
-                             "freenove-esp32-camera-board", "esp32-s3-camera-board")}
+                             "freenove-esp32-camera-board", "esp32-cam",
+                             "esp32-s3-camera-board")}
         secs = re.findall(r'<svg class="art seal sec"[^>]*>.*?</svg>', hw5, re.S)
         s3w, s3c = hsecs["waveshare-esp32-s3-lcd-1-47"], hsecs["esp32-s3-camera-board"]
         others = ("esp32-dev-board-base", "esp32-dev-board-base-sd-card-for-storage",
-                  "freenove-esp32-camera-board")
+                  "freenove-esp32-camera-board", "esp32-cam")
         note = ('<dt>Secure</dt><dd>* Encrypted connections (<span class="gl"')
         check("the Secure seal is on the two S3 boards' pictures only, FLASH & GO's "
               "size, bottom right, with its asterisk",
@@ -4500,11 +4502,14 @@ def main():
               and "varies between batches" in flat_c7 and "GC0308" in flat_c7
               and "works with either" in flat_c7
               and "| Resolution |" not in cam7
-              and "<td>320x240 or 640x480, on either camera." in cam7
+              and "On the Freenove, 320x240 or 640x480, on either camera;" in cam7
+              # Site 1.3.4: /camera now gives every board's largest photo,
+              # so the rule that no size above 640x480 appears beside the
+              # Freenove holds for its own entry, where it always mattered.
               and not re.search(r"\b(800x600|1024x768|1600x1200)\b|(?<![\d.])[1-9] ?(MP|megapixels?)\b",
-                                flat_fn + flat_c7)
-              # every OV2640 on either page shares its sentence with the GC0308
-              and all("GC0308" in s for s in re.split(r"(?<=[.:])\s", flat_fn + " " + flat_c7)
+                                flat_fn)
+              # every OV2640 in its entry shares its sentence with the GC0308
+              and all("GC0308" in s for s in re.split(r"(?<=[.:])\s", flat_fn)
                       if "OV2640" in s))
         check("and it is running on the bench, still coming soon to the installer",
               "under way" not in S.board_html(["esp32-fncam"]) and "under way" not in flat_fn
@@ -4513,6 +4518,82 @@ def main():
               # Site 1.2.9: in BOARDS, but waiting for a release, so not on
               # the picker while none on disk carries it.
               and "esp32-fncam" not in {b["dir"] for b in S.picker_boards()})
+        # Site 1.3.4, Rob: "call out the ESP32-CAM has a better camera than
+        # the Freenove one ... include max pixel sizes and resolution on cam
+        # boards for users to pick, and make recommendations."
+        ecb = S.BOARD_BY_DIR["esp32-cam"]
+        ec = hw5.split('id="esp32-cam"')[1].split("<h2")[0] if 'id="esp32-cam"' in hw5 else ""
+        flat_ec = " ".join(ec.split())
+        check("the ESP32-CAM has its entry: coming soon, flash and go, its buy link",
+              ecb in S.SOON_BOARDS and ecb not in S.BOARDS
+              and ecb["buy"] == "https://link.amazon/B0enK4lpi"
+              and '<a href="https://link.amazon/B0enK4lpi" rel="sponsored">Amazon</a>'
+                  " (affiliate link)" in ec
+              and S.board_html(["esp32-cam"]) in ec
+              and "coming soon to" in S.board_html(["esp32-cam"])
+              and S.BOARD_SEAL["esp32-cam"] == "go"
+              and "FLASH &amp; GO</text>" in ec and ">expected</text>" not in ec
+              and S.secure_seal_html("esp32-cam") == "" and "esp32-cam" not in S.BOARD_SSH
+              and S.BOARD_ART_ESPCAM.replace('class="art board', 'class="art board big', 1) in ec
+              and "esp32-cam" not in {b["dir"] for b in S.picker_boards()}
+              and "ESP32-CAM" not in inst4)
+        check("and its facts: the chip, the memory, a genuine OV2640 at 1600x1200, "
+              "the programmer board, and no BOOT button",
+              "ESP32-D0WDQ6" in ecb["part"] and "4 MB PSRAM" in ecb["part"]
+              and "OV2640" in ecb["camera"] and "2 MP" in ecb["camera"]
+              and "better than the one on Rob" in flat_ec
+              and "1600x1200" in flat_ec and "640x480" in flat_ec
+              and "ESP32-CAM-MB" in flat_ec and "micro USB" in flat_ec and "CH340" in flat_ec
+              and "white flash LED" in flat_ec and "micro SD slot" in flat_ec
+              and "<b>No BOOT button recovery.</b>" in flat_ec
+              and "SSH" not in re.sub(r"<[^>]+>", "", ec))
+        ch = (hw5.split('id="choosing-a-camera-board"')[1].split("<h2")[0]
+              if 'id="choosing-a-camera-board"' in hw5 else "")
+        flat_ch = " ".join(ch.split())
+        def cells(tr):
+            return [re.sub(r"<[^>]+>", "", re.sub(r'<span class="gt".*?</span>', "", c)).strip()
+                    for c in re.findall(r"<t[hd]>(.*?)</t[hd]>", tr, re.S)]
+        tabs = [[cells(tr) for tr in re.findall(r"<tr>(.*?)</tr>", t, re.S)]
+                for t in re.findall(r"<table>(.*?)</table>", ch, re.S)]
+        heads = [t[0][0] for t in tabs if t and t[0]]
+        facts = [{r[0]: r[1] for r in t[1:] if len(r) == 2} for t in tabs]
+        check("Choosing a camera board: a small table per board, with each one's "
+              "sensor, megapixels and largest photo in pixels",
+              heads == ["ESP32-CAM", "Freenove camera board",
+                        "ESP32-S3 camera board (expected)"]
+              and [f.get("Largest photo") for f in facts]
+                  == ["1600x1200", "640x480, with either camera", "2048x1536"]
+              and [f.get("Megapixels") for f in facts]
+                  == ["2", "0.3 with a GC0308, 2 with an OV2640", "3"]
+              and facts[0].get("Sensor") == "OmniVision OV2640"
+              and "GC0308" in facts[1].get("Sensor", "")
+              and facts[2].get("Sensor") == "OmniVision OV3660"
+              and all(set(f) == {"Sensor", "Megapixels", "Largest photo", "Price",
+                                 "On the board", "Verdict"} for f in facts)
+              and facts[0]["Verdict"] == "The best camera for the money"
+              and 'class="gl"' in ch)
+        check("and the three recommendations, the S3 camera board marked expected",
+              "<b>The best camera for the money: " in flat_ch
+              and '<a href="#esp32-cam">the ESP32-CAM</a>' in flat_ch
+              and "<b>The easiest: " in flat_ch and "plan to swap it" in flat_ch
+              and "<b>The best overall, when tested: " in flat_ch
+              and "expected, not measured" in flat_ch
+              and hw5.index('id="choosing-a-camera-board"')
+                  < hw5.index('id="freenove-esp32-camera-board"')
+                  < hw5.index('id="esp32-cam"') < hw5.index('id="esp32-s3-camera-board"')
+              and 'href="#choosing-a-camera-board"' in hw5
+              and "a genuine OV2640 module fits it in place of a GC0308" in flat_fn)
+        c7 = (cam7.split('id="what-size-photos-can-i-take"')[1].split("<h2")[0]
+              if 'id="what-size-photos-can-i-take"' in cam7 else "")
+        flat_c7s = " ".join(c7.split())
+        check("/camera says what size photos each board takes, and points at the table",
+              "only the sizes its camera, and its build, can take" in flat_c7s
+              and "up to 1600x1200" in flat_c7s and "320x240 or 640x480" in flat_c7s
+              and "up to 2048x1536 expected" in flat_c7s
+              and 'href="/hardware#choosing-a-camera-board"' in c7
+              and 'href="/hardware#esp32-cam"' in cam7
+              and '<a class="go" href="/hardware#choosing-a-camera-board">' in cam7
+              and all(S.gloss_key(w) for w in ("sensor", "megapixels", "PSRAM")))
         _, diff5 = get("/different")
         check("and nowhere else",
               "(expected" not in diff5 and "Fastest" not in diff5)
