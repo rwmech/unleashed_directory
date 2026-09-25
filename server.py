@@ -8811,9 +8811,17 @@ svg.art .f-dat { fill:var(--live); }
    tick brightens and its name turns --dial under the pointer, and keyboard
    focus draws the site's yellow ring round the column rather than the
    browser's round a stray box. The lamp is the run card's: --dial, with a
-   glow. */
-svg.art.spectrum { width:100%; max-width:30rem; height:auto;
-        margin:0.75rem auto 1rem; }
+   glow. Since site 1.3.9 two drawings of it, across and down, the
+   roadmap's way, and the stretch out to the fourth stop is dashed, because
+   not all of that build exists yet. */
+svg.art.spectrum { width:100%; height:auto; margin:0.75rem auto 1rem; }
+svg.art.spectrum.wide { max-width:42rem; }
+svg.art.spectrum.tall { display:none; max-width:24rem; }
+@media (max-width: 900px) {
+  svg.art.spectrum.wide { display:none; }
+  svg.art.spectrum.tall { display:block; }
+}
+svg.art.spectrum .later { stroke-dasharray:4 5; }
 svg.art.spectrum a { outline:none; cursor:pointer; }
 svg.art.spectrum .hit { fill:transparent; stroke:none; }
 svg.art.spectrum .tk { stroke-width:1.6; opacity:0.7; }
@@ -8946,14 +8954,18 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
 @keyframes artgrow { 0% { transform:scaleX(0.04); } 70%, 100% { transform:scaleX(1); } }
 @keyframes arttimer { from { stroke-dashoffset:30; } to { stroke-dashoffset:0; } }
 /* The spectrum on /hardware (site 1.2.2). The lamp's two ends are the
-   first and last stops, measured from the middle one it rests on. */
+   first and last stops, measured from the stop it rests on, and set per
+   drawing in --from and --to (site 1.3.9): across on a desktop, down on
+   a phone. */
 @keyframes specdraw { from { transform:scaleX(0); } to { transform:scaleX(1); } }
 @keyframes specgrow { from { transform:scaleY(0); } to { transform:scaleY(1); } }
 @keyframes specrise { from { opacity:0; transform:translateY(5px); }
                       to { opacity:1; transform:translateY(0px); } }
 @keyframes specin { from { opacity:0; } to { opacity:1; } }
-@keyframes specgo { from { transform:translateX(-118px); }
-                    to { transform:translateX(126px); } }
+@keyframes specgo { from { transform:translateX(var(--from)); }
+                    to { transform:translateX(var(--to)); } }
+@keyframes specgoy { from { transform:translateY(var(--from)); }
+                     to { transform:translateY(var(--to)); } }
 @keyframes specair { from { opacity:1; } to { opacity:0.5; } }
 /* The roadmap (site 1.2.4): the lamp runs the "now" stretch, its length
    set per drawing in --run. The camera's flash lands as the word arrives. */
@@ -9023,18 +9035,25 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
   svg.art.lights .px2 { animation:artpulse 0.9s ease-in-out infinite; }
   svg.art.lights .px3 { animation:artpulse 1.3s ease-in-out 0.4s infinite backwards; }
   /* the spectrum: the line draws, each stop grows out of it in turn, and
-     a lamp goes along it and back, 7s the round trip */
+     a lamp goes along it and back at about the pace it had with three
+     stops, 12s the round trip across and 8s down */
   svg.art.spectrum .sl { transform-box:fill-box; transform-origin:left center;
         animation:specdraw 0.8s ease-out both; }
+  svg.art.spectrum.tall .sl { transform-origin:center top; animation-name:specgrow; }
   svg.art.spectrum .tk { transform-box:fill-box; transform-origin:center;
         animation:specgrow 0.35s ease-out 0.8s both; }
+  svg.art.spectrum.tall .tk { animation-name:specdraw; }
   svg.art.spectrum .lab { animation:specrise 0.45s ease-out 0.9s both; }
   svg.art.spectrum .s1 .tk { animation-delay:1.05s; }
   svg.art.spectrum .s1 .lab { animation-delay:1.15s; }
   svg.art.spectrum .s2 .tk { animation-delay:1.3s; }
   svg.art.spectrum .s2 .lab { animation-delay:1.4s; }
-  svg.art.spectrum .sdot { animation:specin 0.6s ease-out 1.9s both,
-        specgo 3.5s ease-in-out -1.75s infinite alternate; }
+  svg.art.spectrum .s3 .tk { animation-delay:1.55s; }
+  svg.art.spectrum .s3 .lab { animation-delay:1.65s; }
+  svg.art.spectrum .sdot { animation:specin 0.6s ease-out 2.15s both,
+        specgo 6s ease-in-out -3s infinite alternate; }
+  svg.art.spectrum.tall .sdot { animation:specin 0.6s ease-out 2.15s both,
+        specgoy 4s ease-in-out -2s infinite alternate; }
   svg.art.spectrum .arr { animation:specair 2.4s ease-in-out 2s infinite alternate backwards; }
   /* the roadmap: the line draws, each stretch's stations come in down it,
      one stretch after another, then the lamp runs down "now" */
@@ -9710,23 +9729,22 @@ LIGHTS_STRIP = _lights_strip()
 
 
 # ----------------------------------------------------------------------
-# The spectrum at the top of /hardware (site 1.2.1, Rob): the three ways to
+# The spectrum at the top of /hardware (site 1.2.1, Rob): the ways to
 # build a board on one line, a range to choose from and not a ladder, so
 # every stretch of the line has a head at both ends. Under the line, a
 # ruler with a tick under each stop and the estimates under the ticks.
 #
-# 354 units wide, so a 390 phone draws it at about 1:1 and the smallest
-# type lands near 9px, like the other drawings. The figures are "about" on
-# purpose and come from listings on 2026-09-24 (see the comment at the top
-# of pages/hardware.md); change them here and in the list together.
+# The figures are "about" on purpose and come from listings on 2026-09-24
+# (see the comment at the top of pages/hardware.md); change them here and
+# in the list together.
 #
 # Since site 1.2.2 each stop is a link to its board (Rob: "how about some
 # animations here"), with an aria-label saying in words what the column
-# shows, so the drawing is a group of three links to a screen reader and
-# not decoration. The overview names the class, "ESP32-S3 board"; the
-# section it links to names the exact board, because that image runs on
-# that board and no other (Rob: "dont reference 'waveshare' but an S3
-# board ... which we can go into").
+# shows, so the drawing is a group of links to a screen reader and not
+# decoration. The overview names the class, "ESP32-S3 board"; the section
+# it links to names the exact board, because that image runs on that board
+# and no other (Rob: "dont reference 'waveshare' but an S3 board ... which
+# we can go into").
 #
 # Since site 1.2.5 a fourth row under the work: the speed, "fast", "fast"
 # and "fastest" (Rob: "Fast, Faster, Fastest ... instead of numbers for
@@ -9736,46 +9754,96 @@ LIGHTS_STRIP = _lights_strip()
 # "Faster" is the Freenove camera board's, which is not a stop here; the
 # boards' own facts lists carry all three, from BOARD_SPEED.
 #
-# The motion, all of it in ART_CSS's no-preference block: the line draws
-# left to right, each stop's tick grows out of it and its three figures
-# rise in, a quarter second apart, and then a lamp like the run card's
-# goes slowly along the line and back. At rest, and with reduced motion,
-# everything is drawn and the lamp sits on the middle stop. Transforms and
-# opacity only, inside a fixed viewBox, so nothing on the page moves.
+# Since site 1.3.9 (Rob) a fourth stop at the top end, "Advanced build":
+# an ESP32-S3 board with a bigger screen, a camera and SSH, in a case,
+# about $40 and up. Not all of it exists yet, and the drawing says so the
+# way the roadmap does: the stretch of line out to it is dashed. The S3
+# camera board has not been tested, SSH is firmware 1.2.0, and the only
+# panel the firmware drives is the Waveshare's (BBS_HAS_LCD, src/board.h),
+# so its link goes to the S3 camera board, the nearest thing to it on the
+# page, and its words say what is still to come.
+#
+# Four stops do not fit a phone across, so there are two drawings of the
+# one spectrum, the roadmap's way: across on a desktop, and down the page
+# under the site's one breakpoint, 900px, which a 390 phone draws at about
+# 1:1. CSS shows one and hides the other, so only one is ever in the
+# accessibility tree.
+#
+# The motion, all of it in ART_CSS's no-preference block: the line draws,
+# each stop's tick grows out of it and its figures rise in, a quarter
+# second apart, and then a lamp like the run card's goes slowly along the
+# line from the first stop to the last and back. At rest, and with reduced
+# motion, everything is drawn and the lamp sits on the second stop. The
+# lamp's run is set per drawing in --from and --to, measured from where it
+# rests. Transforms and opacity only, inside a fixed viewBox, so nothing on
+# the page moves.
 # ----------------------------------------------------------------------
-SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work,
-                    # where it links, what a screen reader is told, speed
-    (52, "bare ESP32", ("functional,", "lowest cost"), "about $5", "about 5 min",
+SPECTRUM_STOPS = (  # x across, name, what it is (two lines), cost, time,
+                    # the work, where it links, what a screen reader is told,
+                    # speed
+    (56, "bare ESP32", ("functional,", "lowest cost"), "about $5", "about 5 min",
      "no wiring", "#esp32-dev-board-base",
      "A bare ESP32 dev board: functional, lowest cost. About $5, about 5 "
      "minutes, no wiring. Expected to be fast, not yet measured.", "fast"),
-    (170, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
+    (200, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
      "wiring the card", "#esp32-dev-board-base-sd-card-for-storage",
      "An ESP32 dev board with an SD card: economical and usable. About $8, "
      "about 30 minutes, most of it wiring the card. Expected to be fast, "
      "not yet measured.", "fast"),
-    (296, "ESP32-S3 board", ("advanced", "capabilities"), "about $20",
+    (344, "ESP32-S3 board", ("advanced", "capabilities"), "about $20",
      "about 10 min", "BOOT and RESET", "#waveshare-esp32-s3-lcd-1-47",
      "An ESP32-S3 board: advanced capabilities. About $20, about 10 minutes, "
      "BOOT and RESET pressed by hand. Expected to be fastest, not yet "
      "measured.", "fastest"),
+    (488, "Advanced build", ("display, camera,", "the works"), "about $40+",
+     "about 30 min", "parts and a case", "#esp32-s3-camera-board",
+     "An advanced build: an ESP32-S3 board with a bigger display, a camera "
+     "and SSH, in a case. About $40 and up, about 30 minutes, parts and a "
+     "case. Not all of it is here yet: the S3 camera board is still to be "
+     "tested, SSH comes in firmware 1.2.0, and a bigger display is not "
+     "supported yet. Expected to be fastest, not yet measured.", "fastest"),
 )
-SPECTRUM_HITS = ((-2, 112), (112, 120), (234, 122))  # x and width of each column
-SPECTRUM_PARK = 170                                  # the lamp at rest
+SPECTRUM_PARK = 1       # the stop the lamp rests on
+SPECTRUM_LATER = 3      # the first stop not all there yet: the stretch out to it is dashed
+SPECTRUM_LABEL = "Four ways to build a board"
 
 
-def _spectrum():
-    # Type a size up from the other drawings: this one is all words, and at
-    # 390 the 9.5 unit captions read as small print (rendered 2026-09-24).
-    out = ['<svg class="art spectrum" viewBox="-4 -2 362 160" '
+def _spectrum_lamp(cx, cy, run_from, run_to):
+    return (f'<g class="sdot" aria-hidden="true" '
+            f'style="--from:{run_from}px;--to:{run_to}px">'
+            f'<circle class="dh" cx="{cx}" cy="{cy}" r="5.5"/>'
+            f'<circle class="dc" cx="{cx}" cy="{cy}" r="2.6"/></g>')
+
+
+def _spectrum_speed(x, y, speed, size, anchor):
+    return (f'<text class="ink spd" x="{x}" y="{y}" font-size="{size}" '
+            f'text-anchor="{anchor}">{speed} <tspan font-size="{size - 1}" '
+            'class="exp">(expected)</tspan></text>')
+
+
+def _spectrum_wide():
+    # 552 units across, four stops 144 apart, the ruler 44 past each end.
+    # Type a size up from the other drawings: this one is all words.
+    xs = [s[0] for s in SPECTRUM_STOPS]
+    later = xs[SPECTRUM_LATER - 1]
+    out = ['<svg class="art spectrum wide" viewBox="-4 -2 552 160" '
            'preserveAspectRatio="xMidYMid meet" role="group" '
-           'aria-label="Three ways to build a board">']
-    for x1, x2 in ((93, 128), (210, 240)):
+           f'aria-label="{SPECTRUM_LABEL}">']
+    # A head at both ends of every stretch, 30 long and centred in the gap
+    # between the two names (12 unit monospace, about 7.2 a character).
+    for a, b in zip(SPECTRUM_STOPS, SPECTRUM_STOPS[1:]):
+        gap_l = a[0] + len(a[1]) * 3.6
+        gap_r = b[0] - len(b[1]) * 3.6
+        mid = round((gap_l + gap_r) / 2)
+        x1, x2 = mid - 15, mid + 15
         out.append(f'<path class="o arr" d="M{x1} 18 H{x2} M{x1 + 5} 14 L{x1} 18 '
                    f'L{x1 + 5} 22 M{x2 - 5} 14 L{x2} 18 L{x2 - 5} 22"/>')
-    out.append('<path class="f sl" d="M12 79 H342"/>')
-    for i, (stop, (hx, hw)) in enumerate(zip(SPECTRUM_STOPS, SPECTRUM_HITS)):
+    out.append(f'<path class="f sl" d="M12 79 H{later}"/>')
+    out.append(f'<path class="f sl later" d="M{later} 79 H532"/>')
+    for i, stop in enumerate(SPECTRUM_STOPS):
         x, name, (l1, l2), cost, time, work, href, label, speed = stop
+        hx = max(-2, x - 72)
+        hw = min(546, x + 72) - hx
         out.append(
             f'<a class="stp s{i}" href="{href}" aria-label="{html.escape(label, quote=True)}">'
             f'<rect class="hit" x="{hx}" y="0" width="{hw}" height="156" rx="4"/>'
@@ -9787,22 +9855,62 @@ def _spectrum():
             f'<text x="{x}" y="57" font-size="10.5" text-anchor="middle">{l2}</text>'
             '<g class="lab">'
             f'<text class="live" x="{x}" y="104" font-size="10.5" '
-            f'text-anchor="middle">{cost}</text>'
+            f'text-anchor="middle">{html.escape(cost)}</text>'
             f'<text x="{x}" y="118" font-size="10.5" text-anchor="middle">{time}</text>'
             f'<text class="warm" x="{x}" y="134" font-size="9.5" '
             f'text-anchor="middle">{work}</text>'
-            f'<text class="ink spd" x="{x}" y="151" font-size="10.5" '
-            f'text-anchor="middle">{speed} <tspan font-size="9.5" '
-            'class="exp">(expected)</tspan></text>'
+            + _spectrum_speed(x, 151, speed, 10.5, "middle") +
             "</g></g></a>")
-    out.append(f'<g class="sdot" aria-hidden="true">'
-               f'<circle class="dh" cx="{SPECTRUM_PARK}" cy="79" r="5.5"/>'
-               f'<circle class="dc" cx="{SPECTRUM_PARK}" cy="79" r="2.6"/></g>')
+    park = xs[SPECTRUM_PARK]
+    out.append(_spectrum_lamp(park, 79, xs[0] - park, xs[-1] - park))
     out.append("</svg>")
     return "".join(out)
 
 
-SPECTRUM = _spectrum()
+def _spectrum_tall():
+    # 354 units across like the other drawings, so a 390 phone draws it at
+    # about 1:1: the line runs down the left, each stop a block beside it,
+    # its figures in two columns.
+    x0, tx, col, top, step = 22, 44, 190, 26, 104
+    ys = [top + step * i for i in range(len(SPECTRUM_STOPS))]
+    ticks = [y - 5 for y in ys]
+    end = ticks[-1] + 22
+    height = ys[-1] + 70
+    later = ticks[SPECTRUM_LATER - 1]
+    out = [f'<svg class="art spectrum tall" viewBox="0 0 354 {height}" '
+           'preserveAspectRatio="xMidYMid meet" role="group" '
+           f'aria-label="{SPECTRUM_LABEL}">']
+    # Between each pair, in the gap under a stop's figures, a head at both ends.
+    for y in ys[:-1]:
+        y1, y2 = y + 69, y + 87
+        out.append(f'<path class="o arr" d="M{tx + 10} {y1} V{y2} M{tx + 6} {y1 + 4} '
+                   f'L{tx + 10} {y1} L{tx + 14} {y1 + 4} M{tx + 6} {y2 - 4} '
+                   f'L{tx + 10} {y2} L{tx + 14} {y2 - 4}"/>')
+    out.append(f'<path class="f sl" d="M{x0} {ticks[0] - 18} V{later}"/>')
+    out.append(f'<path class="f sl later" d="M{x0} {later} V{end}"/>')
+    for i, (stop, y) in enumerate(zip(SPECTRUM_STOPS, ys)):
+        x, name, (l1, l2), cost, time, work, href, label, speed = stop
+        out.append(
+            f'<a class="stp s{i}" href="{href}" aria-label="{html.escape(label, quote=True)}">'
+            f'<rect class="hit" x="1" y="{y - 22}" width="352" height="{step - 4}" rx="4"/>'
+            f'<path class="o tk" d="M{x0 - 6} {y - 5} H{x0 + 6}"/>'
+            '<g class="up">'
+            f'<text class="ink nm" x="{tx}" y="{y}" font-size="16">{name}</text>'
+            f'<text x="{tx}" y="{y + 21}" font-size="13.5">{l1} {l2}</text>'
+            '<g class="lab">'
+            f'<text class="live" x="{tx}" y="{y + 41}" font-size="13.5">'
+            f'{html.escape(cost)}</text>'
+            f'<text x="{col}" y="{y + 41}" font-size="13.5">{time}</text>'
+            f'<text class="warm" x="{tx}" y="{y + 60}" font-size="13">{work}</text>'
+            + _spectrum_speed(col, y + 60, speed, 13.5, "start") +
+            "</g></g></a>")
+    park = ticks[SPECTRUM_PARK]
+    out.append(_spectrum_lamp(x0, park, ticks[0] - park, ticks[-1] - park))
+    out.append("</svg>")
+    return "".join(out)
+
+
+SPECTRUM = _spectrum_wide() + _spectrum_tall()
 
 
 # ----------------------------------------------------------------------

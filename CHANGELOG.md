@@ -14,6 +14,38 @@
 
 # Changelog
 
+## 1.3.9, 2026-09-25
+
+The spectrum at the top of /hardware gets a fourth stop at the top end
+(Rob): **Advanced build**, about $40 and up. An ESP32-S3 board with a
+bigger display, a camera and SSH, in a case: the works.
+
+- **Four stops, equally spaced, a head at both ends of every stretch.** The
+  fourth reads "display, camera, the works", about $40+, about 30 min,
+  parts and a case, fastest (expected). The $20 ESP32-S3 board stays the
+  third stop.
+- **Nothing on it is claimed as here.** The stretch of line out to the
+  fourth stop is dashed, the roadmap's sign for "not started", its
+  screen reader label and its paragraph say what is still to come (the S3
+  camera board is untested, SSH is firmware 1.2.0, and the only screen the
+  firmware drives is the Waveshare's own), and it links to the S3 camera
+  board's section, the nearest thing to it on the page.
+- **Two drawings of it, the roadmap's way.** Across on a desktop, now 552
+  units wide and up to 42rem; down the page under the site's 900px
+  breakpoint, 354 units wide so a 390 phone draws it at about 1:1. The
+  three-stop drawing had shrunk to about 7px captions at 390. CSS shows one
+  and hides the other, so a screen reader meets one group of four links.
+- **The lamp** rests on the second stop as before and runs from the first
+  stop to the last, its run set per drawing in `--from` and `--to` (a new
+  `specgoy` keyframe runs it down the phone drawing). Transforms and
+  opacity only, and all of it still stops for reduced motion.
+- "Three ways to build one" is "Four ways", with a paragraph for the
+  advanced build.
+- Self-test: both drawings carry all four stops, the spacing is equal,
+  three arrows each, the breakpoint swaps them, the fourth stop's figures,
+  dashed stretch, link and caveats, both lamps' runs, and seven spectrum
+  keyframes.
+
 ## 1.3.8, 2026-09-25
 
 Rob: "why are we not saying the right unleashed on the site it all say

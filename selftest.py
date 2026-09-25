@@ -4489,16 +4489,54 @@ def main():
               and "a little under 400 mA" in flat_h
               and "520 KB" not in flat_b and "400 mA" not in flat_b
               and "EN pulled up" in flat_b)
-        # H1, Rob's spectrum: three stops, each with the words the drawing
-        # shows said again in the page, with links, because the drawing is
-        # aria-hidden.
-        spec = S.ART["hardware-spectrum"]
+        # H1, Rob's spectrum: three stops, four since site 1.3.9, each with
+        # the words the drawing shows said again in the page, with links.
+        # Two drawings of it since 1.3.9, across and down, the roadmap's
+        # way: each carries every stop, and CSS shows one of them.
+        spec_all = S.ART["hardware-spectrum"]
+        spec, spec_tall = spec_all.split("</svg>")[:2]
+        spec, spec_tall = spec + "</svg>", spec_tall + "</svg>"
         check("the tested boards page opens with the spectrum",
-              spec in hwp
-              and hwp.index(spec) < hwp.index('id="esp32-dev-board-base"')
-              and spec.startswith('<svg class="art spectrum" viewBox="-4 -2 362 160"')
-              and all(f">{s[1]}</text>" in spec and f">{s[3]}</text>" in spec
-                      and f">{s[4]}</text>" in spec for s in S.SPECTRUM_STOPS))
+              spec_all in hwp
+              and hwp.index(spec_all) < hwp.index('id="esp32-dev-board-base"')
+              and spec_all == spec + spec_tall
+              and spec.startswith('<svg class="art spectrum wide" viewBox="-4 -2 552 160"')
+              and spec_tall.startswith('<svg class="art spectrum tall" viewBox="0 0 354 ')
+              and len(S.SPECTRUM_STOPS) == 4
+              and all(f">{s[1]}</text>" in d and f">{html.escape(s[3])}</text>" in d
+                      and f">{s[4]}</text>" in d
+                      for s in S.SPECTRUM_STOPS for d in (spec, spec_tall)))
+        # Four stops, equally spaced, a head at both ends of each of the
+        # three stretches in both drawings, and the one across hidden under
+        # the site's breakpoint and the one down shown.
+        xs = [s[0] for s in S.SPECTRUM_STOPS]
+        check("four stops, equally spaced, an arrow between each pair",
+              len({b - a for a, b in zip(xs, xs[1:])}) == 1
+              and spec.count('class="o arr"') == 3
+              and spec_tall.count('class="o arr"') == 3
+              and "svg.art.spectrum.tall { display:none;" in hwp
+              and re.search(r"@media \(max-width: 900px\) \{\s*svg\.art\.spectrum\.wide "
+                            r"\{ display:none; \}\s*svg\.art\.spectrum\.tall \{ display:block; \}",
+                            hwp) is not None)
+        # Site 1.3.9, Rob: the fourth stop is the advanced build, about $40
+        # and up, and nothing about it is claimed as here: the stretch out
+        # to it is dashed in both drawings, its link goes to a section that
+        # exists, and its words say what is still to come.
+        adv = S.SPECTRUM_STOPS[3]
+        flat_intro = " ".join(re.sub(r"<[^>]+>", " ", hwp.split('id="esp32-dev-board-base"')[0]).split())
+        check("the fourth stop is the advanced build, and says what is not here yet",
+              adv[1] == "Advanced build" and adv[3] == "about $40+"
+              and adv[8] == "fastest"
+              and 'id="esp32-s3-camera-board"' in hwp and adv[6] == "#esp32-s3-camera-board"
+              and "still to be tested" in adv[7] and "firmware 1.2.0" in adv[7]
+              and "not supported yet" in adv[7]
+              and spec.count('class="f sl later"') == 1
+              and spec_tall.count('class="f sl later"') == 1
+              and f'd="M{xs[2]} 79 H532"' in spec
+              and "Four ways to build one." in flat_intro
+              and "An advanced build : display, camera, the works. About $40 and up" in flat_intro
+              and "SSH comes in firmware 1.2.0" in flat_intro
+              and "still to be tested" in flat_intro)
         # Site 1.2.5, Rob: a speed per board, "Fast, Faster, Fastest", and
         # every one of them says it is expected, because nothing has been
         # measured yet. In the spectrum (fast, fast, fastest), in each
@@ -4511,8 +4549,9 @@ def main():
             '<span class="exp">(expected, not yet measured)</span></dd>'
             in S.board_html([b["dir"]]) and S.board_html([b["dir"]]) in hw5
             for b in S.BOARDS + S.SHOWN_BOARDS + S.SOON_BOARDS)
+        spd_tall = re.findall(r'<text class="ink spd"[^>]*>(\w+) <tspan[^>]*>\(expected\)</tspan></text>', spec_tall)
         check("the speeds render, each one marked expected",
-              spd == ["fast", "fast", "fastest"]
+              spd == ["fast", "fast", "fastest", "fastest"] and spd_tall == spd
               and all("Expected to be " in s[7] and "not yet measured" in s[7]
                       for s in S.SPECTRUM_STOPS)
               and facts_ok
@@ -4750,11 +4789,15 @@ def main():
         # what its column shows. The overview names the class of board and
         # the section it links to names the exact board.
         stops = re.findall(r'<a class="stp s\d" href="([^"]+)" aria-label="([^"]+)">', spec)
+        stops_tall = re.findall(r'<a class="stp s\d" href="([^"]+)" aria-label="([^"]+)">', spec_tall)
         check("and each stop is a link, told to a screen reader in words",
-              'role="group" aria-label="Three ways to build a board"' in spec.split(">")[0]
+              'role="group" aria-label="Four ways to build a board"' in spec.split(">")[0]
+              and 'role="group" aria-label="Four ways to build a board"' in spec_tall.split(">")[0]
+              and stops_tall == stops
               and [h for h, _ in stops] == ["#esp32-dev-board-base",
                                           "#esp32-dev-board-base-sd-card-for-storage",
-                                          "#waveshare-esp32-s3-lcd-1-47"]
+                                          "#waveshare-esp32-s3-lcd-1-47",
+                                          "#esp32-s3-camera-board"]
               and all("About $" in a for _, a in stops)
               and 'id="esp32-dev-board-base"' in hwp
               and 'id="waveshare-esp32-s3-lcd-1-47"' in hwp)
@@ -4762,7 +4805,8 @@ def main():
               ">ESP32-S3 board</text>" in spec and "Waveshare" not in spec
               and "Waveshare" not in hwp.split('id="esp32-dev-board-base"')[0])
         # The motion: every piece of it declared where reduced motion stops
-        # it, the lamp at rest on the middle stop, transforms and opacity only.
+        # it, the lamp at rest on the second stop and running from the first
+        # to the last, in both drawings, transforms and opacity only.
         art_all = hwp.split("svg.art { display:block;")[1].split("</style>")[0]
         still, moving_s = art_all.split("@media (prefers-reduced-motion: no-preference) {")
         check("and its motion is declared only where reduced motion stops it",
@@ -4771,17 +4815,22 @@ def main():
               and "svg.art.spectrum a:hover .up," in moving_s
               and not re.search(r"svg\.art\.spectrum[^{]*\{[^}]*(animation|transition):",
                                 still)
-              and f'cx="{S.SPECTRUM_PARK}"' in spec
-              and S.SPECTRUM_PARK == S.SPECTRUM_STOPS[1][0])
+              and "svg.art.spectrum.tall .sdot { animation:" in moving_s
+              and "specgoy" in moving_s
+              and S.SPECTRUM_PARK == 1
+              and f'<circle class="dh" cx="{xs[1]}" cy="79"' in spec
+              and f'style="--from:{xs[0] - xs[1]}px;--to:{xs[3] - xs[1]}px"' in spec
+              and 'style="--from:-104px;--to:208px"' in spec_tall)
         spec_kf = re.findall(r"@keyframes (spec\w+) \{(.*?)\}\s*\}", art_all, re.S)
         check("and it moves by transform and opacity alone",
-              len(spec_kf) == 6
+              len(spec_kf) == 7
               and all(set(re.findall(r"([a-z-]+):", body)) <= {"transform", "opacity"}
                       for _, body in spec_kf))
         check("and says it in words too, every figure an estimate",
               "functional, and the lowest cost. About $5" in flat_h
               and "economical and usable. About $8" in flat_h
               and "advanced capabilities. About $20" in flat_h
+              and "display, camera, the works. About $40 and up" in flat_h
               and all(s[3].startswith("about ") and s[4].startswith("about ")
                       for s in S.SPECTRUM_STOPS))
         s3sec = hwp.split('id="waveshare-esp32-s3-lcd-1-47"')[1].split('id="other-chips"')[0]
