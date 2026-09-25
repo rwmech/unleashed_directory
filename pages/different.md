@@ -1,4 +1,4 @@
-<!-- What makes it different (site 1.2.4, Rob: "See what Unleashed can do that other BBS systems cant"). Every line links to the page that shows it. No "only" is claimed, because espbbs (github.com/snazzware/espbbs) already runs a telnet BBS on an ESP8266, and the table says so. The power figure is /hardware's: about a tenth of an amp while the dev board waits, at 5 V from USB, 0.5 W, 4.38 kWh a year. Items marked 1.1.0 are the lights on the dev board (1.1.0-dev.4), nightly backups (dev.6) and the BOOT reset (dev.3); the camera is coming soon. The two lists swap on the day a 1.1.0 release is on disk. The URL is /different: one plain word, which says what the page is about and reads the same said aloud. Site 1.2.9 (Rob): the machines named are a varied set from the firmware's CLIENTS.md rather than one favourite; the drive light is optional; the S3's screen is from the firmware's CHANGELOG 1.1.0-dev.10; the card's 32 GB is /sdcard's FAT32 limit; linked chat is on /roadmap under Later and not built. Site 1.3.0 (Rob): plain words with the BBS terms bridged in by the glossary, the BBS table in words a newcomer gets at a glance, and a second table against the places people build a community today (COMPARE_TODAY_ROWS in server.py, whose sources are listed beside it there). "What is on those sites" is from each company's own terms and privacy policy, read on 2026-09-25; tracker scans (Blacklight, Exodus) could not be run from here, so no counts are quoted. -->
+<!-- What makes it different (site 1.2.4, Rob: "See what Unleashed can do that other BBS systems cant"). Every line links to the page that shows it. No "only" is claimed, because espbbs (github.com/snazzware/espbbs) already runs a telnet BBS on an ESP8266, and the table says so. The power figure is /hardware's: about a tenth of an amp while the dev board waits, at 5 V from USB, 0.5 W, 4.38 kWh a year. Items marked 1.1.0 are the lights on the dev board (1.1.0-dev.4), nightly backups (dev.6) and the BOOT reset (dev.3); the camera is coming soon. The two lists swap on the day a 1.1.0 release is on disk. The URL is /different: one plain word, which says what the page is about and reads the same said aloud. Site 1.2.9 (Rob): the machines named are a varied set from the firmware's CLIENTS.md rather than one favourite; the drive light is optional; the S3's screen is from the firmware's CHANGELOG 1.1.0-dev.10; the card's 32 GB is /sdcard's FAT32 limit; linked chat is on /roadmap under Later and not built. Site 1.3.0 (Rob): plain words with the BBS terms bridged in by the glossary, the BBS table in words a newcomer gets at a glance, and a second table against the places people build a community today (COMPARE_TODAY_ROWS in server.py, whose sources are listed beside it there). "Privacy forward, or a privacy policy" (site 1.3.6, Rob: a table, green "Privacy forward" against "Privacy policies"; it was "What is on those sites", a list) is from each company's own terms and privacy policy, read on 2026-09-25, its rows in PRIVACY_ROWS in server.py; tracker scans (Blacklight, Exodus) could not be run from here, so no counts are quoted. -->
 # What a board can do
 
 A whole [[BBS]], a community of your own, on a board about the size of a stick
@@ -94,38 +94,30 @@ compare, with each column checked against the company's own pages.
 ::: compare-today
 :::
 
-## What is on those sites
+## Privacy forward, or a privacy policy
 
-What each one says about itself, in its own terms and privacy policy, read in
-September 2026. The links go to the pages quoted.
+On the left, what a µnleashed board does. On the right, what Discord and Meta,
+which runs Facebook Groups, say in their own terms and privacy policies, read
+in September 2026. Each name links to the page it is quoted from.
 
-- **Discord.** Its [privacy policy](https://discord.com/privacy), updated 29
-  August 2025, says it uses your information "to help us surface sponsored
-  content", its Quests, and may give advertising platforms limited information
-  to measure its own ads. What members post is theirs, but [its
-  terms](https://discord.com/terms) take a licence to use it, and let Discord
-  suspend an account "with or without notice". From 23 September 2026 every
-  account goes through an age check, most of them decided from account
-  activity rather than an ID ([TechCrunch](https://techcrunch.com/2026/09/22/discords-age-verification-era-is-upon-us-despite-community-backlash/)).
-- **Facebook Groups.** Meta's [terms](https://www.facebook.com/terms.php) say
-  that businesses "pay us to show you ads", chosen from your activity and
-  interests, and take a worldwide licence to what you post. In 2025 Meta began
-  training its AI on public posts by adults [in the EU as
-  well](https://about.fb.com/news/2025/04/making-ai-work-harder-for-europeans/).
-- **A hosted forum.** It depends on the host. Discourse, for one, says on [its
-  pricing page](https://www.discourse.org/pricing) that "your data always
-  belongs to you" and lets you download a backup.
-- **A Mastodon server.** Mastodon says it "will never serve ads". Each server
-  is run by somebody with rules of their own, and an account [can
-  move](https://joinmastodon.org/servers) to another server.
-- **A µnleashed board.** No ads, no trackers and no outside scripts, and what
-  members write stays on the host's board. This website runs no analytics
-  either. The listing tells this directory only what the list shows: the
-  board's name and description, its host's name, its address and port, how
-  many lines it has and how many are in use, how long it has been up, its time
-  zone, and any badges the host chose; the day's call counts only if the host
-  asks to share them; nothing about who is on; and nothing at all until the
-  host switches the listing on.
+::: privacy-compare
+:::
+
+Hosted forums and Mastodon servers depend on whoever runs them, and plenty
+are good: Discourse says on [its pricing
+page](https://www.discourse.org/pricing) that "your data always belongs to
+you" and lets you download a backup, and Mastodon says it "will never serve
+ads" and lets an account [move to another
+server](https://joinmastodon.org/servers).
+
+A µnleashed board has no ads, no trackers and no outside scripts, and what
+members write stays on the host's board. This website runs no analytics
+either. The listing tells this directory only what the list shows: the
+board's name and description, its host's name, its address and port, how
+many lines it has and how many are in use, how long it has been up, its time
+zone, and any badges the host chose; the day's call counts only if the host
+asks to share them; nothing about who is on; and nothing at all until the
+host switches the listing on.
 
 The honest part, because it matters: the words between a member and a board
 travel as plain text, the way they always did on a BBS. Anyone in a position

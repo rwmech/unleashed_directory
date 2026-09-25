@@ -1301,10 +1301,12 @@ CARD_BLOCKS = ("cards", "hero")
 # inside it, built from BOARDS and what is on disk (site 1.2.0). "early" is
 # the early-testing line for a .0 release, from what is on disk, and nothing
 # at all otherwise (site 1.2.9, see early_note()); it takes no lines.
-# "compare" is /different's table (site 1.2.9, COMPARE_ROWS).
+# "compare" is /different's table (site 1.2.9, COMPARE_ROWS), and
+# "privacy-compare" its privacy table (site 1.3.6, PRIVACY_ROWS).
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
                              "installer-terms", "badges", "badgefind", "board",
-                             "next", "early", "compare", "compare-today")
+                             "next", "early", "compare", "compare-today",
+                             "privacy-compare")
 
 
 # --------------------------------------------------------------------------
@@ -1357,6 +1359,8 @@ def md_block(kind, lines):
         return board_html(lines)
     if kind in ("compare", "compare-today"):
         return compare_html(kind)
+    if kind == "privacy-compare":
+        return privacy_compare_html()
     if kind == "early":
         note = early_note()
         return '<p class="early">' + html.escape(note) + "</p>" if note else ""
@@ -3474,6 +3478,74 @@ COMPARE_TODAY_NOTE = ("They win on reach and ease: millions of people already "
                       "its heading links to them. [What travelling in plain "
                       "text means](/privacy).")
 
+# --------------------------------------------------------------------------
+# "Privacy forward, or a privacy policy" on /different (site 1.3.6, Rob:
+# "this should be a table, one side, green header 'Privacy forward' the
+# other 'Privacy policies' so its clear"). It replaced a list of five
+# platforms that left the reader to do the comparing. The left column is
+# what a µnleashed board does, the right what Discord and Meta say about
+# themselves, each platform's name linking to the page it is quoted from.
+# Hosted forums and Mastodon vary by host, and some are good, so they get a
+# plain sentence under the table on the page rather than a column here.
+# Every right-hand cell is from the sources listed above COMPARE_TODAY_COLS,
+# read on 2026-09-25, plus discord.com/privacy (updated 2025-08-29) read
+# again on 2026-09-25 for two more lines: "We may also provide information
+# to analytics and measurement partners to measure the effectiveness of
+# sponsored content if you engage with it", and its one use of content for
+# models, "to create systems and models that can be automated to more
+# swiftly detect, categorize, and take action against prohibited content or
+# conduct". It says nothing about training other AI on messages, so the
+# row says exactly that and no more. Cells are Markdown (md_inline).
+# --------------------------------------------------------------------------
+PRIVACY_COLS = ("Privacy forward", "Privacy policies")
+_PV_DPRIV = "[Discord](https://discord.com/privacy)"
+_PV_DTERMS = "[Discord](https://discord.com/terms)"
+_PV_META = "[Meta](https://www.facebook.com/terms.php)"
+PRIVACY_ROWS = (
+    ("Ads", (
+        "None.",
+        (f'{_PV_DPRIV}: uses your information "to help us surface sponsored '
+         'content", such as its Quests.',
+         f'{_PV_META}: businesses "pay us to show you ads".'))),
+    ("Tracking and analytics", (
+        "No trackers and no outside scripts on a board. This website runs "
+        "no analytics either.",
+        (f"{_PV_DPRIV}: may give advertising platforms limited information to "
+         "measure its ads, and analytics partners information to measure "
+         "sponsored content you engage with.",
+         f"{_PV_META}: chooses the ads you see from your activity and "
+         "interests."))),
+    ("Who owns what you post", (
+        "The people who wrote it. It stays on the host's board, and the "
+        "software takes no licence to it.",
+        (f'{_PV_DTERMS}: "Your content is yours, but you give us a license" '
+         "to use it.",
+         f'{_PV_META}: takes a "worldwide license to host, use, distribute" '
+         "what you post."))),
+    ("Training AI on your posts", (
+        "No. Posts stay on the host's board.",
+        ("[Meta](https://about.fb.com/news/2025/04/making-ai-work-harder-for-europeans/): "
+         "trains its AI on public posts by adults, in the EU as well since 2025.",
+         f"{_PV_DPRIV}: uses content to build models that spot posts breaking "
+         "its rules, and does not say it trains other AI on them."))),
+    ("Suspending your account", (
+        "Only the board's host, under their own house rules.",
+        (f'{_PV_DTERMS}: can suspend or end an account "with or without '
+         'notice".',
+         f'{_PV_META}: can "suspend or disable your account".'))),
+    ("Age or ID checks", (
+        "None set by anyone else: the host's house rules, and the law where "
+        "they are.",
+        ("[Discord](https://techcrunch.com/2026/09/22/discords-age-verification-era-is-upon-us-despite-community-backlash/): "
+         "an age check on every account from 23 September 2026, most decided "
+         "from account activity rather than an ID.",
+         f"{_PV_META}: 13 or over, by its terms."))),
+    ("Where your words are kept", (
+        "On the host's board, on a shelf at home or at work.",
+        (f"{_PV_DTERMS}: on Discord's servers, under that licence.",
+         f"{_PV_META}: on Meta's servers, under that licence."))),
+)
+
 _CMP_TICK = ('<svg class="cm y" viewBox="0 0 16 16" role="img" aria-label="Yes">'
              '<path d="M3 8.5 L6.5 12 L13 4.5"/></svg>')
 _CMP_CROSS = ('<svg class="cm n" viewBox="0 0 16 16" role="img" aria-label="No">'
@@ -3521,6 +3593,36 @@ def compare_html(kind="compare"):
         out.append("</tr>")
     out.append("</tbody></table></div>")
     out.append('<p class="cmpnote">' + md_inline(note) + "</p>")
+    return "".join(out)
+
+
+def privacy_compare_html():
+    """The ::: privacy-compare block (site 1.3.6): PRIVACY_ROWS as a two
+    column table, "Privacy forward" in green on the left. Real th and scope
+    for the headers. On a phone each row stacks, its topic and then the
+    two cells, each under its column's name repeated in the cell; that
+    copy is aria-hidden, because a screen reader has the th already. The
+    explicit roles keep the table a table to a screen reader after the CSS
+    turns its rows into blocks, which WebKit otherwise forgets."""
+    fwd, pol = (html.escape(c) for c in PRIVACY_COLS)
+    out = ['<div class="pvwrap"><table class="pv" role="table" '
+           'aria-label="Privacy forward, or a privacy policy">'
+           '<thead role="rowgroup"><tr role="row">'
+           '<th scope="col" role="columnheader"><span class="vh">Topic</span></th>'
+           f'<th scope="col" role="columnheader" class="fwd">{fwd}</th>'
+           f'<th scope="col" role="columnheader" class="pol">{pol}</th>'
+           '</tr></thead><tbody role="rowgroup">']
+    for topic, (ours, theirs) in PRIVACY_ROWS:
+        out.append('<tr role="row">'
+                   f'<th scope="row" role="rowheader">{html.escape(topic)}</th>'
+                   '<td role="cell" class="fwd">'
+                   f'<span class="pvh" aria-hidden="true">{fwd}</span>'
+                   f'<span class="pvl">{md_inline(ours)}</span></td>'
+                   '<td role="cell" class="pol">'
+                   f'<span class="pvh" aria-hidden="true">{pol}</span>'
+                   + "".join(f'<span class="pvl">{md_inline(t)}</span>' for t in theirs)
+                   + "</td></tr>")
+    out.append("</tbody></table></div>")
     return "".join(out)
 
 
@@ -4761,6 +4863,43 @@ p.cmphint {{ display:none; color:var(--faint); font-size:0.75rem; margin:0.75rem
   table.cmp th, table.cmp td {{ padding:0.4375rem 0.5rem; }}
   table.cmp.today td, table.cmp.today thead th[scope=col] {{ min-width:8rem; }}
   table.cmp.today td.us, table.cmp.today thead th.us {{ min-width:9rem; }}
+}}
+/* /different's privacy table (site 1.3.6): two columns, "Privacy
+   forward" in --live on the left, the same green the /privacy diagram
+   gives a party that keeps no copy of you, and "Privacy policies" in the
+   ordinary column-name colour. A µnleashed cell carries a faint --live
+   wash, the way the other tables light their µnleashed column. On a phone
+   (600px and under) every row stacks: the topic, then each cell under its
+   column's name, repeated in the cell, since a label column and two cells
+   side by side at 390px would leave each cell a few words a line. */
+.pvwrap {{ margin:0.75rem 0; border:1px solid var(--rule); border-radius:0.375rem; }}
+article table.pv {{ width:100%; border-collapse:separate; border-spacing:0;
+        font-size:0.8125rem; }}
+table.pv th, table.pv td {{ padding:0.5rem 0.625rem; border-bottom:1px solid var(--rule);
+        vertical-align:top; text-align:left; white-space:normal; }}
+table.pv tbody tr:last-child th, table.pv tbody tr:last-child td {{ border-bottom:0; }}
+table.pv thead th {{ color:var(--struct); font-size:0.75rem; letter-spacing:0.0625rem;
+        text-transform:uppercase; }}
+table.pv thead th.fwd {{ color:var(--live); }}
+table.pv th[scope=row] {{ color:var(--ink); width:10rem; font-weight:normal;
+        border-right:1px solid var(--rule); }}
+table.pv td.fwd {{ background:rgba(93, 220, 122, 0.07); color:var(--ink); width:38%; }}
+table.pv td.pol {{ color:var(--dim); }}
+table.pv .pvl {{ display:block; }}
+table.pv .pvl + .pvl {{ margin-top:0.375rem; }}
+table.pv .pvh {{ display:none; }}
+@media (max-width: 600px) {{
+  table.pv, table.pv tbody, table.pv tr, table.pv th, table.pv td {{ display:block; width:auto; }}
+  table.pv thead {{ position:absolute; width:0.0625rem; height:0.0625rem; overflow:hidden;
+        clip:rect(0 0 0 0); }}
+  table.pv th[scope=row] {{ width:auto; border-right:0; border-bottom:0; padding-bottom:0.25rem;
+        color:var(--struct); font-size:0.875rem; }}
+  table.pv td, table.pv td.fwd {{ border-bottom:0; width:auto; }}
+  table.pv tbody tr {{ border-bottom:1px solid var(--rule); }}
+  table.pv tbody tr:last-child {{ border-bottom:0; }}
+  table.pv .pvh {{ display:block; font-size:0.6875rem; letter-spacing:0.0625rem;
+        text-transform:uppercase; color:var(--struct); margin-bottom:0.25rem; }}
+  table.pv td.fwd .pvh {{ color:var(--live); }}
 }}
 .vh {{ position:absolute; width:0.0625rem; height:0.0625rem; overflow:hidden; clip:rect(0 0 0 0);
         white-space:nowrap; }}
@@ -7481,7 +7620,7 @@ FRONT_BOARD_ART = (
 
 FRONT_KICKER = ('<p class="kicker">Social, before social media'
                 '<span class="k2"><span class="kd" aria-hidden="true"> &middot; </span>'
-                '<a href="/different#what-is-on-those-sites">Privacy forward</a>'
+                '<a href="/different#privacy-forward-or-a-privacy-policy">Privacy forward</a>'
                 "</span></p>")
 
 FRONT_TITLE = ("\u00b5nleashed: your own online community, on a device that "

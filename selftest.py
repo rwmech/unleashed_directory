@@ -2590,11 +2590,41 @@ def main():
               and "Easy for new people to find" in today
               and "Encrypted on the way" in today
               and dif.index('class="cmp today"') < dif.index('<table class="cmp">'))
-        check("and says what is on those sites, from their own pages, and on ours",
-              has_h(dif, 2, "What is on those sites")
-              and 'href="https://discord.com/privacy"' in dif
-              and 'href="https://www.facebook.com/terms.php"' in dif
+        # Site 1.3.6 (Rob: "this should be a table, one side, green header
+        # 'Privacy forward' the other 'Privacy policies'"): the list became
+        # a two column table, real th and scope, the left header in --live,
+        # one row a topic, and the fair sentence about forums and Mastodon
+        # under it rather than a column painting them as villains.
+        pvt = dif.split('<table class="pv"')[1].split("</table>")[0]             if '<table class="pv"' in dif else ""
+        check("and compares privacy as a table: Privacy forward against Privacy policies",
+              has_h(dif, 2, "Privacy forward, or a privacy policy")
+              and not has_h(dif, 2, "What is on those sites")
+              and '<th scope="col" role="columnheader" class="fwd">Privacy forward</th>' in pvt
+              and '<th scope="col" role="columnheader" class="pol">Privacy policies</th>' in pvt
+              and pvt.count('<th scope="row"') == len(S.PRIVACY_ROWS)
+              and all(f'<th scope="row" role="rowheader">{t}</th>' in pvt
+                      for t in ("Ads", "Tracking and analytics", "Who owns what you post",
+                                "Training AI on your posts", "Suspending your account",
+                                "Age or ID checks", "Where your words are kept"))
+              and pvt.count('<td role="cell" class="fwd">') == len(S.PRIVACY_ROWS)
+              and pvt.count('<span class="pvh" aria-hidden="true">Privacy forward</span>')
+                  == len(S.PRIVACY_ROWS)
+              and "table.pv thead th.fwd { color:var(--live); }" in dif
+              and "table.pv td.fwd .pvh { color:var(--live); }" in dif
+              and "@media (max-width: 600px) {\n  table.pv, table.pv tbody, table.pv tr, "
+                  "table.pv th, table.pv td { display:block;" in dif
+              and 'href="https://discord.com/privacy"' in pvt
+              and 'href="https://discord.com/terms"' in pvt
+              and 'href="https://www.facebook.com/terms.php"' in pvt
+              and 'href="https://about.fb.com/news/2025/04/making-ai-work-harder-for-europeans/"' in pvt
+              and "techcrunch.com/2026/09/22/discords-age-verification" in pvt
+              and "\u2014" not in pvt
+              and dif.index('<table class="pv"') < dif.index("Hosted forums and Mastodon servers")
+              and 'href="https://www.discourse.org/pricing"' in dif
+              and 'href="https://joinmastodon.org/servers">move to another' in " ".join(dif.split())
               and "This website runs no analytics" in " ".join(dif.split())
+              and "the day's call counts only if the host asks to share them"
+                  in html.unescape(" ".join(dif.split()))
               and 'href="/privacy">What that means in practice' in dif)
         # Site 1.3.1: where encryption comes up, SSH is said to be coming on
         # the S3 boards, and never as a thing already there.
@@ -3602,7 +3632,7 @@ def main():
         check("the front page opens with the kicker and the headline",
               '<p class="kicker">Social, before social media'
               '<span class="k2"><span class="kd" aria-hidden="true"> &middot; </span>'
-              '<a href="/different#what-is-on-those-sites">Privacy forward</a></span></p>'
+              '<a href="/different#privacy-forward-or-a-privacy-policy">Privacy forward</a></span></p>'
               '<h1 class="hero">Your own online community, on a device that '
               "<em>fits in your hand</em>.</h1>" in hbody
               and hbody.find('<section class="hero">') < hbody.find('<p class="kicker">'))
@@ -3611,8 +3641,8 @@ def main():
         # on a phone, the dot going.
         difp = get("/different")[1]
         check("and Privacy forward links to where /different backs it",
-              'id="what-is-on-those-sites"' in difp
-              and "No ads, no trackers and no outside scripts" in difp
+              'id="privacy-forward-or-a-privacy-policy"' in difp
+              and "has no ads, no trackers and no outside scripts" in difp
               and ".front p.kicker .k2 { display:block;" in home
               and ".front p.kicker .kd { display:none; }" in home
               and "Social, before social media · Privacy forward" in hflat)

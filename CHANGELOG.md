@@ -14,6 +14,34 @@
 
 # Changelog
 
+## 1.3.6, 2026-09-25
+
+Rob, on /different's "What is on those sites": "this should be a table, one
+side, green header 'Privacy forward' the other 'Privacy policies' so its
+clear."
+
+- **"Privacy forward, or a privacy policy"** replaces "What is on those
+  sites". A two column table: on the left, under a green "Privacy forward",
+  what a µnleashed board does; on the right, under "Privacy policies", what
+  Discord and Meta say in their own terms and privacy policies. One row a
+  topic: ads, tracking and analytics, who owns what you post, training AI on
+  your posts, suspending your account, age or ID checks, and where your words
+  are kept. Each platform's name links to the page it is quoted from.
+- **Discord's privacy policy was read again** for two lines the list did not
+  have: it may give analytics partners information to measure sponsored
+  content you engage with, and the only models it says it builds from
+  content are for spotting posts that break its rules. The AI row says that
+  and no more.
+- **Hosted forums and Mastodon get one fair sentence under the table**
+  rather than a column: they depend on whoever runs them, and plenty are
+  good. The µnleashed paragraph (what the listing tells this directory, and
+  the day's call counts only if the host asks to share them) is unchanged.
+- **On a phone each row stacks**: the topic, then each cell under its
+  column's name, repeated in the cell for sight and hidden from screen
+  readers, which have the table's own headers. Real `th` and `scope`, with
+  table roles so the stacked rows stay a table to a screen reader.
+- The front page's "Privacy forward" goes to the new heading.
+
 ## 1.3.5, 2026-09-25
 
 Rob: "get the esp32-cam (original) out there on the website flasher now its
