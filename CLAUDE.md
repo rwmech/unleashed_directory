@@ -197,7 +197,9 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `storage.bin` is PlatformIO's `littlefs.bin`, renamed for its partition.
   **The manifests are the server's**: it builds one a board from the five
   files and serves it at `/install/<version>/<board>/manifest.json` (and
-  `manifest-update.json`), with `name` "unleashed BBS",
+  `manifest-update.json`), with `name` "µnleashed BBS" (`MANIFEST_NAME`,
+  site 1.3.8; the board sends "unleashed BBS" over Improv, and the dialog
+  served here compares the two with the micro sign folded to "u"),
   `new_install_prompt_erase` true and `new_install_improv_wait_time` 30. A
   `manifest.json` on disk (release.py writes one into each folder for
   trying images by hand) is never served. A family missing any part, or

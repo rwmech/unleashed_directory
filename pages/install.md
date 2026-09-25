@@ -14,7 +14,7 @@ connected to the board. Your Wi-Fi name and password, exactly
 <!-- The upgrade call-out is the first thing in the steps column, not in the intro: beside the card on a desktop, and after the card on a phone, so it does not push the install button down the first screen. -->
 > [!NOTE]
 > **Already running µnleashed?** Press **Update my board**, pick the port,
-> then **Update unleashed BBS** and **Install**. It never erases: your
+> then **Update µnleashed BBS** and **Install**. It never erases: your
 > accounts, settings, mail and forums stay, and your SD card is never
 > touched. More on [upgrading a board](/upgrade), including one older than
 > 0.22.1.
@@ -31,9 +31,9 @@ install-cable
    devices plugged in, its serial ports. If you are not sure which one is the board,
    unplug it, look at the list, plug it back in, and take the one that
    appeared.
-2. **The page reads the chip** and offers **Install or update unleashed
+2. **The page reads the chip** and offers **Install or update µnleashed
    BBS**. A board already running version 0.22.1 or later of this BBS may be
-   greeted by name and version and offered **Update unleashed BBS** instead.
+   greeted by name and version and offered **Update µnleashed BBS** instead.
    The page does not always catch a board while it is starting up, and
    nothing is erased either way unless you ask.
 3. **The erase question**, headed **Start fresh?**, unless the board was
@@ -284,7 +284,7 @@ cannot be undone, so read this before you press the button.
 page recognises the board or not: it always does the second of those two
 things, new firmware and screens, accounts left alone. So does **Install on a
 new board** for a board the page recognises, which it offers **Update
-unleashed BBS**.
+µnleashed BBS**.
 
 > When the board already runs the version on offer, **Install on a new board**
 > shows **Erase User Data**. **Update my board** does not offer it. It is not

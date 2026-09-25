@@ -31,6 +31,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from html.parser import HTMLParser
 
 # The suite's first port. It uses this and the four after it, all on
 # 127.0.0.1, one directory each. SELFTEST_PORT moves the lot, for a machine
@@ -44,6 +45,82 @@ def has_h(page, level, text):
     """A heading with this text, carrying the id md_render gives it."""
     return re.search(rf'<h{level} id="[a-z0-9-]+">{re.escape(text)}</h{level}>',
                      page) is not None
+
+
+# Site 1.3.8 (Rob: "why are we not saying the right unleashed on the site").
+# The name a person reads is \u00b5nleashed. Plain "unleashed" is allowed only
+# where it is an identifier, and this is the allowlist of where that is:
+#   - joined to something that makes it a name of another kind, which the
+#     pattern itself steps over: unleashed.local, unleashedbbs.com,
+#     unleashed_BBS, unleashed-directory, /unleashed, @unleashed;
+#   - inside <code>, <pre>, <kbd> or <samp>: a hostname, a password, a
+#     command, a protocol value, typed or shown exactly;
+#   - inside a screen capture, <svg class="... shot">, which quotes what
+#     the board's own screen shows, its hostname field included.
+# Anything else a reader meets, text or the attributes a reader or a screen
+# reader gets (alt, title, aria-label, data-tip, placeholder, and the meta
+# a link preview shows), fails. URLs in href and src are never read.
+NAME_WORD = re.compile(r"(?<![\w./@-])unleashed(?![\w.-])", re.I)
+NAME_CODE = ("code", "pre", "kbd", "samp")
+NAME_ATTRS = ("alt", "title", "aria-label", "data-tip", "placeholder")
+
+
+class NameSweep(HTMLParser):
+    """Every plain "unleashed" a reader would meet on one page, outside the
+    allowlist above, as short snippets."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.hidden = 0            # inside <script> or <style>
+        self.code = 0              # inside an allowed identifier element
+        self.svg = 0               # svg nesting
+        self.shot_at = None        # the svg depth of a screen capture
+        self.bad = []
+
+    def _allowed(self):
+        return self.code > 0 or self.shot_at is not None
+
+    def _look(self, where, text):
+        for m in NAME_WORD.finditer(text or ""):
+            self.bad.append(where + ": " + " ".join(
+                text[max(0, m.start() - 40): m.end() + 30].split()))
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag in ("script", "style"):
+            self.hidden += 1
+        if tag in NAME_CODE:
+            self.code += 1
+        if tag == "svg":
+            self.svg += 1
+            if self.shot_at is None and "shot" in (a.get("class") or "").split():
+                self.shot_at = self.svg
+        if self._allowed():
+            return
+        for k in NAME_ATTRS:
+            self._look(f"<{tag} {k}>", a.get(k))
+        if tag == "meta":
+            key = a.get("property") or a.get("name") or ""
+            if key.startswith(("og:", "twitter:")) or key == "description":
+                self._look(f"<meta {key}>", a.get("content"))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self.hidden:
+            self.hidden -= 1
+        if tag in NAME_CODE and self.code:
+            self.code -= 1
+        if tag == "svg" and self.svg:
+            if self.shot_at == self.svg:
+                self.shot_at = None
+            self.svg -= 1
+
+    def handle_data(self, data):
+        if not self.hidden and not self._allowed():
+            self._look("text", data)
 
 
 def check(label, ok):
@@ -685,7 +762,7 @@ def badge_checks(S, db):
     # then new or steady and time listed.
     check("the software with its version and the machine first, then the rest in "
           "their fixed order, the SD card with its size after what is running",
-          found == [("soft", "unleashed 1.0.0"),
+          found == [("soft", "\u00b5nleashed 1.0.0"),
                     ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;"),
                     ("term", "P"), ("guest", "G"), ("feat", "C"), ("feat", "Fi"),
                     ("feat", "D"), ("feat", "SD32"), ("new", "N")])
@@ -696,10 +773,10 @@ def badge_checks(S, db):
     check("on two rows: what the board is, and the small badges under it",
           row.count('<span class="bid">') == 1 and row.count('<span class="bset">') == 1
           and row.index('<span class="bid">') < row.index('<span class="bset">')
-          and badges_in(ident) == [("soft", "unleashed 1.0.0"),
+          and badges_in(ident) == [("soft", "\u00b5nleashed 1.0.0"),
                                    ("sys", "Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;")])
     check("its tooltip says the software and the version, as the board sent them",
-          'aria-label="Software: unleashed 1.0.0, as the board reports it."' in row)
+          'aria-label="Software: \u00b5nleashed 1.0.0, as the board reports it."' in row)
     check("each feature that is not running has no badge",
           ("feat", "F") not in found and ("feat", "M") not in found)
     check("then its support symbol, drawn not typed; ham is not a cause any more",
@@ -780,7 +857,7 @@ def badge_checks(S, db):
           and jb.get("software") == "" and jb.get("version") == "")
     feed = get("/feed.xml")[1]
     check("the feed says it in words, escaped for XML",
-          "Software: unleashed 1.0.0" in feed
+          "Software: \u00b5nleashed 1.0.0" in feed
           and "Runs on: Compaq 486 &amp;lt;b&amp;gt;&amp;amp;&amp;lt;/b&amp;gt;" in feed
           and "Supports: LGBTQ+ people" in feed
           and "Interests: Commodore 64, Electronics, Chiptune, Amateur radio" in feed
@@ -1087,7 +1164,7 @@ def badge_checks(S, db):
           and '<span class="cn k-upd">dim cyan</span>' in leg
           and 'class="bd k-upd"' in leg and S.UP_ARROW in leg
           and 'value="update"' in pane and "update" in S.FILTER_KEYS
-          and "<b>Software</b>" in leg and ">unleashed 1.0.0</span>" in leg)
+          and "<b>Software</b>" in leg and ">\u00b5nleashed 1.0.0</span>" in leg)
     check("then Show your support: every symbol, its code in capitals and its "
           "sentence",
           all(f"<code>{code.upper()}</code>" in leg and html.escape(sentence) in leg
@@ -1283,7 +1360,7 @@ def badge_checks(S, db):
         con.close()
         check("its row shows the badges it earned without sending any: 1m",
               badges_in(badge_row(home4[2].decode("utf-8"), "Old Timer"))
-              == [("soft", "unleashed"), ("age", "1m")])
+              == [("soft", "µnleashed"), ("age", "1m")])
         code4, _b = post_from({"name": "Old Timer", "port": 6400, "token": "a" * 32,
                                "software": "unleashed", "system": "ESP32-WROOM-32E",
                                "features": ["chat"]}, "192.0.2.44", base4)
@@ -3709,7 +3786,7 @@ def main():
         # other button.
         check("the update is Update my board, which never asks or erases",
               "press Update my board and pick the port" in uflat
-              and "Press Update unleashed BBS, then Install." in uflat
+              and "Press Update \u00b5nleashed BBS, then Install." in uflat
               and "It does not ask about erasing and it does not erase." in uflat)
         check("and it no longer promises that a 0.22.1 board is always recognised",
               "usually tells the installer its name and version" in uflat
@@ -3717,7 +3794,7 @@ def main():
               and "the page recognises the board. A board running 0.22.1" not in uflat)
         check("and shows the erase screen's own words, box unticked, for Install",
               has_h(upg, 3, "If you pressed Install on a new board instead")
-              and "Install or update unleashed BBS" in uflat
+              and "Install or update \u00b5nleashed BBS" in uflat
               and "Start fresh? Updating a board you already run? Leave this "
                   "unticked: your accounts, settings, mail and forums are kept." in uflat
               and "[ ] Erase everything first" in uflat
@@ -3753,7 +3830,7 @@ def main():
         itop = inst_now.split('<div class="install-top">')[1].split('id="before-you-start"')[0]
         check("/install calls it out first in the steps, linking /upgrade",
               '<div class="steps"><p class="aside"><b>Already running µnleashed?</b> '
-              "Press <b>Update my board</b>, pick the port, then <b>Update unleashed "
+              "Press <b>Update my board</b>, pick the port, then <b>Update \u00b5nleashed "
               "BBS</b> and <b>Install</b>. It never erases: your accounts, settings, "
               "mail and forums stay, and your SD card is never touched. "
               'More on <a href="/upgrade">upgrading a board</a>' in itop
@@ -3765,7 +3842,7 @@ def main():
         check("and the steps name the new buttons and the erase screen's words",
               "Choose your board, press Install on a new board and pick the port."
               in flat_top
-              and "offers Install or update unleashed BBS ." in flat_top
+              and "offers Install or update \u00b5nleashed BBS ." in flat_top
               and "may be greeted by name and version" in flat_top
               and "headed Start fresh? , unless the board was recognised" in flat_top
               and "tick Erase everything first ." in flat_top
@@ -3946,6 +4023,16 @@ def main():
         # the rest of the bundle from -2, so every earlier path answers.
         old_paths = [fetch("/install/esp-web-tools/" + S.EWT_VERSION + "-" + str(n) + "/"
                            + dlg[0]) for n in range(1, S.EWT_REV + 1)]
+        # Site 1.3.8. The manifests name the firmware with its micro sign,
+        # and upstream compares that name with what the board sends over
+        # Improv, exactly; firmware up to 1.1.x sends "unleashed BBS".
+        check("the dialog recognises a board whichever way either side spells the name",
+              'String(this._info.firmware).replace("\\xb5","u")'
+              '===String(this._manifest.name).replace("\\xb5","u"))}' in served
+              and "this._info.firmware===this._manifest.name" not in served
+              and S.EWT_REV >= 4
+              and '5. Whether the board already runs this firmware (site 1.3.8).'
+                  in dlg_src[:6000])
         check("and every earlier revision's path still answers, with today's files",
               all(c == 200 and b.decode("utf-8") == dlg_src for c, _t, b in old_paths)
               and fetch("/install/esp-web-tools/" + S.EWT_VERSION + "-"
@@ -4769,6 +4856,75 @@ def main():
         # with dotted underline for terms"). One table of definitions, a
         # BBS word marked where a page wants it explained, no script and no
         # title attribute, and a definition a screen reader is pointed at.
+        # ------------------------------------------------------------------
+        # Site 1.3.8: the name a reader sees is \u00b5nleashed, everywhere,
+        # and every page is served as UTF-8 so the sign never arrives as
+        # mojibake. See NAME_WORD for the allowlist.
+        print("The name, with its micro sign")
+        check("a board's software shows as \u00b5nleashed, and nothing else changes",
+              S.software_shown("unleashed") == "\u00b5nleashed"
+              and S.software_shown(" Unleashed ") == "\u00b5nleashed"
+              and S.software_shown("Mystic") == "Mystic"
+              and S.software_shown("unleashed-fork") == "unleashed-fork"
+              and S.software_shown("") == "" and S.software_shown(None) == "")
+        sweep_paths = sorted({"/", "/directory", "/badges", "/about", "/author",
+                              "/data", "/how", "/rules", "/build", "/no-such-page"}
+                             | {"/" + n[:-3] for n in os.listdir("pages")
+                                if n.endswith(".md")})
+        slipped, not_utf8 = [], []
+        for path in sweep_paths:
+            for host in (None, "about.example", "data.example"):
+                if host and path != "/":
+                    continue
+                req = urllib.request.Request(BASE + path)
+                if host:
+                    req.add_header("Host", host)
+                try:
+                    with urllib.request.urlopen(req, timeout=5) as r:
+                        ctype, body = r.headers.get("Content-Type", ""), r.read()
+                except urllib.error.HTTPError as e:
+                    ctype, body = e.headers.get("Content-Type", ""), e.read()
+                if "text/html" not in ctype:
+                    continue
+                where = (host or "") + path
+                text = body.decode("utf-8")
+                if ctype.replace(" ", "").lower() != "text/html;charset=utf-8" \
+                        or not text.startswith('<!doctype html>\n<html lang="en">'
+                                               '<head><meta charset="utf-8">'):
+                    not_utf8.append(where)
+                sweeper = NameSweep()
+                sweeper.feed(text)
+                slipped += [where + " " + b for b in sweeper.bad]
+        check("no page shows a plain unleashed outside the identifier allowlist"
+              + ("" if not slipped else "  <- " + " | ".join(slipped[:4])),
+              len(sweep_paths) > 30 and not slipped)
+        check("every page says UTF-8, in its header and first thing in its head"
+              + ("" if not not_utf8 else "  <- " + ", ".join(not_utf8[:4])),
+              not not_utf8)
+        front = get("/")[1]
+        check("and the name arrives as the micro sign, in the title and the preview",
+              "<title>\u00b5nleashed" in front
+              and '<meta property="og:site_name" content="%s">'
+                  % html.escape(S.SITE_NAME, quote=True) in front
+              and S.SITE_NAME.startswith("\u00b5nleashed")
+              and '<meta property="og:title" content="\u00b5nleashed' in front)
+        probe = NameSweep()
+        probe.feed('<p>Run unleashed.local and <code>unleashed</code>, see '
+                   'unleashedbbs.com and unleashed_BBS.</p>'
+                   '<svg class="art shot" aria-label="Hostname unleashed">'
+                   '<text>unleashed</text></svg><p title="unleashed BBS">x</p>'
+                   '<p>Update unleashed BBS</p>')
+        check("the sweep itself: identifiers pass, a display name does not",
+              [b.split(":")[0] for b in probe.bad] == ["<p title>", "text"])
+        # The protocol value is untouched: the API and the database keep
+        # what the board sent.
+        api = json.loads(get("/api/boards.json")[1] or "[]")
+        api_rows = api if isinstance(api, list) else api.get("boards", [])
+        check("the API still carries the raw software value",
+              all(b.get("software") != "\u00b5nleashed" for b in api_rows)
+              and '"\u00b5nleashed' not in get("/api/boards.json")[1]
+              and "\\u00b5nleashed" not in get("/api/boards.json")[1])
+
         print("The glossary")
         glossed = {}
         for f in sorted(pathlib.Path("pages").glob("*.md")):
@@ -5049,8 +5205,12 @@ def main():
             check("at the offsets the partition table actually uses",
                   [p["offset"] for p in parts]
                   == [4096, 32768, 61440, 131072, 3932160])
-            check("under the name the board reports over Improv",
-                  man["name"] == "unleashed BBS" and man["version"] == "0.19.2")
+            # Site 1.3.8: the name a reader sees in the dialog, with its
+            # micro sign. The board still sends "unleashed BBS" over Improv,
+            # and the dialog served here folds the sign to match it.
+            check("under the name a reader sees, with the micro sign",
+                  man["name"] == "\u00b5nleashed BBS" == S.MANIFEST_NAME
+                  and man["version"] == "0.19.2")
             # Their type is `offset: number`, JSON has no hex literal, and a
             # string would be handed to the flasher unparsed. This is the one
             # mistake in the schema that would write a board at the wrong
@@ -6016,7 +6176,7 @@ def main():
                 check("a board that is behind has the arrow on its software badge, "
                       "linked to /upgrade, before the machine",
                       '<span class="bid"><span class="bd k-soft" role="img"' in bb1
-                      and '>unleashed 1.0.0</span><a class="bu" href="/upgrade" ' in bb1
+                      and '>\u00b5nleashed 1.0.0</span><a class="bu" href="/upgrade" ' in bb1
                       and bb1.index('class="bu"') < bb1.index('class="bd k-sys"')
                       and 'data-tip="Update available: 1.0.0 → 1.0.1. Plug it in and '
                           'use Update my board on /install."' in bb1
@@ -6036,8 +6196,8 @@ def main():
                       "with nothing else there is no second row",
                       S.board_badges(brow(version="1.0.1"), int(time.time()), False, latest)
                       == '<span class="badges"><span class="bid">'
-                         + S.badge("soft", "unleashed 1.0.1",
-                                   "Software: unleashed 1.0.1, as the board reports it.")
+                         + S.badge("soft", "\u00b5nleashed 1.0.1",
+                                   "Software: \u00b5nleashed 1.0.1, as the board reports it.")
                          + "</span></span>"
                       and S.board_badges(brow(software="", version=""), int(time.time()),
                                          False, latest) == "")
@@ -6055,7 +6215,7 @@ def main():
                 brow3, orow3 = badge_row(home3, "Behind Board"), badge_row(home3, "Other Board")
                 check("on the list, the board behind carries the arrow and the other "
                       "software does not",
-                      '>unleashed 1.0.0</span><a class="bu" href="/upgrade" ' in brow3
+                      '>\u00b5nleashed 1.0.0</span><a class="bu" href="/upgrade" ' in brow3
                       and "1.0.0 → 1.0.1." in brow3
                       and ">Mystic 0.0.1</span>" in orow3 and 'class="bu"' not in orow3)
                 upd_rows = list_rows(fetch("/?b=update", base2)[2].decode("utf-8"))

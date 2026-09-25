@@ -62,7 +62,7 @@ across a deploy.
 its top, as section 4(b) of the Apache License 2.0 requires. The notice
 lists every changed string. Upstream's SHA-256 for it is
 `6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5`;
-`SHA256SUMS` carries the modified file's. Four changes, all in that file.
+`SHA256SUMS` carries the modified file's. Five changes, all in that file.
 
 **Telnet details (0.19.0 of this site).** After the Wi-Fi step the dialog
 offers the link the device sends over Improv, labelled "Visit Device". A
@@ -79,8 +79,8 @@ device", which reads to somebody updating a board full of accounts as
 "you are about to lose everything", although with the box unticked nothing
 but the firmware and the screens is written. The title is "Start fresh?",
 the text says to leave it unticked when updating a board you already run,
-the checkbox is "Erase everything first", "Install unleashed BBS" is
-"Install or update unleashed BBS", and the confirmation screen and the
+the checkbox is "Erase everything first", "Install <name>" is
+"Install or update <name>", and the confirmation screen and the
 "Erase User Data" screen say what an erase takes and that the SD card is
 not touched. Strings only; no behaviour changed.
 
@@ -95,7 +95,7 @@ at `manifest-update.json`, which is the ordinary manifest plus
   reaches the one line that erases (`s&&(... h.eraseFlash() ...)`) even if
   the stored flag were somehow true;
 - both dashboards call `_startInstall(!1)` instead of opening the erase
-  question, and their button reads "Update unleashed BBS";
+  question, and their button reads "Update <name>";
 - "Erase User Data" is not offered, and the confirmation says "update to".
 
 The flag has exactly two writes in the file, the constructor's `!1` and
@@ -122,11 +122,23 @@ upstream for anything else. `/connected` without a fragment says how to
 find the board by other means. The page shown after a successful Wi-Fi
 step is unchanged. `EWT_REV` went to 3 for it.
 
-Moving to a new version means making all four again by hand in that
+**The name, with or without the micro sign (site 1.3.8).** The manifests
+name the firmware `µnleashed BBS`, the name a reader should see in
+"Update µnleashed BBS". Upstream's `_isSameFirmware` compares that with
+the firmware name the board sends over Improv, exactly, and firmware up to
+1.1.x sends `unleashed BBS` in ASCII, so a board would stop being
+recognised. The comparison turns the first `µ` in each into a `u` first
+(`String(...).replace("\xb5","u")` on both sides), so either spelling
+from the board matches. The Improv SDK decodes the board's strings as
+UTF-8, so a later firmware that sends the micro sign arrives as one.
+`EWT_REV` went to 4 for it.
+
+Moving to a new version means making all five again by hand in that
 version's dialog chunk: search for `Visit Device` (twice; the first is the
 dashboard, whose `void 0===this._client.nextUrl?"":` guard is the one
-removed), `_renderAskErase`, `_startInstall(e)` and
-`this._manifest,this._installErase)`. Nobody can
+removed), `_renderAskErase`, `_startInstall(e)`,
+`this._manifest,this._installErase)` and
+`this._info.firmware===this._manifest.name`. Nobody can
 click through the dialog in a test here, so check it the way 0.22.1 was:
 import the chunk in a page in headless Chrome, construct
 `ewt-install-dialog`, set `_manifest` with and without the key, and call

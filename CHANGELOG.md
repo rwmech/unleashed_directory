@@ -14,6 +14,46 @@
 
 # Changelog
 
+## 1.3.8, 2026-09-25
+
+Rob: "why are we not saying the right unleashed on the site it all say
+unleashed without the u being micro". The name a person reads is µnleashed,
+with a real micro sign (U+00B5). Plain `unleashed` stays only where it is an
+identifier: a hostname or a password in code, a URL, a repository or file
+name, a protocol value, or a board's own screen quoted exactly.
+
+- **The software badge says µnleashed.** Every board row on /directory, the
+  example on /badges and the feed's "Software:" line show "µnleashed 1.1.0"
+  for a board that announces `"software": "unleashed"`, through
+  `software_shown()`. Only the display changes: the database, the API, the
+  update arrow's comparison and every other program's name are as the board
+  sent them.
+- **The installer's dialog says Update µnleashed BBS.** The manifests'
+  `name` is `MANIFEST_NAME`, "µnleashed BBS"; the dialog puts it into the
+  page as text, so it shows as the sign. ESP Web Tools also compares that
+  name with the firmware name a board sends over Improv to tell whether the
+  board already runs this firmware, and firmware up to 1.1.x sends
+  "unleashed BBS". So the dialog served here has a fifth change: that
+  comparison folds the micro sign to a "u" on both sides, and a board is
+  still recognised whichever way it spells the name. `EWT_REV` is 4, so
+  browsers fetch the new dialog; SHA256SUMS, the notice at the top of the
+  file and vendor/esp-web-tools/README.md say so.
+- **/install and /upgrade quote the dialog's buttons as it now shows
+  them**: "Update µnleashed BBS" and "Install or update µnleashed BBS", and
+  the drawing of the dialog on /install is titled the same.
+- **Every page carries `og:site_name`**, the directory's name with its
+  micro sign, for link previews. Every page was already served as
+  `text/html; charset=utf-8` with `<meta charset="utf-8">` first in its
+  head.
+- Self-test: an allowlist sweep over every page on all three faces and a
+  404, which fails on any plain "unleashed" a reader meets (text, alt,
+  title, aria-label, data-tip, placeholder, the preview's meta) outside
+  code, pre, kbd, samp, a screen capture, or a form joined to a domain, a
+  hostname, a path or a repository name; the sweep tested on a sample with
+  both kinds; the charset on every page; `og:site_name`; the software shown
+  and the API's raw value; the manifests' name; the dialog's comparison and
+  its notice.
+
 ## 1.3.7, 2026-09-25
 
 Rob: once the Freenove camera fixes check out, firmware 1.1.1-dev.1 is a

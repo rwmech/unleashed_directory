@@ -18,7 +18,7 @@ It does not hold the mail or the information pages. The forums and the file area
 ## Update
 
 1. **Plug the board in** with a cable that carries data, open [the installer](/install) in Chrome or Edge, choose your board in the card, press **Update my board** and pick the port. On the Waveshare S3, hold BOOT and tap RESET before pressing the button, and press RESET when it has finished. The installer page says [why the S3 needs that](/install#on-the-waveshare-s3).
-2. **Press Update unleashed BBS, then Install.** A board running 0.22.1 or later usually tells the installer its name and version, and the page shows both above the button. It may not, if the board is still starting up when the page asks, and that makes no difference here. It does not ask about erasing and it does not erase.
+2. **Press Update µnleashed BBS, then Install.** A board running 0.22.1 or later usually tells the installer its name and version, and the page shows both above the button. It may not, if the board is still starting up when the page asks, and that makes no difference here. It does not ask about erasing and it does not erase.
 3. **Writing** takes about two minutes. Keep the tab in view while it works.
 4. **The board starts on the new version**, on the Wi-Fi network it already knew.
 
@@ -30,7 +30,7 @@ If the board already runs the version on offer, there is no update to press, and
 
 ### If you pressed Install on a new board instead
 
-That works too. A board the page recognises is offered **Update unleashed BBS** and not asked anything. One it does not recognise is offered **Install or update unleashed BBS**, which does the same thing as long as you leave the box on the next screen unticked. That screen looks like this:
+That works too. A board the page recognises is offered **Update µnleashed BBS** and not asked anything. One it does not recognise is offered **Install or update µnleashed BBS**, which does the same thing as long as you leave the box on the next screen unticked. That screen looks like this:
 
 > [!NOTE]
 > **Start fresh?** Updating a board you already run? Leave this unticked: your accounts, settings, mail and forums are kept. Tick it only for a brand-new board, or to wipe this one and start over. `[ ]` **Erase everything first**

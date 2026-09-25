@@ -233,7 +233,7 @@ EWT_DIR     = (pathlib.Path(__file__).resolve().parent
 # expects the new one. A new path is fetched fresh, whole. The bare version
 # is still served, for a tab left open across a deploy, which has the old
 # entry point loaded and fetches the rest of the bundle as it goes.
-EWT_REV     = 3
+EWT_REV     = 4
 EWT_PATH    = EWT_VERSION + "-" + str(EWT_REV)
 EWT_BASE    = "/install/esp-web-tools/" + EWT_PATH + "/"
 # Every path the bundle has been served under: the bare version and each
@@ -258,6 +258,11 @@ EWT_TEXT    = ("LICENSE", "THIRD_PARTY_LICENSES.txt")
 # all: the reader is left with a board that never joined anything and no
 # idea why. Waiting longer than needed costs a spinner.
 EWT_IMPROV_WAIT = 30
+
+# The firmware's name in every manifest, which the dialog shows a reader
+# ("Update µnleashed BBS"). See firmware_manifest() for how it is matched with
+# the ASCII name a board sends over Improv.
+MANIFEST_NAME = "µnleashed BBS"
 
 # The chip families this can serve, keyed by the directory name a release
 # uses. A second family is a directory drop and an entry here, never a
@@ -2453,7 +2458,14 @@ def firmware_manifest(version, update=False, chip=None):
         s = rel["sets"][board]
         where = "" if chip else board + "/"
         man = {
-            "name": "unleashed BBS",
+            # The name the dialog shows a reader, in "Update µnleashed BBS"
+            # (site 1.3.8). ESP Web Tools also compares it with the firmware
+            # name the board sends over Improv to tell whether the board
+            # already runs this firmware, and firmware up to 1.1.x sends
+            # "unleashed BBS" in ASCII. The copy of the dialog served here
+            # (EWT_REV 4) compares the two with the micro sign folded to a
+            # "u", so either spelling from the board is recognised.
+            "name": MANIFEST_NAME,
             "version": s["shown"],
             # The user is asked rather than erased by default, and that is
             # what lets somebody reinstall over a board they already run
@@ -4011,6 +4023,7 @@ PAGE = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{desc}">
+<meta property="og:site_name" content="@SITE_NAME@">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}">
 <meta property="og:type" content="website">
@@ -6014,7 +6027,12 @@ OG_CARD_ALT = ("The \u00b5nleashed wordmark and the words 'Your own online "
                "community, on a device that fits in your hand', beside a "
                "drawing of the board.")
 PAGE = (PAGE.replace("@OG_CARD_URL@", html.escape(OG_CARD_URL, quote=True))
-            .replace("@OG_CARD_ALT@", html.escape(OG_CARD_ALT, quote=True)))
+            .replace("@OG_CARD_ALT@", html.escape(OG_CARD_ALT, quote=True))
+            # The site's name above a shared link's title (site 1.3.8), with
+            # its micro sign. PAGE is still a format string here, so any
+            # brace a DIRECTORY_NAME carries is doubled.
+            .replace("@SITE_NAME@", html.escape(SITE_NAME, quote=True)
+                     .replace("{", "{{").replace("}", "}}")))
 
 # What a shared link to these pages says about itself, from the round 3
 # specification: a title and a sentence written for somebody who has never
@@ -6949,10 +6967,10 @@ def _badge_table():
 
     # Sent by the board. The software and the machine are the board's own
     # words, so they have no fixed symbol and nothing to filter on.
-    add("board", "software", "Software", "soft", "unleashed 1.0.0",
+    add("board", "software", "Software", "soft", "µnleashed 1.0.0",
         "What the board runs, and which version of it.",
         "<code>software</code> <span class='src'>and <code>version</code></span>",
-        tip="Software: unleashed 1.0.0, as the board reports it.", filt=False)
+        tip="Software: µnleashed 1.0.0, as the board reports it.", filt=False)
     add("board", "system", "Machine", "sys", "Compaq 486",
         f"What the board runs on, in its own words, up to {SYSTEM_MAX} characters: "
         "the chip it runs on, or the Compaq 486 in the corner.",
@@ -7095,6 +7113,17 @@ def newest_release():
     return rels[0]["version"] if rels else ""
 
 
+def software_shown(raw):
+    """A board's software as a reader sees it (site 1.3.8, Rob: "why are we
+    not saying the right unleashed on the site"). This firmware announces
+    itself as "unleashed", in ASCII, because the protocol value is an
+    identifier; a person reads the name, which has a micro sign. Only the
+    display changes: the database, the API and every comparison keep the
+    raw value, and any other program's name is shown as it sent it."""
+    raw = raw or ""
+    return "µnleashed" if raw.strip().lower() == "unleashed" else raw
+
+
 def update_for(r, latest):
     """The newer release a board could move to, or "". Only µnleashed
     boards: nothing here knows what another program's newest version is.
@@ -7211,7 +7240,7 @@ def board_badges(r, now, steady=False, latest=""):
     age = now - since
     ident, marks = [], []
     if r["software"]:
-        what = r["software"] + (" " + r["version"] if r["version"] else "")
+        what = software_shown(r["software"]) + (" " + r["version"] if r["version"] else "")
         ident.append(badge("soft", html.escape(what),
                            f"Software: {what}, as the board reports it."))
         newer = update_for(r, latest)
@@ -7337,7 +7366,7 @@ def about_lines(r):
     which has no badges and no tooltips. Plain text: the caller escapes."""
     lines = []
     if r["software"]:
-        lines.append("Software: " + r["software"]
+        lines.append("Software: " + software_shown(r["software"])
                      + (" " + r["version"] if r["version"] else ""))
     if r["system"]:
         lines.append(f"Runs on: {r['system']}")
@@ -10121,7 +10150,7 @@ INSTALL_WRITE = _deco(112,
     # the dialog's own since 0.22.1: "Install or update", "Start fresh?"
     # and "Erase everything first", the last on two lines to fit its box.
     '<rect class="o" x="0" y="6" width="104" height="72" rx="4"/>'
-    '<text class="ink" x="8" y="21" font-size="8">unleashed BBS</text>'
+    '<text class="ink" x="8" y="21" font-size="8">µnleashed BBS</text>'
     '<rect class="k" x="8" y="30" width="88" height="16" rx="2"/>'
     '<text class="ink" x="13" y="41" font-size="7.5">Install or update</text>'
     '<text x="14" y="62" font-size="7.5">Logs &amp; Console</text>'
