@@ -44,7 +44,7 @@ its 1.1.1 preview, the way the ESP32-CAM already gets 1.1.1-dev.0.
   ribbon module, as the Freenove's is.
 - **/hardware, the Freenove's entry**: the swap paragraph follows the same
   gate, and 1.1.1's fixes are listed once it is offered: the OV2640's green
-  cast and the washed-out first frame fixed, Auto levels for the GC0308,
+  cast and the washed-out first frame fixed, Auto levels on any camera,
   better JPEG quality from an OV2640, and a watermark that no longer costs
   detail. "About 4 seconds a picture" is gone: snap times are being measured
   again.

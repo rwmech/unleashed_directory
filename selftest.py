@@ -5765,7 +5765,9 @@ def main():
                       and "with an OV2640 it takes photos up to 1600x1200" in flat_fn4
                       and "at most with either" not in flat_fn4
                       and "green cast" in flat_fn4 and "washed photos out" in flat_fn4
-                      and "<b>Auto levels</b>" in flat_fn4
+                      and "<b>Auto levels</b>, a new setting, on as shipped, which "
+                          "evens out a flat or washed-out photo on any camera." in flat_fn4
+                      and "for the GC0308" not in flat_fn4
                       and "the watermark no longer costs the photo any detail" in flat_fn4
                       and "The installer offers it first, with 1.1.0 beside it, and its "
                           "version line says whether 1.1.1 is still a preview" in flat_fn4
