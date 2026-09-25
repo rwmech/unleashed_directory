@@ -143,12 +143,23 @@ and the board takes a photo of whatever it is pointed at, ready to download.
 :::
 
 ::: from 1.1.0
+::: until esp32-cam
 [The Freenove camera board](/hardware#freenove-esp32-camera-board) lets a
 board look out of the window, and the ESP32-CAM and an ESP32-S3 camera
 board follow. A visitor types `SNAPSHOT`, from a laptop or from an 8-bit
 machine, and the board takes a photo of whatever it is pointed at, ready to
 download. (An 8-bit machine can take the picture. Looking at it is a job for
 a PC.)
+:::
+
+::: from esp32-cam
+[The Freenove camera board](/hardware#freenove-esp32-camera-board) and [the
+ESP32-CAM](/hardware#esp32-cam) let a board look out of the window, and an
+ESP32-S3 camera board follows. A visitor types `SNAPSHOT`, from a laptop or from an 8-bit
+machine, and the board takes a photo of whatever it is pointed at, ready to
+download. (An 8-bit machine can take the picture. Looking at it is a job for
+a PC.)
+:::
 :::
 
 - **Outdoors.** On a porch, in a shed window, beside a weather station:

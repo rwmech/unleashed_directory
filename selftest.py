@@ -2463,7 +2463,10 @@ def main():
         # release, and is coming soon here while no release carries it,
         # which is the case with this suite's firmware/ (0.23.0).
         fncam = S.BOARD_BY_DIR["esp32-fncam"]
-        for b in S.SOON_BOARDS + (fncam,):
+        # Site 1.3.5: the ESP32-CAM is in BOARDS too, and coming soon here
+        # while nothing on disk carries its set, as with this firmware/.
+        espcam = S.BOARD_BY_DIR["esp32-cam"]
+        for b in S.SOON_BOARDS + (fncam, espcam):
             anchor = b["page"].split("#")[1]
             sec = hw4.split(f'id="{anchor}"')[1].split("<h2")[0] if f'id="{anchor}"' in hw4 else ""
             soon_ok = soon_ok and (S.board_html([b["dir"]]) in sec
@@ -2476,13 +2479,19 @@ def main():
         # way the tested boards show theirs, and stay coming soon.
         # Site 1.3.4: the ESP32-CAM joins them, coming soon with its own.
         check("/hardware lists the camera boards as coming soon, each with its buy link",
-              [b["dir"] for b in S.SOON_BOARDS] == ["esp32-cam", "esp32s3-cam"] and soon_ok
+              [b["dir"] for b in S.SOON_BOARDS] == ["esp32s3-cam"] and soon_ok
               and "tested when it arrives" in " ".join(hw4.split())
               and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw4
               and "<b>ESP32-WROVER: yes, on one board.</b>" not in hw4)
         _, inst4 = get("/install")
         check("and neither is offered on the installer's picker",
               all(b["name"] not in inst4 for b in S.SOON_BOARDS + (fncam,))
+              # Site 1.3.5: the ESP32-CAM may take previews, so with nothing
+              # on disk it is a "Coming soon" row with no buttons, the way
+              # the S3 was before its first preview.
+              and "<b>ESP32-CAM</b>" in inst4
+              and "esp32-cam/manifest" not in inst4
+              and 'id="on-the-esp32-cam"' not in inst4
               and all(b["dir"] not in {x["dir"] for x in S.BOARDS} for b in S.SOON_BOARDS)
               and fncam.get("previews") is False
               and fncam not in S.picker_boards()
@@ -4524,28 +4533,44 @@ def main():
         ecb = S.BOARD_BY_DIR["esp32-cam"]
         ec = hw5.split('id="esp32-cam"')[1].split("<h2")[0] if 'id="esp32-cam"' in hw5 else ""
         flat_ec = " ".join(ec.split())
-        check("the ESP32-CAM has its entry: coming soon, flash and go, its buy link",
-              ecb in S.SOON_BOARDS and ecb not in S.BOARDS
+        # Site 1.3.5 (Rob): on the installer, as a preview, once its set is
+        # on disk. With this suite's firmware/ there is none, so its entry
+        # is still coming soon, and the picker has a row with no buttons.
+        check("the ESP32-CAM has its entry: in BOARDS, taking previews, flash and go, "
+              "its buy link, coming soon while nothing on disk carries it",
+              ecb in S.BOARDS and ecb not in S.SOON_BOARDS
+              and ecb.get("previews", True) is True and "status" not in ecb
+              and S.FLASH_FAMILIES["esp32-cam"] == ("ESP32", 0x1000)
               and ecb["buy"] == "https://link.amazon/B0enK4lpi"
               and '<a href="https://link.amazon/B0enK4lpi" rel="sponsored">Amazon</a>'
                   " (affiliate link)" in ec
               and S.board_html(["esp32-cam"]) in ec
               and "coming soon to" in S.board_html(["esp32-cam"])
-              and S.BOARD_SEAL["esp32-cam"] == "go"
+              and "<b>Coming soon.</b> The ESP32-CAM" in flat_ec
+              and "on the installer as a preview" not in flat_ec
+              and S.BOARD_SEAL["esp32-cam"] == "go" and S.BOARD_SPEED["esp32-cam"] == "Faster"
               and "FLASH &amp; GO</text>" in ec and ">expected</text>" not in ec
               and S.secure_seal_html("esp32-cam") == "" and "esp32-cam" not in S.BOARD_SSH
               and S.BOARD_ART_ESPCAM.replace('class="art board', 'class="art board big', 1) in ec
-              and "esp32-cam" not in {b["dir"] for b in S.picker_boards()}
-              and "ESP32-CAM" not in inst4)
-        check("and its facts: the chip, the memory, a genuine OV2640 at 1600x1200, "
-              "the programmer board, and no BOOT button",
-              "ESP32-D0WDQ6" in ecb["part"] and "4 MB PSRAM" in ecb["part"]
+              and [b["dir"] for b in S.picker_boards()][-1] == "esp32-cam"
+              and "<b>ESP32-CAM</b>" in inst4 and "esp32-cam/manifest" not in inst4)
+        check("and its facts: the chip, 8 MB of PSRAM with 4 usable, a genuine OV2640 "
+              "at 1600x1200, the programmer board, the two LEDs, and no BOOT button",
+              "ESP32-D0WDQ6" in ecb["part"] and "8 MB PSRAM (4 MB usable)" in ecb["part"]
               and "OV2640" in ecb["camera"] and "2 MP" in ecb["camera"]
+              and "1600x1200" in ecb["camera"]
               and "better than the one on Rob" in flat_ec
               and "1600x1200" in flat_ec and "640x480" in flat_ec
+              and "8 MB of" in flat_ec and "the chip can use 4 MB" in flat_ec
               and "ESP32-CAM-MB" in flat_ec and "micro USB" in flat_ec and "CH340" in flat_ec
-              and "white flash LED" in flat_ec and "micro SD slot" in flat_ec
+              and "no buttons to press" in flat_ec
+              and "<b>The white LED is the camera&#x27;s flash.</b>" in flat_ec
+              and "<code>CONFIG camera</code>" in flat_ec
+              and "<b>The red LED is the activity light.</b>" in flat_ec
+              and "micro SD slot" in flat_ec and "32 GB" in flat_ec and "SPI mode" in flat_ec
               and "<b>No BOOT button recovery.</b>" in flat_ec
+              and "<code>BACKUP SD</code>" in flat_ec
+              and "<b>No pins to spare.</b>" in flat_ec and 'href="/lights"' in ec
               and "SSH" not in re.sub(r"<[^>]+>", "", ec))
         ch = (hw5.split('id="choosing-a-camera-board"')[1].split("<h2")[0]
               if 'id="choosing-a-camera-board"' in hw5 else "")
@@ -5092,7 +5117,9 @@ def main():
             # the picker has the same two rows as before.
             check("the picker still offers exactly one ESP32, and the card entry "
                   "takes the ESP32's firmware",
-                  shown.count('<input type="radio" name="fwboard"') == 2
+                  # Site 1.3.5: plus the ESP32-CAM's row, coming soon with
+                  # nothing on disk for it.
+                  shown.count('<input type="radio" name="fwboard"') == 3
                   and shown.count("<b>ESP32 dev board (Base)</b>") == 1
                   and '<span class="tell pick">With or without an SD card: one '
                       "image</span>" in shown
@@ -5100,8 +5127,10 @@ def main():
                   and all(len(b.get("pick", "")) <= 39 for b in S.BOARDS)
                   and "SD card, for storage" not in shown
                   and "Freenove" not in shown
-                  and [b["dir"] for b in S.BOARDS] == ["esp32", "esp32s3", "esp32-fncam"]
-                  and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3"]
+                  and [b["dir"] for b in S.BOARDS] == ["esp32", "esp32s3", "esp32-fncam",
+                                                       "esp32-cam"]
+                  and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3",
+                                                                "esp32-cam"]
                   and all("image" not in b for b in S.BOARDS)
                   and "<dt>Firmware</dt><dd>0.19.2 <a href=\"/install\">on the "
                       "installer</a>. The same image as the bare board: choose ESP32 "
@@ -5213,7 +5242,11 @@ def main():
                   and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest.json"' in pick
                   and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest-update.json"'
                       in pick
-                  and "Coming soon" not in pick)
+                  # Site 1.3.5: the ESP32-CAM, with nothing on disk here, is
+                  # the one row still coming soon.
+                  and pick.count("Coming soon") == 1
+                  and '<b>ESP32-CAM</b><span class="tell pick">On a USB programmer; '
+                      'card out first</span><span class="bv soon">Coming soon' in pick)
             check("and the S3's section says download mode first, before its buttons",
                   pick.find('<div class="bsec b1"><p class="first"><b>First:</b> hold '
                             "<b>BOOT</b>, tap <b>RESET</b>, let go of BOOT.")
@@ -5287,7 +5320,8 @@ def main():
                 check("before 1.1.0 the Freenove shows nowhere on the installer, "
                       "even with a preview carrying it",
                       S.board_offers("esp32-fncam") == []
-                      and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3"]
+                      and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3",
+                                                                    "esp32-cam"]
                       and "Freenove" not in pick0 and "esp32-fncam" not in pick0
                       and S.firmware_file("1.1.0-dev.15/esp32-fncam/manifest.json") is None
                       and S.firmware_file("1.1.0-dev.15/esp32-fncam/firmware.bin") is None
@@ -5327,8 +5361,11 @@ def main():
                          "full regression yet. 1.1.1 follows with anything it finds.")
                 check("with 1.1.0 on disk the picker offers three boards, the "
                       "Freenove by its picture and a line saying why",
-                      [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3", "esp32-fncam"]
-                      and pick1.count('<input type="radio" name="fwboard"') == 3
+                      [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3", "esp32-fncam",
+                                                                "esp32-cam"]
+                      # Site 1.3.5: and the ESP32-CAM's row, coming soon
+                      # until a set of its own is on disk.
+                      and pick1.count('<input type="radio" name="fwboard"') == 4
                       and '<input type="radio" name="fwboard" id="fwb2">'
                           + S.BOARD_ART_FNCAM in pick1
                       and "<b>Freenove ESP32 camera board</b>" in pick1
@@ -5382,8 +5419,8 @@ def main():
                     S.BOARD_SSH.update(was_ssh)
                 check("the picker says Secure on the S3's row alone: a word and a "
                       "small lock, linking to the board's section, no seal, no footnote",
-                      len(rows1) == 3
-                      and ['class="secure"' in r for r in rows1] == [False, True, False]
+                      len(rows1) == 4
+                      and ['class="secure"' in r for r in rows1] == [False, True, False, False]
                       and pick1.count('class="secure"') == 1
                       and '<a class="secure" href="/hardware#waveshare-esp32-s3-lcd-1-47" '
                           'aria-label="Secure: encrypted connections over SSH, coming in '
@@ -5457,6 +5494,134 @@ def main():
                       and '<p class="early">' not in render("upgrade")
                       and [r["version"] for r in S.board_offers("esp32-fncam")] == ["1.1.0"]
                       and "<code>SCREENS INSTALL</code>" in render("sdcard"))
+
+                # ----------------------------------------------------------
+                # Site 1.3.5 (Rob: "get the esp32-cam (original) out there on
+                # the website flasher now its confirmed working with sd"):
+                # the ESP32-CAM's set arrives on a pre-release, and the board
+                # is offered it as a preview. Before it, the board-gated prose
+                # still says coming soon; with it, the pages switch by
+                # themselves, and the card-out step is on both.
+                print("The ESP32-CAM, from a pre-release")
+                g_none = S.md_render("::: until esp32-cam\nold\n:::\n\n"
+                                     "::: from esp32-cam\nnew\n:::")
+                hw2, inst2 = render("hardware"), render("install")
+                cam2, who2 = render("camera"), render("whofor")
+                put110("1.1.1-dev.0", "esp32-cam", "1.1.1-dev.0 (ESPCAM 1.0.1)",
+                       "2026-09-26")
+                g_have = S.md_render("::: until esp32-cam\nold\n:::\n\n"
+                                     "::: from esp32-cam\nnew\n:::")
+                g_else = S.md_render("::: from esp32x9\nnew\n:::\n::: until esp32x9\nold\n:::")
+                check("a gate on a board switches when the installer offers it anything, "
+                      "a preview included, and a board with nothing never opens one",
+                      g_none == "<p>old</p>" and g_have == "<p>new</p>"
+                      and g_else == "<p>old</p>"
+                      and S.firmware_releases()[0]["version"] == "1.1.1")
+                pick3 = S.installer_html()
+                hw3, inst3 = render("hardware"), render("install")
+                cam3, who3 = render("camera"), render("whofor")
+                rows3 = pick3.split('<label class="bopt">')[1:]
+                ecb3 = S.BOARD_BY_DIR["esp32-cam"]
+                check("the picker offers the ESP32-CAM its preview, by its picture, "
+                      "labelled preview",
+                      [r["version"] for r in S.board_offers("esp32-cam")] == ["1.1.1-dev.0"]
+                      and [b["dir"] for b in S.picker_boards()]
+                          == ["esp32", "esp32s3", "esp32-fncam", "esp32-cam"]
+                      and len(rows3) == 4 and "Coming soon" not in pick3
+                      and '<input type="radio" name="fwboard" id="fwb3">'
+                          + S.BOARD_ART_ESPCAM in pick3
+                      and '<b>ESP32-CAM</b><span class="tell pick">On a USB programmer; '
+                          "card out first</span>" in rows3[3]
+                      and '<span class="bv">Firmware 1.1.1 preview (ESPCAM 1.0.1)</span>'
+                          in rows3[3]
+                      and 'manifest="/install/1.1.1-dev.0/esp32-cam/manifest.json"' in pick3
+                      and 'manifest="/install/1.1.1-dev.0/esp32-cam/manifest-update.json"'
+                          in pick3
+                      and '<p class="meta ver r0">Version 1.1.1-dev.0 (ESPCAM 1.0.1), a '
+                          "preview, published 2026-09-26.</p>" in pick3
+                      and ".installer:has(#fwb3:checked) .bsec.b3{display:flex}" in pick3)
+                b3 = pick3.split('<div class="bsec b3">')[1] if '<div class="bsec b3">' in pick3 else ""
+                check("and choosing it shows the card-out step before its buttons",
+                      "SD card out" in ecb3["before"]
+                      and "put the card back" in ecb3["before"]
+                      and "plug it in" in ecb3["before"]
+                      and b3.startswith('<p class="first"><b>First:</b> SD card out. '
+                                        "<b>When it is done:</b> unplug the board, put "
+                                        "the card back, plug it in. "
+                                        '<a href="#on-the-esp32-cam">Why</a></p>')
+                      and b3.find('<p class="first">')
+                          < b3.find('manifest="/install/1.1.1-dev.0/esp32-cam/manifest.json"'))
+                check("and the same-chip line names all three ESP32 boards",
+                      "The ESP32 dev board (Base), the Freenove ESP32 camera board and "
+                      "the ESP32-CAM have the same chip, so between those the picture "
+                      "is the only check." in pick3)
+                man3 = S.firmware_manifest("1.1.1-dev.0", chip="esp32-cam")
+                check("its manifest holds its own build, at the ESP32's offsets",
+                      man3 is not None and man3["version"] == "1.1.1-dev.0 (ESPCAM 1.0.1)"
+                      and [b["chipFamily"] for b in man3["builds"]] == ["ESP32"]
+                      and [(p["path"], p["offset"]) for p in man3["builds"][0]["parts"]]
+                          == [("bootloader.bin", 4096), ("partitions.bin", 32768),
+                              ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
+                              ("storage.bin", 3932160)]
+                      and S.firmware_file("1.1.1-dev.0/esp32-cam/firmware.bin") is not None
+                      and [r["version"] for r in S.board_offers("esp32")] == ["1.1.1", "1.1.0"]
+                      and [r["version"] for r in S.board_offers("esp32-fncam")] == ["1.1.0"])
+                ec2 = hw2.split('id="esp32-cam"')[1].split("<h2")[0]
+                ec3 = hw3.split('id="esp32-cam"')[1].split("<h2")[0]
+                flat_ec3 = " ".join(ec3.split())
+                warn3 = re.findall(r'<p class="warn">(.*?)</p>', ec3, re.S)
+                check("/hardware: before its set, coming soon; with it, a preview on the "
+                      "installer, the card-out step as a warning",
+                      "<b>Coming soon.</b> The ESP32-CAM" in " ".join(ec2.split())
+                      and "coming soon to" in ec2 and '<p class="warn">' not in ec2
+                      and "<dt>Firmware</dt><dd>1.1.1 preview (ESPCAM 1.0.1) <a href="
+                          '"/install">on the installer</a>; the board calls it '
+                          "1.1.1-dev.0 (ESPCAM 1.0.1)</dd>" in ec3
+                      and "Coming soon" not in ec3 and "coming soon" not in ec3
+                      and "on <a href=\"/install\">the installer</a> as a preview" in flat_ec3
+                      and len(warn3) == 1
+                      and "<b>Take the SD card out to install it.</b>" in warn3[0]
+                      and "put the card back" in warn3[0]
+                      and 'href="/install#on-the-esp32-cam"' in warn3[0]
+                      and "And two with a camera" in hw3 and "And two with a camera" not in hw2
+                      and "ESP32-CAM once its build is published" in hw2
+                      and "once its build is published" not in hw3
+                      and "its SD card comes out while it is installed or updated"
+                          in " ".join(hw3.split())
+                      and hw3.count("<b>ESP32-D0WDQ6: yes, on one board.</b>") == 1)
+                ic3 = (inst3.split('id="on-the-esp32-cam"')[1].split("<h2")[0]
+                       if 'id="on-the-esp32-cam"' in inst3 else "")
+                flat_ic3 = " ".join(ic3.split())
+                check("/install: its own section once it is offered, the card-out warning "
+                      "first, then the steps in order",
+                      'id="on-the-esp32-cam"' not in inst2
+                      and '<h2 id="on-the-esp32-cam">On the ESP32-CAM</h2>' in inst3
+                      and re.search(r'<p class="warn"><b>Take the micro SD card out '
+                                    r"first</b>, every time you install or update\.", ic3)
+                         is not None
+                      and "start-up pins high" in flat_ic3
+                      and ic3.find('<p class="warn">') < ic3.find("<ol>")
+                      and len(re.findall(r"<li>", ic3.split("<ol>")[1].split("</ol>")[0])) == 3
+                      and "<b>Take the micro SD card out</b> of its slot." in ic3
+                      and "<b>Unplug the board, put the card back, and plug it in again.</b>"
+                          in ic3
+                      and "<b>Failed to initialize. Try resetting your device or "
+                          "holding the BOOT button while clicking INSTALL.</b>, and "
+                          "nothing is written." in flat_ic3
+                      and "Freenove camera board" in flat_ic3 and "no buttons to press" in flat_ic3
+                      and "<b>It is a preview</b>" in flat_ic3
+                      and "The ESP32-CAM has no BOOT button reset" in inst3
+                      and "The ESP32-CAM has no BOOT button reset" not in inst2)
+                check("/camera and /whofor say it is on the installer, once it is",
+                      "The ESP32-CAM goes on once its build is published" in " ".join(cam2.split())
+                      and "The Freenove camera board and the ESP32-CAM are on"
+                          in " ".join(cam3.split())
+                      and "once its build is published" not in cam3
+                      and "the ESP32-CAM and an ESP32-S3 camera board follow"
+                          in " ".join(who2.split())
+                      and "let a board look out of the window" in " ".join(who3.split())
+                      and "::: from" not in hw3 + inst3 + cam3 + who3
+                      and "::: until" not in hw3 + inst3 + cam3 + who3)
             finally:
                 S.FIRMWARE_DIR = pathlib.Path(fwroot)
                 shutil.rmtree(fw110, ignore_errors=True)
@@ -6183,7 +6348,8 @@ def main():
             rc, out = run_fetch()
             fetch_src = open(os.path.join("deploy", "fetch_release.py"), encoding="utf-8").read()
             check("a pre-release is never taken for the Freenove's set",
-                  rc == 0 and 'FAMILIES = ("esp32", "esp32s3", "esp32-fncam")' in fetch_src
+                  rc == 0 and 'FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")'
+                      in fetch_src
                   and 'NO_PREVIEW = ("esp32-fncam",)' in fetch_src
                   and tree("1.4.0-dev.1") is None
                   and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"])
@@ -6215,6 +6381,44 @@ def main():
                   and fn_man["builds"][0]["parts"][0] == {"path": "bootloader.bin",
                                                           "offset": 4096}
                   and fn_part is not None)
+            # Site 1.3.5: the ESP32-CAM's set, esp32-cam, first on a
+            # pre-release that carries it alone. Unlike the Freenove's it is
+            # taken from one, and served as a preview while no release has it.
+            list_release("v1.4.1-dev.0", ("esp32-cam",), pre=True,
+                         versions={"esp32-cam": "1.4.1-dev.0 (ESPCAM 1.0.1)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            t141 = tree("1.4.1-dev.0") or {}
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                ec_offers = [r["version"] for r in S.board_offers("esp32-cam")]
+                ec_man = S.firmware_manifest("1.4.1-dev.0", chip="esp32-cam")
+                ec_rest = [[r["version"] for r in S.board_offers(c)]
+                           for c in ("esp32", "esp32s3", "esp32-fncam")]
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("a pre-release carrying only the ESP32-CAM's set installs it as a "
+                  "preview, from its prefixed assets, at the ESP32's offsets",
+                  rc == 0 and "Installed firmware 1.4.1-dev.0 (a preview, for the "
+                              "esp32-cam image) for the browser installer." in out
+                  and 'NO_PREVIEW = ("esp32-fncam",)' in fetch_src
+                  and all("esp32-cam/" + n in t141 for n in (
+                      "bootloader.bin", "partitions.bin", "ota_data_initial.bin",
+                      "firmware.bin", "storage.bin"))
+                  and t141.get("esp32-cam/version.txt") == b"1.4.1-dev.0 (ESPCAM 1.0.1)\n"
+                  and t141.get("esp32-cam/firmware.bin", b"").startswith(b"esp32-camfirmware.bin")
+                  and not any(k.startswith("esp32/") for k in t141)
+                  and ec_offers == ["1.4.1-dev.0"]
+                  and ec_man is not None and ec_man["version"] == "1.4.1-dev.0 (ESPCAM 1.0.1)"
+                  and [b["chipFamily"] for b in ec_man["builds"]] == ["ESP32"]
+                  and ec_man["builds"][0]["parts"][0] == {"path": "bootloader.bin",
+                                                          "offset": 4096}
+                  and ec_rest[2] == ["1.4.0"] and ec_rest[0][0] == "1.4.0")
+            rc, out = run_fetch()
+            check("and the next run keeps it while it serves the board",
+                  rc == 0 and "Firmware 1.4.1-dev.0 is already installed." in out
+                  and "1.4.1-dev.0" in os.listdir(dest) and "Removed" not in out)
         finally:
             relsrv.shutdown()
             shutil.rmtree(relroot, ignore_errors=True)

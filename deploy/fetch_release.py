@@ -24,8 +24,8 @@ The contract, which the firmware side publishes to (its tools/release.py):
   - one image set per board, five parts each. The reference ESP32's are
     bootloader.bin, partitions.bin, ota_data_initial.bin, firmware.bin and
     storage.bin; another board's carry its folder as a prefix,
-    esp32s3-bootloader.bin, esp32-fncam-bootloader.bin and so on (FAMILIES
-    below).
+    esp32s3-bootloader.bin, esp32-fncam-bootloader.bin,
+    esp32-cam-bootloader.bin and so on (FAMILIES below).
   - optionally, since firmware 1.1.0, each set's version.txt (the S3's as
     esp32s3-version.txt): one line, the version as that board shows it,
     "1.0.3" or "1.1.0 (S3 1.0.0)".
@@ -100,8 +100,10 @@ SUMS = "SHA256SUMS"
 # assets carry no prefix, as every release before 1.1.0 had them; any other
 # set's are "<folder>-<part>". esp32-fncam is the Freenove ESP32-WROVER
 # camera board, from firmware 1.1.0: the ESP32's chip family, a set of its
-# own.
-FAMILIES = ("esp32", "esp32s3", "esp32-fncam")
+# own. esp32-cam is the ESP32-CAM, AI-Thinker's design (site 1.3.5): the same
+# family again, and it arrives on a pre-release first, so it is served as a
+# preview until a release carries it, and is not in NO_PREVIEW.
+FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")
 # Sets never taken from a pre-release, and never kept for one: the site
 # offers them from a release or not at all (server.py, "previews": False).
 NO_PREVIEW = ("esp32-fncam",)

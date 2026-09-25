@@ -144,6 +144,42 @@ board with a camera on a ribbon in the middle and a USB-C socket at one end.
   driver for: see [when the board does not appear](#when-the-board-does-not-appear).
 :::
 
+<!-- The ESP32-CAM section (site 1.3.5), shown once the installer offers the board anything, a preview included ("::: from esp32-cam"). Its set is esp32-cam, chipFamily ESP32, first on the firmware's pre-release v1.1.1-dev.0 (ESPCAM 1.0.1). The card-out step is Rob's, from his bench on 2026-09-25. Why: the card's line on GPIO 2 is a boot strap, and Espressif's esptool page "Boot mode selection" says GPIO 2 "must also be either left unconnected/floating, or driven Low, in order to enter the serial bootloader"; ESP-IDF's "SD pull-up requirements" page names the same conflict. Some cards do not hold it high, so the step says always. "Failed to initialize" is the start of the only message ESP Web Tools 10.4.0 shows when it cannot bring the chip into its flashing mode (vendor/esp-web-tools/10.4.0, install-dialog chunk: "Failed to initialize. Try resetting your device or holding the BOOT button while clicking INSTALL."). The board looks for its card as it starts, hence the unplug. -->
+::: from esp32-cam
+## On the ESP32-CAM
+
+The [ESP32-CAM](/hardware#esp32-cam) needs its SD card out while it is
+installed or updated. It sits on its USB programmer board, which puts it into
+its flashing mode by itself, so there are no buttons to press.
+
+> **Take the micro SD card out first**, every time you install or update.
+> The card holds one of the chip's start-up pins high, and with that pin high
+> the board starts up as usual instead of taking new software. Some cards do
+> not do it, but taking it out costs ten seconds.
+
+1. **Take the micro SD card out** of its slot.
+2. **Install or update** as above, and set the Wi-Fi when the installer asks.
+3. **Unplug the board, put the card back, and plug it in again.** The board
+   looks for its card as it starts, so it has to start again with the card in.
+
+- **If you forgot the card**, the installer says **Failed to initialize. Try
+  resetting your device or holding the BOOT button while clicking
+  INSTALL.**, and nothing is written. Take the card out and press the button
+  again. Holding a button does not help here: the card is the cause.
+- **It has the same chip as the ESP32 dev board and the Freenove camera
+  board.** The installer cannot tell them apart, so the picture on the
+  installer is the only check. Choose it for the small board with a camera, seated on a
+  second board with a micro USB socket. If you picked the wrong one, install
+  again with the right choice.
+- **Its activity light** is the small red LED on the back. The bright white
+  one on the front is the camera's flash, off until you turn it on.
+- **Its programmer has a CH340 USB-serial chip**, which Windows and macOS
+  sometimes need a driver for: see [when the board does not
+  appear](#when-the-board-does-not-appear).
+- **It is a preview**, an early build out for testing, until a full release
+  carries it. Its version line on the installer says so.
+:::
+
 ## Before you start
 
 There is nothing to install and no account to make. The installer uses Web
@@ -385,6 +421,11 @@ The LED, on a board that has one:
   is no longer on the directory unless you restore a backup.
 - **At 20 seconds** the LED goes off and the reset is abandoned. Letting go
   does nothing.
+
+::: from esp32-cam
+The ESP32-CAM has no BOOT button reset: its camera uses that pin. On one, a
+forgotten sysop password needs the last step below.
+:::
 :::
 
 - **Last of all, press Install on a new board and tick Erase everything

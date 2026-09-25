@@ -269,7 +269,12 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   `camera` row, no buy link, and deliberately not in `BOARDS`, so the
   picker and the fetcher ignore them. When one ships, move it to
   `BOARDS` with its image-set folder; the Freenove shares the ESP32's
-  chip family, so the picker has to ask which board.
+  chip family, so the picker has to ask which board. The ESP32-CAM moved in
+  site 1.3.5 (`esp32-cam`, a third set on the ESP32's family, taking
+  previews, unlike the Freenove), with a card-out step in its `before`:
+  the card holds GPIO 2, a boot strap, high. Its picker row made four, and
+  the rows were tightened so the Update button stays on the first screen
+  at 1366 x 768.
   **/camera, /different and /roadmap** (1.2.4). /camera owns camera
   usage and says "not settled yet" for any default the firmware plan
   leaves open. /different claims no "only": espbbs runs a BBS on an
@@ -568,6 +573,12 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   before the loop, so the gate can call it. A gated block is rendered on its
   own, so a list that runs into a gate is two lists: /setup's announce list
   is written out whole in each half for that reason.
+  **`::: from <board>` / `::: until <board>`** (site 1.3.5, the ESP32-CAM):
+  the same gate on an image-set folder (`esp32-cam`) instead of a version,
+  open once `board_offers()` gives that board anything, a preview included.
+  A version gate never sees a preview, so a board that arrives on a
+  pre-release needs this one. Gates nest: /hardware's intro is a board pair
+  inside `::: from 1.1.0`.
 - **The footer** is two rows, Get started and Reference, then the colophon:
   the site version from the newest `## X.Y.Z` in CHANGELOG.md, read once at
   start (so CHANGELOG.md is installed beside server.py), the copyright and

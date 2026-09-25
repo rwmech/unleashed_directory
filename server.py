@@ -276,6 +276,9 @@ FLASH_FAMILIES = {
     # set on the ESP32's chip family, so ESP Web Tools cannot choose between
     # it and the dev board's by reading the chip. The picker asks instead.
     "esp32-fncam": ("ESP32", 0x1000),
+    # The ESP32-CAM, AI-Thinker's design (ESPCAM 1.0.1, a pre-release first,
+    # site 1.3.5): the ESP32's chip family again, a third set on it.
+    "esp32-cam": ("ESP32", 0x1000),
     "esp32s2": ("ESP32-S2", 0x1000),
     "esp32s3": ("ESP32-S3", 0x0),
     "esp32c3": ("ESP32-C3", 0x0),
@@ -1108,7 +1111,10 @@ _MD_ITAL   = re.compile(r"(?<!\*)\*([^*\s][^*]*?)\*(?!\*)")
 # joined into a wall of text. Nothing caught it because every word was
 # present and in the right order, which is what a grep checks.
 _MD_STEP   = re.compile(r"^\d{1,2}\. ")
-_MD_GATE   = re.compile(r"^::: (from|until) (\d+)\.(\d+)\.(\d+)\s*$")
+# "::: from|until" takes a version, or since site 1.3.5 a board's image set
+# folder ("esp32-cam"), the same shape FIRMWARE_CHIP allows.
+_MD_GATE   = re.compile(r"^::: (from|until) (?:(\d+)\.(\d+)\.(\d+)|"
+                        r"([a-z][a-z0-9]{2,11}(?:-[a-z0-9]{2,11})?))\s*$")
 
 
 # --------------------------------------------------------------------------
@@ -1767,13 +1773,20 @@ def _md_render(text):
         # only while the newest release on disk is older, or there is none.
         # A pair of them swaps one account for the other on the day the
         # release is published, with nobody editing the page.
+        # "::: from esp32-cam" (site 1.3.5) gates on a board rather than a
+        # release: rendered once the installer offers that board anything,
+        # a preview included, which a version gate can never see because a
+        # preview never lights one. "::: until esp32-cam" is its other half.
         if gate is not None:
             if line.startswith("::: "):
                 gate[1] += 1
             elif line.strip() == ":::":
                 if gate[1] == 0:
-                    rels = firmware_releases()
-                    reached = bool(rels) and rels[0]["sort"] >= gate[0]
+                    if isinstance(gate[0], str):
+                        reached = bool(board_offers(gate[0]))
+                    else:
+                        rels = firmware_releases()
+                        reached = bool(rels) and rels[0]["sort"] >= gate[0]
                     if reached != gate[3]:
                         out.append(md_render("\n".join(gate[2])))
                     gate = None
@@ -1789,7 +1802,8 @@ def _md_render(text):
                 table = None
             flush()
             m = _MD_GATE.match(line)
-            want = tuple(int(g) for g in m.groups()[1:])
+            want = (m.group(5) if m.group(5)
+                    else tuple(int(g) for g in m.groups()[1:4]))
             gate = [want, 0, [], m.group(1) == "until"]
             continue
 
@@ -2652,6 +2666,33 @@ BOARDS = (
                "running on Rob's bench, camera and card included",
      "before": ("**Check the picture:** the installer cannot tell this board "
                 "from the dev board. [Why](#on-the-freenove-camera-board)")},
+    # The ESP32-CAM (coming soon in site 1.3.4, on the installer from site
+    # 1.3.5, Rob: "get the esp32-cam (original) out there on the website
+    # flasher now its confirmed working with sd"). An Aideepen two-pack of
+    # the AI-Thinker design on ESP32-CAM-MB programmers, from Rob's bench on
+    # 2026-09-25 and the firmware's board profile (BBS_BOARD_AI_ESP32CAM,
+    # ESPCAM 1.0.1, src/board.h in the espcam-1.1.1 lane): an ESP32-D0WDQ6
+    # rev 1, 4 MB flash, 8 MB PSRAM of which 4 MB is mapped, a genuine
+    # OV2640 (UXGA, 1600x1200), the card over SPI on the slot's own lines
+    # (a 32 GB SDHC mounted), the white LED on GPIO 4 as a pin flash, off
+    # as shipped, the red LED on GPIO 33 as the activity light, and GPIO 0
+    # the camera's clock, so no BOOT button and no backup button. Its set
+    # arrives on a pre-release first (v1.1.1-dev.0), so it is offered as a
+    # preview until a release carries it: previews allowed, unlike the
+    # Freenove. The card holds GPIO 2, a boot strap, high: with a card in,
+    # the board will not enter its flashing mode, hence "before".
+    {"dir": "esp32-cam", "name": "ESP32-CAM",
+     "part": "ESP32-D0WDQ6, 4 MB flash, 8 MB PSRAM (4 MB usable)",
+     "pick": "On a USB programmer; card out first",
+     "tell": "A small camera board seated on a USB programmer board",
+     "art": BOARD_ART_ESPCAM,
+     "camera": "OV2640, 2 MP, photos up to 1600x1200",
+     "page": "/hardware#esp32-cam",
+     "buy": "https://link.amazon/B0enK4lpi",
+     # Two lines of the card's calm box, not three, so the buttons stay
+     # as high as the Waveshare's with its note.
+     "before": ("**First:** SD card out. **When it is done:** unplug the board, "
+                "put the card back, plug it in. [Why](#on-the-esp32-cam)")},
 )
 BOARD_ART_S3CAM = (
     '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
@@ -2683,25 +2724,6 @@ BOARD_ART_S3CAM = (
 # people can get one ahead of the installer; the Firmware row still says
 # coming soon. "status" is what the Firmware row says in place of a version.
 SOON_BOARDS = (
-    # The ESP32-CAM (site 1.3.4, Rob's bench, 2026-09-25): an Aideepen
-    # two-pack of the AI-Thinker design on ESP32-CAM-MB programmers. The
-    # firmware's board profile is being finished (BBS_BOARD_AI_ESP32CAM,
-    # ESPCAM 1.0.0 in its src/board.h): an ESP32-D0WDQ6, 4 MB flash, 4 MB
-    # PSRAM, a genuine OV2640 read over SCCB (PID 0x26, VER 0x42), UXGA
-    # frames taken on the bench, a white flash LED on GPIO 4, and GPIO 0
-    # the camera's clock, so no BOOT button for the firmware. Here until a
-    # release names its image set; then into BOARDS, marked to wait for a
-    # release, the way the Freenove went in site 1.2.9. No Secure seal:
-    # SSH is for the S3 boards only.
-    {"dir": "esp32-cam", "name": "ESP32-CAM",
-     "part": "ESP32-D0WDQ6, 4 MB flash, 4 MB PSRAM",
-     "tell": "A small camera board seated on a USB programmer board",
-     "art": BOARD_ART_ESPCAM,
-     "camera": "OV2640, 2 MP, genuine on Rob's",
-     "page": "/hardware#esp32-cam",
-     "buy": "https://link.amazon/B0enK4lpi",
-     "status": 'coming soon to <a href="/install">the installer</a>; '
-               "its build is being finished on Rob's bench"},
     {"dir": "esp32s3-cam", "name": "ESP32-S3 camera board",
      "part": "ESP32-S3 N16R8, 16 MB flash, 8 MB PSRAM",
      "tell": "A camera, two USB-C sockets and an antenna lead",
@@ -3102,9 +3124,13 @@ def installer_html(lines=()):
             fams.setdefault(FLASH_FAMILIES[b["dir"]][0], []).append(b["name"])
     alike = next((names for names in fams.values() if len(names) > 1), None)
     if alike:
+        # Three on one family since site 1.3.5 (the ESP32-CAM): "the A, the
+        # B and the C", not "the A and the B and the C".
+        named = ["the " + n for n in alike]
+        named = (", ".join(named[:-1]) + " and " + named[-1])[4:]
         out.append('<p class="meta fam">The installer reads the chip first and '
                    "stops, writing nothing, if it is the wrong kind. The "
-                   + html.escape(" and the ".join(alike)) + " have the same chip, "
+                   + html.escape(named) + " have the same chip, "
                    "so between those the picture is the only check.</p>")
     else:
         out.append('<p class="meta fam">Each image is for its own chip. The installer '
@@ -5345,8 +5371,12 @@ article .installer fieldset.boards {{ border:0; margin:0; padding:0; min-width:0
 article .installer fieldset.boards legend {{ padding:0; margin:0 0 0.25rem;
         font-size:0.8125rem; color:var(--dim); }}
 article .installer fieldset.boards legend a {{ margin-left:0.5rem; }}
+/* Site 1.3.5: a fourth board (the ESP32-CAM) put the Update button past
+   the first screen at 1366 x 768, so each row is tighter: an eighth of a
+   rem of padding above and below where it was a quarter, and the three
+   lines at 1.15 rather than 1.25. About 12px a row. */
 article .installer .bopt {{ display:flex; align-items:center; gap:0.625rem;
-        padding:0.25rem 0.625rem 0.25rem 0.5rem; border:1px solid #2c3a44;
+        padding:0.125rem 0.625rem 0.125rem 0.5rem; border:1px solid #2c3a44;
         border-radius:0.375rem; cursor:pointer; }}
 article .installer .bopt input {{ flex:none; margin:0; accent-color:var(--dial); }}
 article .installer .bopt:has(input:checked) {{ border-color:var(--dial);
@@ -5354,7 +5384,7 @@ article .installer .bopt:has(input:checked) {{ border-color:var(--dial);
 article .installer .bopt:has(input:focus-visible) {{ outline:3px solid #ffd35c;
         outline-offset:2px; }}
 article .installer .bopt .bt {{ display:flex; flex-direction:column; min-width:0;
-        font-size:0.8125rem; line-height:1.25; }}
+        font-size:0.8125rem; line-height:1.15; }}
 article .installer .bopt .bt b {{ color:var(--ink); }}
 article .installer .bopt svg.art.board {{ width:4rem; height:2.5rem; }}
 article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}

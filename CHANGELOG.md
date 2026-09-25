@@ -14,6 +14,49 @@
 
 # Changelog
 
+## 1.3.5, 2026-09-25
+
+Rob: "get the esp32-cam (original) out there on the website flasher now its
+confirmed working with sd".
+
+- **The installer offers the ESP32-CAM**, as a preview: its image set,
+  `esp32-cam`, comes first on a firmware pre-release (ESPCAM 1.0.1), and the
+  site's rule for a board no release carries already labels it one. Its
+  picker line reads "On a USB programmer; card out first", and choosing it
+  shows the step before the buttons: SD card out first, and when it is done
+  unplug the board, put the card back and plug it in. FLASH & GO, the
+  Faster tier and the affiliate link stay.
+- **The picker's rows are tighter** (less padding, the three lines closer),
+  so with four boards the Update button still starts on the first screen at
+  1366 x 768.
+- **/install: "On the ESP32-CAM"**, why the card comes out (it holds one of
+  the chip's start-up pins high, so the board starts up as usual instead of
+  taking new software), the steps in order, what the installer says if the
+  card is still in, and that the picture is the only check against the dev
+  board and the Freenove. The BOOT button section says the ESP32-CAM has no
+  BOOT reset.
+- **The card's same-chip line names three boards** properly: "the ESP32
+  dev board (Base), the Freenove ESP32 camera board and the ESP32-CAM".
+- **/hardware: the ESP32-CAM entry is installable**, with the card-out step
+  as a warning, and what ships: 8 MB of PSRAM, 4 MB of it usable (1.3.4 said
+  4 MB), the card in SPI mode with a 32 GB card tested, the white LED as the
+  camera's flash (off until switched on in `CONFIG camera`), the red LED as
+  the activity light, no BOOT or backup button, and no pins for the lights
+  or the serial bridge. "Choosing a camera board" says its card comes out to
+  install. The chip list calls the ESP32-D0WDQ6 tested.
+- **A gate on a board, not only a release**: `::: from esp32-cam` and
+  `::: until esp32-cam` switch prose the moment the installer offers that
+  board anything, a preview included, which a version gate never sees.
+  /hardware, /install, /camera and /whofor use it, so nothing here claims
+  the ESP32-CAM is installable until its images are on the site.
+- **The release fetcher takes the `esp32-cam` set** (`esp32-cam-*.bin`,
+  `esp32-cam-version.txt`), from a pre-release while no release carries it,
+  like the S3 before 1.1.0 and unlike the Freenove.
+- Self-test: the set fetched from a pre-release, served as a preview at the
+  ESP32's offsets, the picker's fourth board and its card-out step, the
+  three-board line, the board gates both ways, and the pages before and
+  after its images arrive.
+
 ## 1.3.4, 2026-09-25
 
 Rob: "call out the ESP32-CAM has a better camera than the Freenove one in the

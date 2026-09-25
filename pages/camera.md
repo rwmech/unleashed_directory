@@ -14,10 +14,20 @@ few seconds later.
 :::
 
 ::: from 1.1.0
+::: until esp32-cam
 > [!NOTE]
 > **The Freenove camera board is on [the installer](/install)** from firmware
-> 1.1.0. The ESP32-CAM goes on once a release carries its build, and the
+> 1.1.0. The ESP32-CAM goes on once its build is published, and the
 > ESP32-S3 camera board once it has been tested.
+:::
+
+::: from esp32-cam
+> [!NOTE]
+> **The Freenove camera board and the ESP32-CAM are on [the
+> installer](/install)**, the Freenove from firmware 1.1.0 and the ESP32-CAM
+> as a preview, an early build out for testing. The ESP32-S3 camera board
+> goes on once it has been tested.
+:::
 :::
 
 ::: art
