@@ -409,8 +409,9 @@ def badge_checks(S, db):
             "system": ["not", "a", "string"], "terminals": "petscii",
             "guests": "yes", "features": {"chat": True}, "support": "lgbtq",
             "interests": "c64", "sd": "32"}
+    # Site 1.2.8: a board with a camera running says so in its features.
     shut = {"name": "No Guests", "port": 6400, "token": "", "guests": False,
-            "sd": True}
+            "sd": True, "features": ["Camera", "webcam"]}
     code, got = post_from(full, "198.51.100.7")
     check("a heartbeat carrying every badge field is accepted", code == 200)
     code, gotj = post_from(junk, "198.51.100.8")
@@ -433,6 +434,10 @@ def badge_checks(S, db):
     check("guests: a JSON true is true", bb.get("guests") is True)
     check("features: known words only, in order",
           bb.get("features") == ["chat", "files", "doors"])
+    check("camera is a feature, in any case, and an unknown one beside it is "
+          "still ignored",
+          listed.get("No Guests", {}).get("features") == ["camera"]
+          and "camera" not in bb.get("features", []))
     check("support: known codes only; a made-up one, markup and all, is dropped",
           bb.get("support") == ["lgbtq"])
     # Amateur radio moved from support to the interests (site 0.22.2, Rob:
@@ -714,6 +719,15 @@ def badge_checks(S, db):
           and re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
                         r"<span class='bname'>Badge Board</span>", page).group(1)
           == "chat doors files guests petscii sd new lgbtq c64 elctr chptn ham")
+    # Site 1.2.8 (Rob): "This BBS can take pictures".
+    cam_row = badge_row(page, "No Guests")
+    check("a board sending camera carries the camera badge, drawn, in the "
+          "features' blue, with Rob's sentence",
+          '<span class="bd k-feat" role="img" tabindex="0" aria-label="This BBS can '
+          'take pictures." data-tip="This BBS can take pictures.">' + S.CAMERA_SVG
+          + "</span>" in cam_row)
+    check("and a board that does not send it has none",
+          "This BBS can take pictures" not in row and S.CAMERA_SVG not in row)
     check("nothing a board sent reaches the page unescaped",
           "<b>&</b>" not in page and "<script>alert" not in page
           and 'data-tip="Runs on: Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;, in the '
@@ -803,10 +817,13 @@ def badge_checks(S, db):
           and 'data-tip="Listed a month or more."' in pane
           and 'data-tip="Supports LGBTQ+ people. Code LGBTQ."' in pane
           and 'data-tip="Interest: Electronics. Code ELCTR."' in pane
-          and 'value="sd" data-n="SD card"' in pane)
+          and 'value="sd" data-n="SD card"' in pane
+          and 'value="camera" data-n="Camera"' in pane
+          and '<span class="cb k-feat" data-tip="This BBS can take pictures.">'
+              + S.CAMERA_SVG in pane)
     check("the pane is a GET form of checkboxes, one per badge, in the page's "
           "order, with all or any beside them",
-          '<form class="fpane" id="fform" method="get" action="/"' in pane
+          '<form class="fpane" id="fform" method="get" action="/directory"' in pane
           and re.findall(r'<input type="checkbox" name="b" value="([^"]+)"', pane)
           == list(S.FILTER_KEYS)
           and '<input type="radio" name="m" value="all" checked>' in pane
@@ -844,7 +861,7 @@ def badge_checks(S, db):
           and '<span class="fc" id="fcount">1</span>' in one
           and f'<span data-f="n">{len(shown1)} of {len(rows1)} board' in one
           and '<span data-f="m">all of</span>: <span data-f="l">PETSCII</span>. '
-              '<a href="/" data-clear>Clear</a>' in one
+              '<a href="/directory" data-clear>Clear</a>' in one
           and '<p class="factive" id="factive" aria-live="polite">' in one)
     check("and the pane stays closed, so the page is the filtered list",
           '<details class="filter" id="filter"><summary>' in one
@@ -899,8 +916,9 @@ def badge_checks(S, db):
           code == 200 and "alert(1)" not in evil and "<img src=x" not in evil
           and '"><x' not in evil and "petsciipetscii" not in evil
           and not any(h for _n, _k, h in list_rows(evil)))
-    check("a filtered view is still the board list to a search engine",
-          '<link rel="canonical" href="https://boards.example/">' in one)
+    # Site 1.2.8: a filter is answered on /directory, so that is its page.
+    check("a filtered view is still the whole directory to a search engine",
+          '<link rel="canonical" href="https://boards.example/directory">' in one)
     check("the rows the filter leaves out stay hidden at every width, and the "
           "stripes count only the rows showing",
           "main [hidden] { display:none !important; }" in home
@@ -1023,7 +1041,12 @@ def badge_checks(S, db):
     check("every lettered badge is on it, with its colour named",
           all(f">{letters}</span>" in leg and f"<b>{name}</b>" in leg
               and f'<span class="cn k-{cls}">{S.BADGE_COLOURS[cls]}</span>' in leg
-              for _k, letters, cls, name, _m in S.LETTER_BADGES))
+              for _k, letters, cls, name, _m in S.LETTER_BADGES if letters))
+    check("the camera is on it too, drawn, with how a caller uses it linked",
+          "<b>Camera</b>" in leg and S.CAMERA_SVG in leg
+          and "<code>camera</code> <span class='src'>in features</span>" in leg
+          and 'downloads it a few seconds later. Running now. '
+              '<a href="/camera">How a caller uses it</a>.' in leg)
     check("and the machine, the software and every time-listed step",
           "<b>Machine</b>" in leg and "<b>Software</b>" in leg
           and all(f">{label}</span>" in leg for _d, label, _w in S.AGES))
@@ -1044,7 +1067,7 @@ def badge_checks(S, db):
           and 'href="#how-steady-is-worked-out"' in leg)
     check("every row is on the page with no script: one per badge, the steps "
           "of Listed sharing one",
-          len(trs) == len(S.BADGES) - 5 == 81
+          len(trs) == len(S.BADGES) - 5 == 82
           and '<tr data-k="' in leg and " hidden>" not in leg.split("</nav>")[1]
           .replace("data-js hidden>", ""))
     check("each says where it comes from: the field a board sends, or worked "
@@ -1146,7 +1169,7 @@ def badge_checks(S, db):
           marks == ["LGBTQ+ people", "Amateur radio", "Chiptune", "Commodore 64",
                     "Electronics"]
           and S.ROW_ORDER == ("petscii", "guests", "chat", "mail", "forums", "files",
-                              "doors", "sd", "new", "steady")
+                              "doors", "camera", "sd", "new", "steady")
           and [b["sort"] for b in S.ROW_INTERESTS]
               == sorted(b["sort"] for b in S.ROW_INTERESTS)
           and [b["key"] for b in S.ROW_SUPPORT]
@@ -1492,6 +1515,133 @@ def badge_checks(S, db):
                 os.remove(leftover)
             except OSError:
                 pass
+
+
+def directory_checks(S):
+    """Site 1.2.8 (Rob: "limit the front page to 10 BBS systems, most active
+    and popular. Create a new page which is purely the search and directory.
+    Search should include a name search too."). A directory of its own with
+    twelve boards, each with a different number of callers on, so the order
+    is known and is not the alphabet's."""
+    import sqlite3
+    print("The busiest ten, and /directory")
+    db12 = os.path.join(tempfile.gettempdir(), f"dir128{os.getpid()}.db")
+    for leftover in (db12, db12 + "-wal", db12 + "-shm"):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    now = int(time.time())
+    # Busiest first as listed here; the names run against the alphabet.
+    names = ["Zulu Station", "Yankee Relay", "X-Ray Vision", "Whiskey Node",
+             "Victor Line", "Uniform Hall", "Tango Club", "Sierra Base",
+             "Romeo Lounge", "Quebec Corner", "Papa Shack", "Oscar Attic"]
+    con = sqlite3.connect(db12)
+    con.executescript(S.SCHEMA)
+    for i, name in enumerate(names):
+        con.execute("INSERT INTO boards(token, name, owner, description, software, "
+                    "version, port, nodes, busy, state, first_seen, last_seen, "
+                    "streak_start, public_at, features) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (f"{i:032d}", name, "Sysop Hedgehog" if i == 7 else f"Op{i}",
+                     "Home of the lighthouse" if i == 9 else "A board",
+                     "unleashed", "1.1.0", 6400, 16, 12 - i, "online",
+                     now - 86400, now, now - 86400, now - 86400,
+                     "chat,files" if i % 2 else "chat"))
+    con.commit()
+    con.close()
+    port7 = PORT + 4
+    base7 = f"http://127.0.0.1:{port7}"
+    server7, out7, up7 = start_server(db12, port7)
+    try:
+        def page(path):
+            code, _t, body = fetch(path, base7) if up7 else (None, "", b"")
+            return code, body.decode("utf-8", "replace")
+
+        code, home = page("/")
+        front = [n for n, _k, _h in list_rows(home)]
+        check("the front page shows the ten busiest of twelve, busiest first"
+              + ("" if up7 else "  <- " + b"".join(out7[-3:]).decode("utf-8", "replace")),
+              code == 200 and front == names[:10])
+        check("says so in one line above the list, and offers all of them under it",
+              '<p class="topn">The ten busiest boards right now.</p><table id="boards"'
+              in home
+              and '<p class="next allb"><a class="go" href="/directory">All 12 boards, '
+                  "search and filters</a></p>" in home
+              and home.index("</table>") < home.index('class="next allb"'))
+        check("its filter goes to /directory, and its script leaves it alone",
+              '<form class="fpane" id="fform" method="get" action="/directory" data-go'
+              in home and "f.hasAttribute('data-go')" in S.BADGE_JS)
+        code, full = page("/directory")
+        check("/directory shows all twelve, in the same order",
+              code == 200 and [n for n, _k, _h in list_rows(full)] == names
+              and "<h1>All boards</h1>" in full)
+        check("and lights Boards in the menu",
+              '<a class="here" href="/">Boards</a>' in full)
+        check("with a search box that belongs to the filter's form",
+              '<input type="search" id="nq" name="q" form="fform" value=""'
+              f' maxlength="{S.SEARCH_MAX}"' in full
+              and '<button type="submit" form="fform">Search</button>' in full
+              and '<form class="fpane" id="fform" method="get" action="/directory"'
+                  ' aria-label=' in full)
+        _c, hit = page("/directory?q=yANKee")
+        check("?q= finds a board by its name, in any case",
+              [n for n, _k, _h in list_rows(hit)] == ["Yankee Relay"]
+              and "1 board matches &ldquo;yANKee&rdquo;." in hit
+              and 'value="yANKee"' in hit)
+        _c, by = page("/directory?q=hedgehog")
+        _c, dsc = page("/directory?q=LIGHTHOUSE")
+        check("and by its sysop's name, and by its description",
+              [n for n, _k, _h in list_rows(by)] == ["Sierra Base"]
+              and [n for n, _k, _h in list_rows(dsc)] == ["Quebec Corner"])
+        _c, evil = page("/directory?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E")
+        check("a search is only ever put back on the page escaped",
+              "<script>alert" not in evil
+              and 'value="&lt;script&gt;alert(1)&lt;/script&gt;"' in evil
+              and "No board matches &ldquo;&lt;script&gt;alert(1)&lt;/script&gt;"
+                  "&rdquo;." in evil)
+        check("and one that finds nothing says so, and offers to clear it",
+              '<a href="/directory">Clear the search</a>' in evil
+              and '<table id="boards"' not in evil
+              and 'id="fform"' in evil)
+        # "e" is in six of them, by name, sysop or description; four of
+        # those six run files.
+        _c, both = page("/directory?b=files&q=E")
+        shown_b = [n for n, _k, h in list_rows(both) if not h]
+        check("a filter and a search narrow together, and the filter keeps the search",
+              shown_b == ["Yankee Relay", "Whiskey Node", "Sierra Base", "Quebec Corner"]
+              and len(list_rows(both)) == 6
+              and 'href="/directory?q=E" data-clear>Clear all</a>' in both
+              and '<a href="/directory?b=files">Clear the search</a>' in both)
+        _c, long_ = page("/directory?q=" + "a" * 500)
+        check("a long search is cut to SEARCH_MAX characters",
+              S.SEARCH_MAX == 60 and f'value="{"a" * 60}"' in long_
+              and "a" * 61 not in long_
+              and S.search_query("q=" + "b" * 500) == "b" * 60
+              and S.search_query("q=%00x%E2%80%AEy++z") == "xy z")
+        code, loc = None, ""
+        try:
+            opener = urllib.request.build_opener(NoRedirect)
+            opener.open(base7 + "/?b=files&q=E", timeout=5)
+        except urllib.error.HTTPError as e:
+            code, loc = e.code, e.headers.get("Location", "")
+        check("a filter or a search asked of the front page is sent to /directory",
+              code == 302 and loc == "/directory?b=files&q=E")
+    finally:
+        server7.terminate()
+        try:
+            server7.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            server7.kill()
+        for leftover in (db12, db12 + "-wal", db12 + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """An opener that reports a redirect instead of following it."""
+    def redirect_request(self, *args, **kwargs):
+        return None
 
 
 def main():
@@ -2383,6 +2533,20 @@ def main():
               home.count('href="/different"') == 1
               and '<p class="next tease"><a class="go" href="/different">' in home
               and home.index('href="/different"') < home.index('class="runcard"'))
+        # Site 1.2.8 (Rob): the button opens the page, under two sentences
+        # saying why to press it, and a line and a rule lead into the list.
+        check("and it opens the page: the pitch, then the button, before the "
+              "directory's heading, with a rule between them",
+              '<div class="listtop"><div class="intro"><p class="pitch">A whole BBS '
+              "on a board the size of a stick of gum, for about $5." in home
+              and 0 <= home.find('<p class="pitch">') < home.find('href="/different"')
+              < home.find('<p class="tryit">Try out any of the boards in the '
+                          "directory below.</p>")
+              < home.find('<hr class="dirrule">') < home.find("<h1>BBS directory</h1>")
+              and home.count('<hr class="dirrule">') == 1
+              and '<hr class="dirrule"><h1>BBS directory</h1>' in home)
+        check("the rule is the footer's hairline, in --rule",
+              "hr.dirrule { border:0; border-top:1px solid var(--rule);" in home)
         code, rmp = get("/roadmap")
         art_r = rmp.split("svg.art { display:block;")[1].split("</style>")[0]
         still_r, moving_r = art_r.split("@media (prefers-reduced-motion: no-preference) {")
@@ -3346,9 +3510,13 @@ def main():
               not re.search(r'class="(fill|line)"[^>]*>[^<]*Install', hbody))
         lst = hbody.find('<table id="boards"')
         lst = lst if lst >= 0 else hbody.find("No boards listed yet")
-        check("the card follows the heading and the lead, and the list follows it",
-              0 <= hbody.find("<h1>BBS directory</h1>") < hbody.find('<p class="lead">')
-              < hbody.find('<aside class="runcard"') < lst)
+        # Site 1.2.8 (Rob): the card sits beside the pitch in the opening
+        # row, and the directory's heading and lead follow the rule.
+        check("the card follows the pitch and its button, then the rule, the "
+              "heading, the lead and the list",
+              0 <= hbody.find('<p class="pitch">') < hbody.find('<p class="next tease">')
+              < hbody.find('<aside class="runcard"') < hbody.find('<hr class="dirrule">')
+              < hbody.find("<h1>BBS directory</h1>") < hbody.find('<p class="lead">') < lst)
         css_h = home.split("<style>")[1]
         check("beside them from 901px as a grid column, not a float",
               ".listtop { display:grid; grid-template-columns:minmax(0, 1fr) 19.5rem;"
@@ -4842,8 +5010,8 @@ def main():
                       'class="banner"' not in get("/")[1])
                 # Absent means absent: the heading follows the menu directly,
                 # with no empty box and no margin standing in for one.
-                check("and nothing takes its place: the heading follows the menu",
-                      '</nav><div class="listtop"><div class="intro"><h1>BBS directory</h1>'
+                check("and nothing takes its place: the opening row follows the menu",
+                      '</nav><div class="listtop"><div class="intro"><p class="pitch">'
                       in home2
                       and '</nav><div class="listtop">' in get("/")[1])
                 check("and the page has no full size button without it either",
@@ -5542,6 +5710,7 @@ def main():
               [b["name"] for b in after] == [b["name"] for b in before])
 
         badge_checks(S, db)
+        directory_checks(S)
     finally:
         server.terminate()
         try:

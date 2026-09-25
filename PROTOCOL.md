@@ -60,7 +60,7 @@ Connection: close
 | `system` | string | no | the machine the board runs on, up to 40 printable characters. See [Badges](#badges) |
 | `terminals` | array of strings | no | what the board can speak to a caller: any of `ansi`, `utf8`, `petscii`, `ascii`, `vt100` |
 | `guests` | boolean | no | `true` if a caller can look around without an account, `false` if not |
-| `features` | array of strings | no | what is running right now: any of `chat`, `forums`, `files`, `mail`, `doors` |
+| `features` | array of strings | no | what is running right now: any of `chat`, `forums`, `files`, `mail`, `doors`, `camera` |
 | `sd` | number | no | the SD card in use right now, its size in GB as printed on the card: a whole number from 1 to 4096 |
 | `support` | array of strings | no | causes the sysop shows support for, as codes from the directory's published list |
 | `interests` | array of strings | no | what the sysop is into, as codes from the directory's published list |
@@ -91,7 +91,7 @@ The last seven fields in the table are optional and describe the board rather th
 | `system` | Free text, the board's own words: a board that knows its hardware can report it, and any board can say `Compaq 486`. The directory removes control and format characters (the bidirectional overrides and zero-width characters included), collapses runs of spaces, keeps at most two combining marks on a character, and cuts what is left to 40 characters. |
 | `terminals` | Lower case words from the list above. `utf8` means UTF-8 ANSI; `ansi` means CP437 ANSI. |
 | `guests` | A JSON `true` or `false` and nothing else. A string such as `"yes"` counts as not sent. |
-| `features` | Only what is running when the heartbeat is sent. A board that switches its file areas off should stop sending `files`. |
+| `features` | Only what is running when the heartbeat is sent. A board that switches its file areas off should stop sending `files`. `camera` means a caller can take a picture with the board's camera and download it; send it only while the camera is enabled and working. unleashedbbs.com shows it as a small camera, "This BBS can take pictures". |
 | `sd` | The size of the SD card the board is using right now, in GB, rounded up by the board to the size printed on the card: a "32 GB" card that reports 29.7 GB is sent as `32`. A JSON number, a whole one, from 1 to 4096; anything else counts as not sent. Sent only while a card is in use, so a board whose card is pulled loses the badge with its next heartbeat. unleashedbbs.com shows it as `SD32`. |
 | `support` | Codes from the list the directory publishes. The one at unleashedbbs.com publishes its list at `/badges`, and as a file, `badges.json` in [its repository](https://github.com/rwmech/unleashed_directory). |
 | `interests` | Codes from the list the directory publishes, exactly as `support`: hobbies and interests rather than causes, such as `c64`, `elctr` (electronics), `games` or `garden`. The one at unleashedbbs.com publishes its list at `/badges` and in `badges.json`. A code a directory moves from one list to the other should still be understood in the list it came from: unleashedbbs.com moved `ham` from `support` to `interests` and reads it in either. |

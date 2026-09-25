@@ -14,6 +14,45 @@
 
 # Changelog
 
+## 1.2.8, 2026-09-25
+
+The home page opens with the pitch and shows the busiest ten, every board
+moves to /directory with a search, and a board with a camera gets a badge.
+
+- **The home page's opening row** (Rob): on the left, two sentences from
+  /different ("A whole BBS on a board the size of a stick of gum, for about
+  $5. It answers a Commodore 64 and a laptop in the same chat room, on
+  about half a watt.") over the "See what µnleashed can do" button; on the
+  right, the Run your own board card, as before. Under the row, "Try out
+  any of the boards in the directory below.", a hairline rule in the
+  footer's style, and then the directory: its heading, the live figures and
+  the dial help, unchanged. On a phone it stacks in that order.
+- **The front page shows the ten busiest boards** (Rob: "limit the front
+  page to 10 BBS systems, most active and popular"), in the order the list
+  always had: up before quiet, then the caller-minutes a board shares or
+  its callers on now, then the longest run up, and now the name last. A
+  line over the table says so ("The ten busiest boards right now.", or
+  "Every board listed, the busiest first." while there are ten or fewer),
+  and under it a button, "All N boards, search and filters".
+- **/directory is every board, with a search** (Rob: "a new page which is
+  purely the search and directory. Search should include a name search
+  too"). A plain GET form, `?q=`, answered by the server: any case, a
+  match anywhere in the board's name, its sysop's name or its description.
+  The search is part of the badge filter's form, so the two narrow
+  together and travel together in the URL. What is typed is cut to 60
+  characters, loses control and format characters, and only ever comes
+  back escaped. A search that finds nothing says so, with a link that
+  clears it and keeps the badges. It lights Boards in the menu.
+- **Filters live on /directory.** The front page's filter sends its chips
+  there rather than narrowing ten rows, and `/?b=` or `/?q=`, including
+  every filter link shared before today, is redirected there with its
+  query.
+- **A camera badge** (Rob: "This BBS can take pictures"): a board whose
+  `features` include `camera` carries a small blue camera beside its other
+  features, between doors and the SD card. It is a chip in the filter and a
+  row on /badges, linked to /camera. The firmware sends `camera` only while
+  the camera plugin is enabled and running. PROTOCOL.md lists it.
+
 ## 1.2.7, 2026-09-25
 
 The ESP32 dev board is two entries on /hardware (Rob: "esp32 is misleading

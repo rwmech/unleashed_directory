@@ -506,6 +506,9 @@ NAV_SECTION = {
     # face because "/" alone is every face's own home, and on the about
     # face that would light "What this is" for a page about badges.
     "/badges":          "list:/",
+    # Every board, with the search and the filter (site 1.2.8): the board
+    # list itself, only whole, so it lights Boards.
+    "/directory":       "list:/",
 }
 
 
@@ -1360,6 +1363,13 @@ CONNECTED_JS = (
 #     can be shared. "#filter" is added while the pane is open, so the
 #     list's own refresh, which reloads that URL, opens it again rather than
 #     snapping it shut under somebody who is still choosing.
+#   - Only on /directory (site 1.2.8). The front page's form is marked
+#     data-go and left alone, so its chips go to the full list. On
+#     /directory the name search (q) is part of the form; the URL keeps the
+#     search the page was served for, and a changed search is let through
+#     to the server, which is the only thing that can answer it. When a
+#     search found nothing there is no table, and the chips go to the
+#     server too.
 #
 # It reads the page and nothing else, writes with textContent and the
 # hidden attribute only, sends nothing anywhere, stores nothing and never
@@ -1386,10 +1396,10 @@ BADGE_JS = (
     "out.textContent=!w.length?items.length+noun:"
     "n?n+' of '+items.length+noun:'No badge matches that.';}"
     "q.addEventListener('input',find);find();});"
-    "var f=d.getElementById('fform');if(!f)return;"
+    "var f=d.getElementById('fform');if(!f||f.hasAttribute('data-go'))return;"
     "var det=d.getElementById('filter'),rows=all('tr[data-b]'),"
     "tab=d.getElementById('boards'),none=d.getElementById('fnone'),"
-    "line=d.getElementById('factive');"
+    "line=d.getElementById('factive'),qi=f.elements.q;if(!tab)return;"
     "function part(k){return line.querySelector('[data-f='+k+']');}"
     "function apply(){"
     "var sel=all('input[name=b]:checked',f),any=f.elements.m.value==='any',n=0;"
@@ -1404,10 +1414,12 @@ BADGE_JS = (
     "d.getElementById('fcount').textContent=sel.length||'';"
     "var q=sel.map(function(c){return 'b='+encodeURIComponent(c.value);});"
     "if(any&&q.length)q.push('m=any');"
+    "if(qi&&qi.defaultValue)q.push('q='+encodeURIComponent(qi.defaultValue));"
     "history.replaceState(null,'',location.pathname+(q.length?'?'+q.join('&'):'')"
     "+(det.open?'#filter':''));}"
     "f.addEventListener('change',apply);"
-    "f.addEventListener('submit',function(e){e.preventDefault();det.open=false;});"
+    "f.addEventListener('submit',function(e){"
+    "if(qi&&qi.value!==qi.defaultValue)return;e.preventDefault();det.open=false;});"
     "det.addEventListener('toggle',apply);"
     "all('[data-clear]').forEach(function(a){a.addEventListener('click',function(e){"
     "e.preventDefault();all('input[name=b]',f).forEach(function(c){c.checked=false;});"
@@ -3343,12 +3355,14 @@ p.lead {{ color:var(--dim); margin:0 0 1.25rem; }}
    the line. */
 p.stat {{ color:var(--ink); margin:0 0 0.5rem; }}
 p.stat .n {{ color:var(--live); }}
-/* The top of the board list: the heading, the figures and the lead on the
-   left, the "Run your own board" card on the right. From the site's one
-   breakpoint up it is a grid column, the way /install's card is, and not a
-   float; the card is top aligned, level with the heading, so the table
-   starts under whichever of the two is taller. Below it the card follows
-   the lead, full width and short.
+/* The top of the board list (site 1.2.8, Rob): the pitch and the button to
+   /different on the left, the "Run your own board" card on the right, as
+   the page's opening row; then a line into the list, a rule, and the
+   directory itself, its heading, figures and lead unchanged. From the
+   site's one breakpoint up the row is a grid, the way /install's card is,
+   and not a float; the card is top aligned, level with the pitch. Below it
+   everything stacks in reading order: the pitch and its button, the card,
+   the line into the list, the rule, the directory.
 
    19.5rem rather than 18: at 18 the two buttons stacked, which made the
    card half as tall again as the text beside it and pushed the list down
@@ -3356,7 +3370,32 @@ p.stat .n {{ color:var(--live); }}
    one line, in Menlo, the widest face the font stack reaches (0.602em a
    character against Consolas's 0.55). */
 .listtop {{ margin:0 0 1.25rem; }}
-.listtop p.lead {{ margin:0; }}
+.listtop p.pitch {{ color:var(--ink); margin:0; }}
+.listtop p.tease {{ margin:0.875rem 0 0; }}
+/* The line into the list, and the rule under it in the footer's style: a
+   hairline in --rule, the page's own divider, nothing heavier. */
+p.tryit {{ color:var(--dim); margin:0 0 0.75rem; }}
+hr.dirrule {{ border:0; border-top:1px solid var(--rule); margin:0 0 1.25rem; }}
+/* The front page's ten (site 1.2.8): a line saying so over the table, and
+   the way to all of them under it, a section's next step. */
+p.topn {{ color:var(--dim); font-size:0.8125rem; margin:0 0 0.375rem; }}
+p.allb {{ margin:1rem 0 0.5rem; }}
+/* /directory's search: the badge search's box and label, with a button in
+   the Filter button's outline, and under it a line saying what it found. */
+.findbar.bsearch {{ max-width:36rem; margin:0 0 0.75rem; }}
+.bsearch button {{ font:inherit; font-size:0.75rem; letter-spacing:0.0625rem;
+        text-transform:uppercase; color:var(--dial); background:transparent;
+        border:1px solid #35566b; border-radius:0.375rem; min-height:2.125rem;
+        padding:0.25rem 0.875rem; cursor:pointer; }}
+.bsearch button:hover {{ border-color:var(--dial); }}
+.bsearch button:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+p.qline {{ color:var(--dim); font-size:0.8125rem; margin:-0.25rem 0 0.75rem; }}
+/* On a phone the label takes its own line, so the box and its button share
+   the next one rather than the button dropping under the box alone. */
+@media (max-width: 900px) {{
+  .bsearch label {{ flex-basis:100%; }}
+}}
+p.qline a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 /* The card stands out in --dial, the colour of things you can act on (Rob,
    0.20.2): a wash of it over the page rather than a flat bright block, and
    its border in the same blue. rgba() rather than the variable because a
@@ -3536,7 +3575,12 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
 .bd.k-sup, .bd.k-int {{ padding:0 0.125rem; }}
 .bd.k-sup svg, .bd.k-int svg, .cb svg {{ display:block; width:1.0625rem; height:1.0625rem;
         fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
-.k-int svg, .k-upd svg {{ stroke:currentColor; }}
+.k-int svg, .k-upd svg, .k-feat svg {{ stroke:currentColor; }}
+/* The camera (site 1.2.8), the one feature drawn rather than lettered: a
+   point smaller than a cause's drawing, and the chip's side padding given
+   back, so it sits the height and near the width of C or Fi beside it. */
+.bd.k-feat svg {{ display:block; width:1rem; height:1rem; margin:0 -0.125rem;
+        fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }}
 /* The arrow on the end of a behind board's software badge: a link to
    /upgrade, joined to the badge by giving back the row's gap and having no
    left edge of its own. */
@@ -5056,7 +5100,7 @@ def chart_html(info):
 # --------------------------------------------------------------------------
 SYSTEM_MAX = 40
 TERMINALS  = ("ansi", "utf8", "petscii", "ascii", "vt100")
-FEATURES   = ("chat", "forums", "files", "mail", "doors")
+FEATURES   = ("chat", "forums", "files", "mail", "doors", "camera")
 NEW_DAYS   = 7
 # The SD card's size, in GB, as the board sends it (site 1.1.0, firmware
 # 1.1.0): a whole number, already rounded by the board up to the size
@@ -5066,9 +5110,12 @@ SD_MAX     = 4096
 
 # The small badges, in the order they appear: key, letters, colour class,
 # name, and what it means, which the tooltip says after the name. The first
-# eight are sent by the board and the last two are worked out here. The SD
+# nine are sent by the board and the last two are worked out here. The SD
 # card's letters here are what the legend and the filter show; on a board's
-# row the badge carries the size as well, "SD32".
+# row the badge carries the size as well, "SD32". The camera (site 1.2.8,
+# Rob: "This BBS can take pictures") has no letters: it is a drawing,
+# CAMERA_SVG, in the features' blue, and its tooltip is Rob's sentence,
+# from LETTER_TIPS, rather than the name and the meaning run together.
 LETTER_BADGES = (
     ("petscii", "P",  "term",   "PETSCII",
      "a Commodore 64 or 128 gets colour and graphics here, not just text."),
@@ -5079,13 +5126,32 @@ LETTER_BADGES = (
     ("files",   "Fi", "feat",   "Files",  "file areas to download from, running now."),
     ("mail",    "M",  "feat",   "Mail",   "private mail between callers, running now."),
     ("doors",   "D",  "feat",   "Doors",  "games and programs to run, running now."),
-    ("sd",      "SD", "feat",   "SD card",
+    ("camera",  "",   "feat",   "Camera",
+     "this BBS can take pictures. A caller takes a snapshot from their "
+     "terminal and downloads it a few seconds later. Running now."),
+    ("sd",     "SD", "feat",   "SD card",
      "an SD card is in use on the board. On a board's row the badge carries "
      "the card's size in GB, as printed on the card: SD32 is a 32 GB card."),
     ("new",     "N",  "new",    "New",    "listed here for less than a week."),
     ("steady",  "S",  "steady", "Steady",
      "answered more than 95% of the heartbeats it was due over the last seven days."),
 )
+
+# A badge whose tooltip is its own sentence rather than "Name: meaning".
+LETTER_TIPS = {"camera": "This BBS can take pictures."}
+
+# The camera badge's drawing (site 1.2.8): a camera body with its hump, the
+# lens and a glint in it, in the same 24 unit square and line weight as the
+# causes and the interests, drawn in the chip's colour. Not the Photography
+# interest's camera: that one is rose and says what the sysop likes; this
+# one is blue and says what the board can do.
+CAMERA_SVG = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+              '<path d="M4.6 8.2 H7.8 L9.4 5.8 H14.6 L16.2 8.2 H19.4 C20.3 8.2 21 8.9'
+              ' 21 9.8 V17.4 C21 18.3 20.3 19 19.4 19 H4.6 C3.7 19 3 18.3 3 17.4'
+              ' V9.8 C3 8.9 3.7 8.2 4.6 8.2 Z"/>'
+              '<circle cx="12" cy="13.5" r="3.5"/>'
+              '<circle cx="12" cy="13.5" r="1.1" fill="currentColor" stroke="none"/>'
+              "</svg>")
 
 # How long a board has been listed, counted from the day it first went
 # public. Only the highest reached is shown. A month is 30 days and a year
@@ -5770,7 +5836,7 @@ def _badge_table():
         else:
             add("board", key, name, cls, letters, _cap(means),
                 where.get(key, f"<code>{key}</code> <span class='src'>in features</span>"),
-                tip=f"{name}: {means}")
+                tip=LETTER_TIPS.get(key, f"{name}: {means}"))
     # The six steps of how long a board has been listed are one badge,
     # "Listed", which shows its highest step only; each step is a chip of
     # its own in the filter, meaning that long or longer. They share the
@@ -5824,9 +5890,10 @@ FILTER_KEYS = tuple(b["key"] for b in BADGES if b["filter"])
 # worked out, then the causes and the interests, and only those two
 # alphabetical, because there a reader is scanning for a name. /badges and
 # the filter keep BADGES order; only the row uses this. The SD card (site
-# 1.1.0) sits with what is running, after doors.
+# 1.1.0) sits with what is running, after doors, and the camera (site
+# 1.2.8) between the two.
 ROW_ORDER = ("petscii", "guests", "chat", "mail", "forums", "files", "doors",
-             "sd", "new", "steady")
+             "camera", "sd", "new", "steady")
 ROW_SUPPORT = tuple(b for b in BADGES if b["group"] == "support")
 ROW_INTERESTS = tuple(sorted((b for b in BADGES if b["group"] == "interests"),
                              key=lambda b: b["sort"]))
@@ -5849,6 +5916,8 @@ def badge_symbol(b):
         return html.escape(b["sym"].upper())
     if b["cls"] == "upd":
         return UP_ARROW
+    if b["key"] == "camera":
+        return CAMERA_SVG
     return html.escape(b["sym"])
 
 
@@ -6089,6 +6158,8 @@ def legend_html(lines):
             means = html.escape(b["means"])
             if b["key"] == "steady":
                 means += ' <a href="#how-steady-is-worked-out">How</a>.'
+            elif b["key"] == "camera":
+                means += ' <a href="/camera">How a caller uses it</a>.'
             out.append(row(chips, b, b["name"], means, badge_words(b)))
         return "".join(out)
 
@@ -6418,6 +6489,20 @@ RUN_CARD = ('<aside class="runcard" aria-labelledby="run-your-own">'
 HOME_TEASER = ('<p class="next tease"><a class="go" href="/different">'
                "See what µnleashed can do</a></p>")
 
+# Above the button, the reason to press it (site 1.2.8, Rob), in two
+# sentences taken from /different, all of it true of the ESP32 dev board:
+# the size of a stick of gum, about $5, a Commodore 64 and a laptop in one
+# chat room, and /hardware's half a watt while it waits. The S3 boards cost
+# and draw more, so this names the cheap one, as /different does.
+HOME_PITCH = ('<p class="pitch">A whole BBS on a board the size of a stick of '
+              "gum, for about $5. It answers a Commodore 64 and a laptop in the "
+              "same chat room, on about half a watt.</p>")
+
+# And after the opening row, the line into the list, which the rule then
+# separates from the directory itself.
+HOME_TRY = ('<p class="tryit">Try out any of the boards in the directory '
+            "below.</p>")
+
 
 # --------------------------------------------------------------------------
 # The filter over the board list (site 0.22.0, Rob: "allow filtering on the
@@ -6502,10 +6587,20 @@ FILTER_TITLES = {"board": "Sent by the board", "directory": "Worked out here",
                  "support": "Support", "interests": "Interests"}
 
 
-def filter_bar_html(sel, any_, shown, total):
+def filter_bar_html(sel, any_, shown, total, go=False, q=""):
     """The Filter button, its pane, the line saying what is chosen, and the
-    key to the badges, for the top of the board list."""
+    key to the badges, for the top of the board list.
+
+    Every filter lands on /directory (site 1.2.8). On the front page, which
+    shows only the busiest ten, go is true: the form is marked data-go so
+    the script leaves it alone, and "Show boards" takes the reader to the
+    full list with those badges chosen, rather than narrowing ten rows. On
+    /directory the chips filter live, and q, the name search, rides along
+    in the form (its box sits outside the pane, tied to it by form=) so a
+    search and a filter always travel together."""
     chosen = set(sel)
+    clear = "/directory" + ("?q=" + urllib.parse.quote_plus(q) if q else "")
+    clear = html.escape(clear, quote=True)
     groups = []
     for group, _heading in BADGE_GROUPS:
         items = [b for b in BADGES if b["group"] == group and b["filter"]]
@@ -6532,8 +6627,9 @@ def filter_bar_html(sel, any_, shown, total):
     return ('<div class="fbar">'
             '<details class="filter" id="filter"><summary>Filter'
             f'<span class="fc" id="fcount">{len(sel) or ""}</span></summary>'
-            '<form class="fpane" id="fform" method="get" action="/"'
-            ' aria-label="Filter the boards by badge">'
+            '<form class="fpane" id="fform" method="get" action="/directory"'
+            + (" data-go" if go else "")
+            + ' aria-label="Filter the boards by badge">'
             '<div class="ftop">'
             '<p class="findbar" data-js hidden><label for="fq">Find a badge</label>'
             '<input type="search" id="fq" data-find="#fgrid" data-count="fqn"'
@@ -6544,14 +6640,14 @@ def filter_bar_html(sel, any_, shown, total):
             + "</fieldset></div>"
             '<div class="frows" id="fgrid">' + "".join(groups) + "</div>"
             '<p class="fgo"><button type="submit">Show boards</button>'
-            '<a href="/" data-clear>Clear all</a></p>'
+            f'<a href="{clear}" data-clear>Clear all</a></p>'
             "</form></details>"
             '<p class="keylink"><a href="/badges">What the badges mean</a></p>'
             f'<p class="factive" id="factive" aria-live="polite"{"" if sel else " hidden"}>'
             f'<span data-f="n">{shown} of {total} board{plural}</span> with '
             f'<span data-f="m">{mode} of</span>: '
             f'<span data-f="l">{html.escape(names)}</span>. '
-            '<a href="/" data-clear>Clear</a></p>'
+            f'<a href="{clear}" data-clear>Clear</a></p>'
             "</div>")
 
 
@@ -6565,7 +6661,8 @@ def index_data():
         rows = con.execute(
             "SELECT * FROM boards WHERE state IN ('online','offline') "
             "ORDER BY state='online' DESC, "
-            "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC").fetchall()
+            "COALESCE(minutes24, busy * 60, 0) DESC, streak_start ASC, "
+            "name COLLATE NOCASE ASC").fetchall()
         charts = {}
         for r in rows:
             hours = hours_for(con, r["id"])
@@ -6575,67 +6672,173 @@ def index_data():
     return now, rows, charts, steady
 
 
-def index_page(sel=(), any_=False, data=None):
-    """The board list. sel is the badges chosen in the filter, any_ whether
-    one of them is enough; with none chosen it is the whole list, which is
-    the page almost everybody gets and the one that is cached whole."""
+# The front page shows the busiest ten (site 1.2.8, Rob: "limit the front
+# page to 10 BBS systems, most active and popular"), in the order the list
+# has always had: up before quiet, then the caller-minutes a board shares
+# or, failing that, its callers on now counted as an hour each, then the
+# longest unbroken run up, then the name. Every board is on /directory.
+HOME_MAX = 10
+
+# The name search on /directory (site 1.2.8): a GET form, answered here.
+# What a reader types is cut to SEARCH_MAX characters after control and
+# format characters are dropped and runs of spaces are closed up, and it is
+# only ever put back on the page escaped.
+SEARCH_MAX = 60
+
+
+def search_query(query):
+    """The name search in a query string, cleaned and cut to SEARCH_MAX, or
+    "" for none. The first q wins."""
+    for part in (query or "").split("&")[:FILTER_MAX_PARAMS]:
+        name, _eq, value = part.partition("=")
+        if urllib.parse.unquote_plus(name) != "q":
+            continue
+        text = urllib.parse.unquote_plus(value)
+        text = "".join(c for c in text if unicodedata.category(c)[0] != "C")
+        return " ".join(text.split())[:SEARCH_MAX].strip()
+    return ""
+
+
+def board_found(r, q):
+    """Whether a board answers a search: q anywhere in its name, its sysop's
+    name or its description, in any case."""
+    needle = q.casefold()
+    return any(needle in (r[k] or "").casefold()
+               for k in ("name", "owner", "description"))
+
+
+def list_html(rows, now, charts, steady, sel=(), any_=False, go=False, q="", say=""):
+    """The filter over the board list and the table under it, for the front
+    page (go: its chips go to /directory) and for /directory itself.
+
+    The filter and the key to the badges sit small and right above the
+    table, where somebody wondering what "Fi" means is already looking. Not
+    in the table's header row, which a phone does not show. When nothing
+    passes the filter the table is hidden and a sentence says so, rather
+    than a header over nothing."""
+    latest = newest_release()
+    shown = sum(1 for r in rows
+                if board_matches(row_keys(r, now, r["id"] in steady, latest), sel, any_))
+    return (filter_bar_html(sel, any_, shown, len(rows), go, q)
+            + (f'<p class="topn">{say}</p>' if say else "")
+            + '<table id="boards"' + ("" if shown else " hidden") + ">"
+            "<tr><th>Board</th><th>Dial</th><th>State</th></tr>"
+            + board_rows(rows, now, charts, steady, sel, any_, latest) + "</table>"
+            + '<p class="none" id="fnone"' + (" hidden" if shown else "") + ">"
+            + f"No board with {'any' if any_ else 'all'} of those yet.</p>")
+
+
+# Under both lists: what the figures on a row mean. Five clauses and sixty
+# words with no break, and it is the only place that says what the 24 hour
+# figures and "up for" mean. Three lines, one idea each.
+LIST_FOOT = ("The 24 hour figures under a board's state are how many calls it "
+             "took and how long callers were connected in total.<br>"
+             "Caller counts and activity are reported by the boards themselves. "
+             "The small figure next to the state is how old that reading is.<br>"
+             '"Up for" is measured here and cannot be fudged.')
+
+
+def index_page(data=None):
+    """The front page: the opening row, then the directory's heading and
+    figures, then the busiest HOME_MAX boards and the way to all of them.
+    The same for everybody, so it is cached whole. A filter or a search
+    asked of it is sent on to /directory, which is where both live."""
     now, rows, charts, steady = data or index_data()
     live = [r for r in rows if r["state"] == "online"]
     # The same figure each row's state shows as "N of M on", summed.
     on = sum(r["busy"] or 0 for r in live)
 
     # The announcement, when there is one, sits above everything else the
-    # page says; then the heading, its figures and the lead, with the small
-    # "Run your own board" card beside them; then the list, which is still
-    # the first big thing on the screen at every width.
+    # page says. Then the opening row (site 1.2.8, Rob): the pitch and the
+    # one button to what sets the board apart on the left, the small "Run
+    # your own board" card beside them. Then a line into the list, a rule,
+    # and the directory: its heading, its figures and the lead, then the
+    # list.
     head = (head_html("list", "/")
             + announcement_banner()
             + '<div class="listtop"><div class="intro">'
+            + HOME_PITCH + HOME_TEASER + "</div>"
+            + RUN_CARD + "</div>"
+            + HOME_TRY + '<hr class="dirrule">'
             + "<h1>BBS directory</h1>"
             + stat_line(len(rows), on)
             + '<p class="lead">Boards that are up right now. '
             'Dial one with <a href="/terminals">any telnet client</a>, or click '
             'an address if you have one installed. '
             '<a href="/dialing">Nothing happened?</a> '
-            '<a href="/firstcall">Never called one before?</a></p>'
-            # One button to what sets the board apart (site 1.2.4, Rob),
-            # and no more than that here: the list stays the first big
-            # thing on the screen. The page makes each claim and cites it.
-            + HOME_TEASER + "</div>"
-            + RUN_CARD + "</div>")
+            '<a href="/firstcall">Never called one before?</a></p>')
     if rows:
-        # The filter and the key to the badges, small and right above the
-        # table, where somebody wondering what "Fi" means is already
-        # looking. Not in the table's header row, which a phone does not
-        # show. When nothing passes the filter the table is hidden and a
-        # sentence says so, rather than a header over nothing.
-        latest = newest_release()
-        shown = sum(1 for r in rows
-                    if board_matches(row_keys(r, now, r["id"] in steady, latest), sel, any_))
-        body = (filter_bar_html(sel, any_, shown, len(rows))
-                + '<table id="boards"' + ("" if shown else " hidden") + ">"
-                "<tr><th>Board</th><th>Dial</th><th>State</th></tr>"
-                + board_rows(rows, now, charts, steady, sel, any_, latest) + "</table>"
-                + '<p class="none" id="fnone"' + (" hidden" if shown else "") + ">"
-                + f"No board with {'any' if any_ else 'all'} of those yet.</p>"
+        top = rows[:HOME_MAX]
+        # One line saying what the list is, and it has to be true: "ten"
+        # only once there are more than ten to choose from.
+        what = ("The ten busiest boards right now." if len(rows) > HOME_MAX
+                else "Every board listed, the busiest first.")
+        n = len(rows)
+        body = (list_html(top, now, charts, steady, go=True, say=what)
+                + '<p class="next allb"><a class="go" href="/directory">'
+                + f"All {n:,} board{'' if n == 1 else 's'}, search and filters</a></p>"
                 + BADGE_JS)
     else:
         body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
-    body = head + body
-    # Five clauses and sixty words with no break, and it is the only place
-    # that says what the 24 hour figures and "up for" mean. Three lines, one
-    # idea each.
-    footer = foot_html("list",
-        "The 24 hour figures under a board's state are how many calls it "
-        "took and how long callers were connected in total.<br>"
-        "Caller counts and activity are reported by the boards themselves. "
-        "The small figure next to the state is how old that reading is.<br>"
-        '"Up for" is measured here and cannot be fudged.')
     desc = (f"{len(rows)} bulletin board{'' if len(rows) == 1 else 's'} listed, "
             f"{len(live)} up right now, {on} caller{'' if on == 1 else 's'} on. "
             "Dial one with any telnet client.")
     return PAGE.format(title=html.escape(SITE_NAME), desc=html.escape(desc, quote=True),
-                       body=body, footer=footer, refresh=LIST_REFRESH, head="")
+                       body=head + body, footer=foot_html("list", LIST_FOOT),
+                       refresh=LIST_REFRESH, head="")
+
+
+def directory_page(sel=(), any_=False, q="", data=None):
+    """/directory (site 1.2.8, Rob: "a new page which is purely the search
+    and directory"): every listed board, the name search and the badge
+    filter, and nothing else. sel and any_ are the filter, q the search.
+    With none of them it is the same for everybody and cached whole."""
+    now, rows, charts, steady = data or index_data()
+    live = [r for r in rows if r["state"] == "online"]
+    on = sum(r["busy"] or 0 for r in live)
+    found = [r for r in rows if board_found(r, q)] if q else rows
+    qe = html.escape(q, quote=True)
+    head = (head_html("list", "/directory")
+            + "<h1>All boards</h1>"
+            + stat_line(len(rows), on)
+            + '<p class="lead">Every board on the directory, the busiest first. '
+            'Dial one with <a href="/terminals">any telnet client</a>, or click '
+            "an address if you have one installed.</p>")
+    if not rows:
+        body = "<p class='none'>No boards listed yet. Yours could be the first.</p>"
+    else:
+        # The box sits outside the filter's pane, so it is on the screen
+        # without opening anything, and belongs to the pane's form by its
+        # form attribute, so a search keeps the badges chosen and the
+        # badges keep the search.
+        box = ('<div class="findbar bsearch" role="search">'
+               '<label for="nq">Find a board</label>'
+               f'<input type="search" id="nq" name="q" form="fform" value="{qe}"'
+               f' maxlength="{SEARCH_MAX}" autocomplete="off" spellcheck="false"'
+               ' placeholder="name, sysop or description">'
+               '<button type="submit" form="fform">Search</button></div>')
+        if q:
+            keep = "".join("&b=" + urllib.parse.quote_plus(k) for k in sel)
+            keep += "&m=any" if any_ and sel else ""
+            clear = html.escape("/directory" + ("?" + keep[1:] if keep else ""), quote=True)
+            n = len(found)
+            said = (f"No board matches &ldquo;{qe}&rdquo;." if not n else
+                    f"{n:,} board{' matches' if n == 1 else 's match'} &ldquo;{qe}&rdquo;.")
+            box += (f'<p class="qline" aria-live="polite">{said} '
+                    f'<a href="{clear}">Clear the search</a></p>')
+        if found:
+            body = box + list_html(found, now, charts, steady, sel, any_, q=q) + BADGE_JS
+        else:
+            # No table at all: the filter is still there, and with nothing
+            # to narrow, its chips go to the server with the search.
+            body = (box + filter_bar_html(sel, any_, 0, 0, q=q) + BADGE_JS)
+    n = len(rows)
+    desc = (f"All {n} bulletin board{'' if n == 1 else 's'} on the directory, "
+            "with a search by name and a filter by badge.")
+    return PAGE.format(title=html.escape(f"All boards - {SITE_NAME}"),
+                       desc=html.escape(desc, quote=True),
+                       body=head + body, footer=foot_html("list", LIST_FOOT),
+                       refresh=LIST_REFRESH, head="")
 
 
 def rss_date(when):
@@ -9436,17 +9639,32 @@ class Handler(BaseHTTPRequestHandler):
                                                            data_page(), "data",
                                                            "/", DATA_DESC)))
             else:
-                # A filtered view is built for its own request, from the
-                # same cached rows, so a thousand different filters cost a
-                # thousand renders and not a thousand database reads. The
-                # plain list, which is what nearly everybody asks for, is
-                # still cached whole.
-                sel, any_ = filter_query(self.path.partition("?")[2])
-                if sel:
-                    self.reply(200, index_page(sel, any_, cached(
-                        "indexdata", PAGE_CACHE, index_data)))
+                # The front page is one page for everybody, cached whole. A
+                # filter or a search asked of it (site 1.2.8) is answered on
+                # /directory, where every board is, so a link shared as
+                # /?b=petscii before there was a /directory still works.
+                query = self.path.partition("?")[2]
+                if filter_query(query)[0] or search_query(query):
+                    self.reply(302, "", "text/plain; charset=utf-8",
+                               {"Location": "/directory?" + query})
                 else:
-                    self.reply(200, cached("index", PAGE_CACHE, index_page))
+                    self.reply(200, cached("index", PAGE_CACHE, lambda: index_page(
+                        cached("indexdata", PAGE_CACHE, index_data))))
+        # Every board, with the name search and the badge filter (site
+        # 1.2.8). A filtered or searched view is built for its own request,
+        # from the same cached rows, so a thousand different filters cost a
+        # thousand renders and not a thousand database reads. The plain
+        # list is cached whole. Only on the list face: elsewhere it is the
+        # list face's page, and the menu already links there.
+        elif path == "/directory" and role not in ("about", "data"):
+            query = self.path.partition("?")[2]
+            (sel, any_), q = filter_query(query), search_query(query)
+            if sel or q:
+                self.reply(200, directory_page(sel, any_, q, cached(
+                    "indexdata", PAGE_CACHE, index_data)))
+            else:
+                self.reply(200, cached("directory", PAGE_CACHE, lambda: directory_page(
+                    data=cached("indexdata", PAGE_CACHE, index_data))))
         # The other two faces, under their own paths, so a deployment with
         # one domain has all three. There were no path routes at all: with
         # only DIRECTORY_LIST_DOMAIN set, /about and /data returned 404, two
