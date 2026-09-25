@@ -2393,11 +2393,14 @@ SOON_BOARDS = (
      "part": "ESP32-WROVER-E, 4 MB flash, 8 MB PSRAM",
      "tell": "A camera on a ribbon, a card slot and a USB-C socket",
      "art": BOARD_ART_FNCAM,
-     "camera": "OV2640",
+     # Site 1.2.7: the sensor varies between batches. Freenove document an
+     # OV2640; Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no
+     # JPEG encoder), and the firmware (FNCAM 1.0.2) drives both.
+     "camera": "varies by batch: OV2640, or a GC0308 at 640x480 as on Rob's",
      "page": "/hardware#freenove-esp32-camera-board",
      "buy": "https://link.amazon/B04Ehvw2R",
      "status": 'coming soon to <a href="/install">the installer</a>; '
-               "the port is under way on Rob's bench"},
+               "running on Rob's bench, camera and card included"},
     {"dir": "esp32s3-cam", "name": "ESP32-S3 camera board",
      "part": "ESP32-S3 N16R8, 16 MB flash, 8 MB PSRAM",
      "tell": "A camera, two USB-C sockets and an antenna lead",
@@ -2408,7 +2411,49 @@ SOON_BOARDS = (
      "status": 'coming soon to <a href="/install">the installer</a>; '
                "on order, and tested when it arrives"},
 )
-BOARD_BY_DIR = {b["dir"]: b for b in BOARDS + SOON_BOARDS}
+# The dev board with an SD card module wired to it (site 1.2.7, Rob: "esp32
+# is misleading with flash and go, it has to have an sd card, so maybe we
+# duplicate it, ESP32 + SD for Storage"). The dev board exactly as drawn
+# for BOARDS, at the same scale, in a viewBox widened to 144 x 66 for the
+# module beside it: the module's PCB with its card in the socket, the
+# regulator and the level shifter the common blue module carries, a
+# header on its lower edge, and four signal wires plus power and ground, from
+# the dev board's lower header. The wires go by count, not by pin: the
+# wiring diagram on /sdcard is the one that says which pin is which.
+_ESP32_INNER = BOARD_ART_ESP32.split(">", 1)[1].rsplit("</svg>", 1)[0]
+BOARD_ART_ESP32_SD = (
+    '<svg class="art board wide" viewBox="0 0 144 66" aria-hidden="true" '
+    'focusable="false" preserveAspectRatio="xMidYMid meet">'
+    + _ESP32_INNER
+    + '<rect class="o" x="104" y="9" width="36" height="41" rx="2"/>'
+    '<rect class="o" x="110" y="12" width="26" height="20" rx="1"/>'
+    '<path class="gb" d="M114 4 H132 V26 H114 V8 L118 4 Z"/>'
+    '<path class="d" d="M118 8 H128"/>'
+    '<rect class="gb" x="110" y="36" width="8" height="5" rx="0.6"/>'
+    '<rect class="gb" x="123" y="35" width="11" height="7" rx="0.6"/>'
+    '<rect class="g" x="106" y="44.5" width="30" height="4" rx="1"/>'
+    '<path class="d" d="' + " ".join(
+        f"M{83 - 5 * i} 50.5 V{53 + 2 * i} H{108 + 5 * i} V48.5" for i in range(6))
+    + '"/>'
+    "</svg>")
+
+# Boards shown on /hardware that are not image sets (site 1.2.7). The dev
+# board with a card runs the dev board's image, so it takes its firmware
+# from "image" and never reaches BOARDS: the installer's picker and the
+# release fetcher would otherwise offer, and look for, a second ESP32 build
+# that does not exist. "buy" is the dev board's, and "buy_more" is the line
+# after it for what is bought beside the board.
+SHOWN_BOARDS = (
+    {"dir": "esp32-sd", "image": "esp32",
+     "name": "ESP32 dev board + SD card, for storage",
+     "part": "ESP32-WROOM-32E, 4 MB flash, and a micro SD card module",
+     "tell": "The dev board with a card module wired beside it",
+     "art": BOARD_ART_ESP32_SD,
+     "page": "/hardware#esp32-dev-board-sd-card-for-storage",
+     "buy": "https://link.amazon/B08MTidlU",
+     "buy_more": "the SD card module is a couple of dollars anywhere"},
+)
+BOARD_BY_DIR = {b["dir"]: b for b in BOARDS + SHOWN_BOARDS + SOON_BOARDS}
 
 # How fast each board is expected to be (site 1.2.5, Rob: "Fast, Faster,
 # Fastest ... instead of numbers for now"). Expected, not measured: a
@@ -2417,29 +2462,41 @@ BOARD_BY_DIR = {b["dir"]: b for b in BOARDS + SOON_BOARDS}
 # the Wi-Fi buffers off internal memory, and the classic ESP32 reaches PSRAM
 # more slowly than the S3 does, hence the middle tier. Kept apart from
 # BOARDS so the installer's picker is untouched.
-BOARD_SPEED = {"esp32": "Fast", "esp32-fncam": "Faster",
+BOARD_SPEED = {"esp32": "Fast", "esp32-sd": "Fast", "esp32-fncam": "Faster",
                "esp32s3": "Fastest", "esp32s3-cam": "Fastest"}
 
 # The seal on a board's picture on /hardware (site 1.2.5, Rob: "So people
 # know these boards like the Freenove are literally flash and go"). Two
 # levels and no more: "flash & go", everything on the board, plug it in and
-# install from the browser; and "a little wiring", kept for the add-ons
-# (the SD card module, the lights), which is why no board wears it. The
-# add-on pages have wiring diagrams rather than a picture of a board, with
-# the ESP32 drawn in the corner a seal would cover, so they carry none.
+# install from the browser; and "a little wiring", a part added with
+# jumper wires and a page of steps. The second was kept for the add-ons
+# until site 1.2.7, when the dev board with a card became an entry of its
+# own and the first to wear it. The add-on pages have wiring diagrams
+# rather than a picture of a board, with the ESP32 drawn in the corner a
+# seal would cover, so they carry none.
 # A board not yet tested says "expected" on its seal, the S3 camera board
 # until it has run. A ribbon rather than a round seal, so the words are
 # 9.5 units at 5.25rem: about 11px on a phone, where a seal's curved type
 # would have been under 8.
-BOARD_SEAL = {"esp32": "go", "esp32s3": "go", "esp32-fncam": "go",
-              "esp32s3-cam": "go-expected"}
+BOARD_SEAL = {"esp32": "go", "esp32-sd": "wire", "esp32s3": "go",
+              "esp32-fncam": "go", "esp32s3-cam": "go-expected"}
 
 
 def seal_html(kind):
     """The ribbon over a board picture's top-left corner: "FLASH & GO",
-    with "expected" under it for a board not yet tested. role="img" with
-    the level said in words, because the ribbon is the only place it is
-    shown."""
+    with "expected" under it for a board not yet tested, or "A LITTLE /
+    WIRING" on two lines, which at the ribbon's width is the only way it
+    fits at the same size. role="img" with the level said in words,
+    because the ribbon is the only place it is shown."""
+    if kind == "wire":
+        return ('<svg class="art seal" viewBox="0 0 72 34" role="img" '
+                'aria-label="A little wiring: a part added to the board with '
+                'jumper wires, with a page of steps">'
+                '<path class="rb" d="M1 1 H71 L65 17 L71 33 H1 Z"/>'
+                '<text class="sl1" x="32" y="15" font-size="9.5" '
+                'text-anchor="middle">A LITTLE</text>'
+                '<text class="sl1" x="32" y="27" font-size="9.5" '
+                'text-anchor="middle">WIRING</text></svg>')
     exp = kind.endswith("-expected")
     h = 34 if exp else 24
     label = ("Flash and go, expected: everything should be on the board, "
@@ -2655,19 +2712,25 @@ def board_html(lines):
     # A board on its way (SOON_BOARDS) has no image set to look for: its
     # Firmware row says what is happening instead, and it has a Camera row
     # and no buy link.
-    o = [] if "status" in b else board_offers(b["dir"])
+    # A board in SHOWN_BOARDS runs another board's image, named by "image",
+    # and says so.
+    img = b.get("image", b["dir"])
+    o = [] if "status" in b else board_offers(img)
+    same = " The same image as the bare board." if img != b["dir"] else ""
     if "status" in b:
         build = b["status"]
     elif o:
-        ver = board_version(o[0], b["dir"])
-        exact = o[0]["sets"][b["dir"]]["shown"]
+        ver = board_version(o[0], img)
+        exact = o[0]["sets"][img]["shown"]
         build = (html.escape(ver) + ' <a href="/install">on the installer</a>'
-                 + (f"; the board calls it {html.escape(exact)}" if exact != ver else ""))
+                 + (f"; the board calls it {html.escape(exact)}" if exact != ver else "")
+                 + ("." + same if same else ""))
     else:
-        build = 'coming soon to <a href="/install">the installer</a>'
+        build = 'coming soon to <a href="/install">the installer</a>' + (
+            "." + same if same else "")
     seal = seal_html(BOARD_SEAL[b["dir"]]) if b["dir"] in BOARD_SEAL else ""
     return ('<div class="hwb"><div class="hwpic">'
-            + b["art"].replace('class="art board"', 'class="art board big"', 1)
+            + b["art"].replace('class="art board', 'class="art board big', 1)
             + seal + "</div>"
             + "<dl>"
             + "<dt>Firmware</dt><dd>" + build + "</dd>"
@@ -2679,7 +2742,9 @@ def board_html(lines):
                + ' <span class="exp">(expected, not yet measured)</span></dd>'
                if b["dir"] in BOARD_SPEED else "")
             + ('<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
-               + '" rel="sponsored">Amazon</a> (affiliate link)</dd>'
+               + '" rel="sponsored">Amazon</a> (affiliate link)'
+               + (" for the board; " + html.escape(b["buy_more"])
+                  if b.get("buy_more") else "") + "</dd>"
                if b.get("buy") else "")
             + "</dl></div>")
 
@@ -7155,6 +7220,9 @@ svg.art.steps { width:100%; max-width:34rem; height:auto;
    the step drawings reach on a desktop, so the lines are the same weight. */
 svg.art.board { flex:none; width:4.5rem; height:2.8125rem; margin:0; }
 svg.art.board.big { width:9rem; height:5.625rem; }
+/* The dev board with its card module (site 1.2.7): 144 x 66 units, so the
+   board in it is drawn at exactly the scale of the one above it. */
+svg.art.board.big.wide { width:13.5rem; height:6.1875rem; }
 /* The seal on a board's picture (site 1.2.5): --live, the site's colour
    for up and working, on the page's own background so the board's lines
    stop at its edge. */
@@ -8136,7 +8204,7 @@ SPECTRUM_STOPS = (  # x, name, what it is (two lines), cost, time, the work,
      "A bare ESP32 dev board: functional, lowest cost. About $5, about 5 "
      "minutes, no wiring. Expected to be fast, not yet measured.", "fast"),
     (170, "ESP32 + SD", ("economical", "and usable"), "about $8", "about 30 min",
-     "wiring the card", "/sdcard",
+     "wiring the card", "#esp32-dev-board-sd-card-for-storage",
      "An ESP32 dev board with an SD card: economical and usable. About $8, "
      "about 30 minutes, most of it wiring the card. Expected to be fast, "
      "not yet measured.", "fast"),

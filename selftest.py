@@ -2428,7 +2428,8 @@ def main():
         check("the tested boards page draws each board, its build and where to buy it",
               code == 200 and '<h2 id="esp32-dev-board">' in body
               and '<h2 id="waveshare-esp32-s3-lcd-1-47">' in body
-              and body.count('<div class="hwb">') == len(S.BOARDS) + len(S.SOON_BOARDS)
+              and body.count('<div class="hwb">')
+                  == len(S.BOARDS) + len(S.SHOWN_BOARDS) + len(S.SOON_BOARDS)
               and all(b["buy"] in body for b in S.BOARDS)
               and all(S.board_html([b["dir"]]) in body for b in S.BOARDS))
         check("and it is part of Build one, with the drawings' stylesheet and no script",
@@ -4115,14 +4116,15 @@ def main():
             f"<dt>Speed</dt><dd>{S.BOARD_SPEED[b['dir']]} "
             '<span class="exp">(expected, not yet measured)</span></dd>'
             in S.board_html([b["dir"]]) and S.board_html([b["dir"]]) in hw5
-            for b in S.BOARDS + S.SOON_BOARDS)
+            for b in S.BOARDS + S.SHOWN_BOARDS + S.SOON_BOARDS)
         check("the speeds render, each one marked expected",
               spd == ["fast", "fast", "fastest"]
               and all("Expected to be " in s[7] and "not yet measured" in s[7]
                       for s in S.SPECTRUM_STOPS)
               and facts_ok
-              and [S.BOARD_SPEED[d] for d in ("esp32", "esp32-fncam", "esp32s3", "esp32s3-cam")]
-                  == ["Fast", "Faster", "Fastest", "Fastest"]
+              and [S.BOARD_SPEED[d] for d in ("esp32", "esp32-sd", "esp32-fncam",
+                                              "esp32s3", "esp32s3-cam")]
+                  == ["Fast", "Fast", "Faster", "Fastest", "Fastest"]
               and "The speeds are expected, not measured" in " ".join(hw5.split())
               and "side by side" in " ".join(hw5.split()))
         # Site 1.2.5, Rob: a seal on each board's picture, "flash & go" for
@@ -4132,16 +4134,71 @@ def main():
         # board wears it.
         seals = re.findall(r'<div class="hwpic">.*?(<svg class="art seal[^"]*"[^>]*>.*?</svg>)</div>',
                            hw5, re.S)
-        check("every board's picture wears its seal, flash and go",
-              len(seals) == 4
-              and all('role="img" aria-label="Flash and go' in x and "FLASH &amp; GO</text>" in x
-                      for x in seals)
+        # Site 1.2.7: the dev board with a card wears the second level, a
+        # little wiring, the first board to, and the intro says both.
+        go = [x for x in seals if "FLASH &amp; GO</text>" in x]
+        wire = [x for x in seals if ">A LITTLE</text>" in x and ">WIRING</text>" in x]
+        check("every board's picture wears its seal, four flash and go, one a little wiring",
+              len(seals) == 5 and len(go) == 4 and len(wire) == 1
+              and all('role="img" aria-label="Flash and go' in x for x in go)
+              and 'role="img" aria-label="A little wiring' in wire[0]
               and sum(">expected</text>" in x for x in seals) == 1
               and ">expected</text>" in S.seal_html(S.BOARD_SEAL["esp32s3-cam"])
               and all(S.BOARD_SEAL[b["dir"]] == "go" for b in S.BOARDS + S.SOON_BOARDS[:1])
-              and "wiring" not in "".join(S.BOARD_SEAL.values())
-              and "<b>Flash &amp; go</b>, on a board" in hw5
+              and [d for d, v in S.BOARD_SEAL.items() if v == "wire"] == ["esp32-sd"]
+              and "<b>Flash &amp; go</b>:" in hw5 and "<b>A little wiring</b>:" in hw5
               and "svg.art.seal .rb {" in hwp and "article .hwb .hwpic svg.art.seal {" in hwp)
+        # Site 1.2.7, Rob: "esp32 is misleading with flash and go, it has to
+        # have an sd card". The bare board says what it does without one and
+        # points at the second entry, which summarises and links /sdcard.
+        sda = "esp32-dev-board-sd-card-for-storage"
+        bare = hw5.split('id="esp32-dev-board"')[1].split("<h2")[0]
+        sdsec = hw5.split(f'id="{sda}"')[1].split("<h2")[0] if f'id="{sda}"' in hw5 else ""
+        flat_sd = " ".join(sdsec.split())
+        check("the dev board with an SD card is an entry of its own, a little wiring",
+              S.SHOWN_BOARDS[0]["page"] == "/hardware#" + sda
+              and S.board_html(["esp32-sd"]) in sdsec
+              and 'class="art board big wide"' in sdsec
+              and "A LITTLE</text>" in sdsec and "FLASH &amp; GO" not in sdsec
+              and f'<a href="{S.BOARDS[0]["buy"]}" rel="sponsored">Amazon</a> (affiliate link) '
+                  "for the board; the SD card module is a couple of dollars anywhere" in sdsec
+              and "everything the BBS does" in flat_sd and "about $8" in flat_sd
+              and "about half an hour" in flat_sd
+              and "four signal wires plus power" in flat_sd
+              and '<p class="next"><a class="go" href="/sdcard">' in sdsec
+              and "svg.art.board.big.wide {" in hwp)
+        check("and the bare board says what needs a card, and links it",
+              "FLASH &amp; GO" in bare and f'href="#{sda}"' in bare
+              and "chat, mail, accounts" in " ".join(bare.split())
+              and "file areas, forums, backups kept on the card, and the photos"
+                  in " ".join(bare.split()))
+        # Site 1.2.7, Rob's bench: the Freenove's sensor is not the OV2640
+        # Freenove document. His kit carries a GC0308 (640x480, no JPEG),
+        # the firmware drives both, and the board is running, not a port.
+        fn = hw5.split('id="freenove-esp32-camera-board"')[1].split("<h2")[0]
+        flat_fn = " ".join(fn.split())
+        _, cam7 = get("/camera")
+        flat_c7 = " ".join(cam7.split())
+        fnb = S.BOARD_BY_DIR["esp32-fncam"]
+        check("the Freenove's camera varies by batch: GC0308 at 640x480, or OV2640",
+              "GC0308" in fnb["camera"] and "OV2640" in fnb["camera"]
+              and "640x480" in fnb["camera"]
+              and "varies between batches" in flat_fn and "GC0308" in flat_fn
+              and "640x480 at most" in flat_fn and "works with either" in flat_fn
+              and "varies between batches" in flat_c7 and "GC0308" in flat_c7
+              and "works with either" in flat_c7
+              and "| Resolution |" not in cam7
+              and "<td>320x240 or 640x480, on either camera." in cam7
+              and not re.search(r"\b(800x600|1024x768|1600x1200)\b|(?<![\d.])[1-9] ?(MP|megapixels?)\b",
+                                flat_fn + flat_c7)
+              # every OV2640 on either page shares its sentence with the GC0308
+              and all("GC0308" in s for s in re.split(r"(?<=[.:])\s", flat_fn + " " + flat_c7)
+                      if "OV2640" in s))
+        check("and it is running on the bench, still coming soon to the installer",
+              "under way" not in S.board_html(["esp32-fncam"]) and "under way" not in flat_fn
+              and "running on Rob's bench" in S.board_html(["esp32-fncam"])
+              and "coming soon to" in S.board_html(["esp32-fncam"])
+              and "esp32-fncam" not in {b["dir"] for b in S.BOARDS})
         _, diff5 = get("/different")
         check("and nowhere else",
               "(expected" not in diff5 and "Fastest" not in diff5)
@@ -4152,7 +4209,8 @@ def main():
         stops = re.findall(r'<a class="stp s\d" href="([^"]+)" aria-label="([^"]+)">', spec)
         check("and each stop is a link, told to a screen reader in words",
               'role="group" aria-label="Three ways to build a board"' in spec.split(">")[0]
-              and [h for h, _ in stops] == ["#esp32-dev-board", "/sdcard",
+              and [h for h, _ in stops] == ["#esp32-dev-board",
+                                          "#esp32-dev-board-sd-card-for-storage",
                                           "#waveshare-esp32-s3-lcd-1-47"]
               and all("About $" in a for _, a in stops)
               and 'id="esp32-dev-board"' in hwp
@@ -4536,6 +4594,19 @@ def main():
                       ".installer:has(#fwb1:checked) .bsec.b0{display:none}"
                       ".installer:has(#fwb1:checked) .bsec.b1{display:flex}" in shown
                   and "Board: ESP32" not in shown)
+            # Site 1.2.7, Rob: the dev board with a card is a second entry on
+            # /hardware and a display split only. The picker still has one
+            # ESP32, and the new entry names the ESP32's own firmware.
+            check("the picker still offers exactly one ESP32, and the card entry "
+                  "takes the ESP32's firmware",
+                  shown.count('<input type="radio" name="fwboard"') == len(S.BOARDS) == 2
+                  and shown.count("<b>ESP32 dev board</b>") == 1
+                  and "SD card, for storage" not in shown
+                  and [b["dir"] for b in S.BOARDS] == ["esp32", "esp32s3"]
+                  and all("image" not in b for b in S.BOARDS)
+                  and "<dt>Firmware</dt><dd>0.19.2 <a href=\"/install\">on the "
+                      "installer</a>. The same image as the bare board.</dd>"
+                      in S.board_html(["esp32-sd"]))
             # Site 1.0.0: a symbol on each button, a fresh chip with a
             # sparkle and a chip in an arrow going round it. Decoration: the
             # words say it, so a screen reader is not told twice.

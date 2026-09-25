@@ -1,4 +1,4 @@
-<!-- The camera page (site 1.2.4, Rob), in the shape of /sdcard and /lights. Every fact is from the firmware repository's internal/PLAN-freenove-cam.md as of 2026-09-24, and only from the sections Rob decided: "Snapshot command, self-timer and timelapse", "Limits, notices and naming" and "Retention", plus the privacy points in the brief (off until switched on, staff told of every snap, a lens cap the only real guarantee). Deliberately not stated, because the plan leaves them open: the quality and resolution defaults, the brightness default, the default count limits, the shortest timelapse interval (to be measured), exact wording of the board's messages other than "Download it now? (y/N)", which is Rob's, and the text-art preview (a stretch without a go). The Photos area is readable by everyone as shipped (Rob, in the 1.2.4 brief; the plan's proposal was users). The "until 1.1.0" note follows /lights; if the camera slips past 1.1.0, move the gate to the release that carries it. -->
+<!-- The camera page (site 1.2.4, Rob), in the shape of /sdcard and /lights. Every fact is from the firmware repository's internal/PLAN-freenove-cam.md as of 2026-09-24, and only from the sections Rob decided: "Snapshot command, self-timer and timelapse", "Limits, notices and naming" and "Retention", plus the privacy points in the brief. Since site 1.2.7 the sensor and the resolution are stated, from the firmware's FNCAM 1.0.2 (CHANGELOG, COMMANDS.md and src/board.h, 2026-09-25): the Freenove's sensor varies between batches, Freenove document an OV2640 and Rob's kit carries a GalaxyCore GC0308 (640x480 at most, no JPEG encoder, the board encodes: 3.6 to 3.9 s from SNAPSHOT to saved); both drivers are built, and CONFIG offers qvga or vga on either, vga as shipped (off until switched on, staff told of every snap, a lens cap the only real guarantee). Deliberately not stated, because the plan leaves them open: the quality default, the brightness default, the default count limits, the shortest timelapse interval (to be measured), exact wording of the board's messages other than "Download it now? (y/N)", which is Rob's, and the text-art preview (a stretch without a go). The Photos area is readable by everyone as shipped (Rob, in the 1.2.4 brief; the plan's proposal was users). The "until 1.1.0" note follows /lights; if the camera slips past 1.1.0, move the gate to the release that carries it. -->
 # Camera
 
 A camera on the board, and any caller you allow can take a picture with it.
@@ -23,6 +23,11 @@ camera-snap
   board](/hardware#freenove-esp32-camera-board) or an [ESP32-S3 camera
   board](/hardware#esp32-s3-camera-board). The camera is on the board, so
   there is nothing to wire.
+- **Whichever camera your Freenove came with.** Its sensor varies between
+  batches: Freenove's documents name an OV2640, and Rob's kit came
+  with a GalaxyCore GC0308, which takes 640x480 pictures at most and has no
+  JPEG encoder, so the board encodes each photo itself. The firmware works
+  with either, and the `CAMERA` command names the one it found.
 - **A micro SD card** in the board's slot. Photos are kept on the card, and
   without one the camera does not start.
 - **Somewhere worth pointing it**, within reach of a USB power supply. A phone
@@ -33,7 +38,8 @@ camera-snap
 Type `SNAPSHOT`, or `SNAP` for short, at the main prompt.
 
 - **It takes the picture straight away.** There is no countdown: whoever typed
-  it is somewhere else, not in front of the lens.
+  it is somewhere else, not in front of the lens. On a board with a GC0308 the
+  photo is saved about 4 seconds later, because the board encodes it itself.
 - **It tells you the photo's file name**, that it is in the Photos file area,
   and how many more you may take this hour and today.
 - **It asks `Download it now? (y/N)`.** Y sends the photo at once by YMODEM or
@@ -97,7 +103,8 @@ has.
 | On | Whether the camera runs at all. | Off |
 | Snapshot level | Who may take a picture, from everybody, guests included, up to the sysop alone. | Staff |
 | Photos level | Who may see and download the photos in area 12. | Everybody |
-| Quality, resolution | How sharp the JPEG is and how many pixels it has. | Not settled yet |
+| Resolution | 320x240 or 640x480, on either camera. A GC0308 goes no higher. | 640x480 |
+| Quality | How sharp the JPEG is. | Not settled yet |
 | Flip, mirror, brightness | For a camera mounted upside down, looking through a mirror, or in a dim room. | Not settled yet |
 | Use flash LED? | Lights the board's pixel white while a picture is taken, callers' pictures and the timelapse's alike. | Yes |
 | Name snaps | By date, by date and handle, or a folder for each handle. | By date |

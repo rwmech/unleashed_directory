@@ -14,6 +14,41 @@
 
 # Changelog
 
+## 1.2.7, 2026-09-25
+
+The ESP32 dev board is two entries on /hardware (Rob: "esp32 is misleading
+with flash and go, it has to have an sd card"), and the Freenove camera
+board's sensor is corrected from Rob's bench.
+
+- **ESP32 dev board** keeps its flash & go seal, and says what it does with
+  no card (chat, mail, accounts, the information pages, a directory
+  listing) and what needs one: file areas, forums, backups kept on the
+  card, and photos on a camera board.
+- **ESP32 dev board + SD card, for storage** is the new second entry: the
+  same board with a micro SD module beside it in the picture, and the first
+  board to wear the **a little wiring** seal. Everything the BBS does, about
+  $8 and about half an hour, four signal wires plus power. Its buy link is
+  the dev board's, with a line that the card module is a couple of dollars
+  anywhere, and its button goes to /sdcard, which still owns the wiring.
+- A display split only. Both entries run the one ESP32 image, so the new
+  one lives in a table of its own, `SHOWN_BOARDS`, and takes its firmware
+  version from the dev board's image set. `BOARDS`, which feeds the
+  installer's picker and the release fetcher, is unchanged: the picker
+  still offers one ESP32.
+- The spectrum's middle stop and the intro's middle line link to the new
+  entry rather than straight to /sdcard, and the intro's line about the
+  seal now describes both levels.
+- **The Freenove's camera varies between batches.** Freenove document an
+  OV2640; Rob's kit carries a GalaxyCore GC0308, 0.3 MP, 640x480 at most and
+  no JPEG encoder, so the board encodes each photo itself, about 4 seconds a
+  snap (firmware FNCAM 1.0.2). /hardware and /camera say so, say the
+  firmware drives both, and /camera's settings table gives the resolution:
+  320x240 or 640x480, 640x480 as shipped. Nothing claims more than a GC0308
+  can do.
+- **The Freenove is running, not being ported.** Core, SD card and camera
+  work on Rob's bench, and photos are being taken on it. It stays coming
+  soon to the installer until a release carries its build.
+
 ## 1.2.6, 2026-09-24
 
 - /hardware no longer says the Freenove camera board has a NeoPixel. It
