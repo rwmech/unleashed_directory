@@ -2,7 +2,15 @@
 ::: install-top
 # Set up your board
 
-Install the BBS software on an ESP32 from this page over a USB cable, which the hobby calls [[flashing]], then tell it which Wi-Fi network to join. About five minutes, most of it waiting.
+Put the BBS software on a board from this page over a USB cable, which the hobby calls [[flashing]]. About five minutes, most of it waiting.
+
+<!-- The guided path (site 1.3.15, Rob: "the current look is good on the right we just need to add a more guided process which starts with pick your board, then flash your board, etc."). One step a line, "Title | one short line"; {panel} is where the install card is, "in the panel on the right" on a desktop and "in the panel below" on a phone. The first step gets our three picks under it from "rec" in BOARDS in server.py, and a line saying every board in the panel works. The links go to the part of this page each step is about: #step-wifi is the anchor after the drawing of the first start, where the Wi-Fi item begins. Step 4 is the page's own account of the first caller, "After it boots" and "The sysop password". -->
+::: guide
+Pick your board | Choose it {panel}.
+Flash it | Press **Install on a new board** and pick the port. [How it goes](#what-happens-in-order)
+Join your Wi-Fi | When the page asks, choose your network and type its password. [The Wi-Fi step](#step-wifi)
+Log in and set it up | Connect to it and sign up first: the first account takes the board over. [After it boots](#after-it-boots)
+:::
 
 ::: installer
 **Before you start:** Chrome or Edge, on a desktop or laptop. A USB cable
@@ -53,6 +61,7 @@ install-write
 
 ::: art
 install-boot
+#step-wifi
 :::
 
 6. **Wi-Fi.** The page asks the board which networks it can hear and lists

@@ -911,6 +911,15 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   not BOARDS (so never the picker or the fetcher) and not `BOARD_BY_DIR`
   (so nothing counting tested boards counts it); its block is
   `class="hwb no"`, which the tested-boards count does not match.
+- **The guided path on /install (site 1.3.15, Rob).** Four numbered
+  steps at the top of the left column, from a `::: guide` block in
+  pages/install.md ("Title | one short line", `{panel}` for where the card
+  is), drawn by `guide_html()`; step 1 carries our picks from `"rec"` on
+  BOARDS, each name a `<label for="fwbN">` for the card's radio. The card
+  is unchanged apart from a gold frame and a --warm label on the picks'
+  rows, the label placed on the frame's edge out of the row's flow. Rob
+  turned down 1.3.13, which rebuilt the card and moved the picker into the
+  left column: the card on the right is to stay as it is.
 - **The installer always offers Telnet details (site 1.0.0).** The fourth
   change to the vendored dialog: `_renderDashboard` renders the link item
   whether or not the device sent a URL, to `/connected` with no fragment

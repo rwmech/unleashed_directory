@@ -14,6 +14,43 @@
 
 # Changelog
 
+## 1.3.15, 2026-09-26
+
+/install gets a guided path, and the card marks our three picks (Rob: "the
+current look is good on the right we just need to add a more guided process
+which starts with pick your board, then flash your board, etc."). 1.3.13,
+a redesign of the whole top of the page, was turned down before it was
+published; this replaces it and leaves the card as it was.
+
+- **Four numbered steps open the left column**: Pick your board, Flash
+  it, Join your Wi-Fi, Log in and set it up, each with one short line, in
+  rings and a thin line in the site's structure colour, no script. On a
+  phone they come before the card. The lead is one sentence shorter,
+  since the steps now say the Wi-Fi part.
+- **Step 1 points at the card**, "in the panel on the right", and "in the
+  panel below" on a phone, and names our three picks: Cheapest, the ESP32
+  dev board; Most powerful, the Waveshare S3; Best with a camera, the
+  ESP32-CAM, each with a short why. Each board's name is a label for its
+  radio in the card, so pressing it picks that board there, and is filled
+  while that board is picked. Then "Something else? Every board in the
+  panel works; compare them all", linking /hardware, so nobody reads the
+  three as the only choice.
+- **Steps 2 to 4 link down the page**: What happens, in order; its Wi-Fi
+  item, through a new anchor line in an `::: art` block (`#step-wifi`);
+  and After it boots.
+- **The card is as it was** (picker, rows, default pick, selection,
+  buttons, small print), except that the three picks wear a thin gold
+  frame (#8a6d39) and their label in --warm on the frame's top edge. The
+  label is out of the row's flow, so no row moves; a picked row still
+  turns cyan. Forced colours thicken the frame and box the label.
+- `"rec"` on BOARDS is the one source for the guide and the frames, and a
+  pick is shown only while the installer offers it something.
+- Self-test: the four steps in order before the card, step 1's panel
+  wording both ways, the picks and the "Something else" line, the three
+  links and their targets, the card as it was, the frames and tags on the
+  picks alone, the guide's labels and their fill, and a pick with nothing
+  to install left out of both.
+
 ## 1.3.14, 2026-09-26
 
 A new page, /skins: making display skins (Rob: "coming soon for

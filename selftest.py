@@ -4129,6 +4129,53 @@ def main():
                   and top.count("Coming soon") == sum(
                       1 for b in S.picker_boards() if not S.board_offers(b["dir"]))
                   and '<svg class="art mini"' not in top)
+            # Site 1.3.15 (Rob: "a more guided process which starts with pick
+            # your board, then flash your board"): four numbered steps at the
+            # top of the left column, before the card in the markup, so a
+            # phone reads them first. The card itself is as it was.
+            intro_g = top.split('<div class="installer')[0]
+            guide_g = (intro_g.split('<ol class="guide">')[1].split("</ol>")[0]
+                       if '<ol class="guide">' in intro_g else "")
+            check("a guided path of four steps opens the left column, before the card",
+                  re.findall(r'<p class="t">([^<]+)</p>', guide_g)
+                  == ["Pick your board", "Flash it", "Join your Wi-Fi",
+                      "Log in and set it up"]
+                  and [int(n) for n in re.findall(
+                      r'<li><span class="n" aria-hidden="true">(\d)</span>', guide_g)]
+                  == [1, 2, 3, 4]
+                  and intro_g.index("</h1>") < intro_g.index('<ol class="guide">')
+                  and "<b>Install on a new board</b>" in guide_g)
+            check("step 1 points at the card, on the right or below, with our picks "
+                  "and a line saying any board there works",
+                  '<p class="d">Choose it <span class="side">in the panel on the '
+                  'right</span><span class="under">in the panel below</span>.</p>'
+                  in guide_g
+                  and '<li><span class="ul">Cheapest</span><label for="fwb0">ESP32 dev '
+                      'board</label>' in guide_g
+                  and '<p class="else">Something else? Every board in the panel works; '
+                      '<a href="/hardware">compare them all</a>.</p>' in guide_g
+                  and "{panel}" not in inst2
+                  # the desktop's words after the phone's, so they win
+                  and S.PAGE.find("article ol.guide .side {{ display:none; }}")
+                      < S.PAGE.find("  article ol.guide .side {{ display:inline; }}\n"
+                                    "  article ol.guide .under {{ display:none; }}"))
+            links_g = re.findall(r'<a href="(#[a-z0-9-]+)">', guide_g)
+            check("steps 2 to 4 link to their part of the page, and each target exists",
+                  links_g == ["#what-happens-in-order", "#step-wifi", "#after-it-boots"]
+                  and all(inst2.count(f'id="{h[1:]}"') == 1 for h in links_g)
+                  and S.ART["install-boot"] + '<span class="anchor" id="step-wifi">'
+                      '</span><ol start="6"><li><b>Wi-Fi.</b> The page asks the board'
+                      in inst2
+                  and S.art_html(["install-boot", "#step-wifi"])
+                      == S.ART["install-boot"] + '<span class="anchor" id="step-wifi"></span>'
+                  and S.art_html(["#Bad Id"]).startswith("<p>art: #Bad Id"))
+            check("the card is as it was: its picker, the dev board picked to start",
+                  '<fieldset class="boards"><legend>Your board <a href="/hardware">'
+                  "which is mine?</a></legend>" in top.split('<div class="installer')[1]
+                  and re.search(r'name="fwboard" id="fwb0" checked>', top) is not None
+                  and "grid-template-columns:minmax(0, 1fr) 26rem" in S.PAGE
+                  and "article .installer .bopt:has(input:checked) {{ border-color:"
+                      "var(--dial);" in S.PAGE)
             check("the installer's own licence is under Doing it the other way",
                   S.EWT_BASE + "LICENSE" in inst2.split('id="doing-it-the-other-way"')[1]
                   and S.EWT_BASE + "LICENSE" not in top)
@@ -5918,6 +5965,13 @@ def main():
                       ".installer:has(#fwb1:checked) .bsec.b0{display:none}"
                       ".installer:has(#fwb1:checked) .bsec.b1{display:flex}" in shown
                   and "Board: ESP32" not in shown)
+            g0 = S.guide_html(["Pick your board | Choose it {panel}."])
+            check("a pick with nothing to install is neither framed nor in the guide",
+                  shown.count('<label class="bopt rec">') == 1
+                  and "Most powerful" not in shown + g0
+                  and "Best with a camera" not in shown + g0
+                  and '<label for="fwb0">ESP32 dev board</label>' in g0
+                  and S.guide_html([]) == "")
             # Site 1.2.7, Rob: the dev board with a card is a second entry on
             # /hardware and a display split only. The picker still has one
             # ESP32, and the new entry names the ESP32's own firmware.
@@ -6212,7 +6266,7 @@ def main():
                 # section on /hardware, and no footnote. Once BOARD_SSH names
                 # a release on disk carrying the board's set, and not before,
                 # the seal loses its asterisk and the footnote goes.
-                rows1 = pick1.split('<label class="bopt">')[1:]
+                rows1 = pick1.split('<label class="bopt')[1:]
                 was_ssh = dict(S.BOARD_SSH)
                 try:
                     S.BOARD_SSH["esp32s3"] = (1, 1, 0)
@@ -6330,7 +6384,7 @@ def main():
                 pick3 = S.installer_html()
                 hw3, inst3 = render("hardware"), render("install")
                 cam3, who3 = render("camera"), render("whofor")
-                rows3 = pick3.split('<label class="bopt">')[1:]
+                rows3 = pick3.split('<label class="bopt')[1:]
                 ecb3 = S.BOARD_BY_DIR["esp32-cam"]
                 check("the picker offers the ESP32-CAM its preview, by its picture, "
                       "labelled preview",
@@ -6340,8 +6394,10 @@ def main():
                       and len(rows3) == 4 and "Coming soon" not in pick3
                       and '<input type="radio" name="fwboard" id="fwb3">'
                           + S.BOARD_ART_ESPCAM in pick3
-                      and '<b>ESP32-CAM</b><span class="tell pick">On a USB programmer; '
-                          "card out first</span>" in rows3[3]
+                      # Site 1.3.15: our camera pick, so its name carries the tag.
+                      and '<b>ESP32-CAM</b><span class="rec"><span class="vh">Our pick: '
+                          '</span>Best with a camera</span><span class="tell pick">'
+                          "On a USB programmer; card out first</span>" in rows3[3]
                       and '<span class="bv">Firmware 1.1.1 preview (ESPCAM 1.0.1)</span>'
                           in rows3[3]
                       and 'manifest="/install/1.1.1-dev.0/esp32-cam/manifest.json"' in pick3
@@ -6365,6 +6421,52 @@ def main():
                       "The ESP32 dev board (Base), the Freenove ESP32 camera board and "
                       "the ESP32-CAM have the same chip, so between those the picture "
                       "is the only check." in pick3)
+
+                # Site 1.3.15 (Rob): our three picks wear a thin gold frame and
+                # a small tag in the card, and the guide's first step names
+                # them, each name a label for its radio. With every board
+                # offered here, all three are picks and the Freenove is not.
+                print("Our picks: the frames and the guide")
+                rows3g = pick3.split('<label class="bopt')[1:]
+                guide3 = S.guide_html(["Pick your board | Choose it {panel}.",
+                                       "Flash it | x"])
+                check("the three picks are framed and tagged in the card, "
+                      "the Freenove is not, and the rows keep their order",
+                      [r.startswith(' rec">') for r in rows3g] == [True, True, False, True]
+                      and [re.search(r'<span class="rec"><span class="vh">Our pick: '
+                                     r'</span>([^<]+)</span>', r).group(1)
+                           for r in (rows3g[0], rows3g[1], rows3g[3])]
+                          == ["Cheapest", "Most powerful", "Best with a camera"]
+                      and 'class="rec"' not in rows3g[2]
+                      and re.search(r'name="fwboard" id="fwb0" checked>', pick3) is not None
+                      and all(len(b["rec"]["label"]) <= 18 and len(b["rec"]["short"]) <= 16
+                              and len(b["rec"]["why"]) <= 34
+                              for b in S.BOARDS if b.get("rec")))
+                check("gold frames a pick, a --warm tag names it, and a picked row "
+                      "still turns cyan",
+                      "border-color:#8a6d39; }}" in S.PAGE
+                      and "article .installer .bopt.rec {{ position:relative; "
+                          "border-color:#8a6d39; }}" in S.PAGE
+                      and "article .installer .bopt .rec {{ position:absolute;" in S.PAGE
+                      and "letter-spacing:0.04em; color:var(--warm); }}" in S.PAGE
+                      and "article .installer .bopt:has(input:checked) {{ border-color:"
+                          "var(--dial);" in S.PAGE
+                      and "@media (forced-colors: active) {{\n  article .installer "
+                          ".bopt.rec {{ border:2px solid CanvasText; }}" in S.PAGE)
+                check("the guide names the picks in order, each a label for its "
+                      "row's radio, filled when that row is picked",
+                      re.findall(r'<li><span class="ul">([^<]+)</span><label '
+                                 r'for="(fwb\d)">([^<]+)</label>', guide3)
+                      == [("Cheapest", "fwb0", "ESP32 dev board"),
+                          ("Most powerful", "fwb1", "Waveshare S3"),
+                          ("Best with a camera", "fwb3", "ESP32-CAM")]
+                      and all(f'id="fwb{j}"' in pick3 for j in (0, 1, 3))
+                      and all(f".install-top:has(#fwb{j}:checked) .uc label[for=fwb{j}]"
+                              "{background:#102630}" in pick3 for j in (0, 1, 3))
+                      and "label[for=fwb2]" not in pick3
+                      and guide3.count('<p class="else">') == 1
+                      and guide3.count('<ul class="uc">') == 1
+                      and guide3.index('<ul class="uc">') < guide3.index("Flash it"))
                 man3 = S.firmware_manifest("1.1.1-dev.0", chip="esp32-cam")
                 check("its manifest holds its own build, at the ESP32's offsets",
                       man3 is not None and man3["version"] == "1.1.1-dev.0 (ESPCAM 1.0.1)"
@@ -6477,7 +6579,7 @@ def main():
                       and S.firmware_file("1.1.1-dev.1/esp32/manifest.json") is None
                       and S.firmware_releases()[0]["version"] == "1.1.1")
                 pick4 = S.installer_html()
-                rows4 = pick4.split('<label class="bopt">')[1:]
+                rows4 = pick4.split('<label class="bopt')[1:]
                 b2 = (pick4.split('<div class="bsec b2">')[1].split('<div class="bsec b3">')[0]
                       if '<div class="bsec b2">' in pick4 else "")
                 check("the picker labels the Freenove's row the 1.1.1 preview, with "

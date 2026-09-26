@@ -1346,7 +1346,7 @@ CARD_BLOCKS = ("cards", "hero")
 # at all otherwise (site 1.2.9, see early_note()); it takes no lines.
 # "compare" is /different's table (site 1.2.9, COMPARE_ROWS), and
 # "privacy-compare" its privacy table (site 1.3.6, PRIVACY_ROWS).
-BLOCK_NAMES = CARD_BLOCKS + ("installer", "art", "thanks", "cta", "connected",
+BLOCK_NAMES = CARD_BLOCKS + ("installer", "guide", "art", "thanks", "cta", "connected",
                              "installer-terms", "badges", "badgefind", "board",
                              "next", "early", "compare", "compare-today",
                              "privacy-compare")
@@ -1382,6 +1382,8 @@ def md_block(kind, lines):
     thanks list."""
     if kind == "installer":
         return installer_html(lines)
+    if kind == "guide":
+        return guide_html(lines)
     if kind == "installer-terms":
         return installer_terms_html()
     if kind == "thanks":
@@ -1656,10 +1658,18 @@ def art_html(lines):
     a hole where a drawing was meant to be.
     """
     out = []
-    for name in (ln.strip() for ln in lines):
-        if not name:
+    for line in (ln.strip() for ln in lines):
+        if not line:
             continue
-        out.append(ART.get(name) or "<p>" + html.escape("art: " + name) + "</p>")
+        # A line "#anchor" (site 1.3.15) is an empty anchor where it stands,
+        # so a page can link into a numbered list the drawings already
+        # break up: /install's guide links its Wi-Fi step to the line after
+        # the drawing of the first start, which is where the Wi-Fi item
+        # begins. Nothing is drawn for it.
+        if re.fullmatch(r"#[a-z0-9-]+", line):
+            out.append(f'<span class="anchor" id="{line[1:]}"></span>')
+            continue
+        out.append(ART.get(line) or "<p>" + html.escape("art: " + line) + "</p>")
     return "".join(out)
 
 
@@ -2699,6 +2709,14 @@ BOARD_ART_ESPCAM = (
 # offered first, labelled preview, with the release beside it. The Freenove,
 # since Rob's decision of 2026-09-25 that firmware 1.1.1-dev.1 (FNCAM 1.0.4)
 # is its 1.1.1 preview. The ESP32 and the S3 stay on their releases.
+#
+# "rec" (site 1.3.15, Rob, 2026-09-26) marks one of our three picks: its
+# "label" ("Cheapest", at most 18 characters), its "order" in /install's
+# guide, a "short" name for the guide (at most 16) and a "why" (at most
+# 34). One source: the guide's first step and the gold frame and tag on the
+# picker's row both read it, and only while the installer offers the board
+# something (board_rec()), so a board with nothing to install is never
+# framed as a pick.
 BOARDS = (
     # "(Base)", site 1.2.9 (Rob): the dev board is one choice with or
     # without an SD card wired to it, and someone with a card module should
@@ -2710,6 +2728,8 @@ BOARDS = (
      "art": BOARD_ART_ESP32,
      "page": "/hardware#esp32-dev-board-base",
      "buy": "https://link.amazon/B08MTidlU",
+     "rec": {"order": 1, "label": "Cheapest", "short": "ESP32 dev board",
+             "why": "About $5: chat, mail and accounts"},
      "before": ""},
     {"dir": "esp32s3", "name": "Waveshare ESP32-S3-LCD-1.47",
      "part": "ESP32-S3R8, 16 MB flash, 8 MB PSRAM",
@@ -2717,6 +2737,8 @@ BOARDS = (
      "art": BOARD_ART_S3,
      "page": "/hardware#waveshare-esp32-s3-lcd-1-47",
      "buy": "https://link.amazon/B0bb1oJqt",
+     "rec": {"order": 2, "label": "Most powerful", "short": "Waveshare S3",
+             "why": "Most memory, screen and card slot"},
      # From Rob's bench: the stick has no USB-serial chip, and on his PC the
      # installer's automatic reset did not reach it.
      "before": ("**First:** hold **BOOT**, tap **RESET**, let go of BOOT. "
@@ -2766,6 +2788,10 @@ BOARDS = (
      "camera": "OV2640, 2 MP, photos up to 1600x1200",
      "page": "/hardware#esp32-cam",
      "buy": "https://link.amazon/B0enK4lpi",
+     # Our camera pick (Rob, over the Freenove): the camera and the price.
+     # Its card-out install is said on its row and before its buttons.
+     "rec": {"order": 3, "label": "Best with a camera", "short": "ESP32-CAM",
+             "why": "A 2 MP camera, about $9 a board"},
      # Two lines of the card's calm box, not three, so the buttons stay
      # as high as the Waveshare's with its note.
      "before": ("**First:** SD card out. **When it is done:** unplug the board, "
@@ -3162,6 +3188,65 @@ def board_version(rel, chip):
     return core + " preview" + (f" ({m.group(5)})" if m and m.group(5) else "")
 
 
+def board_rec(b):
+    """Board b's "rec", our pick, while the installer offers it something;
+    None for a board that is not a pick or has nothing to install."""
+    r = b.get("rec")
+    return r if r and board_offers(b["dir"]) else None
+
+
+# The token a guide step writes for where the install card is: on the right
+# from the site's one breakpoint up, below on a phone.
+_GUIDE_PANEL = ('<span class="side">in the panel on the right</span>'
+                '<span class="under">in the panel below</span>')
+
+
+def guide_html(lines):
+    """The ::: guide block at the top of /install (site 1.3.15, Rob: "a
+    more guided process which starts with pick your board, then flash your
+    board"): a numbered path in the left column, beside the install card
+    and, on a phone, above it.
+
+    One step a line, "Title | one short line", in the page's own Markdown;
+    "{panel}" in a line is where the card is, "in the panel on the right"
+    on a desktop and "in the panel below" on a phone. The first step
+    carries our picks under its line, from "rec" in BOARDS, each board's
+    name a label for its radio in the card, so pressing it picks the board
+    there with no script; then a line saying any board in the card works,
+    so nobody reads the three as the only choice. A pick the installer has
+    nothing for is left out, and with none the list is not drawn."""
+    steps = []
+    for raw in lines:
+        if "|" not in raw:
+            continue
+        title, text = (p.strip() for p in raw.split("|", 1))
+        if title:
+            steps.append((title, text))
+    if not steps:
+        return ""
+    offers = picker_boards()
+    picks = sorted(((board_rec(b), j) for j, b in enumerate(offers) if board_rec(b)),
+                   key=lambda rj: rj[0]["order"])
+    out = ['<ol class="guide">']
+    for k, (title, text) in enumerate(steps, 1):
+        body = md_inline(text).replace("{panel}", _GUIDE_PANEL)
+        out.append(f'<li><span class="n" aria-hidden="true">{k}</span><div class="gs">'
+                   f'<p class="t">{md_inline(title)}</p><p class="d">{body}</p>')
+        if k == 1 and picks:
+            out.append('<ul class="uc">')
+            for r, j in picks:
+                out.append('<li><span class="ul">' + html.escape(r["label"]) + "</span>"
+                           f'<label for="fwb{j}">' + html.escape(r["short"]) + "</label>"
+                           '<span class="vh">: </span><span class="why">'
+                           + html.escape(r["why"]) + "</span></li>")
+            out.append("</ul>")
+            out.append('<p class="else">Something else? Every board in the panel '
+                       'works; <a href="/hardware">compare them all</a>.</p>')
+        out.append("</div></li>")
+    out.append("</ol>")
+    return "".join(out)
+
+
 def installer_html(lines=()):
     """The ::: installer block: the install card, or an honest account of
     why there is no button.
@@ -3216,10 +3301,18 @@ def installer_html(lines=()):
                '<a href="/hardware">which is mine?</a></legend>')
     for j, (b, o) in enumerate(offers):
         ver = ("Firmware " + board_version(o[0], b["dir"])) if o else "Coming soon"
-        out.append(f'<label class="bopt"><input type="radio" name="fwboard" id="fwb{j}"'
+        # Our picks (site 1.3.15) wear a thin gold frame and their label
+        # beside the name, and nothing else about the row changes.
+        r = board_rec(b)
+        name = "<b>" + html.escape(b["name"]) + "</b>"
+        if r:
+            name += ('<span class="rec"><span class="vh">Our pick: </span>'
+                     + html.escape(r["label"]) + "</span>")
+        out.append(f'<label class="bopt{" rec" if r else ""}"><input type="radio" '
+                   f'name="fwboard" id="fwb{j}"'
                    + (" checked" if j == first else "") + ">"
                    + b["art"]
-                   + '<span class="bt"><b>' + html.escape(b["name"]) + "</b>"
+                   + '<span class="bt">' + name
                    + ('<span class="tell pick">' + html.escape(b["pick"]) + "</span>"
                       if b.get("pick") else
                       '<span class="tell">' + html.escape(b["tell"]) + "</span>")
@@ -3355,6 +3448,10 @@ def installer_html(lines=()):
             rules.append(f".installer .b{j} .r{i}{{display:none}}"
                          f".installer:has(#fwv{j}_{i}:checked) .b{j} .r0{{display:none}}"
                          f".installer:has(#fwv{j}_{i}:checked) .b{j} .r{i}{{display:block}}")
+        # The guide's name for a pick is filled the way its row is.
+        if board_rec(_b):
+            rules.append(f".install-top:has(#fwb{j}:checked) .uc label[for=fwb{j}]"
+                         "{background:#102630}")
     if rules:
         out.append("<style>" + "".join(rules) + "</style>")
     out.append("</div>")
@@ -5807,6 +5904,24 @@ article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}
 article .installer .bopt .tell.pick {{ color:var(--ink); }}
 article .installer .bopt .bv {{ color:var(--dial); font-size:0.75rem; }}
 article .installer .bopt .bv.soon {{ color:var(--faint); }}
+/* Our picks (site 1.3.15, Rob): a thin gold frame, the amber box's own bar
+   colour, and the pick's label in --warm sitting on the frame's top edge
+   at the right, the card's own colour behind it, the way a label sits on
+   a border. Out of the row's flow, so the row lays out exactly as it did
+   before: in the flow it widened the words and pushed a long name under
+   the picture, and inside the row's corner it ran over the longest name
+   at 1366. A picked row still turns cyan as it always has. */
+article .installer .bopt.rec {{ position:relative; border-color:#8a6d39; }}
+article .installer .bopt .rec {{ position:absolute; top:-0.45em; right:0.625rem;
+        padding:0 0.3em; background:#12121a;
+        font-size:0.625rem; line-height:0.9; text-transform:uppercase;
+        letter-spacing:0.04em; color:var(--warm); }}
+/* Windows' high contrast drops the gold, so the frame is heavier and the
+   tag boxed: the words still say "our pick". */
+@media (forced-colors: active) {{
+  article .installer .bopt.rec {{ border:2px solid CanvasText; }}
+  article .installer .bopt .rec {{ border:1px solid CanvasText; padding:0 0.25em; }}
+}}
 /* Secure (site 1.3.3) after an S3 board's version, in the row's own small
    type, so the row is no taller for it; the lock no taller than its
    letters. */
@@ -5864,6 +5979,51 @@ article .install-top > .steps > p.aside:first-child {{ margin:0 0 1.25rem; }}
   article .installer button.go {{ padding-top:0.5625rem; padding-bottom:0.5625rem; }}
   article .install-top > .steps {{ grid-column:1; grid-row:2; }}
   article .install-top .steps svg.art.steps {{ margin:1rem 0 1.25rem; }}
+}}
+/* The guided path at the top of /install (site 1.3.15, Rob: "a more guided
+   process which starts with pick your board, then flash your board"): four
+   numbered steps down the left column, each a ring in --struct with a thin
+   line to the next, its title in --struct and one short line under it. On
+   a phone it comes before the card, where the markup puts it. The first
+   step carries our picks, each board's name a label for its radio in the
+   card (--dial, dotted, filled like its row when that board is picked). */
+article ol.guide {{ list-style:none; margin:1.25rem 0 0.5rem; padding:0; }}
+article ol.guide > li {{ position:relative; display:grid;
+        grid-template-columns:1.75rem minmax(0, 1fr); column-gap:0.75rem;
+        margin:0; padding:0 0 0.875rem; }}
+article ol.guide > li:last-child {{ padding-bottom:0; }}
+article ol.guide > li:not(:last-child)::before {{ content:""; position:absolute;
+        left:0.875rem; top:2rem; bottom:0.25rem; border-left:1px solid #2c3a44; }}
+article ol.guide .n {{ display:flex; align-items:center; justify-content:center;
+        width:1.75rem; height:1.75rem; box-sizing:border-box;
+        border:1px solid var(--struct); border-radius:50%; color:var(--struct);
+        font-size:0.875rem; line-height:1; }}
+article ol.guide .gs {{ min-width:0; }}
+article ol.guide p.t {{ margin:0; color:var(--struct); font-size:0.9375rem;
+        line-height:1.75rem; }}
+article ol.guide p.d {{ margin:0; font-size:0.875rem; line-height:1.5; }}
+article ol.guide .side {{ display:none; }}
+@media (min-width: 901px) {{
+  article ol.guide .side {{ display:inline; }}
+  article ol.guide .under {{ display:none; }}
+}}
+article ol.guide ul.uc {{ list-style:none; margin:0.375rem 0 0; padding:0;
+        font-size:0.8125rem; line-height:1.5; }}
+article ol.guide ul.uc li {{ margin:0; padding-left:2ch; }}
+article ol.guide .uc .ul {{ display:block; margin-left:-2ch; color:var(--warm); }}
+article ol.guide .uc label {{ margin-left:-0.25em; padding:0 0.25em;
+        border-radius:0.2em; color:var(--dial); cursor:pointer;
+        text-decoration:underline dotted; text-underline-offset:0.2em; }}
+article ol.guide .uc .why {{ margin-left:0.5ch; }}
+article ol.guide p.else {{ margin:0.375rem 0 0; font-size:0.8125rem; line-height:1.5; }}
+@media (min-width: 1200px) {{
+  article ol.guide ul.uc {{ display:grid;
+        grid-template-columns:max-content max-content minmax(0, 1fr);
+        column-gap:2ch; }}
+  article ol.guide ul.uc li {{ display:contents; }}
+  article ol.guide .uc .ul {{ margin-left:0; }}
+  article ol.guide .uc label {{ justify-self:start; }}
+  article ol.guide .uc .why {{ margin-left:0; }}
 }}
 /* On a phone the card is one column above the steps, and the picker and
    the buttons come first: the menu already takes the top third of the
