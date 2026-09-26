@@ -920,18 +920,27 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   rows, the label placed on the frame's edge out of the row's flow. Rob
   turned down 1.3.13, which rebuilt the card and moved the picker into the
   left column: the card on the right is to stay as it is.
-- **Buy one, in the install card (site 1.3.16, Rob).** One small red
-  button for the board picked, the last thing in its `.bsec` (under the
-  buttons and the version line, above the amber box), from that board's
-  `"buy"` in BOARDS through `buy_html()` (never retyped), so the same
-  `:has(#fwbN:checked)` rules that show the section show it, with
-  "Affiliate link: buying through it helps support µnleashed." under it.
-  `rel="sponsored nofollow noopener"`, `target="_blank"`, an aria-label
-  that starts with the visible "Buy one" and names the board. A board with
-  no link gets neither. Not --risk: that red keeps its one meaning. Rob
-  considered it in the guide's step 1 and on every row first, and chose
-  this. Not at the very foot of the card: the card is sticky and taller
-  than 768px, so the foot is out of reach while it is pinned.
+- **BUY on every board row (site 1.3.18, Rob), replacing 1.3.16's "Buy
+  one" under the buttons.** Rob: "this should be a BUY button not BUY ONE
+  and I wanted one near each board ... literally BUY small, no padding
+  button ... Just like you have SECURE but a button not a link." Each
+  picker row is `<div class="brow"><label class="bopt">...</label>` then
+  that board's BUY from `buy_html()` (its `"buy"` in BOARDS, never
+  retyped), outside the label so pressing it never picks a board, set by
+  the stylesheet at the right-hand end of the version line, after Secure.
+  The version line keeps 1.125rem clear of it (`.bv` padding); rows lay
+  out exactly as before from 414px up, and on a narrower phone a long
+  version line can wrap to clear it. `buy_note_html()` ("BUY links are
+  affiliate links, except the one to Makerfabs: buying through them helps
+  support µnleashed.") opens the card's small print, before the same-chip
+  line: under the list it pushed both buttons down by its own two lines,
+  and there the Update button is where it was, measured. /hardware's Buy one row
+  leads with the same button, then "on Amazon (affiliate link)" or "from
+  Makerfabs, their own shop (not an affiliate link)". White on #c62828,
+  bold, 0.625rem like the picks' tags. Affiliate: `rel="sponsored nofollow
+  noopener"`, aria-label "Buy the <board> on Amazon (affiliate link, opens
+  in a new tab)"; a maker's shop: `rel="noopener"` and "not an affiliate
+  link" in its aria-label. Not --risk: that red keeps its one meaning.
 - **The Makerfabs ESP32-S3 Parallel TFT 3.5" v1.0 (site 1.3.17)** is the
   fifth board, `esp32s3-mf35`, a preview from the board pre-release
   v1.1.1-mf35.1 until a release carries it. Same chip family as the

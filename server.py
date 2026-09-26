@@ -3362,33 +3362,51 @@ def guide_html(lines):
 
 
 def buy_html(b):
-    """Buy one (site 1.3.16, Rob): a board's affiliate link as a small red
-    button, and the line saying what it is, at the end of the board's own
-    section in the install card, so the :has() rules that show the section
-    for the board picked show this with it. From the board's "buy" in
-    BOARDS and nowhere else; a board with none gets nothing. A link and not
-    part of any <label>, so pressing it never picks a board."""
+    """BUY (site 1.3.18, Rob: "literally BUY small, no padding button ...
+    Just like you have SECURE but a button not a link"): a board's buy link
+    as a tiny red button, on /install at the end of the board's row in the
+    picker and on /hardware in the board's Buy one row. From the board's
+    "buy" in BOARDS and nowhere else; a board with none gets "". A board
+    drawn from another board's image (the dev board with a card) is named
+    for the board the link sells. Never inside a <label>: on /install it
+    sits beside the row's label, so pressing it never picks a board."""
     if not b.get("buy"):
         return ""
+    sold = BOARD_BY_DIR.get(b.get("image", b["dir"]), b)["name"]
     if b.get("affiliate", True) is False:
         # A maker's own shop, linked plainly (site 1.3.17, the Makerfabs,
-        # which is not on Amazon): no sponsored rel, and the line under it
-        # says it earns nothing, rather than the affiliate line.
-        shop = html.escape(b.get("shop", "the maker"))
-        return ('<div class="buyone"><a class="buy" href="'
-                + html.escape(b["buy"], quote=True)
-                + '" rel="noopener" target="_blank" '
-                'aria-label="Buy one, the ' + html.escape(b["name"], quote=True)
-                + ", from " + shop + ' (opens in a new tab)">Buy one</a>'
-                '<p class="meta aff">From ' + shop + ", the maker. Not an "
-                "affiliate link.</p></div>")
-    return ('<div class="buyone"><a class="buy" href="'
-            + html.escape(b["buy"], quote=True)
+        # which is not on Amazon): no sponsored rel, and its name for a
+        # screen reader says it earns nothing.
+        return ('<a class="buy" href="' + html.escape(b["buy"], quote=True)
+                + '" rel="noopener" target="_blank" aria-label="Buy the '
+                + html.escape(sold, quote=True) + " from "
+                + html.escape(b.get("shop", "the maker"), quote=True)
+                + ', its maker (not an affiliate link, opens in a new tab)">BUY</a>')
+    return ('<a class="buy" href="' + html.escape(b["buy"], quote=True)
             + '" rel="sponsored nofollow noopener" target="_blank" '
-            'aria-label="Buy one, the ' + html.escape(b["name"], quote=True)
-            + ', on Amazon (affiliate link, opens in a new tab)">Buy one</a>'
-            '<p class="meta aff">Affiliate link: buying through it helps '
-            "support µnleashed.</p></div>")
+            'aria-label="Buy the ' + html.escape(sold, quote=True)
+            + ' on Amazon (affiliate link, opens in a new tab)">BUY</a>')
+
+
+def buy_note_html(boards):
+    """The one line in /install's small print saying what a BUY is, or "" when
+    no board in the list has one. A board whose link is its maker's own
+    shop is named as the exception, so the line never calls it an
+    affiliate link."""
+    linked = [b for b in boards if b.get("buy")]
+    if not linked:
+        return ""
+    plain = [html.escape(b.get("shop", b["name"])) for b in linked
+             if b.get("affiliate", True) is False]
+    if len(plain) == len(linked):
+        return ('<p class="meta aff">BUY links go to each board\'s maker. They are '
+                "not affiliate links.</p>")
+    but = ""
+    if plain:
+        but = (", except the one to " + plain[0] if len(plain) == 1 else
+               ", except those to " + ", ".join(plain[:-1]) + " and " + plain[-1])
+    return ('<p class="meta aff">BUY links are affiliate links' + but
+            + ": buying through them helps support µnleashed.</p>")
 
 
 def installer_html(lines=()):
@@ -3455,7 +3473,11 @@ def installer_html(lines=()):
         if r:
             name += ('<span class="rec"><span class="vh">Our pick: </span>'
                      + html.escape(r["label"]) + "</span>")
-        out.append(f'<label class="bopt{" rec" if r else ""}"><input type="radio" '
+        # The row's box holds the label and, beside it and never in it,
+        # the board's BUY (site 1.3.18), which the stylesheet sets at the
+        # right-hand end of the row's version line.
+        out.append(f'<div class="brow"><label class="bopt{" rec" if r else ""}">'
+                   '<input type="radio" '
                    f'name="fwboard" id="fwb{j}"'
                    + (" checked" if j == first else "") + ">"
                    + b["art"]
@@ -3465,7 +3487,7 @@ def installer_html(lines=()):
                       '<span class="tell">' + html.escape(b["tell"]) + "</span>")
                    + '<span class="bv' + ("" if o else " soon") + '">'
                    + html.escape(ver) + secure_pick_html(b) + "</span></span>"
-                   + "</label>")
+                   + "</label>" + buy_html(b) + "</div>")
     out.append("</fieldset>")
 
     for j, (b, o) in enumerate(offers):
@@ -3474,7 +3496,7 @@ def installer_html(lines=()):
             out.append('<p class="soon">There is no image for this board on this '
                        "site yet. When one is published, its buttons appear here. "
                        f'<a href="{b["page"]}">About this board</a>.</p>')
-            out.append(buy_html(b) + "</div>")
+            out.append("</div>")
             continue
         if len(o) > 1:
             # Short labels, so both fit on one line of the card: the line
@@ -3549,9 +3571,12 @@ def installer_html(lines=()):
                            + html.escape(rel["version"], quote=True)
                            + '/THIRD_PARTY_NOTICES.md">What is inside it, and under '
                            "what terms</a></p>")
-        # Last in the section, under the buttons and the line naming the
-        # version: shopping after installing, never between the two.
-        out.append(buy_html(b) + "</div>")
+        out.append("</div>")
+
+    # What a BUY on the rows is (site 1.3.18), first in the card's small
+    # print: under the buttons, so the line costs the Update button nothing
+    # on the first screen at 1366 x 768.
+    out.append(buy_note_html([b for b, _o in offers]))
 
     # Two boards on one chip family (the dev board and the Freenove, from
     # firmware 1.1.0) are the case the installer cannot check, so the line
@@ -3664,14 +3689,15 @@ def board_html(lines):
                + ' <span class="exp">(expected, not yet measured)</span></dd>'
                if b["dir"] in BOARD_SPEED else "")
             + secure_note_html(b["dir"])
-            + ('<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
-               + '" rel="sponsored">Amazon</a> (affiliate link)'
+            # The BUY button is the link (site 1.3.18); the words beside it
+            # say where it goes and what it is, as they always have.
+            + ('<dt>Buy one</dt><dd>' + buy_html(b) + " on Amazon (affiliate link)"
                + (" for the board; " + html.escape(b["buy_more"])
                   if b.get("buy_more") else "") + "</dd>"
                if b.get("buy") and b.get("affiliate", True) is not False else "")
             # A maker's own shop, linked plainly (site 1.3.17).
-            + ('<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
-               + '">' + html.escape(b.get("shop", "The maker")) + "</a>, their own "
+            + ('<dt>Buy one</dt><dd>' + buy_html(b) + " from "
+               + html.escape(b.get("shop", "the maker")) + ", their own "
                "shop (not an affiliate link)</dd>"
                if b.get("buy") and b.get("affiliate", True) is False else "")
             + "</dl></div>")
@@ -6035,25 +6061,30 @@ article .installer .pre {{ color:#f0c674; background:#241d10;
         padding:0.625rem 0.875rem; font-size:0.8125rem; }}
 article .installer .pre p {{ margin:0; line-height:1.45; }}
 article .installer .pre b {{ color:#ffd35c; }}
-/* Buy one (site 1.3.16, Rob): a small red button under the picked
-   board's buttons and version line, the end of its section, and the line
-   saying it is an affiliate link under it. Not --risk: that red means somebody keeping a copy of you, and this
-   is a shop. White on #c62828 is 5.6:1, the button against the card 3.3:1;
-   the hover is #d32f2f, 5.0:1. Small on purpose: it is not how to install,
-   and it must not look like the Install button's rival. */
-article .installer .buyone {{ display:flex; flex-direction:column; align-items:center;
-        gap:0.25rem; }}
-article .installer a.buy {{ display:inline-block; font-size:0.8125rem; line-height:1.4;
-        color:#fff; background:#c62828; border:1px solid #e57373;
-        border-radius:0.375rem; padding:0.25rem 1rem; text-decoration:none; }}
-article .installer a.buy:hover {{ background:#d32f2f; color:#fff; }}
-article .installer a.buy:focus-visible {{ outline:3px solid #ffd35c;
-        outline-offset:2px; }}
-article .installer .buyone .aff {{ font-size:0.75rem; text-align:center;
-        text-wrap:balance; }}
+/* BUY (site 1.3.18, Rob): a tiny filled red button, the size of the
+   picks' tags, beside each board that has a buy link, on /install and on
+   /hardware. Not --risk: that red means somebody keeping a copy of you,
+   and this is a shop. White on #c62828 is 5.6:1, the hover #d32f2f 5.0:1.
+   Bold capitals with almost no padding: it is there for somebody who has
+   not got the board, and must not look like the Install button's rival. */
+article a.buy {{ display:inline-block; font-size:0.625rem; font-weight:700;
+        line-height:1.2; letter-spacing:0.04em; padding:0 0.2em;
+        color:#fff; background:#c62828; border-radius:0.1875rem;
+        text-decoration:none; white-space:nowrap; vertical-align:0.08em; }}
+article a.buy:hover {{ background:#d32f2f; color:#fff; }}
+article a.buy:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 @media (forced-colors: active) {{
-  article .installer a.buy {{ border:1px solid LinkText; }}
+  article a.buy {{ border:1px solid LinkText; }}
 }}
+/* On /install the row's label and its BUY share a box, the button outside
+   the label so pressing it never picks a board, at the right-hand end of
+   the row's last line, the version line, level with its words. The button
+   stands mostly in the row's own right padding, and the version line ends
+   1.125rem short of the words' column, which is all the room it needs. */
+article .installer .brow {{ position:relative; }}
+article .installer .brow > a.buy {{ position:absolute; right:0.1875rem;
+        bottom:0.125rem; }}
+article .installer .brow:has(> a.buy) .bv {{ padding-right:1.125rem; }}
 /* The board picker (site 1.2.0, Rob: "select the board type ... include an
    image for confirmation so the user flashes the right one. Small picture
    in the pick list"). A fieldset of native radios, one row a board: the

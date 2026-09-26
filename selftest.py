@@ -3111,8 +3111,8 @@ def main():
             soon_ok = soon_ok and (S.board_html([b["dir"]]) in sec
                                    and "coming soon to" in S.board_html([b["dir"]])
                                    and "<b>Coming soon.</b>" in sec
-                                   and f'<a href="{b["buy"]}" rel="sponsored">Amazon</a>'
-                                   ' (affiliate link)' in sec
+                                   and S.buy_html(b) + " on Amazon (affiliate link)"
+                                   in sec
                                    and 'href="/camera"' in sec)
         # Site 1.2.5, Rob: both camera boards gained a buy link, shown the
         # way the tested boards show theirs, and stay coming soon.
@@ -5271,8 +5271,9 @@ def main():
               and S.board_html(["esp32-sd"]) in sdsec
               and 'class="art board big wide"' in sdsec
               and "A LITTLE</text>" in sdsec and "FLASH &amp; GO" not in sdsec
-              and f'<a href="{S.BOARDS[0]["buy"]}" rel="sponsored">Amazon</a> (affiliate link) '
+              and S.buy_html(S.SHOWN_BOARDS[0]) + " on Amazon (affiliate link) "
                   "for the board; the SD card module is a couple of dollars anywhere" in sdsec
+              and 'aria-label="Buy the ESP32 dev board (Base) on Amazon' in sdsec
               and "everything the BBS does" in flat_sd and "about $8" in flat_sd
               and "about half an hour" in flat_sd
               and "four signal wires plus power" in flat_sd
@@ -5335,8 +5336,9 @@ def main():
               and ecb.get("previews", True) is True and "status" not in ecb
               and S.FLASH_FAMILIES["esp32-cam"] == ("ESP32", 0x1000)
               and ecb["buy"] == "https://link.amazon/B0enK4lpi"
-              and '<a href="https://link.amazon/B0enK4lpi" rel="sponsored">Amazon</a>'
-                  " (affiliate link)" in ec
+              and '<a class="buy" href="https://link.amazon/B0enK4lpi" '
+                  'rel="sponsored nofollow noopener"' in ec
+                  and ">BUY</a> on Amazon (affiliate link)" in ec
               and S.board_html(["esp32-cam"]) in ec
               and "coming soon to" in S.board_html(["esp32-cam"])
               and "<b>Coming soon.</b> The ESP32-CAM" in flat_ec
@@ -6192,10 +6194,11 @@ def main():
                   in hw
                   and "<dt>Firmware</dt><dd>0.20.0 preview (S3 1.0.0)" in hw
                   and "the board calls it 0.20.0-dev.3 (S3 1.0.0)" in hw
-                  and ('<a href="https://link.amazon/B0bb1oJqt" rel="sponsored">'
-                       'Amazon</a> (affiliate link)') in hw
-                  and ('<a href="https://link.amazon/B08MTidlU" rel="sponsored">'
-                       'Amazon</a> (affiliate link)') in S.board_html(["esp32"])
+                  and ('<a class="buy" href="https://link.amazon/B0bb1oJqt" '
+                       'rel="sponsored nofollow noopener"') in hw
+                  and ">BUY</a> on Amazon (affiliate link)" in hw
+                  and ('<a class="buy" href="https://link.amazon/B08MTidlU" '
+                       'rel="sponsored nofollow noopener"') in S.board_html(["esp32"])
                   and "<dt>Firmware</dt><dd>0.19.2 " in S.board_html(["esp32"])
                   and S.board_html(["esp32x9"]) == "" and S.board_html([]) == "")
             # A version.txt that is not a version is not read: the folder's
@@ -6539,85 +6542,107 @@ def main():
                       and guide3.count('<ul class="uc">') == 1
                       and guide3.index('<ul class="uc">') < guide3.index("Flash it"))
 
-                # Site 1.3.16 (Rob): Buy one, under the buttons, for the board
-                # picked, from that board's "buy" and nothing else. It sits at
-                # the end of the board's own section, so the rules that show
-                # the section for the board picked show it too.
-                print("Buy one: the affiliate button on the card")
+                # Site 1.3.18 (Rob: "this should be a BUY button not BUY ONE and
+                # I wanted one near each board"): a tiny BUY on each board's row
+                # with a link, from that board's "buy" and nothing else, beside
+                # the row's label and never in it, so pressing it never picks a
+                # board. The Buy one block under the buttons (1.3.16) is gone.
+                print("BUY: the buy buttons on the card's rows")
                 pb3 = S.picker_boards()
-
-                def buy_block(b):
-                    return ('<div class="buyone"><a class="buy" href="'
-                            + html.escape(b["buy"], quote=True)
-                            + '" rel="sponsored nofollow noopener" target="_blank" '
-                            'aria-label="Buy one, the ' + html.escape(b["name"], quote=True)
-                            + ', on Amazon (affiliate link, opens in a new tab)">'
-                            "Buy one</a><p class=\"meta aff\">Affiliate link: buying "
-                            "through it helps support µnleashed.</p></div>")
-
-                def secs(page, n):
-                    # Each board's section, up to the next one or the end of
-                    # the last one's own div.
-                    cut = [page.index(f'<div class="bsec b{j}">') for j in range(n)]
-                    return [page[c:(cut[j + 1] if j + 1 < n else
-                                    page.index('<p class="meta fam">'))]
-                            for j, c in enumerate(cut)]
-                sec3 = secs(pick3, len(pb3))
-                # Site 1.3.17: the Makerfabs's link is its maker's shop, not
-                # an affiliate link, and its section has no buttons yet.
                 aff3 = [b.get("affiliate", True) is not False for b in pb3]
-                check("each board with a link has its Buy one, from BOARDS, sponsored "
-                      "and nofollow, in a new tab, outside every label",
-                      all(b.get("buy") for b in pb3)
+
+                def buy_a(b):
+                    # An affiliate link's button, written out here in full.
+                    return ('<a class="buy" href="' + html.escape(b["buy"], quote=True)
+                            + '" rel="sponsored nofollow noopener" target="_blank" '
+                            'aria-label="Buy the ' + html.escape(b["name"], quote=True)
+                            + ' on Amazon (affiliate link, opens in a new tab)">BUY</a>')
+                picker3 = pick3.split("</fieldset>")[0]
+                rowsb = picker3.split('<div class="brow">')[1:]
+                check("each board with a link has one BUY, from BOARDS, in a new tab, "
+                      "just after its row's label and outside it, sponsored and nofollow "
+                      "when it is an affiliate link",
+                      all(b.get("buy") for b in pb3) and len(rowsb) == len(pb3)
+                      and all(r.endswith("</label>" + (buy_a(b) if a else S.buy_html(b))
+                                         + "</div>")
+                              and r.count('<a class="buy"') == 1
+                              and r.count("<label") == 1 and r.count("</label>") == 1
+                              and r.index('<a class="buy"') > r.index("</label>")
+                              and ('rel="sponsored nofollow noopener"' in r) == a
+                              and 'target="_blank"' in r
+                              for r, b, a in zip(rowsb, pb3, aff3))
+                      and all('class="buy"' not in lab
+                              for lab in re.findall(r"<label.*?</label>", pick3, re.S))
                       and pick3.count('<a class="buy"') == len(pb3)
-                      and 'class="buy"' not in pick3.split("</fieldset>")[0]
                       and "\u2014" not in pick3)
-                check("each sits at the end of its own board's section, under that "
-                      "board's buttons and version line, so it follows the pick",
-                      all(sec.endswith(buy_block(b) + "</div>")
-                          and sec.index("Update my board</button>")
-                              < sec.index('<p class="meta ver r0">')
-                              < sec.index('<a class="buy"')
-                          and sec.count('<a class="buy"') == 1
-                          for sec, b, a in zip(sec3, pb3, aff3) if a)
-                      and all(f".installer:has(#fwb{j}:checked) .bsec.b{j}{{display:flex}}"
-                              in pick3 for j in range(1, len(pb3))))
+                check("the line saying what BUY is opens the card's small print, once, "
+                      "under every board's buttons, naming a maker's own shop as the "
+                      "exception, and the Buy one block under the buttons is gone",
+                      pick3.count('<p class="meta aff">') == 1
+                      and S.buy_note_html(pb3) + '<p class="meta fam">' in pick3
+                      and pick3.rindex('<div class="bsec ')
+                          < pick3.index('<p class="meta aff">')
+                      and ("BUY links are affiliate links, except the one to Makerfabs: "
+                           "buying through them helps support µnleashed.") in pick3
+                      and S.buy_note_html([b for b, a in zip(pb3, aff3) if a])
+                          == ('<p class="meta aff">BUY links are affiliate links: buying '
+                              "through them helps support µnleashed.</p>")
+                      and "not affiliate links" in S.buy_note_html(
+                          [b for b, a in zip(pb3, aff3) if not a])
+                      and S.buy_note_html([]) == ""
+                      and "Buy one" not in pick3 and 'class="buyone"' not in pick3
+                      and "Affiliate link: buying" not in pick3
+                      and "Buy one" not in render("install"))
                 s3b = S.BOARD_BY_DIR["esp32s3"]
                 s3buy = s3b.pop("buy")
                 try:
-                    pick3n = S.installer_html()
                     none3 = S.buy_html(s3b)
+                    rowsn = S.installer_html().split("</fieldset>")[0].split(
+                        '<div class="brow">')[1:]
+                    every = [dict(b) for b in S.BOARDS]
+                    for b in S.BOARDS:
+                        b.pop("buy", None)
+                    try:
+                        bare = S.installer_html()
+                    finally:
+                        for b, was in zip(S.BOARDS, every):
+                            b.update(was)
                 finally:
                     s3b["buy"] = s3buy
-                sec3n = secs(pick3n, len(pb3))
-                check("a board with no link has no button and no line",
-                      none3 == "" and 'class="buyone"' not in sec3n[1]
-                      and pick3n.count('<a class="buy"') == len(pb3) - 1
-                      and pick3n.count("Affiliate link: buying") == sum(aff3) - 1
-                      and all(buy_block(b) in sec for sec, b, a in zip(sec3n, pb3, aff3)
-                              if b is not s3b and a))
-                mf3 = S.BOARD_BY_DIR["esp32s3-mf35"]
-                check("the Makerfabs's Buy one goes to Makerfabs' own page, plainly: "
-                      "no sponsored rel, and a line saying it is not an affiliate link",
-                      mf3["buy"] == "https://www.makerfabs.com/"
-                                    "esp32-s3-parallel-tft-with-touch-ili9488.html"
-                      and mf3["affiliate"] is False and mf3["shop"] == "Makerfabs"
-                      and sec3[pb3.index(mf3)].endswith(S.buy_html(mf3) + "</div>")
-                      and S.buy_html(mf3) == (
-                          '<div class="buyone"><a class="buy" href="https://www.makerfabs.com/'
-                          'esp32-s3-parallel-tft-with-touch-ili9488.html" rel="noopener" '
-                          'target="_blank" aria-label="Buy one, the Makerfabs ESP32-S3 '
-                          'Parallel TFT 3.5&quot; (v1.0), from Makerfabs (opens in a new '
-                          'tab)">Buy one</a><p class="meta aff">From Makerfabs, the maker. '
-                          "Not an affiliate link.</p></div>")
-                      and "sponsored" not in S.buy_html(mf3)
-                      and "amazon" not in S.buy_html(mf3).lower())
-                check("the button is a small red one, white on #c62828, and not --risk",
-                      "article .installer a.buy {{ display:inline-block; font-size:0.8125rem;"
-                      in S.PAGE
+                check("a board with no link has no BUY, and with none at all there is "
+                      "no line either",
+                      none3 == "" and 'class="buy"' not in rowsn[1]
+                      and rowsn[1].endswith("</label></div>")
+                      and sum('class="buy"' in r for r in rowsn) == len(pb3) - 1
+                      and 'class="buy"' not in bare and 'class="meta aff"' not in bare)
+                check("BUY is small, bold and red, white on #c62828 and not --risk, "
+                      "at the end of the version line, which keeps clear of it",
+                      "article a.buy {{ display:inline-block; font-size:0.625rem; "
+                      "font-weight:700;" in S.PAGE
                       and "color:#fff; background:#c62828;" in S.PAGE
-                      and "article .installer a.buy:focus-visible {{ outline:3px solid "
-                          "#ffd35c;" in S.PAGE)
+                      and "article a.buy:focus-visible {{ outline:3px solid #ffd35c;" in S.PAGE
+                      and "article .installer .brow {{ position:relative; }}" in S.PAGE
+                      and "article .installer .brow > a.buy {{ position:absolute; "
+                          "right:0.1875rem;" in S.PAGE
+                      and "article .installer .brow:has(> a.buy) .bv {{ "
+                          "padding-right:1.125rem; }}" in S.PAGE
+                      and "article .installer a.buy" not in S.PAGE)
+                hwbs = [b for b in S.BOARDS + S.SHOWN_BOARDS + S.SOON_BOARDS if b.get("buy")]
+                check("/hardware: each board with a link has the same BUY in its Buy one "
+                      "row, and keeps its words: an affiliate link, or the maker's shop",
+                      all(S.board_html([b["dir"]]).count('<a class="buy"') == 1
+                          and '<dt>Buy one</dt><dd>' + S.buy_html(b) in S.board_html([b["dir"]])
+                          and ((">BUY</a> on Amazon (affiliate link)" in S.board_html([b["dir"]])
+                                and 'rel="sponsored nofollow noopener" target="_blank"'
+                                    in S.board_html([b["dir"]]))
+                               if b.get("affiliate", True) is not False else
+                               (">BUY</a> from Makerfabs, their own shop (not an affiliate "
+                                "link)" in S.board_html([b["dir"]])
+                                and "sponsored" not in S.board_html([b["dir"]])))
+                          for b in hwbs)
+                      and len(hwbs) == len(S.BOARDS) + len(S.SHOWN_BOARDS)
+                          + len(S.SOON_BOARDS)
+                      and render("hardware").count('<a class="buy"') == len(hwbs))
                 man3 = S.firmware_manifest("1.1.1-dev.0", chip="esp32-cam")
                 check("its manifest holds its own build, at the ESP32's offsets",
                       man3 is not None and man3["version"] == "1.1.1-dev.0 (ESPCAM 1.0.1)"
@@ -6883,7 +6908,7 @@ def main():
                           "published 2026-09-26.</p>" in mfsec
                       and ".installer:has(#fwb4:checked) .bsec.b4{display:flex}" in pick6)
                 check("and choosing it shows the v1.0 and USB-TTL step before its "
-                      "buttons, and its Buy one goes to Makerfabs, not an affiliate link",
+                      "buttons, and its BUY goes to Makerfabs, not an affiliate link",
                       mfsec.startswith('<p class="first"><b>First:</b> check the back says '
                                        "<b>v1.0</b>, and plug into the USB-C marked "
                                        '<b>USB-TTL</b>. <a href="#on-the-makerfabs-3-5">'
@@ -6891,8 +6916,13 @@ def main():
                       and mfsec.find('<p class="first">')
                           < mfsec.find('manifest="/install/1.1.1-mf35.1/esp32s3-mf35/'
                                        'manifest.json"')
-                      and S.buy_html(mfb) in mfsec and "sponsored" not in mfsec
-                      and "Not an affiliate link." in mfsec)
+                      and "</label>" + S.buy_html(mfb) + "</div>" in rows6[4]
+                      and 'class="buy"' not in mfsec and "sponsored" not in S.buy_html(mfb)
+                      and 'rel="noopener"' in S.buy_html(mfb)
+                      and "from Makerfabs, its maker (not an affiliate link"
+                          in S.buy_html(mfb)
+                      and "BUY links are affiliate links, except the one to Makerfabs: "
+                          "buying through them helps support µnleashed." in pick6)
                 check("the same-chip line names both families that share a chip, the "
                       "Waveshare and the Makerfabs together",
                       "The ESP32 dev board (Base), the Freenove ESP32 camera board and the "
@@ -6958,9 +6988,10 @@ def main():
                       and "The firmware with skins is in testing" in flat_mf6)
                 check("and where to buy it: Makerfabs' own page, plainly, and the Elecrow "
                       "named as looked at, not supported, not installable",
-                      '<dt>Buy one</dt><dd><a href="https://www.makerfabs.com/'
-                          'esp32-s3-parallel-tft-with-touch-ili9488.html">Makerfabs</a>, '
-                          "their own shop (not an affiliate link)</dd>" in mf6
+                      '<dt>Buy one</dt><dd><a class="buy" href="https://www.makerfabs.com/'
+                          'esp32-s3-parallel-tft-with-touch-ili9488.html" rel="noopener"' in mf6
+                      and ">BUY</a> from Makerfabs, their own shop (not an affiliate "
+                          "link)</dd>" in mf6
                       and 'rel="sponsored"' not in mf6
                       and "link.amazon" not in mf6 and "tag=" not in mf6
                       and 'href="https://www.amazon.com/dp/B0C4SJXP9N"' in mf6

@@ -14,6 +14,34 @@
 
 # Changelog
 
+## 1.3.18, 2026-09-26
+
+BUY beside every board, not one Buy one under the buttons (Rob: "this
+should be a BUY button not BUY ONE and I wanted one near each board").
+
+- **/install:** each board row with a buy link ends in a tiny red **BUY**,
+  at the right-hand end of its version line, after Secure where a row has
+  it. White on #c62828, bold, the size of the picks' tags, with almost no
+  padding. It sits beside the row's label, never inside it, so pressing it
+  opens the shop and does not pick the board. It opens in a new tab. An
+  Amazon link carries `rel="sponsored nofollow noopener"` and tells a
+  screen reader "Buy the <board> on Amazon (affiliate link, opens in a new
+  tab)"; the Makerfabs's goes to Makerfabs' own shop, plainly, and says it
+  is not an affiliate link.
+- The card's small print opens with one line: "BUY links are affiliate
+  links, except the one to Makerfabs: buying through them helps support
+  µnleashed." It sits under the buttons, so the Update button is exactly
+  where it was.
+- The Buy one button and its line under Install and Update (1.3.16) are
+  gone.
+- **/hardware:** each board's Buy one row leads with the same BUY, then
+  "on Amazon (affiliate link)", or for the Makerfabs "from Makerfabs,
+  their own shop (not an affiliate link)". The page's note on affiliate
+  links says "BUY buttons".
+- The rows lay out exactly as before on every screen 414px and wider. On
+  a narrower phone, where the words sit under the picture, a long version
+  line may take a second line to keep clear of the button.
+
 ## 1.3.17, 2026-09-26
 
 The Makerfabs ESP32-S3 Parallel TFT 3.5" (v1.0) on the installer as a

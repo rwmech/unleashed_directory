@@ -75,7 +75,7 @@ an encrypted way to connect, beside telnet, in firmware 1.2.0. That is not
 released yet, which is what the asterisk says; the board's Secure line gives
 the version, and the asterisk goes the day a release carries it.
 
-The buy links below are Amazon affiliate links, apart from one: a purchase
+The BUY buttons below are Amazon affiliate links, apart from one: a purchase
 through one may earn the project a small commission, at no extra cost to you.
 Each goes to the listing for the board that was tested, or for a camera board,
 the one being tested, and any board that matches the picture and the chip will
