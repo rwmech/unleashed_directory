@@ -2587,6 +2587,10 @@ def main():
                  if get_raw(p)[0] != 301 or get_raw(p)[2] != want]
         check("a page of the project's site is sent there with a 301"
               + ("" if not wrong else "  <- " + ", ".join(wrong)), not wrong)
+        # update.sh GETs /announce over plain HTTP and fails the deploy on
+        # anything but 400/404/405: the catch-all must not 301 it (2.0.1).
+        check("GET /announce is 405, never a redirect",
+              get_raw("/announce")[0] == 405)
         if HAVE_DOCS:
             gone = [p for p in ("/setup", "/terminals", "/forward-asus", "/privacy",
                                 "/sdcard", "/camera", "/skins")

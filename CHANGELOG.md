@@ -14,6 +14,14 @@
 
 # Changelog
 
+## 2.0.1, 2026-09-26
+
+- **GET /announce is 405 again.** 2.0.0's catch-all for moved pages took
+  "announce" for a page name and answered a GET with a 301 to the
+  project's site. Boards POST and were never affected, but update.sh's
+  plain-HTTP check GETs it, read the 301 as a redirect in front of the
+  boards, and stopped the cutover at step 7.
+
 ## 2.0.0, 2026-09-26
 
 The split (Rob): this repository is the directory and nothing else, served

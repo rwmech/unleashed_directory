@@ -4219,6 +4219,12 @@ class Handler(BaseHTTPRequestHandler):
         # which used to live at the top level and now lives under /docs, or
         # a page of the project's own site, which moved to its own server:
         # both are a 301, so no old link breaks.
+        # /announce is POST only. Answered here, before the catch-all below,
+        # which would take "announce" for a page name and 301 it to the
+        # project's site: update.sh's plain-HTTP check GETs it and must see
+        # the directory, never a redirect.
+        elif path == "/announce":
+            self.reply(405, "POST only\n", "text/plain; charset=utf-8", {"Allow": "POST"})
         elif PAGE_NAME.match(path[1:] or ""):
             name = path[1:]
             page = md_page(name, role)
