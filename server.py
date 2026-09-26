@@ -531,6 +531,9 @@ NAV_SECTION = {
     # How callers use the camera boards' camera (site 1.2.4): a hardware
     # add-on page like the two above, reached from /build and /hardware.
     "/camera":          "/build",
+    # Display skins (site 1.3.14): a hardware add-on page like the three
+    # above, reached from /build and /lights.
+    "/skins":           "/build",
     # What sets the board apart, and where it is going (site 1.2.4). Both
     # belong to the argument, so they light "What this is", written with
     # its face for the same reason /badges names the list face.
@@ -9167,6 +9170,10 @@ svg.art.roadmap .dc { fill:var(--dial); }
 svg.art.camsnap { width:100%; max-width:30rem; height:auto;
         margin:0.75rem auto 1.25rem; }
 svg.art.camsnap .fl { fill:#ffffff; opacity:0; }
+/* The skins on /skins (site 1.3.14): the same strip's size, and the lit
+   picture's two lamps glow the way the lights page's do. */
+svg.art.skinart { width:100%; max-width:30rem; height:auto;
+        margin:0.75rem auto 1.25rem; }
 
 /* The skull is drawn in the warning box's own amber, on its background,
    so it belongs to the box it sits in rather than to the page. */
@@ -9369,6 +9376,9 @@ svg.art.shot text.cf { fill:#ffffff; }  svg.art.shot rect.bf { fill:#ffffff; }
   /* the camera: the word goes down the line and the pixel flashes */
   svg.art.camsnap .go { animation:artserial 2.4s linear infinite; }
   svg.art.camsnap .fl { animation:camflash 2.4s linear infinite; }
+  /* the skin: the drive lamp flickers, the activity lamp pulses */
+  svg.art.skinart .glow { animation:artpulse 0.9s ease-in-out infinite; }
+  svg.art.skinart .glow2 { animation:artpulse 2.4s ease-in-out 0.4s infinite backwards; }
   svg.art.spectrum .up { transition:transform 0.2s ease-out; }
   svg.art.spectrum a:hover .up,
   svg.art.spectrum a:focus-visible .up { transform:translateY(-2px); }
@@ -10375,6 +10385,70 @@ CAMERA_ART = (
     "</svg>")
 
 
+# The skins page, /skins (site 1.3.14): a picture of a machine with its
+# lamps painted dark, the skin.txt that says where they are, and the board's
+# screen with the same picture lit, the drive lamp amber and the activity lamp
+# green, and status lines on the monitor. A generic machine: no maker's shape
+# and no badge, which is the page's own rule for skins. 354 units wide like
+# the camera strip, so a phone draws it at about 1:1.
+def _skin_machine(lit):
+    """The machine in a 96 x 64 frame, its lamps dark or lit."""
+    out = ('<rect class="o" x="20" y="22" width="40" height="30" rx="2"/>'
+           '<rect class="g" x="24" y="26" width="32" height="22" rx="1"/>'
+           '<path class="o" d="M40 52 V56 M32 56 H48"/>'
+           '<rect class="o" x="66" y="38" width="30" height="20" rx="1.5"/>'
+           '<path class="d" d="M70 45 H92"/>'
+           '<rect class="o" x="18" y="62" width="46" height="9" rx="1.5"/>'
+           '<path class="d" d="M22 66.5 H60"/>')
+    if not lit:
+        return out + ('<circle class="d" cx="90" cy="52" r="2"/>'
+                      '<circle class="d" cx="72" cy="52" r="2"/>')
+    return out + (
+        # the status lines on the monitor, in the text's own colour
+        '<path class="lt" d="M27.5 31 H48 M27.5 36 H44 M27.5 41 H50"/>'
+        # the drive lamp, amber, and the activity lamp, green
+        '<g class="glow"><circle class="c5" cx="90" cy="52" r="5" opacity="0.25"/>'
+        '<circle class="c5" cx="90" cy="52" r="2"/></g>'
+        '<g class="glow2"><circle class="halo" cx="72" cy="52" r="5"/>'
+        '<circle class="lf" cx="72" cy="52" r="2"/></g>')
+
+
+SKIN_ART = (
+    '<svg class="art skinart" viewBox="0 0 354 124" role="img" '
+    'aria-label="A picture of a computer with its lamps painted dark, plus a '
+    'skin.txt file saying where the lamps and the text go, becomes the board\'s '
+    'screen showing the same picture with its lamps lit and status lines on '
+    'its monitor." preserveAspectRatio="xMidYMid meet">'
+    # the picture
+    '<rect class="o" x="8" y="14" width="96" height="64" rx="1.5"/>'
+    + _skin_machine(False)
+    + '<path class="d" d="M109 42.5 L113 46 L109 49.5"/>'
+    # skin.txt
+    '<path class="o" d="M120 14 H180 L190 24 V78 H120 Z"/>'
+    '<path class="d" d="M180 14 V24 H190"/>'
+    '<text class="ink" x="125" y="31" font-size="7.5">skin 1</text>'
+    '<text class="live" x="125" y="43" font-size="7.5">drive 90 52</text>'
+    '<text class="live" x="125" y="55" font-size="7.5">activity</text>'
+    '<text x="125" y="67" font-size="7.5">text 24 26</text>'
+    '<path class="d" d="M195 42.5 L199 46 L195 49.5"/>'
+    # the board: a circuit board with the screen on it, and the picture lit
+    '<rect class="o" x="204" y="8" width="142" height="76" rx="3"/>'
+    '<rect class="gb" x="210" y="14" width="100" height="68" rx="1.5"/>'
+    '<g transform="translate(206 2)">' + _skin_machine(True) + "</g>"
+    '<rect class="o" x="318" y="30" width="20" height="20" rx="1"/>'
+    '<path class="d" d="M322 30 V26 M327 30 V26 M332 30 V26 M322 50 V54 '
+    'M327 50 V54 M332 50 V54"/>'
+    '<rect class="o" x="340" y="60" width="9" height="12" rx="1"/>'
+    # captions
+    '<text class="ink" x="56" y="100" font-size="10.5" text-anchor="middle">your picture</text>'
+    '<text x="56" y="113" font-size="9.5" text-anchor="middle">lamps dark</text>'
+    '<text class="ink" x="155" y="100" font-size="10.5" text-anchor="middle">skin.txt</text>'
+    '<text x="155" y="113" font-size="9.5" text-anchor="middle">says where</text>'
+    '<text class="ink" x="275" y="100" font-size="10.5" text-anchor="middle">the board</text>'
+    '<text x="275" y="113" font-size="9.5" text-anchor="middle">lights it</text>'
+    "</svg>")
+
+
 # The skull for the warning box on /how. Crossbones first, so the skull,
 # filled with the box's own background, sits in front of the crossing.
 # Not animated: a warning that moves is a warning that looks like an
@@ -10740,6 +10814,7 @@ ART = {"firstcall": FIRSTCALL_ART,
        "hardware-spectrum": SPECTRUM,
        "roadmap": ROADMAP_ART,
        "camera-snap": CAMERA_ART,
+       "skin-parts": SKIN_ART,
        # The cover at the top of /donate. An image rather than inline, so
        # it is fetched once and cached, and it is vector either way.
        "cover": ('<img class="cover" src="/cover.svg" width="1600" height="310" '

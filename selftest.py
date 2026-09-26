@@ -2145,6 +2145,81 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def skins_checks(S):
+    """Site 1.3.14. /skins, making display skins: coming soon for display
+    boards, the Makerfabs first, how to make one, the skin.txt reference,
+    and the stock set with no download link until the zip exists."""
+    print("The skins page")
+    code, sk = get("/skins")
+    body = sk.split("<article>")[1].split("</article>")[0] if "<article>" in sk else ""
+    flat = " ".join(body.split())
+    check("/skins renders, with its drawing",
+          code == 200 and has_h(sk, 1, "Skins")
+          and S.ART["skin-parts"] in sk
+          and 'role="img"' in S.ART["skin-parts"].split(">")[0]
+          and "svg.art.skinart { width:100%; max-width:30rem;" in sk)
+    note = body.split('<p class="aside">')[1].split("</p>")[0] if '<p class="aside">' in body else ""
+    check("it opens with the status: coming soon, the Makerfabs first, more to follow",
+          body.index('<p class="aside">') < body.index("<h2")
+          and "Skins are coming soon for display-enabled boards." in note
+          and "Makerfabs ESP32-S3 Parallel TFT" in " ".join(note.split())
+          and 'href="https://www.makerfabs.com/esp32-s3-parallel-tft-with-touch-ili9488.html"' in note
+          and "480 by 320" in note and "more display boards will follow" in " ".join(note.split())
+          and not re.search(r"firmware \d", note))
+    check("it says what a skin is: the picture, skin.txt, and the lights' modes",
+          "<code>background.jpg</code>" in body and "<code>skin.txt</code>" in body
+          and 'href="/lights"' in body
+          and all(f"<code>{w}</code>" in body for w in ("pc", "1541", "disk2", "breathe"))
+          and "No LED strip needs to be wired for it." in flat)
+    steps = body.split('id="making-one-step-by-step"')[1].split("<h2")[0] if (
+        'id="making-one-step-by-step"' in body) else ""
+    check("the steps: template, paint, mark the lights, check, card or upload, in order",
+          steps.count("<ol") >= 3 and 'start="3"' in steps and 'start="5"' in steps
+          and steps.index("Start from the template") < steps.index("Paint it")
+          < steps.index("Mark the lights") < steps.index("Check it")
+          < steps.index("Put it on the board")
+          and "mkskin.py check my_tower" in steps
+          and "mkskin.py preview my_tower" in steps)
+    check("the key colours go through mkskin.py leds, and the board takes an upload",
+          '<pre class="nowrap">python tools/mkskin.py leds keyed.png' in body
+          and "--key drive=#FF00FF" in body
+          and "<b>Skins</b> file area" in body
+          and "<code>my_tower.txt</code>" in body and "<code>my_tower.jpg</code>" in body
+          and "<code>SD UNMOUNT</code>" in body and "<code>CONFIG panel</code>" in body)
+    ref = body.split('id="skin-txt"')[1].split("<h2")[0] if 'id="skin-txt"' in body else ""
+    check("skin.txt's reference is tables, every directive and every lines word",
+          ref.count("<table>") == 2
+          and all(f"<td><code>{d}" in ref for d in ("skin 1", "panel 480 320", "name ",
+                  "drive X Y D STYLE", "activity X Y D", "strip N", "led I X Y D",
+                  "text X Y W H", "lines WORD", "clock X Y"))
+          and all(f"<code>{w}</code>" in ref for w in ("name", "address", "uptime",
+                  "callers", "today", "heap", "card", "clock", "date", "last",
+                  "ring", "blank", "who")))
+    stock = body.split('id="the-stock-skins"')[1].split("<h2")[0] if (
+        'id="the-stock-skins"' in body) else ""
+    check("the stock set is listed, its download coming soon and not a link",
+          all(m in stock for m in ("A PC", "A 1980s home computer", "An Apple ][",
+                                   "An Atari 400/800", "An IMSAI 8080"))
+          and "<b>Download: coming soon.</b>" in stock
+          and ".zip" not in stock and "ZIP-URL" not in sk
+          and "Download the stock skins" not in sk)
+    check("and says no logos or trademark art, for the stock skins and yours",
+          "<b>No logos, and no trademark art.</b>" in stock
+          and "must not use them either" in " ".join(stock.split()))
+    check("the page names no C64 and no firmware version",
+          "C64" not in flat and "Commodore 64" not in flat and "c64" not in flat
+          and not re.search(r"\b1\.[12]\.\d+\b", flat))
+    check("no word from the banned list, and no em dash",
+          "\u2014" not in body
+          and not re.search(r"\b(simply|just|easy|easily|of course|obviously)\b",
+                            flat, re.I))
+    check("it lights Build one, and /build and /lights link it",
+          S.NAV_SECTION.get("/skins") == "/build"
+          and '<a class="here" href="/build">' in sk
+          and 'href="/skins"' in get("/build")[1]
+          and 'href="/skins"' in get("/lights")[1])
+
+
 def main():
     db = os.path.join(tempfile.gettempdir(), f"dirtest{os.getpid()}.db")
     for leftover in (db, db + "-wal", db + "-shm"):
@@ -7428,6 +7503,7 @@ def main():
         directory_checks(S)
         closed_checks(S)
         rate_checks(S)
+        skins_checks(S)
     finally:
         server.terminate()
         try:

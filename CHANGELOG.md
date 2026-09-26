@@ -14,6 +14,35 @@
 
 # Changelog
 
+## 1.3.14, 2026-09-26
+
+A new page, /skins: making display skins (Rob: "coming soon for
+display-enabled boards"). 1.3.13 is taken by the board-choice guide, not yet
+pushed.
+
+- **What a skin is**: a 480 by 320 picture of any machine plus a `skin.txt`
+  saying where the lights and the status text go, lit by the board and
+  following the drive light and strip modes. The status note names the
+  first board, the Makerfabs ESP32-S3 Parallel TFT 3.5", and no firmware
+  version, because none is settled.
+- **How to make one**, for somebody who is not a programmer: start from a
+  stock skin, paint it, mark the lights with key colours and `mkskin.py
+  leds` or by hand, check and preview it, and put it on the card or upload
+  it into the Skins file area as the sysop. Then the `skin.txt` reference
+  in three short tables, what `PANEL` says when a skin will not show, and
+  how to share one.
+- **The stock set** (a PC, a 1980s home computer, an Apple ][, an Atari
+  400/800, an IMSAI 8080) is listed with its download marked coming soon
+  and no link; a comment in the page holds the one line to add once the
+  zip exists. Skins must carry no logos or trademark art, and the page says
+  so.
+- A drawing, `skin-parts`: the picture with its lamps dark, `skin.txt`, and
+  the board's screen with them lit. The renders of the stock skins are
+  still mock-ups, so no picture of one yet.
+- /skins lights Build one, and /build and /lights link it.
+- Facts from the firmware's panel-skins lane (SKINS.md, `tools/mkskin.py`,
+  `src/plugins/skin.cpp` and the skins engineer's draft), 2026-09-26.
+
 ## 1.3.12, 2026-09-26
 
 The heartbeat rate limit is per board, not per address (Rob runs Unleashed

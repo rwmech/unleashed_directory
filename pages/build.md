@@ -55,6 +55,11 @@ connects. The boards are on [the tested boards
 page](/hardware#freenove-esp32-camera-board), and what visitors can do with
 them is on [the camera page](/camera).
 
+Also coming soon, display skins: a board with a bigger screen shows a picture
+of any machine you like, a beige PC, an Apple II or an IMSAI's front panel,
+and lights its lamps as the board works. How to draw one is on [the skins
+page](/skins).
+
 ## For developers: build from source
 
 You need [PlatformIO](https://platformio.org/) and git. For the ESP32 dev

@@ -91,6 +91,9 @@ What it shows:
 - `manual`: each pixel its own effect and colour.
 - `off`.
 
+Coming soon, a board with a display can draw both lights on its screen, over a
+picture of a machine of your choosing: see [skins](/skins).
+
 ## Telling the board about it
 
 Log in as the sysop and type `CONFIG lights`. Switch the plugin on, set
