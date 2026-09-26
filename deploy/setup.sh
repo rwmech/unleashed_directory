@@ -217,33 +217,12 @@ else
     echo "no guides: /docs is not served (see DOCS_SRC in this script)"
 fi
 
-say "Service"
-install -m 644 "$SRC/deploy/unleashed-directory.service" \
-    /etc/systemd/system/unleashed-directory.service
-
-# The domain it answers as, in a drop-in, so the unit that ships in the
-# repository never needs editing for a deployment.
-mkdir -p /etc/systemd/system/unleashed-directory.service.d
-{
-    echo "# Written by deploy/setup.sh"
-    echo "[Service]"
-    [ -n "${DOMAINS[0]:-}" ] && echo "Environment=DIRECTORY_LIST_DOMAIN=${DOMAINS[0]}"
-    true
-} > /etc/systemd/system/unleashed-directory.service.d/domains.conf
-
-systemctl daemon-reload
-systemctl enable unleashed-directory >/dev/null
-systemctl restart unleashed-directory
-
-# ---------------------------------------------------------------------------
-# The web front end, written for the domains given on the command line.
-#
-# THE ONE THING NOT TO CHANGE: /announce stays on plain HTTP with no
-# redirect. A board is a microcontroller with no TLS stack, and Caddy's
-# default of upgrading every http:// request would turn every heartbeat on
-# the network into a 308 that boards report as "refused", silently, with no
-# way for a sysop to find out why.
-# ---------------------------------------------------------------------------
+# The web front end is switched before the service restarts (2.0.0): on
+# the first install after the split, the old Caddyfile still sends the
+# project's site to this port, and the new directory answering it would
+# 301 the site's pages to themselves. Switched first, the site's domains
+# have left before the restart, and .net meets the old server for the
+# second the restart takes, as on any update.
 say "Web front end"
 CADDY=/etc/caddy/Caddyfile
 SITES=/etc/caddy/sites
@@ -370,6 +349,33 @@ if ! systemctl is-active --quiet caddy; then
     exit 1
 fi
 
+say "Service"
+install -m 644 "$SRC/deploy/unleashed-directory.service" \
+    /etc/systemd/system/unleashed-directory.service
+
+# The domain it answers as, in a drop-in, so the unit that ships in the
+# repository never needs editing for a deployment.
+mkdir -p /etc/systemd/system/unleashed-directory.service.d
+{
+    echo "# Written by deploy/setup.sh"
+    echo "[Service]"
+    [ -n "${DOMAINS[0]:-}" ] && echo "Environment=DIRECTORY_LIST_DOMAIN=${DOMAINS[0]}"
+    true
+} > /etc/systemd/system/unleashed-directory.service.d/domains.conf
+
+systemctl daemon-reload
+systemctl enable unleashed-directory >/dev/null
+systemctl restart unleashed-directory
+
+# ---------------------------------------------------------------------------
+# The web front end, written for the domains given on the command line.
+#
+# THE ONE THING NOT TO CHANGE: /announce stays on plain HTTP with no
+# redirect. A board is a microcontroller with no TLS stack, and Caddy's
+# default of upgrading every http:// request would turn every heartbeat on
+# the network into a 308 that boards report as "refused", silently, with no
+# way for a sysop to find out why.
+# ---------------------------------------------------------------------------
 say "Firewall"
 ufw allow 22/tcp  >/dev/null
 ufw allow 80/tcp  >/dev/null
