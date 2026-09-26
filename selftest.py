@@ -32,6 +32,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from html.parser import HTMLParser
 
 # The suite's first port. It uses this and the four after it, all on
@@ -2146,9 +2147,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def skins_checks(S):
-    """Site 1.3.14. /skins, making display skins: coming soon for display
-    boards, the Makerfabs first, how to make one, the skin.txt reference,
-    and the stock set with no download link until the zip exists."""
+    """Site 1.3.14, rewritten in 1.3.17. /skins, making display skins: coming
+    soon for display boards, the firmware with skins in testing, the stock
+    set to download now with a picture of each, the upload route through
+    the Skins file area first, then the card, and the skin.txt reference."""
     print("The skins page")
     code, sk = get("/skins")
     body = sk.split("<article>")[1].split("</article>")[0] if "<article>" in sk else ""
@@ -2159,55 +2161,105 @@ def skins_checks(S):
           and 'role="img"' in S.ART["skin-parts"].split(">")[0]
           and "svg.art.skinart { width:100%; max-width:30rem;" in sk)
     note = body.split('<p class="aside">')[1].split("</p>")[0] if '<p class="aside">' in body else ""
-    check("it opens with the status: coming soon, the Makerfabs first, more to follow",
+    flat_note = " ".join(note.split())
+    check("it opens with the status: coming soon, the firmware in testing, the Makerfabs "
+          "first, linked to its entry on /hardware",
           body.index('<p class="aside">') < body.index("<h2")
-          and "Skins are coming soon for display-enabled boards." in note
-          and "Makerfabs ESP32-S3 Parallel TFT" in " ".join(note.split())
-          and 'href="https://www.makerfabs.com/esp32-s3-parallel-tft-with-touch-ili9488.html"' in note
-          and "480 by 320" in note and "more display boards will follow" in " ".join(note.split())
+          and "Skins are coming soon for display-enabled boards: the firmware with skins "
+              "is in testing." in flat_note
+          and 'href="/hardware#makerfabs-esp32-s3-parallel-tft-3-5-v1-0"' in note
+          and "480 by 320" in flat_note
           and not re.search(r"firmware \d", note))
-    check("it says what a skin is: the picture, skin.txt, and the lights' modes",
+
+    def sec(anchor):
+        return (body.split(f'id="{anchor}"')[1].split("<h2")[0]
+                if f'id="{anchor}"' in body else "")
+    stock = sec("the-stock-skins")
+    names = ("pc", "c64", "apple2", "atari", "imsai")
+    check("the stock skins: a picture of each, from static/skins/, with its name",
+          stock.count("<figure>") == 5 and '<div class="wide gallery skins">' in stock
+          and all(f'<img src="/skins/skin-{n}.png" width="480" height="320" alt="{n}: '
+                  in stock and f"<figcaption><code>{n}</code>:" in stock for n in names)
+          and all(os.path.isfile(os.path.join("static", "skins", f"skin-{n}.png"))
+                  for n in names)
+          and ".gallery.skins img {{ aspect-ratio:3 / 2; }}" in S.PAGE)
+    check("and the two zips as links, still marked coming soon for display boards",
+          '<a href="/skins/skins.zip">Download the stock skins for the card</a>' in stock
+          and '<a href="/skins/skins-upload.zip">Download them as pairs to send</a>' in stock
+          and "<b>Coming soon for display-enabled boards: the firmware with skins is in "
+              "testing.</b>" in " ".join(stock.split())
+          and all(os.path.isfile(os.path.join("static", "skins", z))
+                  for z in ("skins.zip", "skins-upload.zip"))
+          and "ZIP-URL" not in sk and "STOCK-SKINS-ZIP" not in sk
+          and "Download: coming soon" not in sk)
+    zc = zipfile.ZipFile(os.path.join("static", "skins", "skins.zip")).namelist()
+    zu = zipfile.ZipFile(os.path.join("static", "skins", "skins-upload.zip")).namelist()
+    check("skins.zip is laid out for the card, skins-upload.zip in pairs",
+          sorted(zc) == sorted(f"skins/{n}/{f}" for n in names
+                               for f in ("skin.txt", "background.jpg"))
+          and sorted(zu) == sorted(f"{n}.{e}" for n in names for e in ("txt", "jpg")))
+    served = {}
+    for f in ("skins.zip", "skin-pc.png", "../server.py", "nope.zip", "skin-pc.txt"):
+        try:
+            with urllib.request.urlopen(f"{BASE}/skins/{f}", timeout=10) as r:
+                served[f] = (r.status, r.headers.get("Content-Type"), r.read())
+        except urllib.error.HTTPError as e:
+            served[f] = (e.code, None, b"")
+    check("and they are served from here at /skins/, zips and pictures only",
+          served["skins.zip"][:2] == (200, "application/zip")
+          and served["skins.zip"][2] == open(os.path.join("static", "skins", "skins.zip"),
+                                             "rb").read()
+          and served["skin-pc.png"][:2] == (200, "image/png")
+          and served["../server.py"][0] == 404 and served["nope.zip"][0] == 404
+          and served["skin-pc.txt"][0] == 404
+          and "skin-pc.png" not in S.gallery_html())
+    check("no logos: said for the stock skins and for yours",
+          "<b>No logos, and no trademark art.</b>" in stock
+          and "must not use them either" in " ".join(stock.split())
+          and "<b>Leave makers&#x27; logos and names off the machine.</b>" in body)
+    five = sec("the-five-minute-version")
+    check("the upload route comes first: the five-minute version ends by sending the "
+          "pair through the Skins area",
+          body.index('id="the-five-minute-version"') < body.index('id="get-the-tool"')
+          < body.index('id="sending-it-to-the-board"')
+          < body.index('id="or-copy-it-onto-the-card"')
+          and five.index("mkskin.py check my_tower") < five.index("mkskin.py pair my_tower")
+          < five.index("<code>FILES 12</code>") < five.index("<code>CONFIG panel</code>")
+          and 'start="6"' in five)
+    send = sec("sending-it-to-the-board")
+    flat_send = " ".join(send.split())
+    check("sending: area 12 on the Makerfabs, the pair's names, mkskin.py pair, YMODEM",
+          "12 on the Makerfabs 3.5 inch board, and 14 on a board that also has a camera"
+          in flat_send
+          and "<code>my_tower.txt</code>" in send and "<code>my_tower.jpg</code>" in send
+          and "python tools/mkskin.py pair my_tower -o to_send" in send
+          and "YMODEM" in send and "<b>A folder beats a pair.</b>" in flat_send)
+    card = sec("or-copy-it-onto-the-card")
+    check("the card route is still there, SD UNMOUNT first",
+          "<code>SD UNMOUNT</code>" in card and "<code>SD MOUNT</code>" in card)
+    check("it says what a skin is, and the lights' modes",
           "<code>background.jpg</code>" in body and "<code>skin.txt</code>" in body
           and 'href="/lights"' in body
           and all(f"<code>{w}</code>" in body for w in ("pc", "1541", "disk2", "breathe"))
-          and "No LED strip needs to be wired for it." in flat)
-    steps = body.split('id="making-one-step-by-step"')[1].split("<h2")[0] if (
-        'id="making-one-step-by-step"' in body) else ""
-    check("the steps: template, paint, mark the lights, check, card or upload, in order",
-          steps.count("<ol") >= 3 and 'start="3"' in steps and 'start="5"' in steps
-          and steps.index("Start from the template") < steps.index("Paint it")
-          < steps.index("Mark the lights") < steps.index("Check it")
-          < steps.index("Put it on the board")
-          and "mkskin.py check my_tower" in steps
-          and "mkskin.py preview my_tower" in steps)
-    check("the key colours go through mkskin.py leds, and the board takes an upload",
+          and "It works with no LED strip wired to the board at all." in flat)
+    check("the key colours go through mkskin.py leds, written with -o",
           '<pre class="nowrap">python tools/mkskin.py leds keyed.png' in body
-          and "--key drive=#FF00FF" in body
-          and "<b>Skins</b> file area" in body
-          and "<code>my_tower.txt</code>" in body and "<code>my_tower.jpg</code>" in body
-          and "<code>SD UNMOUNT</code>" in body and "<code>CONFIG panel</code>" in body)
-    ref = body.split('id="skin-txt"')[1].split("<h2")[0] if 'id="skin-txt"' in body else ""
+          and "--key drive=#FF00FF" in body and "-o my_tower/skin.txt" in body)
+    ref = sec("skin-txt")
+    words = sec("the-text-and-the-clock")
     check("skin.txt's reference is tables, every directive and every lines word",
           ref.count("<table>") == 2
           and all(f"<td><code>{d}" in ref for d in ("skin 1", "panel 480 320", "name ",
                   "drive X Y D STYLE", "activity X Y D", "strip N", "led I X Y D",
-                  "text X Y W H", "lines WORD", "clock X Y"))
-          and all(f"<code>{w}</code>" in ref for w in ("name", "address", "uptime",
+                  "text X Y W H", "lines ...", "clock X Y"))
+          and all(f"<code>{w}</code>" in words for w in ("name", "address", "uptime",
                   "callers", "today", "heap", "card", "clock", "date", "last",
                   "ring", "blank", "who")))
-    stock = body.split('id="the-stock-skins"')[1].split("<h2")[0] if (
-        'id="the-stock-skins"' in body) else ""
-    check("the stock set is listed, its download coming soon and not a link",
-          all(m in stock for m in ("A PC", "A 1980s home computer", "An Apple ][",
-                                   "An Atari 400/800", "An IMSAI 8080"))
-          and "<b>Download: coming soon.</b>" in stock
-          and ".zip" not in stock and "ZIP-URL" not in sk
-          and "Download the stock skins" not in sk)
-    check("and says no logos or trademark art, for the stock skins and yours",
-          "<b>No logos, and no trademark art.</b>" in stock
-          and "must not use them either" in " ".join(stock.split()))
-    check("the page names no C64 and no firmware version",
-          "C64" not in flat and "Commodore 64" not in flat and "c64" not in flat
+    # The stock skin's own name is c64, and that is what CONFIG lists, so it
+    # appears as a name; the machine is never named in prose.
+    prose = re.sub(r"<code>c64</code>|skin-c64\.png|alt=\"c64:", "", flat)
+    check("the page names no C64 in prose and no firmware version",
+          "C64" not in prose and "Commodore" not in prose and "c64" not in prose
           and not re.search(r"\b1\.[12]\.\d+\b", flat))
     check("no word from the banned list, and no em dash",
           "\u2014" not in body
@@ -2218,6 +2270,10 @@ def skins_checks(S):
           and '<a class="here" href="/build">' in sk
           and 'href="/skins"' in get("/build")[1]
           and 'href="/skins"' in get("/lights")[1])
+    setup = open(os.path.join("deploy", "setup.sh"), encoding="utf-8").read()
+    check("setup.sh installs every file under static/, so static/skins/ reaches the server",
+          '(cd "$SRC/static" && find . -type f)' in setup
+          and 'install -D -m 644 "$SRC/static/$shot" "$DEST/static/$shot"' in setup)
 
 
 def main():
@@ -3298,7 +3354,7 @@ def main():
         # Site 1.2.1: the chips live on /hardware, and /build points there.
         check("build links the tested boards, and the chips are said there",
               'href="/hardware"' in page
-              and "<b>ESP32-S3: yes, on one board.</b>" in get("/hardware")[1])
+              and "<b>ESP32-S3: yes, on two boards.</b>" in get("/hardware")[1])
         code, page = get("/hardware")
         body = page.split("<article>")[1].split("</article>")[0] if "<article>" in page else ""
         check("the tested boards page draws each board, its build and where to buy it",
@@ -4196,8 +4252,11 @@ def main():
                   in css_i
               and "article .installer .bsec { display:flex; flex-direction:column; "
                   "gap:0.5rem; }" in css_i
-              and "article .installer .bopt svg.art.board { width:4rem; height:2.5rem; }"
-                  in css_i
+              # Site 1.3.17: a fifth row, so the picture is a little smaller.
+              and "article .installer .bopt svg.art.board { width:3.8rem; "
+                  "height:2.375rem; }" in css_i
+              and "padding:0 0.625rem 0 0.5rem; border:1px solid #2c3a44;" in css_i
+              and "line-height:1.05; flex:1 1 12rem; }" in css_i
               and "position:sticky; top:1rem; padding:1rem 1.25rem; }" in css_i
               and "article .installer button.go { padding-top:0.5625rem; "
                   "padding-bottom:0.5625rem; }" in css_i)
@@ -5134,8 +5193,8 @@ def main():
         # little wiring, the first board to, and the intro says both.
         go = [x for x in seals if "FLASH &amp; GO</text>" in x]
         wire = [x for x in seals if ">A LITTLE</text>" in x and ">WIRING</text>" in x]
-        check("every board's picture wears its seal, five flash and go, one a little wiring",
-              len(seals) == 6 and len(go) == 5 and len(wire) == 1
+        check("every board's picture wears its seal, six flash and go, one a little wiring",
+              len(seals) == 7 and len(go) == 6 and len(wire) == 1
               and len(nos) == len(S.NOT_BOARDS)
               and all('role="img" aria-label="Flash and go' in x for x in go)
               and 'role="img" aria-label="A little wiring' in wire[0]
@@ -5156,15 +5215,23 @@ def main():
                              "esp32-dev-board-base-sd-card-for-storage",
                              "waveshare-esp32-s3-lcd-1-47",
                              "freenove-esp32-camera-board", "esp32-cam",
-                             "esp32-s3-camera-board")}
+                             "esp32-s3-camera-board",
+                             "makerfabs-esp32-s3-parallel-tft-3-5-v1-0")}
         secs = re.findall(r'<svg class="art seal sec"[^>]*>.*?</svg>', hw5, re.S)
         s3w, s3c = hsecs["waveshare-esp32-s3-lcd-1-47"], hsecs["esp32-s3-camera-board"]
+        # Site 1.3.17: the Makerfabs is an S3 board with no SSH version set
+        # for its 2 MB of PSRAM, so it wears no Secure seal and says so.
+        s3m = hsecs["makerfabs-esp32-s3-parallel-tft-3-5-v1-0"]
         others = ("esp32-dev-board-base", "esp32-dev-board-base-sd-card-for-storage",
                   "freenove-esp32-camera-board", "esp32-cam")
         note = ('<dt>Secure</dt><dd>* Encrypted connections (<span class="gl"')
         check("the Secure seal is on the two S3 boards' pictures only, FLASH & GO's "
               "size, bottom right, with its asterisk",
               len(secs) == 2 and "lockr" not in hw5
+              and '<div class="hwpic">' in s3m and 'class="art seal sec"' not in s3m
+              and "<dt>Secure</dt>" not in s3m
+              and "so it carries no Secure seal until that is settled"
+                  in " ".join(s3m.split())
               and all('viewBox="0 0 72 24"' in x
                       and 'SECURE<tspan class="ast">*</tspan></text>' in x
                       and 'role="img" aria-label="Secure, with an asterisk: encrypted '
@@ -5278,7 +5345,7 @@ def main():
               and "FLASH &amp; GO</text>" in ec and ">expected</text>" not in ec
               and S.secure_seal_html("esp32-cam") == "" and "esp32-cam" not in S.BOARD_SSH
               and S.BOARD_ART_ESPCAM.replace('class="art board', 'class="art board big', 1) in ec
-              and [b["dir"] for b in S.picker_boards()][-1] == "esp32-cam"
+              and [b["dir"] for b in S.picker_boards()][-2:] == ["esp32-cam", "esp32s3-mf35"]
               and "<b>ESP32-CAM</b>" in inst4 and "esp32-cam/manifest" not in inst4)
         check("and its facts: the chip, 8 MB of PSRAM with 4 usable, a genuine OV2640 "
               "at 1600x1200, the programmer board, the two LEDs, and no BOOT button",
@@ -5983,7 +6050,8 @@ def main():
                   "takes the ESP32's firmware",
                   # Site 1.3.5: plus the ESP32-CAM's row, coming soon with
                   # nothing on disk for it.
-                  shown.count('<input type="radio" name="fwboard"') == 3
+                  # Site 1.3.17: and the Makerfabs's, coming soon the same way.
+                  shown.count('<input type="radio" name="fwboard"') == 4
                   and shown.count("<b>ESP32 dev board (Base)</b>") == 1
                   and '<span class="tell pick">With or without an SD card: one '
                       "image</span>" in shown
@@ -5992,9 +6060,9 @@ def main():
                   and "SD card, for storage" not in shown
                   and "Freenove" not in shown
                   and [b["dir"] for b in S.BOARDS] == ["esp32", "esp32s3", "esp32-fncam",
-                                                       "esp32-cam"]
+                                                       "esp32-cam", "esp32s3-mf35"]
                   and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3",
-                                                                "esp32-cam"]
+                                                                "esp32-cam", "esp32s3-mf35"]
                   and all("image" not in b for b in S.BOARDS)
                   and "<dt>Firmware</dt><dd>0.19.2 <a href=\"/install\">on the "
                       "installer</a>. The same image as the bare board: choose ESP32 "
@@ -6107,8 +6175,8 @@ def main():
                   and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest-update.json"'
                       in pick
                   # Site 1.3.5: the ESP32-CAM, with nothing on disk here, is
-                  # the one row still coming soon.
-                  and pick.count("Coming soon") == 1
+                  # a row still coming soon, and since 1.3.17 the Makerfabs.
+                  and pick.count("Coming soon") == 2
                   and '<b>ESP32-CAM</b><span class="tell pick">On a USB programmer; '
                       'card out first</span><span class="bv soon">Coming soon' in pick)
             check("and the S3's section says download mode first, before its buttons",
@@ -6185,7 +6253,7 @@ def main():
                       "even with a preview carrying it",
                       S.board_offers("esp32-fncam") == []
                       and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3",
-                                                                    "esp32-cam"]
+                                                                    "esp32-cam", "esp32s3-mf35"]
                       and "Freenove" not in pick0 and "esp32-fncam" not in pick0
                       and S.firmware_file("1.1.0-dev.15/esp32-fncam/manifest.json") is None
                       and S.firmware_file("1.1.0-dev.15/esp32-fncam/firmware.bin") is None
@@ -6226,10 +6294,10 @@ def main():
                 check("with 1.1.0 on disk the picker offers three boards, the "
                       "Freenove by its picture and a line saying why",
                       [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3", "esp32-fncam",
-                                                                "esp32-cam"]
+                                                                "esp32-cam", "esp32s3-mf35"]
                       # Site 1.3.5: and the ESP32-CAM's row, coming soon
-                      # until a set of its own is on disk.
-                      and pick1.count('<input type="radio" name="fwboard"') == 4
+                      # until a set of its own is on disk; 1.3.17 the Makerfabs'.
+                      and pick1.count('<input type="radio" name="fwboard"') == 5
                       and '<input type="radio" name="fwboard" id="fwb2">'
                           + S.BOARD_ART_FNCAM in pick1
                       and "<b>Freenove ESP32 camera board</b>" in pick1
@@ -6283,8 +6351,9 @@ def main():
                     S.BOARD_SSH.update(was_ssh)
                 check("the picker says Secure on the S3's row alone: a word and a "
                       "small lock, linking to the board's section, no seal, no footnote",
-                      len(rows1) == 4
-                      and ['class="secure"' in r for r in rows1] == [False, True, False, False]
+                      len(rows1) == 5
+                      and ['class="secure"' in r for r in rows1]
+                          == [False, True, False, False, False]
                       and pick1.count('class="secure"') == 1
                       and '<a class="secure" href="/hardware#waveshare-esp32-s3-lcd-1-47" '
                           'aria-label="Secure: encrypted connections over SSH, coming in '
@@ -6390,8 +6459,9 @@ def main():
                       "labelled preview",
                       [r["version"] for r in S.board_offers("esp32-cam")] == ["1.1.1-dev.0"]
                       and [b["dir"] for b in S.picker_boards()]
-                          == ["esp32", "esp32s3", "esp32-fncam", "esp32-cam"]
-                      and len(rows3) == 4 and "Coming soon" not in pick3
+                          == ["esp32", "esp32s3", "esp32-fncam", "esp32-cam", "esp32s3-mf35"]
+                      and len(rows3) == 5 and pick3.count("Coming soon") == 1
+                      and "Coming soon" in rows3[4]
                       and '<input type="radio" name="fwboard" id="fwb3">'
                           + S.BOARD_ART_ESPCAM in pick3
                       # Site 1.3.15: our camera pick, so its name carries the tag.
@@ -6432,7 +6502,8 @@ def main():
                                        "Flash it | x"])
                 check("the three picks are framed and tagged in the card, "
                       "the Freenove is not, and the rows keep their order",
-                      [r.startswith(' rec">') for r in rows3g] == [True, True, False, True]
+                      [r.startswith(' rec">') for r in rows3g]
+                          == [True, True, False, True, False]
                       and [re.search(r'<span class="rec"><span class="vh">Our pick: '
                                      r'</span>([^<]+)</span>', r).group(1)
                            for r in (rows3g[0], rows3g[1], rows3g[3])]
@@ -6492,6 +6563,9 @@ def main():
                                     page.index('<p class="meta fam">'))]
                             for j, c in enumerate(cut)]
                 sec3 = secs(pick3, len(pb3))
+                # Site 1.3.17: the Makerfabs's link is its maker's shop, not
+                # an affiliate link, and its section has no buttons yet.
+                aff3 = [b.get("affiliate", True) is not False for b in pb3]
                 check("each board with a link has its Buy one, from BOARDS, sponsored "
                       "and nofollow, in a new tab, outside every label",
                       all(b.get("buy") for b in pb3)
@@ -6505,7 +6579,7 @@ def main():
                               < sec.index('<p class="meta ver r0">')
                               < sec.index('<a class="buy"')
                           and sec.count('<a class="buy"') == 1
-                          for sec, b in zip(sec3, pb3))
+                          for sec, b, a in zip(sec3, pb3, aff3) if a)
                       and all(f".installer:has(#fwb{j}:checked) .bsec.b{j}{{display:flex}}"
                               in pick3 for j in range(1, len(pb3))))
                 s3b = S.BOARD_BY_DIR["esp32s3"]
@@ -6519,9 +6593,25 @@ def main():
                 check("a board with no link has no button and no line",
                       none3 == "" and 'class="buyone"' not in sec3n[1]
                       and pick3n.count('<a class="buy"') == len(pb3) - 1
-                      and pick3n.count("Affiliate link: buying") == len(pb3) - 1
-                      and all(buy_block(b) in sec for sec, b in zip(sec3n, pb3)
-                              if b is not s3b))
+                      and pick3n.count("Affiliate link: buying") == sum(aff3) - 1
+                      and all(buy_block(b) in sec for sec, b, a in zip(sec3n, pb3, aff3)
+                              if b is not s3b and a))
+                mf3 = S.BOARD_BY_DIR["esp32s3-mf35"]
+                check("the Makerfabs's Buy one goes to Makerfabs' own page, plainly: "
+                      "no sponsored rel, and a line saying it is not an affiliate link",
+                      mf3["buy"] == "https://www.makerfabs.com/"
+                                    "esp32-s3-parallel-tft-with-touch-ili9488.html"
+                      and mf3["affiliate"] is False and mf3["shop"] == "Makerfabs"
+                      and sec3[pb3.index(mf3)].endswith(S.buy_html(mf3) + "</div>")
+                      and S.buy_html(mf3) == (
+                          '<div class="buyone"><a class="buy" href="https://www.makerfabs.com/'
+                          'esp32-s3-parallel-tft-with-touch-ili9488.html" rel="noopener" '
+                          'target="_blank" aria-label="Buy one, the Makerfabs ESP32-S3 '
+                          'Parallel TFT 3.5&quot; (v1.0), from Makerfabs (opens in a new '
+                          'tab)">Buy one</a><p class="meta aff">From Makerfabs, the maker. '
+                          "Not an affiliate link.</p></div>")
+                      and "sponsored" not in S.buy_html(mf3)
+                      and "amazon" not in S.buy_html(mf3).lower())
                 check("the button is a small red one, white on #c62828, and not --risk",
                       "article .installer a.buy {{ display:inline-block; font-size:0.8125rem;"
                       in S.PAGE
@@ -6645,7 +6735,7 @@ def main():
                       if '<div class="bsec b2">' in pick4 else "")
                 check("the picker labels the Freenove's row the 1.1.1 preview, with "
                       "1.1.0 to choose beside it, and the S3's row unchanged",
-                      len(rows4) == 4
+                      len(rows4) == 5
                       and '<span class="bv">Firmware 1.1.1 preview (FNCAM 1.0.4)</span>'
                           in rows4[2]
                       and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)<span class="sep"'
@@ -6732,6 +6822,174 @@ def main():
                       and "preview (FNCAM" not in flat_fn5
                       and "<dt>Firmware</dt><dd>1.1.1 (FNCAM 1.0.4) <a" in flat_fn5
                       and "with an OV2640 it takes photos up to 1600x1200" in flat_fn5)
+
+                # ----------------------------------------------------------
+                # Site 1.3.17 (Rob): the Makerfabs ESP32-S3 Parallel TFT 3.5"
+                # v1.0 as a preview, from a board pre-release that carries its
+                # set alone. Before it, its prose says coming soon and its
+                # picker row has no buttons; with it, a preview, by its
+                # picture, with the v1.0 line under its name and the USB-TTL
+                # step before its buttons.
+                print("The Makerfabs 3.5 inch, from a board pre-release")
+                mfb = S.BOARD_BY_DIR["esp32s3-mf35"]
+                mfa = "makerfabs-esp32-s3-parallel-tft-3-5-v1-0"
+                hw6a, inst6a = hw5b, inst5b
+                put110("1.1.1-mf35.1", "esp32s3-mf35", "1.1.1 (MF35 1.0.0)", "2026-09-26")
+                pick6 = S.installer_html()
+                hw6, inst6 = render("hardware"), render("install")
+                rows6 = pick6.split('<label class="bopt')[1:]
+                mfsec = (pick6.split('<div class="bsec b4">')[1].split('<p class="meta fam">')[0]
+                         if '<div class="bsec b4">' in pick6 else "")
+                check("the Makerfabs is its own board: an S3 set at the S3's offsets, in "
+                      "BOARDS last, flash and go, fastest expected, no SSH version set",
+                      mfb in S.BOARDS and S.BOARDS[-1] is mfb
+                      and mfb.get("previews", True) is True and "status" not in mfb
+                      and S.FLASH_FAMILIES["esp32s3-mf35"] == ("ESP32-S3", 0x0)
+                      and S.FLASH_FAMILIES["esp32s3"] == ("ESP32-S3", 0x0)
+                      and mfb["name"] == 'Makerfabs ESP32-S3 Parallel TFT 3.5" (v1.0)'
+                      and "N16R2" in mfb["part"] and "2 MB PSRAM" in mfb["part"]
+                      and mfb["page"] == "/hardware#" + mfa
+                      and S.BOARD_SEAL["esp32s3-mf35"] == "go"
+                      and S.BOARD_SPEED["esp32s3-mf35"] == "Fastest"
+                      and "esp32s3-mf35" not in S.BOARD_SSH
+                      and S.secure_seal_html("esp32s3-mf35") == ""
+                      and 'viewBox="0 0 96 60"' in S.BOARD_ART_MF35
+                      and 'aria-hidden="true"' in S.BOARD_ART_MF35
+                      # v2.0 has no board and no image yet (Rob): nowhere.
+                      and "esp32s3-mf35v2" not in S.FLASH_FAMILIES
+                      and all(b["dir"] != "esp32s3-mf35v2" for b in S.BOARDS)
+                      and "mf35v2" not in open(os.path.join("deploy", "fetch_release.py"),
+                                               encoding="utf-8").read())
+                check("the picker offers it its preview, by its picture and name, with "
+                      "the v1.0 line under its name, labelled preview",
+                      [r["version"] for r in S.board_offers("esp32s3-mf35")]
+                          == ["1.1.1-mf35.1"]
+                      and [r["version"] for r in S.board_offers("esp32s3")] == ["1.1.0"]
+                      and S.firmware_releases()[0]["version"] == "1.1.1"
+                      and len(rows6) == 5 and "Coming soon" not in pick6
+                      and '<input type="radio" name="fwboard" id="fwb4">'
+                          + S.BOARD_ART_MF35 in pick6
+                      and '<b>Makerfabs Parallel TFT 3.5&quot; (v1.0)</b>'
+                          '<span class="tell pick">Check the back says v1.0; v2.0 '
+                          "coming</span>" in rows6[4]
+                      and '<span class="bv">Firmware 1.1.1 preview (MF35 1.0.0)</span>'
+                          in rows6[4]
+                      and 'class="rec"' not in rows6[4]
+                      and 'manifest="/install/1.1.1-mf35.1/esp32s3-mf35/manifest.json"'
+                          in pick6
+                      and 'manifest="/install/1.1.1-mf35.1/esp32s3-mf35/manifest-update.json"'
+                          in pick6
+                      and '<p class="meta ver r0">Version 1.1.1 (MF35 1.0.0), a preview, '
+                          "published 2026-09-26.</p>" in mfsec
+                      and ".installer:has(#fwb4:checked) .bsec.b4{display:flex}" in pick6)
+                check("and choosing it shows the v1.0 and USB-TTL step before its "
+                      "buttons, and its Buy one goes to Makerfabs, not an affiliate link",
+                      mfsec.startswith('<p class="first"><b>First:</b> check the back says '
+                                       "<b>v1.0</b>, and plug into the USB-C marked "
+                                       '<b>USB-TTL</b>. <a href="#on-the-makerfabs-3-5">'
+                                       "Why</a></p>")
+                      and mfsec.find('<p class="first">')
+                          < mfsec.find('manifest="/install/1.1.1-mf35.1/esp32s3-mf35/'
+                                       'manifest.json"')
+                      and S.buy_html(mfb) in mfsec and "sponsored" not in mfsec
+                      and "Not an affiliate link." in mfsec)
+                check("the same-chip line names both families that share a chip, the "
+                      "Waveshare and the Makerfabs together",
+                      "The ESP32 dev board (Base), the Freenove ESP32 camera board and the "
+                      "ESP32-CAM have the same chip, and so do the Waveshare "
+                      "ESP32-S3-LCD-1.47 and the Makerfabs ESP32-S3 Parallel TFT 3.5&quot; "
+                      "(v1.0), so between those the picture is the only check." in pick6)
+                man6 = S.firmware_manifest("1.1.1-mf35.1", chip="esp32s3-mf35")
+                check("its manifest holds its own build, at the S3's offsets",
+                      man6 is not None and man6["version"] == "1.1.1 (MF35 1.0.0)"
+                      and [b["chipFamily"] for b in man6["builds"]] == ["ESP32-S3"]
+                      and [(p["path"], p["offset"]) for p in man6["builds"][0]["parts"]]
+                          == [("bootloader.bin", 0), ("partitions.bin", 32768),
+                              ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
+                              ("storage.bin", 3932160)]
+                      and S.firmware_file("1.1.1-mf35.1/esp32s3-mf35/firmware.bin")
+                          is not None
+                      and S.firmware_file("1.1.1-mf35.1/esp32s3/firmware.bin") is None)
+                mf6a, mf6 = part(hw6a, mfa), part(hw6, mfa)
+                flat_mf6a, flat_mf6 = " ".join(mf6a.split()), " ".join(mf6.split())
+                warn6 = re.findall(r'<p class="warn">(.*?)</p>', mf6, re.S)
+                check("/hardware: its entry, coming soon before its set and a preview on "
+                      "the installer with it, after the Waveshare's",
+                      '<h2 id="' + mfa + '">Makerfabs ESP32-S3 Parallel TFT 3.5&quot; '
+                          "(v1.0)</h2>" in hw6
+                      and hw6.index('id="waveshare-esp32-s3-lcd-1-47"') < hw6.index(
+                          'id="' + mfa + '"') < hw6.index('id="choosing-a-camera-board"')
+                      and S.board_html(["esp32s3-mf35"]) in mf6
+                      and "<b>Coming soon.</b> A board built round a 3.5 inch touch screen"
+                          in flat_mf6a and "coming soon to" in mf6a
+                      and "on <a href=\"/install\">the installer</a> as a preview"
+                          in flat_mf6
+                      and "<dt>Firmware</dt><dd>1.1.1 preview (MF35 1.0.0) <a href="
+                          '"/install">on the installer</a>; the board calls it 1.1.1 '
+                          "(MF35 1.0.0)</dd>" in mf6
+                      and "<b>Coming soon.</b>" not in flat_mf6
+                      and "FLASH &amp; GO</text>" in mf6 and 'class="art seal sec"' not in mf6
+                      and "<dt>Speed</dt><dd>Fastest" in mf6)
+                check("and says v1.0 only, what v2.0 is, to read the back, and that the "
+                      "SPI TFT is not the one",
+                      len(warn6) == 2
+                      and "<b>Check the back of the board: this build is for v1.0.</b>"
+                          in warn6[0]
+                      and "the one they sell today is v2.0" in " ".join(warn6[0].split())
+                      and "A build for v2.0 is coming." in " ".join(warn6[0].split())
+                      and "the wrong image does not start" in " ".join(warn6[0].split())
+                      and "<b>The Parallel TFT, not the SPI TFT.</b>" in warn6[1]
+                      and "it is not supported" in " ".join(warn6[1].split()))
+                check("and its benefits and its limits, in words",
+                      all(w in flat_mf6 for w in (
+                          "<b>A big status screen.</b> 480 by 320",
+                          "what each caller is doing, for how long, and on which terminal",
+                          "a graph of the last ten minutes",
+                          "<b>No lag from the screen.</b> It is wired to the chip by a "
+                          "16-bit parallel bus",
+                          "<b>16 MB of flash</b> and a micro SD card slot",
+                          "Grove-style sockets", "Mabee",
+                          "the firmware does not use yet",
+                          "<b>Less PSRAM than the Waveshare.</b> v1.0 has 2 MB",
+                          "it will take fewer encrypted callers at once",
+                          "<b>No activity LED.</b>",
+                          "<b>USB-TTL</b>", "it has ten caller lines"))
+                      and 'href="/skins"' in mf6
+                      and "The firmware with skins is in testing" in flat_mf6)
+                check("and where to buy it: Makerfabs' own page, plainly, and the Elecrow "
+                      "named as looked at, not supported, not installable",
+                      '<dt>Buy one</dt><dd><a href="https://www.makerfabs.com/'
+                          'esp32-s3-parallel-tft-with-touch-ili9488.html">Makerfabs</a>, '
+                          "their own shop (not an affiliate link)</dd>" in mf6
+                      and 'rel="sponsored"' not in mf6
+                      and "link.amazon" not in mf6 and "tag=" not in mf6
+                      and 'href="https://www.amazon.com/dp/B0C4SJXP9N"' in mf6
+                      and "It is not supported yet" in flat_mf6
+                      and "Elecrow" not in pick6
+                      and all("Elecrow" not in b["name"] for b in S.BOARDS)
+                      and "apart from one" in " ".join(hw6.split()))
+                im6 = (inst6.split('id="on-the-makerfabs-3-5"')[1].split("<h2")[0]
+                       if 'id="on-the-makerfabs-3-5"' in inst6 else "")
+                flat_im6 = " ".join(im6.split())
+                check("/install: its own section once it is offered, the steps in order: "
+                      "the back, the USB-TTL socket, the choice",
+                      'id="on-the-makerfabs-3-5"' not in inst6a
+                      and '<h2 id="on-the-makerfabs-3-5">On the Makerfabs 3.5&quot;</h2>'
+                          in inst6
+                      and flat_im6.index("<b>Turn it over and find the version</b>")
+                          < flat_im6.index("<b>Plug the cable into the USB-C socket marked "
+                                           "USB-TTL.</b>")
+                          < flat_im6.index("<b>Choose the Makerfabs in the card</b>")
+                      and "This build is for <b>v1.0</b>." in flat_im6
+                      and "<b>It has the same chip as the Waveshare S3.</b>" in flat_im6
+                      and 'href="#when-the-board-does-not-appear"' in im6
+                      and "<b>It is a preview</b>" in flat_im6)
+                check("and /hardware's chip list and spectrum count it without its brand",
+                      "<b>ESP32-S3: yes, on two boards.</b> The Waveshare and the "
+                      "Makerfabs above." in " ".join(hw6.split())
+                      and "the only screen the firmware drives" not in hw6
+                      and "Makerfabs" not in hw6.split("The prices are typical")[0]
+                      and 'href="#' + mfa + '"' in hw6.split('id="esp32-dev-board-base"')[0])
             finally:
                 S.FIRMWARE_DIR = pathlib.Path(fwroot)
                 shutil.rmtree(fw110, ignore_errors=True)
@@ -7459,8 +7717,8 @@ def main():
             rc, out = run_fetch()
             fetch_src = open(os.path.join("deploy", "fetch_release.py"), encoding="utf-8").read()
             check("a pre-release is never taken for the Freenove's set",
-                  rc == 0 and 'FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")'
-                      in fetch_src
+                  rc == 0 and 'FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam", '
+                      '"esp32s3-mf35")' in fetch_src
                   and 'NO_PREVIEW = ("esp32-fncam",)' in fetch_src
                   and tree("1.4.0-dev.1") is None
                   and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"])
@@ -7580,6 +7838,44 @@ def main():
                   rc == 0 and "Installed firmware 1.4.1 for the browser installer." in out
                   and "1.4.1-dev.1" not in os.listdir(dest)
                   and fn_after == ["1.4.1", "1.4.0"])
+            # Site 1.3.17: the Makerfabs's set, esp32s3-mf35, on a board
+            # pre-release that carries it alone, tagged the way the firmware
+            # tags one (v1.1.1-mf35.1). Served as a preview, at the S3's
+            # offsets, and the Waveshare's set, whose assets share the
+            # "esp32s3-" start, is untouched.
+            list_release("v1.4.1-mf35.1", ("esp32s3-mf35",), pre=True,
+                         versions={"esp32s3-mf35": "1.4.1 (MF35 1.0.0)\n"})
+            rel_list.insert(0, rel_list.pop())
+            rc, out = run_fetch()
+            tmf = tree("1.4.1-mf35.1") or {}
+            was_fw = S.FIRMWARE_DIR
+            S.FIRMWARE_DIR = pathlib.Path(dest)
+            try:
+                mf_offers = [r["version"] for r in S.board_offers("esp32s3-mf35")]
+                mf_man = S.firmware_manifest("1.4.1-mf35.1", chip="esp32s3-mf35")
+                mf_s3 = [r["version"] for r in S.board_offers("esp32s3")]
+            finally:
+                S.FIRMWARE_DIR = was_fw
+            check("a board pre-release carrying only the Makerfabs's set installs it "
+                  "as a preview, from its prefixed assets, at the S3's offsets",
+                  rc == 0 and "Installed firmware 1.4.1-mf35.1 (a preview, for the "
+                              "esp32s3-mf35 image) for the browser installer." in out
+                  and all("esp32s3-mf35/" + n in tmf for n in (
+                      "bootloader.bin", "partitions.bin", "ota_data_initial.bin",
+                      "firmware.bin", "storage.bin"))
+                  and tmf.get("esp32s3-mf35/version.txt") == b"1.4.1 (MF35 1.0.0)\n"
+                  and tmf.get("esp32s3-mf35/firmware.bin", b"").startswith(
+                      b"esp32s3-mf35firmware.bin")
+                  and not any(k.startswith(("esp32/", "esp32s3/")) for k in tmf)
+                  and mf_offers == ["1.4.1-mf35.1"] and mf_s3 == ["1.4.1", "1.4.0"]
+                  and mf_man is not None and mf_man["version"] == "1.4.1 (MF35 1.0.0)"
+                  and [b["chipFamily"] for b in mf_man["builds"]] == ["ESP32-S3"]
+                  and mf_man["builds"][0]["parts"][0] == {"path": "bootloader.bin",
+                                                          "offset": 0})
+            rc, out = run_fetch()
+            check("and the next run keeps it while it serves the board",
+                  rc == 0 and "Firmware 1.4.1-mf35.1 is already installed." in out
+                  and "1.4.1-mf35.1" in os.listdir(dest) and "Removed" not in out)
         finally:
             relsrv.shutdown()
             shutil.rmtree(relroot, ignore_errors=True)

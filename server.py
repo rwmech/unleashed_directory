@@ -301,6 +301,12 @@ FLASH_FAMILIES = {
     "esp32-cam": ("ESP32", 0x1000),
     "esp32s2": ("ESP32-S2", 0x1000),
     "esp32s3": ("ESP32-S3", 0x0),
+    # The Makerfabs ESP32-S3 Parallel TFT 3.5", hardware v1.0 (MF35 1.0.0,
+    # a board pre-release first, site 1.3.17): the S3's chip family again,
+    # a second set on it, laid out on the same 4 MB as the Waveshare's. Its
+    # PSRAM is quad where the Waveshare's is octal, so each image refuses to
+    # boot on the other board, and the installer cannot tell them apart.
+    "esp32s3-mf35": ("ESP32-S3", 0x0),
     "esp32c3": ("ESP32-C3", 0x0),
 }
 
@@ -1345,11 +1351,13 @@ CARD_BLOCKS = ("cards", "hero")
 # the early-testing line for a .0 release, from what is on disk, and nothing
 # at all otherwise (site 1.2.9, see early_note()); it takes no lines.
 # "compare" is /different's table (site 1.2.9, COMPARE_ROWS), and
-# "privacy-compare" its privacy table (site 1.3.6, PRIVACY_ROWS).
+# "privacy-compare" its privacy table (site 1.3.6, PRIVACY_ROWS). "skins"
+# is the stock skins' pictures on /skins, one "file.png | caption" a line,
+# from static/skins/ (site 1.3.17, skin_gallery_html()).
 BLOCK_NAMES = CARD_BLOCKS + ("installer", "guide", "art", "thanks", "cta", "connected",
                              "installer-terms", "badges", "badgefind", "board",
                              "next", "early", "compare", "compare-today",
-                             "privacy-compare")
+                             "privacy-compare", "skins")
 
 
 # --------------------------------------------------------------------------
@@ -1402,6 +1410,8 @@ def md_block(kind, lines):
         return badge_find_html()
     if kind == "board":
         return board_html(lines)
+    if kind == "skins":
+        return skin_gallery_html(lines)
     if kind in ("compare", "compare-today"):
         return compare_html(kind)
     if kind == "privacy-compare":
@@ -2141,6 +2151,44 @@ def font_file(name):
 # would actually be worth getting wrong.
 PIX_DIR = pathlib.Path(__file__).resolve().parent / "static" / "kids"
 
+# The stock display skins on /skins (site 1.3.17): the two zips a sysop
+# downloads, skins.zip laid out for the card and skins-upload.zip as the
+# pairs the board's Skins file area takes, and a picture of each skin lit.
+# A folder of their own under static/, for the reason the card art has one:
+# gallery_html() shows every image in static/ on the manifesto, and these
+# are not photographs of hardware. setup.sh installs every file under
+# static/, subfolders included. Served at /skins/<file> with the same name
+# check as everything else, and only these two types.
+SKINS_DIR = STATIC_DIR / "skins"
+SKINS_TYPES = {".png": "image/png", ".zip": "application/zip"}
+
+
+def skins_file(name):
+    """One file from static/skins/, a preview or a zip, or None."""
+    return static_file(name, SKINS_DIR, SKINS_TYPES)
+
+
+def skin_gallery_html(lines):
+    """The ::: skins block on /skins: one "file.png | caption" a line, each a
+    picture of a stock skin as the board draws it, 480 by 320. A line whose
+    file is not in static/skins/ renders nothing, the way a card's picture
+    does, so the page is whole with none of them."""
+    cells = []
+    for raw in lines:
+        name, _, cap = raw.partition("|")
+        name, cap = name.strip(), cap.strip()
+        if not name or not cap or not STATIC_OK.match(name):
+            continue
+        if pathlib.Path(name).suffix.lower() != ".png" or not (SKINS_DIR / name).is_file():
+            continue
+        alt = re.sub(r"[`*]", "", cap)
+        cells.append(f'<figure><img src="/skins/{html.escape(name)}" width="480" '
+                     f'height="320" alt="{html.escape(alt, quote=True)}" loading="lazy">'
+                     f"<figcaption>{md_inline(cap)}</figcaption></figure>")
+    if not cells:
+        return ""
+    return '<div class="wide gallery skins">' + "".join(cells) + "</div>"
+
 
 def static_file(name, base=None, types=None):
     """One file from static/, or None. Names are checked rather than paths:
@@ -2681,6 +2729,35 @@ BOARD_ART_ESPCAM = (
     '<path class="d" d="M83.5 28 H89 L88 32 H84.5 Z"/>'
     "</svg>")
 
+# The Makerfabs ESP32-S3 Parallel TFT 3.5", hardware v1.0 (site 1.3.17), as
+# it is used, landscape with its USB-C edge at the bottom (the firmware's
+# src/board.h: "Landscape, 480 x 320, with the USB-C edge at the bottom, as
+# shipped"). The board is 84.3 by 66 mm (Makerfabs' product page), drawn at
+# that shape, the 3:2 glass filling its front, and the two USB-C sockets,
+# USB-TTL and the chip's own USB, on the bottom edge. On the glass, the
+# status screen the firmware draws for it: a title row and the clock, a row
+# a caller down the left, recent events down the right, the traffic graph
+# under them, and lamps. Nothing else on the front is drawn, because
+# nothing else was checked: the card slot, the buttons and the two Mabee
+# sockets are elsewhere on the board.
+BOARD_ART_MF35 = (
+    '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
+    'preserveAspectRatio="xMidYMid meet">'
+    '<rect class="o" x="15" y="2" width="66" height="51" rx="2"/>'
+    '<rect class="gb" x="27" y="50" width="10" height="7" rx="2.5"/>'
+    '<rect class="gb" x="59" y="50" width="10" height="7" rx="2.5"/>'
+    '<rect class="g" x="18.5" y="5.5" width="59" height="39.5" rx="1"/>'
+    '<path class="lt" d="M22 10 H43 M68 10 H74"/>'
+    '<path class="d" d="M22 15.5 H47 M22 20 H45 M22 24.5 H48 M22 29 H43 M22 33.5 H46"/>'
+    '<path class="d" d="M52.5 15.5 H74 M52.5 20 H71 M52.5 24.5 H73"/>'
+    '<path class="lt" d="M52.5 39.5 L56 35.5 L59 37.5 L62.5 32 L66 34.5 L69.5 30.5 L74 33"/>'
+    '<circle class="lf" cx="23" cy="40" r="1.1"/>'
+    '<circle class="c5" cx="27" cy="40" r="1.1"/>'
+    '<circle class="c1" cx="31" cy="40" r="1.1"/>'
+    '<circle class="lf" cx="35" cy="40" r="1.1"/>'
+    '<path class="d" d="M29.5 53.5 H34.5 M61.5 53.5 H66.5"/>'
+    "</svg>")
+
 # The boards /install offers, in the order its picker lists them. A board
 # is an image set, the folder a release keeps that board's five parts in,
 # which is the firmware's own name for the build (tools/release.py, BUILDS).
@@ -2796,6 +2873,36 @@ BOARDS = (
      # as high as the Waveshare's with its note.
      "before": ("**First:** SD card out. **When it is done:** unplug the board, "
                 "put the card back, plug it in. [Why](#on-the-esp32-cam)")},
+    # The Makerfabs ESP32-S3 Parallel TFT with Touch 3.5", hardware v1.0
+    # (site 1.3.17, Rob: "The Makerfabs board as a preview on the
+    # installer"), from the firmware's board pre-release v1.1.1-mf35.1,
+    # which carries its set alone ("1.1.1 (MF35 1.0.0)"), and src/board.h in
+    # that tag: an ESP32-S3-WROOM-1-N16R2 (16 MB flash, 2 MB quad PSRAM,
+    # read on Rob's bench), two USB-C sockets, USB-TTL a CP2104 with
+    # auto-reset that is the console, the flashing port and Improv's, and
+    # USB the chip's own; a 480 x 320 ILI9488 on a 16-bit parallel bus; a
+    # micro SD slot on SPI; an FT6236 touch controller the firmware does not
+    # use yet; no LED the firmware can drive. Makerfabs sell hardware v2.0
+    # now (their product page, 2026-09-26: the N16R8, 8 MB PSRAM), which
+    # moves three of the panel's pins and needs another image, not yet
+    # built into a release. The installer reads "ESP32-S3" off this board
+    # and the Waveshare alike, and the wrong image does not boot: the
+    # picture, the name and the pick line are the check. Makerfabs is not
+    # on Amazon: "buy" is their own product page, plainly, with no
+    # affiliate tag ("affiliate": False), which buy_html() and board_html()
+    # say in words.
+    {"dir": "esp32s3-mf35", "name": 'Makerfabs ESP32-S3 Parallel TFT 3.5" (v1.0)',
+     "part": "ESP32-S3-WROOM-1 N16R2, 16 MB flash, 2 MB PSRAM",
+     "pickname": 'Makerfabs Parallel TFT 3.5" (v1.0)',
+     "pick": "Check the back says v1.0; v2.0 coming",
+     "tell": "A 3.5 inch touch screen on a board with two USB-C sockets",
+     "art": BOARD_ART_MF35,
+     "page": "/hardware#makerfabs-esp32-s3-parallel-tft-3-5-v1-0",
+     "buy": "https://www.makerfabs.com/esp32-s3-parallel-tft-with-touch-ili9488.html",
+     "shop": "Makerfabs",
+     "affiliate": False,
+     "before": ("**First:** check the back says **v1.0**, and plug into the USB-C "
+                "marked **USB-TTL**. [Why](#on-the-makerfabs-3-5)")},
 )
 BOARD_ART_S3CAM = (
     '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
@@ -2995,7 +3102,8 @@ def not_board_html(b):
 # BOARDS so the installer's picker is untouched.
 BOARD_SPEED = {"esp32": "Fast", "esp32-sd": "Fast", "esp32-fncam": "Faster",
                "esp32-cam": "Faster",
-               "esp32s3": "Fastest", "esp32s3-cam": "Fastest"}
+               "esp32s3": "Fastest", "esp32s3-cam": "Fastest",
+               "esp32s3-mf35": "Fastest"}
 
 # The seal on a board's picture on /hardware (site 1.2.5, Rob: "So people
 # know these boards like the Freenove are literally flash and go"). Two
@@ -3011,7 +3119,8 @@ BOARD_SPEED = {"esp32": "Fast", "esp32-sd": "Fast", "esp32-fncam": "Faster",
 # 9.5 units at 5.25rem: about 11px on a phone, where a seal's curved type
 # would have been under 8.
 BOARD_SEAL = {"esp32": "go", "esp32-sd": "wire", "esp32s3": "go",
-              "esp32-fncam": "go", "esp32-cam": "go", "esp32s3-cam": "go-expected"}
+              "esp32-fncam": "go", "esp32-cam": "go", "esp32s3-cam": "go-expected",
+              "esp32s3-mf35": "go"}
 
 
 def seal_html(kind):
@@ -3080,6 +3189,11 @@ def seal_html(kind):
 # footnote gives the version; the day that release is on disk, the seal
 # says SECURE and the footnote goes. Releases only: a preview never counts,
 # the same rule as a "::: from" gate.
+# The Makerfabs (site 1.3.17) is not in the table: SSH is built for the
+# Waveshare's profile alone so far (src/board.h, 1.1.2-dev.3, "A board with
+# 2 MB of PSRAM sets its own, lower, figure"), and no version is set for a
+# 2 MB board, so /hardware says in words that it comes later, with fewer
+# sessions, rather than wearing a seal with a version on it.
 BOARD_SSH = {"esp32s3": (1, 2, 0), "esp32s3-cam": (1, 2, 0)}
 
 
@@ -3256,6 +3370,18 @@ def buy_html(b):
     part of any <label>, so pressing it never picks a board."""
     if not b.get("buy"):
         return ""
+    if b.get("affiliate", True) is False:
+        # A maker's own shop, linked plainly (site 1.3.17, the Makerfabs,
+        # which is not on Amazon): no sponsored rel, and the line under it
+        # says it earns nothing, rather than the affiliate line.
+        shop = html.escape(b.get("shop", "the maker"))
+        return ('<div class="buyone"><a class="buy" href="'
+                + html.escape(b["buy"], quote=True)
+                + '" rel="noopener" target="_blank" '
+                'aria-label="Buy one, the ' + html.escape(b["name"], quote=True)
+                + ", from " + shop + ' (opens in a new tab)">Buy one</a>'
+                '<p class="meta aff">From ' + shop + ", the maker. Not an "
+                "affiliate link.</p></div>")
     return ('<div class="buyone"><a class="buy" href="'
             + html.escape(b["buy"], quote=True)
             + '" rel="sponsored nofollow noopener" target="_blank" '
@@ -3322,7 +3448,10 @@ def installer_html(lines=()):
         # Our picks (site 1.3.15) wear a thin gold frame and their label
         # beside the name, and nothing else about the row changes.
         r = board_rec(b)
-        name = "<b>" + html.escape(b["name"]) + "</b>"
+        # "pickname" (site 1.3.17): a shorter name for the picker's row, for
+        # a board whose full name would not fit one line of the 26rem card
+        # and would push the picture's row, and the buttons, down.
+        name = "<b>" + html.escape(b.get("pickname", b["name"])) + "</b>"
         if r:
             name += ('<span class="rec"><span class="vh">Our pick: </span>'
                      + html.escape(r["label"]) + "</span>")
@@ -3431,15 +3560,21 @@ def installer_html(lines=()):
     for b, o in offers:
         if o:
             fams.setdefault(FLASH_FAMILIES[b["dir"]][0], []).append(b["name"])
-    alike = next((names for names in fams.values() if len(names) > 1), None)
+    alike = [names for names in fams.values() if len(names) > 1]
     if alike:
         # Three on one family since site 1.3.5 (the ESP32-CAM): "the A, the
-        # B and the C", not "the A and the B and the C".
-        named = ["the " + n for n in alike]
-        named = (", ".join(named[:-1]) + " and " + named[-1])[4:]
+        # B and the C", not "the A and the B and the C". Two families with
+        # more than one board each since site 1.3.17 (the Makerfabs beside
+        # the Waveshare): the second is "and so do the D and the E".
+        def _named(names):
+            named = ["the " + n for n in names]
+            return ", ".join(named[:-1]) + " and " + named[-1]
+        said = _named(alike[0])[4:] + " have the same chip"
+        for more in alike[1:]:
+            said += ", and so do " + _named(more)
         out.append('<p class="meta fam">The installer reads the chip first and '
                    "stops, writing nothing, if it is the wrong kind. The "
-                   + html.escape(named) + " have the same chip, "
+                   + html.escape(said) + ", "
                    "so between those the picture is the only check.</p>")
     else:
         out.append('<p class="meta fam">Each image is for its own chip. The installer '
@@ -3533,7 +3668,12 @@ def board_html(lines):
                + '" rel="sponsored">Amazon</a> (affiliate link)'
                + (" for the board; " + html.escape(b["buy_more"])
                   if b.get("buy_more") else "") + "</dd>"
-               if b.get("buy") else "")
+               if b.get("buy") and b.get("affiliate", True) is not False else "")
+            # A maker's own shop, linked plainly (site 1.3.17).
+            + ('<dt>Buy one</dt><dd><a href="' + html.escape(b["buy"], quote=True)
+               + '">' + html.escape(b.get("shop", "The maker")) + "</a>, their own "
+               "shop (not an affiliate link)</dd>"
+               if b.get("buy") and b.get("affiliate", True) is False else "")
             + "</dl></div>")
 
 
@@ -5195,6 +5335,10 @@ article figure, article .wide {{ max-width:none; margin:1.25rem 0; }}
   .gallery.one {{ float:none; width:100%; margin:1.125rem 0; }}
 }}
 .gallery figcaption {{ color:var(--dim); font-size:0.75rem; margin-top:0.375rem; }}
+/* The stock skins on /skins (site 1.3.17): each the panel's own 3:2, and
+   two across a desktop column rather than three, so a lamp is still a lamp. */
+.gallery.skins {{ grid-template-columns:repeat(auto-fit, minmax(17rem, 1fr)); }}
+.gallery.skins img {{ aspect-ratio:3 / 2; }}
 .tablewrap {{ overflow-x:auto; margin:1rem 0; }}
 article table td {{ vertical-align:top; }}
 /* /different's comparison (site 1.2.9). A table that scrolls sideways
@@ -5926,9 +6070,12 @@ article .installer fieldset.boards legend a {{ margin-left:0.5rem; }}
 /* Site 1.3.5: a fourth board (the ESP32-CAM) put the Update button past
    the first screen at 1366 x 768, so each row is tighter: an eighth of a
    rem of padding above and below where it was a quarter, and the three
-   lines at 1.15 rather than 1.25. About 12px a row. */
+   lines at 1.15 rather than 1.25. About 12px a row.
+   Site 1.3.17: a fifth board (the Makerfabs) did it again, so again each
+   row is tighter: no padding above and below, the lines at 1.05, and the
+   picture at 2.375rem tall, the text's own height. About 9px a row. */
 article .installer .bopt {{ display:flex; align-items:center; gap:0.625rem;
-        padding:0.125rem 0.625rem 0.125rem 0.5rem; border:1px solid #2c3a44;
+        padding:0 0.625rem 0 0.5rem; border:1px solid #2c3a44;
         border-radius:0.375rem; cursor:pointer; }}
 article .installer .bopt input {{ flex:none; margin:0; accent-color:var(--dial); }}
 article .installer .bopt:has(input:checked) {{ border-color:var(--dial);
@@ -5936,9 +6083,9 @@ article .installer .bopt:has(input:checked) {{ border-color:var(--dial);
 article .installer .bopt:has(input:focus-visible) {{ outline:3px solid #ffd35c;
         outline-offset:2px; }}
 article .installer .bopt .bt {{ display:flex; flex-direction:column; min-width:0;
-        font-size:0.8125rem; line-height:1.15; }}
+        font-size:0.8125rem; line-height:1.05; flex:1 1 12rem; }}
 article .installer .bopt .bt b {{ color:var(--ink); }}
-article .installer .bopt svg.art.board {{ width:4rem; height:2.5rem; }}
+article .installer .bopt svg.art.board {{ width:3.8rem; height:2.375rem; }}
 article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}
 article .installer .bopt .tell.pick {{ color:var(--ink); }}
 article .installer .bopt .bv {{ color:var(--dial); font-size:0.75rem; }}
@@ -11747,6 +11894,23 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(blob)))
                 self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(blob)
+        elif path.startswith("/skins/"):
+            # The stock skins' zips and pictures (site 1.3.17), from
+            # static/skins/ and nowhere else: see SKINS_DIR.
+            got = skins_file(path[len("/skins/"):])
+            if got is None:
+                self.reply(404, "no such file\n", "text/plain; charset=utf-8")
+            else:
+                blob, ctype = got
+                self.send_response(200)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(blob)))
+                if ctype == "application/zip":
+                    self.send_header("Content-Disposition", "attachment; filename="
+                                     + path[len("/skins/"):])
+                self.send_header("Cache-Control", "public, max-age=3600")
                 self.end_headers()
                 self.wfile.write(blob)
         elif path.startswith("/static/") or path.startswith("/pix/"):

@@ -198,6 +198,38 @@ its flashing mode by itself, so there are no buttons to press.
   carries it. Its version line on the installer says so.
 :::
 
+<!-- The Makerfabs section (site 1.3.17), shown once the installer offers the board anything, a preview included ("::: from esp32s3-mf35"). Its set is esp32s3-mf35, chipFamily ESP32-S3, first on the firmware's board pre-release v1.1.1-mf35.1 ("1.1.1 (MF35 1.0.0)"). From that tag's src/board.h and README: two USB-C, "USB-TTL" a CP2104 with DTR/RTS auto-reset (the console, flashing and Improv port), "USB" the chip's own; hardware v1.0 only, whose PSRAM is quad (the N16R2), where v2.0, what Makerfabs sell now, carries octal PSRAM and moves the panel's pins, and "this image does not boot on it"; the version is on the back (Makerfabs' wiki: "Check the hardware silkscreen to check the version number"). No LED the firmware can drive. The Waveshare's image is built for octal PSRAM and another board's pins, so it does not start on this one either. -->
+::: from esp32s3-mf35
+## On the Makerfabs 3.5"
+
+The [Makerfabs ESP32-S3 Parallel TFT
+3.5"](/hardware#makerfabs-esp32-s3-parallel-tft-3-5-v1-0) installs like the
+ESP32 dev board, with no buttons to press, once two things are right:
+
+1. **Turn it over and find the version** in the white lettering on the back.
+   This build is for **v1.0**. The v2.0 that Makerfabs sell now has a
+   different memory chip and moves three of the screen's wires, and this
+   image does not start on it. A build for v2.0 is coming.
+2. **Plug the cable into the USB-C socket marked USB-TTL.** It goes through
+   a USB-serial chip, a CP2104, which puts the board into its flashing mode
+   by itself. The socket marked USB is the chip's own, and the installer does
+   not use it.
+3. **Choose the Makerfabs in the card** and install or update as above, and
+   set the Wi-Fi when the installer asks.
+
+- **It has the same chip as the Waveshare S3.** The installer reads
+  ESP32-S3 off either board and cannot tell them apart, so the picture and
+  the name are the only check. Each board's image does not start on the
+  other: if the board never shows an address on its screen after
+  installing, check which board you chose and install again.
+- **Nothing lights when it is listening.** Its one LED is the power light.
+  Once it is on your network, its screen shows the address to dial.
+- **The CP2104 sometimes needs a driver** on Windows and macOS: see [when the
+  board does not appear](#when-the-board-does-not-appear).
+- **It is a preview**, an early build out for testing, until a full release
+  carries it. Its version line on the installer says so.
+:::
+
 ## Before you start
 
 There is nothing to install and no account to make. The installer uses Web

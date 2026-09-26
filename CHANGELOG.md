@@ -14,6 +14,55 @@
 
 # Changelog
 
+## 1.3.17, 2026-09-26
+
+The Makerfabs ESP32-S3 Parallel TFT 3.5" (v1.0) on the installer as a
+preview, and the stock display skins to download on /skins (Rob).
+
+- **The Makerfabs is a fifth board**, `esp32s3-mf35`, from the firmware's
+  board pre-release v1.1.1-mf35.1, which carries its set alone ("1.1.1
+  (MF35 1.0.0)"). In the fetcher's `FAMILIES` (a preview while no release
+  carries it, the way the ESP32-CAM came in), in `FLASH_FAMILIES` as
+  ESP32-S3 at 0x0, and in `BOARDS` last, with a line drawing of its own
+  (`BOARD_ART_MF35`). Checked against GitHub: the real fetcher installs it
+  from the live pre-release.
+- **The picker cannot tell it from the Waveshare**, and the wrong image
+  does not start, so its row says "Makerfabs Parallel TFT 3.5" (v1.0)"
+  (`pickname`, the full name did not fit one line) and under it "Check the
+  back says v1.0; v2.0 coming" (Rob's line, one word shorter so it stays
+  one line). Its "before" says to check the back and use the USB-TTL
+  socket. The same-chip line now names both families that share a chip.
+- **Its Buy one goes to Makerfabs' own page, plainly**: not on Amazon, so
+  `"affiliate": False` and `"shop"` in BOARDS; `buy_html()` drops the
+  sponsored rel and says it is not an affiliate link, and /hardware's Buy
+  one row names the shop.
+- **/hardware has its entry** after the Waveshare's: v1.0 only and how to
+  read the back, the SPI TFT is not the one, the big status screen, no lag
+  from the parallel bus, 16 MB flash, the card slot, the Mabee sockets,
+  touch not used yet, skins coming; and what it costs: 2 MB of PSRAM
+  (fewer SSH sessions when SSH comes, so no Secure seal until a version is
+  set), no activity LED, install through USB-TTL. The Elecrow ESP Terminal
+  3.5" is named as being looked at, not supported, not installable.
+  /install has "On the Makerfabs 3.5"", gated on the board being offered.
+- **The picker's rows are tighter again** (no padding, lines at 1.05, the
+  picture 2.375rem): with five rows the ESP32's Update button ends about
+  756px at 1366 x 768. A text column that does not fit now wraps beside the
+  picture instead of dropping under it.
+- **/skins** is rewritten from the skins engineer's revised draft, upload
+  first: the five-minute version ends with `mkskin.py pair` and `FILES 12`,
+  then the tool, the picture, skin.txt, the lights, key colours, sending
+  through the Skins file area (12 on the Makerfabs, 14 with a camera), the
+  card route, and the messages. The stock set is a gallery of the five
+  skins as the board draws them (`::: skins`), and two downloads,
+  `skins.zip` for the card and `skins-upload.zip` in pairs, still marked
+  coming soon for display boards: the firmware with skins is in testing.
+  Served from `static/skins/` at `/skins/<file>`, zips and PNGs only, out
+  of the manifesto's gallery. No logos in the pictures (checked).
+- `*.zip` is binary in .gitattributes. Self-test: new checks for the set in
+  FAMILIES and BOARDS, the preview label, the v1.0 line, the /hardware and
+  /install sections, the fetcher on a board pre-release, the Buy one, and
+  the skins files, zips and route.
+
 ## 1.3.16, 2026-09-26
 
 A Buy button on /install's card (Rob).

@@ -109,7 +109,12 @@ SUMS = "SHA256SUMS"
 # own. esp32-cam is the ESP32-CAM, AI-Thinker's design (site 1.3.5): the same
 # family again, and it arrives on a pre-release first, so it is served as a
 # preview until a release carries it, and is not in NO_PREVIEW.
-FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")
+# esp32s3-mf35 is the Makerfabs ESP32-S3 Parallel TFT 3.5", hardware v1.0
+# (site 1.3.17): the S3's chip family, arriving on a board pre-release
+# (v1.1.1-mf35.1) that carries its set alone, so it is a preview the same
+# way. Its assets are "esp32s3-mf35-<part>", which no other set's name is a
+# prefix of: the Waveshare's are "esp32s3-<part>", matched whole.
+FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam", "esp32s3-mf35")
 # Sets never taken from a pre-release while no release carries them: the
 # site waits for a release before offering them at all (server.py,
 # "previews": False or "ahead").

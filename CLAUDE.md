@@ -932,6 +932,25 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   considered it in the guide's step 1 and on every row first, and chose
   this. Not at the very foot of the card: the card is sticky and taller
   than 768px, so the foot is out of reach while it is pinned.
+- **The Makerfabs ESP32-S3 Parallel TFT 3.5" v1.0 (site 1.3.17)** is the
+  fifth board, `esp32s3-mf35`, a preview from the board pre-release
+  v1.1.1-mf35.1 until a release carries it. Same chip family as the
+  Waveshare and the wrong image does not start, so the picker row says
+  `pickname` and "Check the back says v1.0". v2.0 (`esp32s3-mf35v2`, what
+  Makerfabs sell now) is deliberately absent until there is a board and an
+  image. A board whose "buy" is not an affiliate link carries
+  `"affiliate": False` and `"shop"`; `buy_html()` and `board_html()` say
+  so and drop the sponsored rel. It is not in `BOARD_SSH`: no SSH version
+  is set for a 2 MB board. With five rows the picker was tightened again;
+  re-measure the ESP32's Update button (756px at 1366 x 768) before adding
+  a sixth, because a board with a "before" note already puts its own
+  Update under the first screen.
+- **The stock skins (site 1.3.17)** live in `static/skins/` (`SKINS_DIR`),
+  served at `/skins/<file>`, PNG and zip only, and kept out of the
+  manifesto's gallery by being in a subfolder. `::: skins` draws the
+  pictures, one "file.png | caption" a line, nothing for a missing file.
+  The skin's own name `c64` is allowed on /skins; the machine is not named
+  in prose.
 - **The installer always offers Telnet details (site 1.0.0).** The fourth
   change to the vendored dialog: `_renderDashboard` renders the link item
   whether or not the device sent a URL, to `/connected` with no fragment

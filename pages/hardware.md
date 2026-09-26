@@ -22,14 +22,16 @@ Four ways to build one. Each is a choice, not a step on a ladder:
 - **[An ESP32-S3 board](#waveshare-esp32-s3-lcd-1-47)**: advanced
   capabilities. About $20, a screen, a card slot and a drive light on the
   board, and no wiring. It does need BOOT and RESET pressed by hand to install, which is
-  why it takes a little longer than the bare board.
+  why it takes a little longer than the bare board. For a big screen, [an
+  ESP32-S3 board with a 3.5 inch screen](#makerfabs-esp32-s3-parallel-tft-3-5-v1-0),
+  about $30, installs with no buttons to press.
 - **[An advanced build](#esp32-s3-camera-board)**: display, camera, the
   works. About $40 and up, and about half an hour, most of it fitting the
   parts into a case. An ESP32-S3 board with a bigger screen, a camera and
   [[SSH]], built into a case. This is where the S3 boards are heading rather
   than something to buy today: the S3 camera board is still to be tested,
-  SSH comes in firmware 1.2.0, and the only screen the firmware drives so far
-  is the small one on the ESP32-S3 board above.
+  SSH comes in firmware 1.2.0, and the screens the firmware drives so far are
+  the two on the ESP32-S3 boards above, a small one and a 3.5 inch one.
 
 ::: until 1.1.0
 Camera boards are next: three boards with a camera on them, coming soon, so
@@ -67,17 +69,18 @@ running side by side.
 The seal on each picture says how much building there is. **Flash & go**:
 everything is on the board, plug it in and install from the browser. **A
 little wiring**: a part to add with jumper wires, and a page of steps for it.
-The ESP32-S3 boards carry a second seal in the opposite corner: a padlock
+Two of the ESP32-S3 boards carry a second seal in the opposite corner: a padlock
 and **Secure**, with an asterisk for now. They are the boards getting [[SSH]],
 an encrypted way to connect, beside telnet, in firmware 1.2.0. That is not
 released yet, which is what the asterisk says; the board's Secure line gives
 the version, and the asterisk goes the day a release carries it.
 
-The buy links below are Amazon affiliate links: a purchase through one may
-earn the project a small commission, at no extra cost to you. Each goes to the
-listing for the board that was tested, or for a camera board, the one being
-tested, and any board that matches the picture and the chip will do, bought
-anywhere. One board that looks like a good buy is not, for this: it is at the
+The buy links below are Amazon affiliate links, apart from one: a purchase
+through one may earn the project a small commission, at no extra cost to you.
+Each goes to the listing for the board that was tested, or for a camera board,
+the one being tested, and any board that matches the picture and the chip will
+do, bought anywhere. The exception is the Makerfabs board, which is not sold
+on Amazon: its link goes to Makerfabs' own shop, and earns nothing. One board that looks like a good buy is not, for this: it is at the
 foot of the page, under [boards we do not
 recommend](#boards-we-do-not-recommend).
 
@@ -196,6 +199,86 @@ pressed by hand, in three steps on the installer page.
 
 ::: next
 [Steps for this board](/install#on-the-waveshare-s3)
+:::
+
+## Makerfabs ESP32-S3 Parallel TFT 3.5" (v1.0)
+
+::: board
+esp32s3-mf35
+:::
+
+<!-- Site 1.3.17 (Rob, 2026-09-26: "The Makerfabs board as a preview on the installer"). On the installer from the firmware's board pre-release v1.1.1-mf35.1, which carries its set alone (esp32s3-mf35, "1.1.1 (MF35 1.0.0)"). Facts from that tag: src/board.h (BBS_BOARD_MF_S3PAR35: ESP32-S3-WROOM-1-N16R2, 16 MB flash and 2 MB quad PSRAM read on Rob's bench on COM18; two USB-C, "USB-TTL" a CP2104 with DTR/RTS auto-reset that is the console, flashing and Improv port, and "USB" the chip's own; a 480 x 320 ILI9488 on a 16-bit i80 bus fed one DMA band a tick, never waited on; an FT6236 touch controller the firmware does not read; a micro SD slot on SPI; no LED the firmware can drive, the power LED on 3V3; two Mabee sockets, J1 on IO17 and IO18, which are the serial bridge's pins, off until enabled, and J2 the I2C), the firmware's README ("the v2.0 Makerfabs sell now carries octal PSRAM and moves the panel's pins, and this image does not boot on it; the silkscreen on the back says which you have"), its CLAUDE.md (the SPI TFT is a different product: a profile built for it gave a dark glass), and the board engineer's notes (the status screen's contents, touch not used yet, fewer SSH sessions later on 2 MB). Makerfabs' own pages, 2026-09-26: the product page (MaTouch ESP32-S3 Parallel TFT with Touch 3.5" ILI9488, SKU ESP32S335D, $29.90, ESP32-S3-WROOM-1-N16R8, 16 MB flash, 8 MB PSRAM, 66 x 84.3 mm, "1*I2C;1*GPIO" Mabee, dual USB-C) and their wiki ("Check the hardware silkscreen to check the version number"; v2.0 replaced the module with the N16R8 and moved WR, RS and CS to IO18, IO17 and IO46, and the Mabee GPIO to IO19 and IO20). The SPI TFT's page (makerfabs.com/esp32-s3-spi-tft-with-touch-ili9488.html) says it drives the same ILI9488 over SPI. The Elecrow ESP Terminal 3.5" link is Rob's; the Amazon listing could not be read from here, so the page says nothing about it beyond being looked at. -->
+::: until esp32s3-mf35
+**Coming soon.** A board built round a 3.5 inch touch screen, made by
+Makerfabs, who sell it as the MaTouch ESP32-S3 Parallel TFT with Touch 3.5".
+It runs on Rob's bench, screen and card included, and it goes on [the
+installer](/install) when its build is out.
+:::
+
+::: from esp32s3-mf35
+A board built round a 3.5 inch touch screen, made by Makerfabs, who sell it as
+the MaTouch ESP32-S3 Parallel TFT with Touch 3.5". It runs on Rob's bench,
+screen and card included, and it is on [the installer](/install) as a preview:
+an early build, out for testing before a full release carries it.
+:::
+
+> **Check the back of the board: this build is for v1.0.** Makerfabs have
+> made two versions of this board, and the one they sell today is v2.0, with
+> more memory and three of the screen's wires moved. The version is printed on
+> the back, in the white lettering on the circuit board. A build for v2.0 is
+> coming. The installer cannot tell the two apart, or this board from the
+> Waveshare: all three have an ESP32-S3, and the wrong image does not start.
+> If that happens, install again with the right choice.
+
+> **The Parallel TFT, not the SPI TFT.** Makerfabs also sell an ESP32-S3 SPI
+> TFT with Touch 3.5", the same size of screen on a board that looks much the
+> same. Its screen is wired a different way, and it is not supported. The name
+> of the one to buy says **Parallel**.
+
+What it adds:
+
+- **A big status screen.** 480 by 320, with room for every caller line on
+  the board at once: who is on, what each caller is doing, for how long, and
+  on which terminal. Beside them, the calls and the latest events, the traffic
+  with a graph of the last ten minutes, and the board's free memory and how
+  long it has been up.
+- **No lag from the screen.** It is wired to the chip by a 16-bit parallel
+  bus, and the board sends it a strip at a time in the background, so drawing
+  it never holds up a caller.
+- **16 MB of flash** and a micro SD card slot on the board.
+- **Two Grove-style sockets**, which Makerfabs call Mabee: one for I2C parts,
+  and one for two plain pins, where the serial bridge goes, off until you
+  switch it on.
+- **Skins, coming soon.** The screen can dress up as a machine from another
+  decade, with its lamps lit for real. The firmware with skins is in testing:
+  see [skins](/skins).
+- **A touch screen**, whose touch the firmware does not use yet.
+
+What it costs you:
+
+- **Less PSRAM than the Waveshare.** v1.0 has 2 MB, against 8 MB. Everything
+  runs on it today. When [[SSH]], encrypted connections beside telnet, comes
+  to this board, it will take fewer encrypted callers at once than a board
+  with more, so it carries no Secure seal until that is settled.
+- **No activity LED.** Its one light is the power LED, which is wired so no
+  firmware can switch it. The address to dial is on its screen.
+- **One of its two USB-C sockets installs.** Use the one marked **USB-TTL**.
+  It goes through a USB-serial chip, a CP2104, which puts the board into its
+  flashing mode by itself, so there are no buttons to press. The one marked
+  **USB** is the chip's own, and the installer does not use it.
+
+Like every board here, it has ten caller lines.
+
+**Where to buy one.** Makerfabs sell it from [their own
+shop](https://www.makerfabs.com/esp32-s3-parallel-tft-with-touch-ili9488.html),
+and it is not on Amazon. That link is not an affiliate link. Their shop sells
+v2.0 now, which this build does not run, so read the listing, and the back of
+the board when it arrives. A similar board, the [Elecrow ESP Terminal
+3.5"](https://www.amazon.com/dp/B0C4SJXP9N), is being looked at. It is not
+supported yet: there is no build for it, and it is not on the installer.
+
+::: next
+[Steps for this board](/install#on-the-makerfabs-3-5)
 :::
 
 ## Choosing a camera board
@@ -431,8 +514,9 @@ is what stops the radio's work from making callers' lines lag.
 ::: until 1.1.0
 - **ESP32-WROOM-32E: yes, tested.** The dev board above. Every release is
   tested on it.
-- **ESP32-S3: yes, on one board.** The Waveshare above. Another S3 board needs
-  a build of its own, because the image carries the Waveshare's pins.
+- **ESP32-S3: yes, on two boards.** The Waveshare and the Makerfabs above.
+  Another S3 board needs a build of its own, because each image carries its
+  own board's pins.
 - **ESP32-WROVER: should work, not yet tested.** The same original ESP32
   chip, as are other modules built on it, so the dev board's image should run.
   A WROVER adds PSRAM, a second memory chip on the module, which that image
@@ -453,8 +537,9 @@ is what stops the radio's work from making callers' lines lag.
 ::: from 1.1.0
 - **ESP32-WROOM-32E: yes, tested.** The dev board above. Every release is
   tested on it.
-- **ESP32-S3: yes, on one board.** The Waveshare above. Another S3 board needs
-  a build of its own, because the image carries the Waveshare's pins.
+- **ESP32-S3: yes, on two boards.** The Waveshare and the Makerfabs above.
+  Another S3 board needs a build of its own, because each image carries its
+  own board's pins.
 - **ESP32-WROVER: yes, on one board.** The Freenove camera board above, with a
   build of its own for its camera and card slot. The WROVER is the same
   original ESP32 chip with PSRAM, a second memory chip, on the module, so
