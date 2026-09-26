@@ -14,6 +14,55 @@
 
 # Changelog
 
+## 2.0.0, 2026-09-26
+
+The split (Rob): this repository is the directory and nothing else, served
+at unleashedbbs.net. The project's own site and its manifesto moved to a
+server and a repository of their own (unleashedbbs.com and .org), and the
+guides to a public repository of their own, unleashed_documentation (CC
+BY-SA 4.0), which this server renders at `/docs`. Its history up to 1.3.18
+is below: that was one server for all three.
+
+- **One site, not three faces.** `/` is the board list (it was the data
+  page on .net); `/directory` answers the same; `/data`, `/badges`, `/how`,
+  `/rules`, `/feed.xml`, `/api/boards.json` and `/announce` are unchanged.
+  `DIRECTORY_ABOUT_DOMAIN` and `DIRECTORY_DATA_DOMAIN` are gone; the menu
+  and the footer are the directory's own.
+- **The guides at `/docs/<page>`** from `DIRECTORY_DOCS_DIR`, with an index
+  at `/docs`, the captured CONFIG screens they draw, and the stock display
+  skins at `/skins/<file>`. The drawings they name stay here.
+- **Every old address keeps working.** An old top-level guide address
+  (`/setup`, `/terminals`, `/forward-asus` ...) answers with a 301 to
+  `/docs/<page>`; a page of the project's site (`/install`, `/hardware`,
+  `/about`, `/static/...`, `/install/...`) with a 301 to
+  `DIRECTORY_HOME_URL` and the same path.
+- **The page engine is `sitekit.py`**: the page shell and stylesheet, the
+  wordmark and freedoms, the glossary, the Markdown dialect with block and
+  drawing registries an app fills in, the static and font readers, the
+  trusted-proxy rule and the firmware folder reader. The main site carries
+  a byte-for-byte copy; this one is edited.
+- **Each firmware image set is placed by its own `partitions.bin`**
+  (firmware 1.1.2 gives the Waveshare S3 its own 8 MB layout, storage at
+  0x780000). `FLASH_PARTS` is the five part names; a set whose table cannot
+  be read, or whose part does not fit its partition, is not offered.
+- **The firmware folder is read-only here** (`DIRECTORY_FIRMWARE_DIR`, the
+  main site's on the droplet): the newest release still lights the update
+  arrow, the announcement above the list and the guides' gates. The
+  installer, ESP Web Tools and `deploy/fetch_release.py` moved with the
+  site.
+- **Deploy**: `setup.sh <domain>` takes the directory's own domain and
+  writes `/etc/caddy/sites/directory.caddy` plus a Caddyfile that imports
+  `/etc/caddy/sites/*.caddy`; it refuses a domain another service's file
+  serves, and will not replace an old all-in-one Caddyfile while any name
+  in it would go unserved. `update.sh` pulls the guides named in
+  `/etc/unleashed-directory/docs` and no longer fetches firmware. The unit
+  sets `DIRECTORY_URL=https://unleashedbbs.net`, `DIRECTORY_HOME_URL`,
+  `DIRECTORY_DOCS_DIR` and `DIRECTORY_FIRMWARE_DIR`.
+- **Tests**: `selftest.py` runs the directory's checks and the guides'
+  (rendered at `/docs`), and needs a checkout of the guides. Every check of
+  the old suite runs in this suite or the main site's; the label accounting
+  is in the firmware repository's `internal/site-split-plan-2026-09-26.md`.
+
 ## 1.3.18, 2026-09-26
 
 BUY beside every board, not one Buy one under the buttons (Rob: "this

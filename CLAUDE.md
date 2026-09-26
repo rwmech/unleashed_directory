@@ -1,5 +1,35 @@
 # unleashed directory: project context
 
+## Since the split (2026-09-26): read this first
+
+This repository is the directory only (unleashedbbs.net). Three repos now:
+
+| Repo | Licence | Serves | Holds |
+|---|---|---|---|
+| unleashed_directory (this) | GPL-3.0-or-later, public | unleashedbbs.net | the list, announce, badges, data, how, rules; renders the guides at `/docs`; `sitekit.py`, the canonical page engine |
+| unleashed_documentation | CC BY-SA 4.0, public | unleashedbbs.net/docs (via this server) | the guides' Markdown, the captured screens, the stock skins |
+| unleashed_site | all rights reserved, private | unleashedbbs.com, .org | pitch, installer and fetcher, hardware, satellites, marketing pages, manifesto, author; the live list drawn from this server's JSON |
+
+- **`sitekit.py` is edited here and copied byte-for-byte into the site**,
+  whose suite fails on a stale copy. Bump `SITEKIT_VERSION` with every
+  change. Everything below that talks about the installer, BOARDS, the
+  front page, the manifesto, /hardware, /different, the roadmap, donate or
+  the vendored ESP Web Tools now lives in unleashed_site; the history is
+  kept here because it is where it happened.
+- **Old URLs**: a guide name at the top level 301s to `/docs/<name>`; a site
+  path 301s to `DIRECTORY_HOME_URL`. `/announce` is proxied (never
+  redirected) on every domain of the droplet, because a board treats any
+  3xx as "refused".
+- **Firmware**: read-only from `DIRECTORY_FIRMWARE_DIR`
+  (`/srv/unleashed_site/firmware` on the droplet), each set placed by its
+  own `partitions.bin`.
+- **Caddy**: each service writes `/etc/caddy/sites/<name>.caddy`; this
+  repo's `setup.sh` writes the Caddyfile that imports them.
+- **Tests**: `SELFTEST_PORT=18765 SELFTEST_DOCS=../unleashed_documentation
+  python3 selftest.py`.
+
+## Before the split
+
 The directory server for µnleashed BBS. Boards post a small JSON heartbeat,
 this keeps a list of the ones that are up, and serves three faces from one
 process. GPL v3 or later, same as the BBS (v2 or later until 2026-09-24).

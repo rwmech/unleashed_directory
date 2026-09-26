@@ -7,26 +7,31 @@
 # Purpose:     Turns a fresh Debian or Ubuntu box into a directory server.
 #              Safe to run again: every step checks before it acts.
 #
-# Usage:       sudo ./deploy/setup.sh <list> [about] [data]
+# Usage:       sudo ./deploy/setup.sh <domain> [alias ...]
 #              sudo ./deploy/setup.sh                  (no TLS, port 80 only)
 #
-#              One server, up to three faces, chosen by the Host header:
+#              One site: the board list at /, the badges, how to get
+#              listed, the house rules, the data, and the guides at /docs
+#              when a checkout of unleashed_documentation is named in
+#              /etc/unleashed-directory/docs (or given as DOCS_SRC). Any
+#              further domains are served the same site. Caddy obtains the
+#              certificates itself and renews them in the background: there
+#              is no certbot here, no cron job to add, and adding one would
+#              fight it.
 #
-#                list    the boards that are up              example.com
-#                about   what this is, and where it came from example.org
-#                data    the API, and what is in it           example.net
-#
-#              Give one domain and it serves all of it. Give three and each
-#              gets its own face. Caddy obtains the certificates itself and
-#              renews them in the background: there is no certbot here, no
-#              cron job to add, and adding one would fight it.
+#              Until 2026-09-26 this took three domains, a board list, a
+#              manifesto and a data page. The manifesto and the rest of the
+#              project's own site moved to their own server; see
+#              UPGRADING in README.md for a box set up the old way.
 #
 # What it does:
 #   - installs everything it needs: python3, sqlite3, curl, gnupg, git, ufw
 #     and Caddy. A minimal cloud image has fewer of these than you expect
 #   - makes a "directory" system user that owns nothing but its database
 #   - copies the code to /srv/unleashed_directory
-#   - writes /etc/caddy/Caddyfile for the domains you gave it
+#   - writes /etc/caddy/sites/directory.caddy for the domains you gave it,
+#     and a /etc/caddy/Caddyfile that imports every file in that folder, so
+#     another service on the same box can add its own sites beside these
 #   - installs and starts the service
 #   - opens 22, 80 and 443, and nothing else
 #
@@ -124,6 +129,9 @@ fi
 
 say "Code"
 install -m 644 "$SRC/server.py"   "$DEST/server.py"
+# The page engine, shared with the project's own site, which carries a
+# byte-for-byte copy of this file.
+install -m 644 "$SRC/sitekit.py"  "$DEST/sitekit.py"
 install -m 644 "$SRC/selftest.py" "$DEST/selftest.py"
 # The site's version is read from the changelog's newest heading at start,
 # for the footer. Without the file the server still starts; it just cannot
@@ -141,26 +149,14 @@ for page in "$SRC"/pages/*.md; do
     [ -f "$page" ] && install -m 644 "$page" "$DEST/pages/"
 done
 
-# Photographs work the other way round: copied in if the repository has any,
-# never removed. A sysop may well have put pictures straight on the server
-# with scp, and an update has no business throwing those away.
-install -d -m 755 "$DEST/static"
-if [ -d "$SRC/static" ]; then
-    # Every file under static/, subfolders included: static/kids/ is the
-    # card art on /kids (PIX_DIR in server.py), and a loop over static/*
-    # alone never reached it.
-    (cd "$SRC/static" && find . -type f) | while IFS= read -r shot; do
-        install -D -m 644 "$SRC/static/$shot" "$DEST/static/$shot"
-    done
-fi
-
-# Everything else the server reads from beside itself. Each of these was
-# added after this script was last run end to end, and a server started
-# without shots/ died at import: the 2026-09-23 outage, every check failing
-# with a 502. Replaced on every install, like pages/, because the repository
-# is where they are edited. Copied to a .new and moved into place so a
-# checkout that IS the destination still ends up with its files.
-for dir in shots brand vendor; do
+# Everything else the server reads from beside itself: brand/, the avatar
+# and the link preview card. Replaced on every install, because the
+# repository is where they are edited. A server started without a folder it
+# read at import died once (the 2026-09-23 outage), so anything the server
+# reads beside itself is installed here, and the suite checks that it is.
+# Copied to a .new and moved into place so a checkout that IS the
+# destination still ends up with its files.
+for dir in brand; do
     if [ -d "$SRC/$dir" ]; then
         rm -rf "$DEST/$dir.new"
         cp -r "$SRC/$dir" "$DEST/$dir.new"
@@ -169,37 +165,47 @@ for dir in shots brand vendor; do
         mv "$DEST/$dir.new" "$DEST/$dir"
     fi
 done
-if [ -f "$SRC/supporters.txt" ]; then
-    install -m 644 "$SRC/supporters.txt" "$DEST/supporters.txt"
-fi
 
-# Firmware releases: copied in, never removed here (deploy/fetch_release.py
-# decides what is kept). A release committed into firmware/ by hand, as
-# 0.23.0 is while the firmware repository is private, arrives this way.
-install -d -m 755 "$DEST/firmware"
-for rel in "$SRC"/firmware/[0-9]*/; do
-    [ -d "$rel" ] || continue
-    name="$(basename "$rel")"
-    rm -rf "$DEST/firmware/$name.new"
-    cp -r "$rel" "$DEST/firmware/$name.new"
-    chmod -R a+rX "$DEST/firmware/$name.new"
-    rm -rf "$DEST/firmware/$name"
-    mv "$DEST/firmware/$name.new" "$DEST/firmware/$name"
-done
+# The guides (unleashed_documentation, CC BY-SA 4.0), served at /docs: their
+# pages/ and shots/, from the checkout named in DOCS_SRC, or in
+# /etc/unleashed-directory/docs (which deploy/update.sh also pulls). Without
+# one there is no /docs and no Guides entry in the menu, and nothing else
+# changes. Replaced whole, so a guide removed upstream is removed here.
+DOCS_SRC="${DOCS_SRC:-$(cat /etc/unleashed-directory/docs 2>/dev/null || true)}"
+if [ -n "$DOCS_SRC" ] && [ -d "$DOCS_SRC/pages" ]; then
+    rm -rf "$DEST/docs.new"
+    install -d -m 755 "$DEST/docs.new/pages" "$DEST/docs.new/shots"
+    for page in "$DOCS_SRC"/pages/*.md; do
+        [ -f "$page" ] && install -m 644 "$page" "$DEST/docs.new/pages/"
+    done
+    for shot in "$DOCS_SRC"/shots/*.json; do
+        [ -f "$shot" ] && install -m 644 "$shot" "$DEST/docs.new/shots/"
+    done
+    # The stock skins' pictures and zips, served at /skins/<file>.
+    if [ -d "$DOCS_SRC/skins" ]; then
+        install -d -m 755 "$DEST/docs.new/skins"
+        for f in "$DOCS_SRC"/skins/*.png "$DOCS_SRC"/skins/*.zip; do
+            [ -f "$f" ] && install -m 644 "$f" "$DEST/docs.new/skins/"
+        done
+    fi
+    rm -rf "$DEST/docs"
+    mv "$DEST/docs.new" "$DEST/docs"
+    echo "guides from $DOCS_SRC"
+else
+    echo "no guides: /docs is not served (see DOCS_SRC in this script)"
+fi
 
 say "Service"
 install -m 644 "$SRC/deploy/unleashed-directory.service" \
     /etc/systemd/system/unleashed-directory.service
 
-# Which domain plays which part, in a drop-in, so the unit that ships in the
+# The domain it answers as, in a drop-in, so the unit that ships in the
 # repository never needs editing for a deployment.
 mkdir -p /etc/systemd/system/unleashed-directory.service.d
 {
     echo "# Written by deploy/setup.sh"
     echo "[Service]"
     [ -n "${DOMAINS[0]:-}" ] && echo "Environment=DIRECTORY_LIST_DOMAIN=${DOMAINS[0]}"
-    [ -n "${DOMAINS[1]:-}" ] && echo "Environment=DIRECTORY_ABOUT_DOMAIN=${DOMAINS[1]}"
-    [ -n "${DOMAINS[2]:-}" ] && echo "Environment=DIRECTORY_DATA_DOMAIN=${DOMAINS[2]}"
     true
 } > /etc/systemd/system/unleashed-directory.service.d/domains.conf
 
@@ -218,35 +224,51 @@ systemctl restart unleashed-directory
 # ---------------------------------------------------------------------------
 say "Web front end"
 CADDY=/etc/caddy/Caddyfile
+SITES=/etc/caddy/sites
+MINE="$SITES/directory.caddy"
+install -d -m 755 "$SITES"
+
+# A domain another service on this box already serves cannot be ours as
+# well: Caddy refuses two sites with one name, and the refusal would take
+# every site on the box down with it. This is also what stops a domains file
+# written by the old three-face installer (list, about and data) from
+# claiming the project's own site on a shared box.
+for d in "${DOMAINS[@]}"; do
+    for other in "$SITES"/*.caddy; do
+        [ -f "$other" ] && [ "$other" != "$MINE" ] || continue
+        if grep -Eq "(^|[ ,/])(www\.)?${d//./\\.}([ ,{]|$)" "$other"; then
+            echo "$d is already served by $other."
+            echo "Give this directory its own domain: sudo ./deploy/setup.sh <domain>"
+            echo "(and put that domain in /etc/unleashed-directory/domains)."
+            exit 1
+        fi
+    done
+done
 
 if [ ${#DOMAINS[@]} -eq 0 ]; then
     echo "no domains given: serving plain HTTP on port 80"
-    cat > "$CADDY" <<EOF
-# Written by deploy/setup.sh. No domains were given, so there is no TLS.
-:80 {
-	encode gzip
-	reverse_proxy 127.0.0.1:8080
-}
-EOF
+    {
+        echo "# Written by deploy/setup.sh (unleashed_directory). No domains were"
+        echo "# given, so there is no TLS."
+        echo ":80 {"
+        echo "	encode gzip"
+        echo "	reverse_proxy 127.0.0.1:8080"
+        echo "}"
+    } > "$MINE.new"
 else
-    MAIN="${DOMAINS[0]}"
     ALL=""
     HTTP_ALL=""
     for d in "${DOMAINS[@]}"; do
         ALL="${ALL:+$ALL, }$d, www.$d"
         HTTP_ALL="${HTTP_ALL:+$HTTP_ALL, }http://$d, http://www.$d"
     done
-
-    echo "board list: $MAIN"
-    [ -n "${DOMAINS[1]:-}" ] && echo "about:      ${DOMAINS[1]}"
-    [ -n "${DOMAINS[2]:-}" ] && echo "data:       ${DOMAINS[2]}"
-    true
-
+    echo "directory: ${DOMAINS[*]}"
     {
-        echo "# Written by deploy/setup.sh. Edit deploy/setup.sh, not this file."
+        echo "# Written by deploy/setup.sh (unleashed_directory). Edit that, not this."
         echo
         echo "# Boards cannot do TLS, so /announce must stay on plain HTTP with"
-        echo "# no redirect. Everything else on port 80 goes up to HTTPS."
+        echo "# no redirect. Everything else on port 80 goes up to HTTPS, on the"
+        echo "# name it was asked for."
         echo "$HTTP_ALL {"
         echo "	@announce path /announce"
         echo "	handle @announce {"
@@ -255,17 +277,15 @@ else
         echo "		}"
         echo "	}"
         echo "	handle {"
-        echo "		redir https://$MAIN{uri} permanent"
+        echo "		redir https://{host}{uri} permanent"
         echo "	}"
         echo "}"
-        # Every domain is served rather than redirected: the server works out
-        # which face to show from the Host header it is handed.
         echo
-        echo "$ALL {"
-        echo "	encode gzip"
         # Caddy appends X-Forwarded-For by itself; X-Real-IP it does not,
         # and the directory reads both. Neither is believed unless the
         # connection came from a trusted proxy, which is loopback.
+        echo "$ALL {"
+        echo "	encode gzip"
         echo "	reverse_proxy 127.0.0.1:8080 {"
         echo "		header_up X-Real-IP {remote_host}"
         echo "	}"
@@ -274,13 +294,51 @@ else
         echo "		format console"
         echo "	}"
         echo "}"
-    } > "$CADDY"
+    } > "$MINE.new"
 fi
+mv "$MINE.new" "$MINE"
+
+# The main Caddyfile only gathers the sites. Each service on the box writes
+# its own file in /etc/caddy/sites, so updating one never rewrites the
+# other's. A Caddyfile this script wrote before the split held every domain
+# itself; it is replaced here, at the same moment the sites folder takes
+# over, so there is no moment with a domain served twice or not at all.
+#
+# Before replacing a Caddyfile that still holds sites of its own (one from
+# before the split), every name it serves must be served by a file in the
+# sites folder once the new one is in, or that name would go dark. On the
+# project's droplet that means the main site's setup has written site.caddy
+# first; for anybody else it means a domain they forgot to hand over.
+if [ -f "$CADDY" ] && ! grep -q "^import /etc/caddy/sites/" "$CADDY"; then
+    dark=""
+    for name in $(grep -E '^[a-z:/]' "$CADDY" | grep -oE '[a-z0-9-]+(\.[a-z0-9-]+)+' \
+                  | sed -e 's/^www\.//' | sort -u); do
+        grep -Eq "(^|[ ,/])(www\.)?${name//./\\.}([ ,{]|$)" "$SITES"/*.caddy 2>/dev/null \
+            || dark="$dark $name"
+    done
+    if [ -n "$dark" ]; then
+        echo "The Caddyfile serves$dark, and nothing in $SITES would after this."
+        echo "Install whatever serves those first (on the project's droplet, the"
+        echo "main site: unleashed_site's deploy/setup.sh), then run this again."
+        exit 1
+    fi
+fi
+{
+    echo "# Written by deploy/setup.sh. Every service on this box writes its own"
+    echo "# sites into /etc/caddy/sites/, and this file only gathers them."
+    echo "import /etc/caddy/sites/*.caddy"
+} > "$CADDY.new"
+cp "$CADDY" "$CADDY.before-split" 2>/dev/null || true
+mv "$CADDY.new" "$CADDY"
 
 # A broken Caddyfile that gets installed anyway takes the site down with it.
 # Note that validate only reads the file: it cannot tell whether Caddy will
 # be allowed to open the log it names, which is checked below instead.
-caddy validate --config "$CADDY"
+if ! caddy validate --config "$CADDY"; then
+    echo "The new web configuration does not validate; putting the old one back."
+    [ -f "$CADDY.before-split" ] && cp "$CADDY.before-split" "$CADDY"
+    exit 1
+fi
 systemctl reload caddy || systemctl restart caddy
 sleep 1
 if ! systemctl is-active --quiet caddy; then
@@ -314,6 +372,13 @@ if INSTALLED_REV="$(git -C "$SRC" rev-parse HEAD 2>/dev/null)"; then
     printf '%s\n' "$INSTALLED_REV" > "$DEST/.installed.new"
     mv "$DEST/.installed.new" "$DEST/.installed"
     echo "installed $INSTALLED_REV"
+fi
+# And the guides' commit, the same way, so an update to the guides alone is
+# installed by deploy/update.sh and a failed one is retried.
+if [ -n "$DOCS_SRC" ] && DOCS_REV="$(git -C "$DOCS_SRC" rev-parse HEAD 2>/dev/null)"; then
+    printf '%s\n' "$DOCS_REV" > "$DEST/.installed-docs.new"
+    mv "$DEST/.installed-docs.new" "$DEST/.installed-docs"
+    echo "installed guides $DOCS_REV"
 fi
 
 if [ ${#DOMAINS[@]} -gt 0 ]; then

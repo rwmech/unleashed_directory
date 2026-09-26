@@ -27,3 +27,5 @@ id_*
 # checkout when the checkout is the install directory.
 /.installed
 /.installed.new
+# A checkout of the guides, when kept beside the server (DIRECTORY_DOCS_DIR).
+/docs/

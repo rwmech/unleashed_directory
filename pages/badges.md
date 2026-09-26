@@ -18,7 +18,7 @@ A board says these about itself in every heartbeat, so each one is as current as
 
 ::: badges
 directory
-A board cannot set these. The directory works them out from what it has seen for itself: when the board was first listed, which of its heartbeats arrived, and, for a µnleashed board, whether the version it reports is older than the newest one on [the install page](/install).
+A board cannot set these. The directory works them out from what it has seen for itself: when the board was first listed, which of its heartbeats arrived, and, for a µnleashed board, whether the version it reports is older than the newest one on [the install page](https://unleashedbbs.com/install).
 :::
 
 ::: badges

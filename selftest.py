@@ -11,7 +11,11 @@ Purpose:      Starts a directory on a scratch database and walks it through
               the whole life of a listing: first announce, token issue,
               the pending window, going public, a second board from the
               same address queueing, the rate limit (per board, with a
-              ceiling per address), and going quiet.
+              ceiling per address), and going quiet. Then the directory's
+              pages, the guides it serves at /docs from a checkout of
+              unleashed_documentation (SELFTEST_DOCS, or docs/ or
+              ../unleashed_documentation beside this file), and the 301s
+              that send an old address to where its page lives now.
 
 Usage:        python3 selftest.py
 
@@ -24,6 +28,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 import html
 import json
 import os
+import pathlib
 import re
 import subprocess
 import sys
@@ -31,15 +36,40 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from html.parser import HTMLParser
+
+
+# Tests stay on 127.0.0.1. Since the split a page that moved answers with a
+# 301 to a real address on the internet (the project's site, the
+# directory), and urllib follows a redirect by default: this one follows it
+# only to loopback, so a move to anywhere else comes back as the 301 itself.
+class _LoopbackOnly(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urllib.parse.urlsplit(newurl).hostname not in ("127.0.0.1", "localhost"):
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+urllib.request.install_opener(urllib.request.build_opener(_LoopbackOnly))
 
 # The suite's first port. It uses this and the four after it, all on
 # 127.0.0.1, one directory each. SELFTEST_PORT moves the lot, for a machine
 # where something else already has 8123 (site 1.1.0).
 PORT = int(os.environ.get("SELFTEST_PORT", "8123"))
 BASE = f"http://127.0.0.1:{PORT}"
+# The guides the directory serves at /docs: a checkout of
+# unleashed_documentation. Without one, the checks of the guides are
+# skipped and say so; everything the directory itself does is still tested.
+HERE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOCS_DIR = os.path.abspath(os.environ.get("SELFTEST_DOCS") or next(
+    (p for p in (os.path.join(HERE_DIR, "docs"),
+                 os.path.join(HERE_DIR, "..", "unleashed_documentation"))
+     if os.path.isdir(os.path.join(p, "pages"))),
+    os.path.join(HERE_DIR, "docs")))
+HAVE_DOCS = os.path.isdir(os.path.join(DOCS_DIR, "pages"))
 passed = failed = 0
 
 
@@ -125,6 +155,34 @@ class NameSweep(HTMLParser):
             self._look("text", data)
 
 
+# A partition table as ESP-IDF's gen_esp32part.py writes one: 32-byte
+# entries (AA 50, type, subtype, offset and size little-endian, a 16-byte
+# label, 4 bytes of flags), an MD5 entry (EB EB), erased flash after it.
+# The server places an image set's parts by the set's own table (firmware
+# 1.1.2), so a scratch release needs a real one.
+ESP32_LAYOUT = (("nvs", 1, 0x02, 0x9000, 0x6000), ("otadata", 1, 0x00, 0xF000, 0x2000),
+                ("phy_init", 1, 0x01, 0x11000, 0x1000),
+                ("ota_0", 0, 0x10, 0x20000, 0x180000), ("ota_1", 0, 0x11, 0x1A0000, 0x180000),
+                ("logs", 1, 0x82, 0x320000, 0x8000), ("userdata", 1, 0x82, 0x328000, 0x98000),
+                ("storage", 1, 0x82, 0x3C0000, 0x40000))
+# The S3's own 8 MB layout from firmware 1.1.2 (partitions_s3.csv).
+S3_LAYOUT = (("nvs", 1, 0x02, 0x9000, 0x6000), ("otadata", 1, 0x00, 0xF000, 0x2000),
+             ("phy_init", 1, 0x01, 0x11000, 0x1000),
+             ("ota_0", 0, 0x10, 0x20000, 0x300000), ("ota_1", 0, 0x11, 0x320000, 0x300000),
+             ("logs", 1, 0x82, 0x620000, 0x8000), ("userdata", 1, 0x82, 0x628000, 0x158000),
+             ("storage", 1, 0x82, 0x780000, 0x80000))
+
+
+def pt_bin(rows):
+    import hashlib
+    import struct
+    body = b"".join(b"\xaa\x50" + bytes([t, s]) + struct.pack("<II", off, size)
+                    + name.encode("ascii").ljust(16, b"\0") + b"\0" * 4
+                    for name, t, s, off, size in rows)
+    md5 = b"\xeb\xeb" + b"\xff" * 14 + hashlib.md5(body).digest()
+    return (body + md5).ljust(0xC00, b"\xff")
+
+
 def check(label, ok):
     global passed, failed
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
@@ -146,19 +204,41 @@ def post(payload):
         return e.code, json.loads(e.read().decode() or "{}"), dict(e.headers)
 
 
-def get(path, host=None, headers=None):
+class _Stay(urllib.request.HTTPRedirectHandler):
+    """Report a redirect rather than follow it: get() decides where to go."""
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_stay = urllib.request.build_opener(_Stay)
+
+
+def get_raw(path, host=None, headers=None):
+    """(status, body, Location) for one GET, following nothing."""
     req = urllib.request.Request(f"{BASE}{path}")
     if host:
         req.add_header("Host", host)
     for key, value in (headers or {}).items():
         req.add_header(key, value)
     try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            return r.status, r.read().decode()
+        with _stay.open(req, timeout=5) as r:
+            return r.status, r.read().decode(), r.headers.get("Location", "")
     except urllib.error.HTTPError as e:
         # A 404 is an answer, not a failure. Checking that something is
         # absent is as much a test as checking it is there.
-        return e.code, e.read().decode(errors="replace")
+        return e.code, e.read().decode(errors="replace"), e.headers.get("Location", "")
+
+
+def get(path, host=None, headers=None):
+    """One page as a browser gets it from this server: a 301 to another page
+    here (an old guide address, /docs/<page>) is followed, and a 301 that
+    leaves this server is returned as it is, never fetched."""
+    code, body, loc = get_raw(path, host, headers)
+    for _hop in range(3):
+        if code not in (301, 302) or not loc.startswith("/"):
+            break
+        code, body, loc = get_raw(loc, host, headers)
+    return code, body
 
 
 def fetch(path, base=None):
@@ -861,11 +941,9 @@ def badge_checks(S, db):
           "button",
           keylink in page and page.index('<div class="fbar">') < page.index(keylink)
           < page.index('<table id="boards">'))
-    feet = {"list": page, "about": get("/", host="about.example")[1]}
+    feet = {"list": page, "data": get("/data")[1]}
     check("and the footer links the legend on every face",
-          '<a href="/badges">Badges</a>' in feet["list"].split("<footer>")[1]
-          and '<a href="https://boards.example/badges">Badges</a>'
-          in feet["about"].split("<footer>")[1])
+          all('<a href="/badges">Badges</a>' in f.split("<footer>")[1] for f in feet.values()))
     check("the JSON says what the board runs and which version (site 1.0.0)",
           bb.get("software") == "unleashed" and bb.get("version") == "1.0.0"
           and jb.get("software") == "" and jb.get("version") == "")
@@ -1009,7 +1087,7 @@ def badge_checks(S, db):
           and not any(h for _n, _k, h in list_rows(evil)))
     # Site 1.2.8: a filter is answered on /directory, so that is its page.
     check("a filtered view is still the whole directory to a search engine",
-          '<link rel="canonical" href="https://boards.example/directory">' in one)
+          '<link rel="canonical" href="https://boards.example/">' in one)
     check("the rows the filter leaves out stay hidden at every width, and the "
           "stripes count only the rows showing",
           "main [hidden] { display:none !important; }" in home
@@ -1137,7 +1215,7 @@ def badge_checks(S, db):
           "<b>Camera</b>" in leg and S.CAMERA_SVG in leg
           and "<code>camera</code> <span class='src'>in features</span>" in leg
           and 'downloads it a few seconds later. Running now. '
-              '<a href="/camera">How a caller uses it</a>.' in leg)
+              '<a href="/docs/camera">How a caller uses it</a>.' in leg)
     check("and the machine, the software and every time-listed step",
           "<b>Machine</b>" in leg and "<b>Software</b>" in leg
           and all(f">{label}</span>" in leg for _d, label, _w in S.AGES))
@@ -1266,12 +1344,9 @@ def badge_checks(S, db):
           and [b["key"] for b in S.ROW_SUPPORT]
               == [b["key"] for b in S.BADGES if b["group"] == "support"])
     check("it belongs to Communities online in the menu, on the list face",
-          '<a class="here" href="/directory">Communities online</a>' in leg)
-    about_leg = get("/badges", host="about.example")[1]
+          '<a class="here" href="/badges">Badges</a>' in leg)
     check("and on the about face, not to What this is",
-          '<a class="here" href="https://boards.example/directory">Communities online</a>'
-          in about_leg
-          and 'class="here" href="/">What this is' not in about_leg)
+          "What this is" not in leg)
     check("How to get listed shows the fields, in codes, and links the legend",
           'href="/badges"' in get("/how")[1] and '"support":["ltrcy"]' in get("/how")[1]
           and '"interests":["c64","elctr","ham"]' in get("/how")[1]
@@ -1655,14 +1730,13 @@ def directory_checks(S):
         code, home = page("/")
         check("the front page carries no board list, and no script"
               + ("" if up7 else "  <- " + b"".join(out7[-3:]).decode("utf-8", "replace")),
-              code == 200 and list_rows(home) == [] and "<script" not in home
-              and '<table id="boards"' not in home)
+              code == 200 and [n for n, _k, _h in list_rows(home)] == names)
         code, full = page("/directory")
         check("/directory shows all twelve, busiest first",
               code == 200 and [n for n, _k, _h in list_rows(full)] == names
               and "<h1>Communities online</h1>" in full)
         check("and lights Communities online in the menu",
-              '<a class="here" href="/directory">Communities online</a>' in full)
+              '<a class="here" href="/">Communities online</a>' in full)
         check("with a search box that belongs to the filter's form",
               '<input type="search" id="nq" name="q" form="fform" value=""'
               f' maxlength="{S.SEARCH_MAX}"' in full
@@ -1704,14 +1778,10 @@ def directory_checks(S):
               and "a" * 61 not in long_
               and S.search_query("q=" + "b" * 500) == "b" * 60
               and S.search_query("q=%00x%E2%80%AEy++z") == "xy z")
-        code, loc = None, ""
-        try:
-            opener = urllib.request.build_opener(NoRedirect)
-            opener.open(base7 + "/?b=files&q=E", timeout=5)
-        except urllib.error.HTTPError as e:
-            code, loc = e.code, e.headers.get("Location", "")
+        _c, fq = page("/?b=files&q=E")
         check("a filter or a search asked of the front page is sent to /directory",
-              code == 302 and loc == "/directory?b=files&q=E")
+              _c == 200 and [n for n, _k, h in list_rows(fq) if not h]
+              == [n for n, _k, h in list_rows(both) if not h])
     finally:
         server7.terminate()
         try:
@@ -2024,25 +2094,6 @@ def closed_checks(S):
         check("and the data page says the JSON carries it",
               "(<code>closed</code>, true or false)" in inspect.getsource(S.data_page))
 
-        # Site 1.3.10 (Rob): under the hero's two buttons, a quiet text link to
-        # /different, the name with its micro sign, not a third button.
-        print("The front page's way on to /different")
-        _c, home = page("/")
-        check("directly under the buttons, a text link to /different, with the "
-              "micro sign",
-              '<a class="b2" href="/directory">Try one first</a></p>'
-              '<p class="diff"><a href="/different">See how µnleashed is '
-              'different</a></p><p class="facts">' in home)
-        hero = home[home.find('<section class="hero">'):home.find("</section>")]
-        check("it is not a button: two buttons in the hero still, and the link has "
-              "no button class",
-              hero.count('class="b1"') == 1 and hero.count('class="b2"') == 1
-              and '<p class="diff"><a class=' not in hero)
-        check("styled as the site's link, left with the buttons on a desktop and "
-              "centred under them on a phone, with room between",
-              ".front p.diff { font-size:0.8125rem; margin:0.625rem 0 0; }" in home
-              and ".front p.diff { text-align:center; margin-top:0.75rem; }" in home
-              and ".front p.diff a:focus-visible { outline:3px solid #ffd35c;" in home)
     finally:
         serverc.terminate()
         try:
@@ -2167,7 +2218,7 @@ def skins_checks(S):
           body.index('<p class="aside">') < body.index("<h2")
           and "Skins are coming soon for display-enabled boards: the firmware with skins "
               "is in testing." in flat_note
-          and 'href="/hardware#makerfabs-esp32-s3-parallel-tft-3-5-v1-0"' in note
+          and 'href="https://unleashedbbs.com/hardware#makerfabs-esp32-s3-parallel-tft-3-5-v1-0"' in note
           and "480 by 320" in flat_note
           and not re.search(r"firmware \d", note))
 
@@ -2176,11 +2227,11 @@ def skins_checks(S):
                 if f'id="{anchor}"' in body else "")
     stock = sec("the-stock-skins")
     names = ("pc", "c64", "apple2", "atari", "imsai")
-    check("the stock skins: a picture of each, from static/skins/, with its name",
+    check("the stock skins: a picture of each, from the guides' skins/, with its name",
           stock.count("<figure>") == 5 and '<div class="wide gallery skins">' in stock
           and all(f'<img src="/skins/skin-{n}.png" width="480" height="320" alt="{n}: '
                   in stock and f"<figcaption><code>{n}</code>:" in stock for n in names)
-          and all(os.path.isfile(os.path.join("static", "skins", f"skin-{n}.png"))
+          and all(os.path.isfile(os.path.join(DOCS_DIR, "skins", f"skin-{n}.png"))
                   for n in names)
           and ".gallery.skins img {{ aspect-ratio:3 / 2; }}" in S.PAGE)
     check("and the two zips as links, still marked coming soon for display boards",
@@ -2188,12 +2239,12 @@ def skins_checks(S):
           and '<a href="/skins/skins-upload.zip">Download them as pairs to send</a>' in stock
           and "<b>Coming soon for display-enabled boards: the firmware with skins is in "
               "testing.</b>" in " ".join(stock.split())
-          and all(os.path.isfile(os.path.join("static", "skins", z))
+          and all(os.path.isfile(os.path.join(DOCS_DIR, "skins", z))
                   for z in ("skins.zip", "skins-upload.zip"))
           and "ZIP-URL" not in sk and "STOCK-SKINS-ZIP" not in sk
           and "Download: coming soon" not in sk)
-    zc = zipfile.ZipFile(os.path.join("static", "skins", "skins.zip")).namelist()
-    zu = zipfile.ZipFile(os.path.join("static", "skins", "skins-upload.zip")).namelist()
+    zc = zipfile.ZipFile(os.path.join(DOCS_DIR, "skins", "skins.zip")).namelist()
+    zu = zipfile.ZipFile(os.path.join(DOCS_DIR, "skins", "skins-upload.zip")).namelist()
     check("skins.zip is laid out for the card, skins-upload.zip in pairs",
           sorted(zc) == sorted(f"skins/{n}/{f}" for n in names
                                for f in ("skin.txt", "background.jpg"))
@@ -2207,12 +2258,12 @@ def skins_checks(S):
             served[f] = (e.code, None, b"")
     check("and they are served from here at /skins/, zips and pictures only",
           served["skins.zip"][:2] == (200, "application/zip")
-          and served["skins.zip"][2] == open(os.path.join("static", "skins", "skins.zip"),
+          and served["skins.zip"][2] == open(os.path.join(DOCS_DIR, "skins", "skins.zip"),
                                              "rb").read()
           and served["skin-pc.png"][:2] == (200, "image/png")
           and served["../server.py"][0] == 404 and served["nope.zip"][0] == 404
           and served["skin-pc.txt"][0] == 404
-          and "skin-pc.png" not in S.gallery_html())
+          and not os.path.exists(os.path.join("static", "skins", "skin-pc.png")))
     check("no logos: said for the stock skins and for yours",
           "<b>No logos, and no trademark art.</b>" in stock
           and "must not use them either" in " ".join(stock.split())
@@ -2239,7 +2290,7 @@ def skins_checks(S):
           "<code>SD UNMOUNT</code>" in card and "<code>SD MOUNT</code>" in card)
     check("it says what a skin is, and the lights' modes",
           "<code>background.jpg</code>" in body and "<code>skin.txt</code>" in body
-          and 'href="/lights"' in body
+          and 'href="/docs/lights"' in body
           and all(f"<code>{w}</code>" in body for w in ("pc", "1541", "disk2", "breathe"))
           and "It works with no LED strip wired to the board at all." in flat)
     check("the key colours go through mkskin.py leds, written with -o",
@@ -2266,17 +2317,20 @@ def skins_checks(S):
           and not re.search(r"\b(simply|just|easy|easily|of course|obviously)\b",
                             flat, re.I))
     check("it lights Build one, and /build and /lights link it",
-          S.NAV_SECTION.get("/skins") == "/build"
-          and '<a class="here" href="/build">' in sk
-          and 'href="/skins"' in get("/build")[1]
-          and 'href="/skins"' in get("/lights")[1])
+          '<a class="here" href="/docs">' in sk
+          and 'href="/docs/skins"' in get("/docs/lights")[1])
     setup = open(os.path.join("deploy", "setup.sh"), encoding="utf-8").read()
     check("setup.sh installs every file under static/, so static/skins/ reaches the server",
-          '(cd "$SRC/static" && find . -type f)' in setup
-          and 'install -D -m 644 "$SRC/static/$shot" "$DEST/static/$shot"' in setup)
+          'for f in "$DOCS_SRC"/skins/*.png "$DOCS_SRC"/skins/*.zip; do' in setup
+          and 'install -m 644 "$f" "$DEST/docs.new/skins/"' in setup)
 
 
 def main():
+    if not HAVE_DOCS:
+        print("This suite checks the guides the directory serves at /docs too: it\n"
+              "wants a checkout of unleashed_documentation as docs/ or beside this\n"
+              "one, or SELFTEST_DOCS naming it.")
+        return 1
     db = os.path.join(tempfile.gettempdir(), f"dirtest{os.getpid()}.db")
     for leftover in (db, db + "-wal", db + "-shm"):
         if os.path.exists(leftover):
@@ -2291,8 +2345,11 @@ def main():
                DIRECTORY_MIN_SECONDS="0",
                DIRECTORY_ADDRESS_PER_MINUTE="0",
                DIRECTORY_LIST_DOMAIN="boards.example",
-               DIRECTORY_ABOUT_DOMAIN="about.example",
-               DIRECTORY_DATA_DOMAIN="data.example")
+               DIRECTORY_HOME_URL="https://unleashedbbs.com",
+               DIRECTORY_DOCS_DIR=DOCS_DIR,
+               # No releases on disk: the suite makes its own where it needs one.
+               DIRECTORY_FIRMWARE_DIR=os.path.join(tempfile.gettempdir(),
+                                                   f"dirtest-nofw{os.getpid()}"))
     server = subprocess.Popen([sys.executable, "server.py"], env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     # Drain it. The server logs one blocking print per request from the
@@ -2488,13 +2545,12 @@ def main():
         code, body, _ = post({"name": "Bad Port", "port": 99999})
         check("a silly port is refused", code == 400)
 
-        print("One server, three faces")
-        _, page = get("/", host="about.example")
-        check("the about domain serves the argument", "Electronic freedom" in page)
-        check("with the history on it", "CBBS" in page and "1978" in page)
-        check("and points at the other two", "boards.example" in page and "data.example" in page)
-
-        _, page = get("/", host="data.example")
+        # One site since the split (2026-09-26): the board list at / and at
+        # /directory, the data at /data. The manifesto and the rest of the
+        # project's site are on their own server, and an old address for
+        # one of their pages is answered here with a 301 to it.
+        print("One site: the list, and the data at /data")
+        _, page = get("/data")
         check("the data domain documents the API", "/api/boards.json" in page)
         check("and says what is not in it", "Nothing about callers" in page)
 
@@ -2502,94 +2558,50 @@ def main():
         check("the list domain still lists boards", "Rusty Modem" in page)
         check("the list page owns the board-list heading",
               "Communities online" in page)
+        _, home = get("/", host="boards.example")
+        check("the front page of the directory is the board list",
+              "Rusty Modem" in home and "<h1>Communities online</h1>" in home)
 
         # The board list's heading used to live in the shared page shell, so
-        # it turned up above the manifesto as well. Every page brings its own.
-        _, page = get("/", host="about.example")
-        check("the about page does not inherit the list heading",
-              "Boards that are up right now" not in page)
-        _, page = get("/", host="data.example")
+        # it turned up above other pages as well. Every page brings its own.
+        _, page = get("/data")
         check("nor does the data page",
               "Boards that are up right now" not in page)
         check("the data page has its own heading", "<h1>Data</h1>" in page)
-        check("the manifesto has one at all",
-              "<h1>What this is</h1>" in get("/", host="about.example")[1])
-
-        # The faces are also paths, so one domain gets all three. There were
-        # no path routes: with only a list domain configured, /about and
-        # /data were 404, two of seven menu items looped back to the page you
-        # were already on, and the manifesto could not be read at all.
-        # README.md and INSTALL.md both said otherwise.
-        print("The other two faces are reachable by path as well")
-        code, page = get("/about", host="boards.example")
-        check("the manifesto is reachable without its own domain",
-              code == 200 and "A bulletin board is a machine" in page)
         code, page = get("/data", host="boards.example")
         check("and so is the data page", code == 200 and "Endpoints" in page)
 
-        print("The manifesto says what the board actually does")
-        _, page = get("/", host="about.example")
-        check("ten callers and a hidden eleventh line, not six and a seventh",
-              "answers ten at once" in page and "answers six at once" not in page)
-        # Nothing on this site states an unbuilt feature as present fact, and
-        # nothing calls a built one unbuilt. Somebody decides whether to spend
-        # an afternoon and twenty dollars on the strength of these sentences,
-        # which makes them the most expensive kind of wrong there is here.
-        # Doors are not started, so they stay in the future tense.
-        check("doors are named as coming, not as something the board has",
-              "doors are still to come" in page.lower() and ", doors," not in page)
-        # F8, site 1.2.1: the forums are not the newest part any more (the
-        # information pages and mail as a place came after them).
-        check("and the forums are not called the newest part",
-              "newest part" not in page)
-        check("and the features it does list are ones that exist",
-              "mail between callers" in page and "file areas on an SD card" in page)
-        # Forums shipped in firmware 0.21: FORUMS in COMMANDS.md, PF_SD in
-        # forums.cpp, so a card and a sysop who switches them on. The site
-        # said "being built" in five places after they were built, which is
-        # the same mistake as the opposite one, pointed the other way.
-        check("the manifesto lists forums as something the board has",
-              "forums on the same card" in page)
-        for path in ("/sdcard", "/build", "/kids"):
-            _, page = get(path)
-            art = page.split("<article>")[1]
-            check(f"{path} does not call the forums unbuilt",
-                  "being built" not in art and "once they are built" not in art
-                  and "not on any board yet" not in art)
-            check(f"{path} says forums need the card",
-                  "forums" in art.lower() and ("card" in art.lower()))
-        # Checked against the sources, 2026-09-22, and each of these was
-        # wrong on the live site. Pinned so that a later copy pass cannot put
-        # the old figure back.
-        _, page = get("/", host="about.example")
-        # Byte, November 1978, p.150, in Christensen and Suess's own words:
-        # "an 8080 processor with 24 K bytes of memory". The page said 64,
-        # and "eight times that memory" was built on it.
-        check("CBBS had 24 KB, in the builders' own words, not 64",
-              "24 kilobytes" in page and "64 kilobytes" not in page
-              and "eight times that" not in page)
-        # The firmware holds the radio awake (WIFI_PS_NONE), and Espressif's
-        # datasheet puts receive alone at 112 mA. "A few tens of milliamps"
-        # was the figure for a radio that dozes, which this one does not.
-        every_page = [page] + [get(p)[1] for p in ("/build", "/whofor")]
-        check("nothing says the board draws a few tens of milliamps",
-              not any("few tens of milliamps" in p for p in every_page))
-        # Sign-up requires a name and an email (UF_REQUIRED in users.cpp).
-        # The freedom box said signing up was a handle and a password.
-        flat_m = " ".join(page.split())
-        check("the manifesto does not say sign-up needs no email address",
-              "no email address" not in flat_m
-              and "none of it is verified" in flat_m)
-        # A stock C64 has been made to finish a TLS 1.3 handshake. It takes
-        # about 36 minutes, which is the honest version of "cannot".
-        check("and no page says a C64 cannot do TLS",
-              "cannot do TLS" not in page
-              and "never will" not in get("/privacy")[1])
-        # Back to the manifesto: the loop above reassigned page, and the check
-        # after this one reads it.
-        _, page = get("/", host="about.example")
-        check("a guest types a handle like everybody else",
-              "A guest types a handle and nothing else" in page)
+        # Everything that moved, answered with a 301 to its new home.
+        print("Old addresses are sent where their pages live now")
+        moved = {"/about": "https://unleashedbbs.com/about",
+                 "/author": "https://unleashedbbs.com/author",
+                 "/install": "https://unleashedbbs.com/install",
+                 "/hardware": "https://unleashedbbs.com/hardware",
+                 "/whofor": "https://unleashedbbs.com/whofor",
+                 "/install/esp-web-tools/10.4.0/install-button.js":
+                     "https://unleashedbbs.com/install/esp-web-tools/10.4.0/install-button.js",
+                 "/static/esp32.jpg": "https://unleashedbbs.com/static/esp32.jpg",
+                 "/cover.svg": "https://unleashedbbs.com/cover.svg",
+                 "/build?x=1": "https://unleashedbbs.com/build?x=1"}
+        wrong = [p for p, want in moved.items()
+                 if get_raw(p)[0] != 301 or get_raw(p)[2] != want]
+        check("a page of the project's site is sent there with a 301"
+              + ("" if not wrong else "  <- " + ", ".join(wrong)), not wrong)
+        if HAVE_DOCS:
+            gone = [p for p in ("/setup", "/terminals", "/forward-asus", "/privacy",
+                                "/sdcard", "/camera", "/skins")
+                    if get_raw(p)[:3:2] != (301, "/docs" + p)]
+            check("an old guide address is sent to /docs with a 301"
+                  + ("" if not gone else "  <- " + ", ".join(gone)), not gone)
+            code, idx = get("/docs")
+            check("/docs lists the guides and lights Guides in the menu",
+                  code == 200 and '<a class="here" href="/docs">Guides</a>' in idx
+                  and 'href="/docs/setup"' in idx and 'href="/docs/terminals"' in idx)
+        code, _b, _l = get_raw("/nothing-at-all")
+        check("a name that is nobody's page is sent to the project's site, which "
+              "says whether it has one", code == 301)
+        code, _b, _l = get_raw("/docs/nothing-at-all")
+        check("and a guide that does not exist is not found", code == 404)
 
         print("The feed")
         code, feed = get("/feed.xml")
@@ -2597,7 +2609,8 @@ def main():
         check("the board that went public is in it", "Rusty Modem" in feed)
         check("with a date and a stable id", "pubDate" in feed and "board-" in feed)
         check("the queued one is not", "Squatter" not in feed)
-        check("the page tells readers where the feed is", "application/rss+xml" in page)
+        check("the page tells readers where the feed is",
+              "application/rss+xml" in get("/directory")[1])
 
         print("The rest of the site")
         code, page = get("/rules")
@@ -2623,20 +2636,22 @@ def main():
               "announce \\\n" in page)
 
         print("Every page says which page it is")
-        code, page = get("/build")
+        code, page = get("/badges")
         check("a markdown page takes its title from its own first heading",
-              "<title>Build one - " in page)
+              "<title>What the badges mean - " in page)
         code, page = get("/forward-mesh")
         check("so the router pages are not four identical tabs",
               "<title>Port forwarding on eero and Google Nest Wifi - " in page)
         check("and a page with no menu entry lights its own section",
-              '<a class="here" href="/forward">' in page)
+              '<a class="here" href="/docs">' in page)
         code, page = get("/dialing")
         check("dialing belongs to terminals",
-              '<a class="here" href="/terminals">' in page)
+              '<a class="here" href="/docs">' in page
+              and has_h(page, 1, "Making the dial links work"))
         code, page = get("/sdcard")
         check("and the SD card page to build one",
-              '<a class="here" href="/build">' in page)
+              '<a class="here" href="/docs">' in page
+              and has_h(page, 1, "Adding an SD card"))
         check("a page carries a description and a preview card",
               'name="description"' in page and 'property="og:title"' in page)
         code, page = get("/favicon.svg")
@@ -2656,276 +2671,11 @@ def main():
         code, page = get("/privacy")
         check("the privacy page leads with the radio framing, not a shrug",
               code == 200 and "in the clear" in page and "bar" in page)
-        check("and the manifesto points at it",
-              "/privacy" in get("/", host="about.example")[1])
         check("so does the terminal page's telnet warning",
               "/privacy" in get("/terminals")[1])
-        _, page = get("/", host="about.example")
-        check("the limits are explained rather than named",
-              "Open communication over the internet is radio" in page
-              and "Somebody has to be trying" in page)
 
-        # ------------------------------------------------------------------
-        # Freedoms gained. Two columns, and the one claim in it that could
-        # do harm if it drifted.
-        #
-        # The section is the project's position rather than its feature
-        # list, and it reaches for words like discreet and hidden. Those are
-        # true of the object and false of the wire: the privacy page spends
-        # a screen saying anybody on the path can read plain telnet, and a
-        # box here implying otherwise would contradict it in the one place
-        # somebody is being talked into trusting the thing. So the honest
-        # sentence is pinned present, and the dishonest ones are pinned
-        # absent by name.
-        print("Freedoms gained")
-        # Prose wraps in the source, so a sentence that reads as one line on
-        # the page is two in the file. These checks are about the words, not
-        # about where somebody happened to press return.
-        flat = " ".join(page.split())
-        check("the freedom boxes are wrapped so they can be laid out",
-              '<div class="freedoms">' in page
-              and page.count('<div class="freedom">') == 12)
-        check("the discreet claim is about the object, and says so",
-              "discretion of the object and not of the wire" in flat
-              and "telnet is plain text" in flat
-              and 'the <a href="/privacy">privacy page</a>' in flat)
-        # Not a style opinion. Each of these would tell a reader the wire
-        # hides them, which is the one thing this section must never say.
-        for wrong in ("undetectable", "untraceable", "invisible on the network",
-                      "nobody can see", "nobody can read", "cannot be traced",
-                      "impossible to intercept", "off the radar"):
-            check("and nothing in the manifesto claims %r" % wrong,
-                  wrong not in page.lower())
-        # Rob's "use it anywhere" is the no-uplink claim, it is true, and it
-        # is the reason the section is shaped the way it is.
-        check("it makes the claim that is actually true: no internet needed",
-              "It works with no internet at all" in flat
-              and "a switch in a room with no uplink" in flat)
-        # Mail stopped being deleted on sight in 0.17.12: reading it offers
-        # reply, save or delete and touches nothing until a key answers. The
-        # manifesto said mail was "gone the moment it is read" in three
-        # places, which was true of an older board and is now a promise the
-        # software does not keep.
-        check("and describes mail the way the board actually handles it",
-              "gone the moment it is read" not in flat
-              and "gone once it has been read" not in flat
-              and "gone when it is read" not in flat
-              and "reply to it or delete it" in flat)
 
-        # /dialing fixes the exact problem a first-time visitor hits, and
-        # used to be reachable from one sentence at the bottom of /terminals
-        # and a title= attribute, which is invisible on every touch device.
-        print("Who would actually want one of these")
-        code, page = get("/whofor")
-        check("the who-it's-for page exists and answers plainly",
-              code == 200 and page.index("Everyone.") < page.index("Schools"))
-        for who in ("Schools", "Ham radio", "Offices and teams",
-                    "One person, one board"):
-            check(f"it covers {who.lower()}", f">{who}</h" in page
-                  or f">{who}</h3>" in page or who in page)
-        check("it says the board is nobody else's to police",
-              "king of everything on the board" in page)
-        check("and names the things that make that true",
-              "deplatform" in page and "decentralized" in page
-              and "off grid" in page)
-        # Boards do not talk to each other. Linking is queued and unbuilt, so
-        # "peer to peer" was the wrong word for what the sentence after it
-        # actually describes, which is that nobody needs a network at all.
-        check("without calling independent boards peer to peer",
-              "peer to peer" not in page)
-        # The caller log records when a call started and how long it ran, and
-        # the board enforces a daily minute limit, so a claim that nothing
-        # measures how long you were on contradicted /firstcall, which names
-        # the log plainly.
-        check("and without claiming nothing records how long you were on",
-              "how long for" not in page and "caller log, and the board is yours" in page)
-        check("it ends by telling somebody how to start",
-              'href="/build"' in page)
-        check("it is in the menu next to the manifesto",
-              ">Who builds one</a>" in page)
-        _, page = get("/", host="about.example")
-        check("and the manifesto points at it",
-              'href="/whofor"' in page)
 
-        # ------------------------------------------------------------------
-        # The two pages hanging off /whofor. Neither is in the menu: nine
-        # items is already at the edge of what a phone header can carry, and
-        # neither is what a general visitor is hunting for. Off the menu is
-        # not the same as buried, so these check they are prominent where
-        # they belong instead.
-        print("The pages for children and for teachers")
-        _, page = get("/whofor")
-        head = page.split("<article>")[1][:900]
-        check("the invitation for children is the first thing on the page",
-              'class="tip"' in head and '"/kids"' in head)
-        # Not a warning, and not a footnote either. It is the full width box
-        # with the marker at its right edge, which is the whole point of it:
-        # the one link on this site written for a twelve year old used to be
-        # a 78ch note indented 30px and it read as an aside.
-        #
-        # The marker is checked for what it is not as much as for what it
-        # is. A warning triangle on the friendliest box on the site would
-        # say "be careful here" at the exact moment it means "this way in".
-        check("and it is an invitation, not a warning",
-              'class="warn"' not in head and "⚠" not in page)
-        tip = page.split("article .tip {")[1][:300]
-        check("the invitation is the full width of the column, not an aside",
-              "max-width:none" in tip and "border-radius:" in tip
-              and "margin-left" not in tip)
-        check("and carries its marker at the right edge",
-              'article .tip::after { content:"-->"' in page
-              and "position:absolute" in page.split("article .tip::after {")[1][:200])
-        # A pointer that does nothing is worse than no pointer: it costs a
-        # reader a click to learn it is decoration, and on a phone it is the
-        # first thing they tap. The whole box is one link now, via a
-        # stretched ::after on the single anchor the box already had, so
-        # there is still one destination and one accessible name.
-        #
-        # pointer-events on the marker is the load-bearing line and it is
-        # the one somebody would delete as noise. The marker is painted
-        # last, so without it the marker sits on top of the overlay and
-        # swallows the click on the one spot this whole change is about.
-        #
-        # Verified in Chrome rather than inferred: elementFromPoint at the
-        # marker's computed centre resolves to the /kids anchor at 1920,
-        # 1366 and 390, the box is live at 2159 of 2160 sampled points, and
-        # a real click dispatched at that pixel put a GET /kids in the
-        # server log where merely loading the page put none.
-        tipcss = page.split("article .tip a::after {")[1][:200]
-        check("the whole box is the link, not just the six words in it",
-              'content:""' in tipcss and "position:absolute" in tipcss
-              and "inset:0" in tipcss)
-        check("and the marker lets the click through to it",
-              "pointer-events:none"
-              in page.split('article .tip::after { content:"-->"')[1][:260])
-        check("the box answers a mouse and a keyboard, not just a mouse",
-              "article .tip:hover {" in page
-              and "article .tip a:focus-visible::after { outline:" in page)
-        # Warm, and deliberately not red: red is the grammar of an error
-        # box. Rob asked for yellow and orange after seeing it in the site's
-        # cyan, which is the structural colour and made it read as
-        # furniture. Ratios against the box background, measured: lead
-        # 11.4:1, body 12.2:1, link and marker 8.7:1, frame 6.1:1.
-        check("and it is warm, which is what makes it read as an invitation",
-              "article .tip { color:#f2ddb8; background:#2e1c05;" in page
-              and "var(--dial)" not in tip)
-        # ------------------------------------------------------------------
-        # The kids page, which is cards rather than prose for a reason that
-        # is not length. The retro terminal look signals nothing to a ten
-        # year old: everywhere else on this site it is doing real work
-        # because the audience recognises it, and on that one page it asks a
-        # reader to decode an unfamiliar visual language before they have
-        # been given a reason to care.
-        print("The kids page is cards, and every card stands on its own")
-        _, kids = get("/kids")
-        check("it is cards, with the headline idea in its own hero",
-              '<div class="cards hero">' in kids
-              and kids.count('<section class="card">') > 8)
-        check("none of the card markers leak onto the page",
-              "!!" not in kids.split("<article>")[1]
-              and "??" not in kids.split("<article>")[1]
-              and ":::" not in kids.split("<article>")[1])
-        # <details> is real interactivity for no script at all, and "what is
-        # in this one" is most of the appeal at this age. Measured in
-        # Chrome: opening one grows the card by 30 to 60px.
-        check("and there is something to open, with no script to do it",
-              "<details><summary>" in kids and "<script" not in kids)
-        # The grid is auto-fit, so the columns come from the width. No
-        # order: anywhere, because source order is what a screen reader
-        # follows and what somebody tabbing gets. Measured: 3 columns at
-        # 1920, 2 at 1366, 1 at 390 and 1 at 200% text, no overflow at any
-        # of them.
-        check("the cards reflow by width, not by reordering them",
-              "grid-template-columns:repeat(auto-fit, minmax(min(21rem, 100%), 1fr))"
-              in kids and "article .card" in kids
-              and "; order:" not in kids and "{order:" not in kids)
-        # Blocky rather than soft, which is the frame this reader already
-        # owns, and it costs nothing and no image weight. It has to read as
-        # deliberate before any artwork exists, because today none does.
-        check("and they are blocky, which is the whole point of the look",
-              "article .card { background:#12121a; border:3px solid" in kids
-              and "image-rendering:pixelated" in kids)
-        # The art slots render NOTHING until a file is there. Not a broken
-        # image, not a reserved gap, not alt text standing in for a picture
-        # nobody drew. So this passes with the folder empty, which is how it
-        # ships today.
-        check("an art slot with no file behind it draws nothing at all",
-              'img class="pix"' not in kids or "/pix/" in kids)
-        # Forums shipped in firmware 0.21, and they need a card and a sysop
-        # who switches them on. The page has to say both halves: present,
-        # and not on every board, because a reader who calls a board without
-        # them should blame the board's setup rather than the software.
-        check("forums are described as present, and as not on every board",
-              "files and forums" in kids.lower()
-              and "not every board has them" in kids.lower()
-              and "newest part" not in kids.lower())
-        # The honest privacy line. This is the one claim on this site with
-        # the potential to actually harm somebody, so it is pinned: the safe
-        # room is the board they host, and a board on the internet is not a
-        # private one. It must not drift into "chat is your safe space".
-        check("and the page never calls a stranger's chat room private",
-              "safe space" not in kids.lower()
-              and "nothing you type is private" in kids.lower()
-              and '"/privacy"' in kids and '"/forward"' in kids)
-        check("the teachers page is linked from the schools section",
-              '"/teachers"' in page)
-        # The menu, not the body: the first version of this check looked for
-        # the link text anywhere on the page and tripped over the perfectly
-        # good link to /teachers in the schools section.
-        nav = page.split("<nav>")[1].split("</nav>")[0]
-        check("neither is in the menu",
-              "/kids" not in nav and "/teachers" not in nav)
-        for path in ("/kids", "/teachers"):
-            _, p2 = get(path)
-            check(f"{path} lights the section it belongs to",
-                  '<a class="here" href="/whofor">' in p2)
-            check(f"{path} does not reintroduce unbuilt features",
-                  "message base" not in p2.lower()
-                  and "doors" not in p2.split("<article>")[1].lower())
-
-        _, page = get("/kids")
-        check("the children's page never asks for anything",
-              "<form" not in page and "<input" not in page
-              and "email" not in page.split("<article>")[1].lower())
-        check("it says plainly that nothing typed is private",
-              "Nothing you type is private" in page
-              and "plain text" in page)
-        check("it names what never to type into a board",
-              "Your real name" in page and "Your school" in page
-              and "Your phone number" in page)
-        check("it says the adult decides about the internet, not the child",
-              "That decision belongs to the adult" in page)
-        check("and that a board that never goes online is finished work",
-              "It is not practice for" in page)
-        check("it does not promise the board is safe",
-              " is safe" not in page.split("<article>")[1])
-        # Measured, not asserted. Flesch-Kincaid on the rendered prose: the
-        # brief was a sixth grade reading level, and the point of keeping the
-        # check is that an edit six months from now cannot quietly push it to
-        # eleventh without anybody noticing.
-        grade = fk_grade(page)
-        check(f"it reads at grade {grade:.1f}, at or below sixth",
-              grade is not None and grade <= 6.5)
-
-        _, page = get("/teachers")
-        check("the lesson plans say how long they take",
-              page.count("50 minutes") >= 3 or page.count("minutes") >= 5)
-        check("and what each one needs",
-              page.count("Needs:") >= 5)
-        check("the making is treated as part of the project",
-              "TinkerCAD" in page and "enclosure" in page.lower())
-        check("it names what it teaches, concretely",
-              "Client and server" in page and "port 6400" in page
-              and "FAT32" in page and "CP437" in page)
-        check("and it is straight about school networks",
-              "will not be able to forward a port" in page)
-        # A board answers ten callers. The page used to say one board serves a
-        # whole class, which is wrong for any class over ten and fails in
-        # front of one, in session 1, where everybody connects at once. The
-        # figure is BBS_MAX_NODES in the firmware and is not a config key.
-        check("and honest about how many callers fit on one board",
-              "answers ten people at once" in " ".join(page.split())
-              and "serves a whole class" not in page)
 
         # ------------------------------------------------------------------
         # The project's own vocabulary, used the same way on every page. Two
@@ -2966,7 +2716,7 @@ def main():
 
         _, page = get("/directory")
         check("the board list offers a way out when a dial link does nothing",
-              'href="/dialing">Did not connect?' in page)
+              'href="/docs/dialing">Did not connect?' in page)
         check("and the footer carries it on every page",
               '>Dial links</a>' in page)
         check("the dial link's tooltip no longer reads a URL out as text",
@@ -2975,10 +2725,11 @@ def main():
         # Pages are files in pages/, routed by name. That lookup runs last
         # on purpose: put it earlier and it swallows real endpoints, which
         # is exactly what happened to /health the first time.
-        for name in ("build", "forward", "terminals", "dialing", "sdcard",
-                     "firstcall", "privacy", "whofor", "kids", "teachers",
-                     "forward-netgear", "forward-tplink", "forward-asus",
-                     "forward-xfinity", "forward-mesh"):
+        for name in ("badges", "docs/forward", "docs/terminals", "docs/dialing",
+                     "docs/sdcard", "docs/firstcall", "docs/privacy", "docs/setup",
+                     "docs/lights", "docs/camera", "docs/skins",
+                     "docs/forward-netgear", "docs/forward-tplink", "docs/forward-asus",
+                     "docs/forward-xfinity", "docs/forward-mesh"):
             code, page = get("/" + name)
             check(f"/{name} renders", code == 200 and "<article>" in page)
         # A numbered step is a step. md_render only knew "- " bullets, so the
@@ -3039,8 +2790,6 @@ def main():
         # the format command in KB5083631, April 2026, and nothing else.
         check("and does not send Windows users to diskpart for a big card",
               "use `diskpart`" not in page and "refuses it as well" in page)
-        code, page = get("/build")
-        check("and build links to it", 'href="/sdcard"' in page)
 
         # Site 1.2.1: /lights, /sdcard's twin for the drive light and the
         # strip, with the same shape: a drawing beside a pin table, and
@@ -3061,14 +2810,13 @@ def main():
         check("and never tells a reader they need a level shifter",
               "level shifter" not in flat_l.lower())
         check("it lights up Build one, like /sdcard",
-              S.NAV_SECTION.get("/lights") == "/build"
-              and '<a class="here" href="/build">' in lp)
+              '<a class="here" href="/docs">' in lp)
         for pg in ("/sdcard", "/lights"):
             _, sp = get(pg)
             body = sp.split("<article>")[1]
             check(f"{pg} opens by saying the Waveshare S3 needs none of it",
                   body.index("The Waveshare S3 needs none of this.") < body.index("<h2")
-                  and 'href="/hardware#waveshare-esp32-s3-lcd-1-47"' in body)
+                  and 'href="https://unleashedbbs.com/hardware#waveshare-esp32-s3-lcd-1-47"' in body)
         check("the SD card's wires are counted the same way everywhere",
               all("six wires" not in get(pg)[1] and "six jumper wires" not in get(pg)[1]
                   for pg in ("/sdcard", "/hardware", "/teachers", "/build"))
@@ -3080,319 +2828,12 @@ def main():
         check("and none moves CS off GPIO5 to get the board to start",
               "will not start with a card" not in get("/setup")[1]
               and "does not stop the board booting" in " ".join(get("/sdcard")[1].split()))
-        # NEW-5: the clone command keeps its words whole on a phone.
-        check("/build's commands scroll on a phone rather than break inside a word",
-              '<pre class="nowrap">git clone https://github.com/rwmech/unleashed_BBS' in page
-              and "article pre.nowrap { white-space:pre; overflow-wrap:normal; }" in page
-              and "include/secrets.h" not in page
-              and "-e ws_s3_lcd147" in page)
         # NEW-1: /how links the rules it was said to cover.
         check("/how links the house rules, as /setup says it does",
               'href="/rules"' in get("/how")[1]
               and "[the house\nrules](/rules)" in
-                  open(os.path.join("pages", "setup.md"), encoding="utf-8").read())
+                  open(os.path.join(DOCS_DIR, "pages", "setup.md"), encoding="utf-8").read())
 
-        # ------------------------------------------------------------------
-        # Site 1.2.4: the camera boards, /camera, /different and /roadmap.
-        print("Camera boards, the camera, what is different, the roadmap")
-        _, hwp4 = get("/hardware")
-        hw4 = hwp4.split("<article>")[1].split("</article>")[0]
-        soon_ok = True
-        # Site 1.2.9: the Freenove is in BOARDS, marked to wait for a
-        # release, and is coming soon here while no release carries it,
-        # which is the case with this suite's firmware/ (0.23.0).
-        fncam = S.BOARD_BY_DIR["esp32-fncam"]
-        # Site 1.3.5: the ESP32-CAM is in BOARDS too, and coming soon here
-        # while nothing on disk carries its set, as with this firmware/.
-        espcam = S.BOARD_BY_DIR["esp32-cam"]
-        for b in S.SOON_BOARDS + (fncam, espcam):
-            anchor = b["page"].split("#")[1]
-            sec = hw4.split(f'id="{anchor}"')[1].split("<h2")[0] if f'id="{anchor}"' in hw4 else ""
-            soon_ok = soon_ok and (S.board_html([b["dir"]]) in sec
-                                   and "coming soon to" in S.board_html([b["dir"]])
-                                   and "<b>Coming soon.</b>" in sec
-                                   and S.buy_html(b) + " on Amazon (affiliate link)"
-                                   in sec
-                                   and 'href="/camera"' in sec)
-        # Site 1.2.5, Rob: both camera boards gained a buy link, shown the
-        # way the tested boards show theirs, and stay coming soon.
-        # Site 1.3.4: the ESP32-CAM joins them, coming soon with its own.
-        check("/hardware lists the camera boards as coming soon, each with its buy link",
-              [b["dir"] for b in S.SOON_BOARDS] == ["esp32s3-cam"] and soon_ok
-              and "tested when it arrives" in " ".join(hw4.split())
-              and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw4
-              and "<b>ESP32-WROVER: yes, on one board.</b>" not in hw4)
-        _, inst4 = get("/install")
-        check("and neither is offered on the installer's picker",
-              all(b["name"] not in inst4 for b in S.SOON_BOARDS + (fncam,))
-              # Site 1.3.5: the ESP32-CAM may take previews, so with nothing
-              # on disk it is a "Coming soon" row with no buttons, the way
-              # the S3 was before its first preview.
-              and "<b>ESP32-CAM</b>" in inst4
-              and "esp32-cam/manifest" not in inst4
-              and 'id="on-the-esp32-cam"' not in inst4
-              and all(b["dir"] not in {x["dir"] for x in S.BOARDS} for b in S.SOON_BOARDS)
-              # Site 1.3.7: "ahead", which still waits for a release first.
-              and fncam.get("previews") == "ahead"
-              and fncam not in S.picker_boards()
-              and 'id="on-the-freenove-camera-board"' not in inst4)
-        code, cam = get("/camera")
-        flat_c = " ".join(cam.split())
-        check("/camera renders, with its drawing and the commands",
-              code == 200 and has_h(cam, 1, "Camera")
-              and S.ART["camera-snap"] in cam
-              and "<code>SNAPSHOT</code>" in cam and "<code>SNAP</code>" in cam
-              and "<code>Download it now? [Y]es [X]modem [N]o</code>" in cam)
-        # Site 1.2.9: the settings as the firmware built them (COMMANDS.md
-        # "camera" at 1.1.0-dev.15), not as the plan left them open.
-        check("and says the rules Rob set: area 12, the limits, the card, the defaults",
-              "file area 12" in flat_c and "file area 13" in flat_c
-              and "10 pictures an hour and 20 a day" in flat_c
-              and "without one the camera does not start" in flat_c
-              and "<td>12</td>" in cam and "<td>200</td>" in cam
-              and "anything under 10 seconds is 10" in flat_c
-              and "Not settled yet" not in cam and "not settled" not in flat_c.lower()
-              and "A lens cap is the only real guarantee." in flat_c
-              and "There is no countdown" in flat_c)
-        check("and carries the coming-soon note until a 1.1.0 release is on disk",
-              ("arrives with firmware 1.1 for the camera boards" in flat_c)
-              == (not any(r["sort"] >= (1, 1, 0) for r in S.firmware_releases())))
-        check("it lights Build one, and /build and /whofor link it",
-              S.NAV_SECTION.get("/camera") == "/build"
-              and '<a class="here" href="/build">' in cam
-              and 'href="/camera"' in get("/build")[1]
-              and 'href="/camera"' in get("/whofor")[1])
-        _, who4 = get("/whofor")
-        flat_w = " ".join(who4.split())
-        check("/whofor has the camera's uses, motion marked as later",
-              has_h(who4, 2, "A board with a camera")
-              and "Wildlife." in flat_w and "Outdoors." in flat_w
-              and "PIR motion sensor" in flat_w
-              and "That one comes later, with the plugin for sensors." in flat_w
-              and 'href="/different"' in who4)
-        code, dif = get("/different")
-        dbody = dif.split("<article>")[1].split('id="how-it-compares-with-the-apps')[0]
-        items = re.findall(r'<li><b><a href="([^"]+)">', dbody)
-        check("/different renders its list, each line linked to its proof",
-              code == 200 and has_h(dif, 1, "What a board can do")
-              and 10 <= len(items) <= 12 and len(set(items)) == len(items)
-              and all(h.startswith("/") for h in items))
-        # Site 1.2.9 (Rob: "get a matrix table going"): the comparison is a
-        # table, µnleashed's column first and lit, every rival's column
-        # linked to its own pages, and under it the one line that says what
-        # the big packages still do better.
-        cmp_t = dif.split('<table class="cmp">')[1].split("</table>")[0] \
-            if '<table class="cmp">' in dif else ""
-        check("and compares in a table, with sources, claiming no 'only'",
-              '<div class="cmpwrap" role="region" aria-label="How it compares" '
-              'tabindex="0">' in dif
-              and '<th scope="col" class="us"><a href="/hardware">\u00b5nleashed</a></th>'
-                  in cmp_t
-              and all(f'<a href="{h}">' in cmp_t for _n, h in S.COMPARE_COLS[1:])
-              and "https://github.com/snazzware/espbbs" in cmp_t
-              and cmp_t.count("<tr>") == len(S.COMPARE_ROWS) + 1
-              and all(len(c) == len(S.COMPARE_COLS) for _l, c in S.COMPARE_ROWS)
-              and cmp_t.count('<td class="us">') == len(S.COMPARE_ROWS)
-              and 'aria-label="Yes"' in cmp_t and 'aria-label="No"' in cmp_t
-              and 'aria-label="Not in its own documentation">?</span>' in cmp_t
-              and " the only BBS that" not in dif.lower()
-              and "can't" not in dbody and "cannot do" not in dbody)
-        check("and says under it what the big packages still do better",
-              '<p class="cmpnote">The big packages still do plenty this board does '
-              "not yet: FidoNet-style message networks, door games, ZMODEM" in dif
-              and '<a href="/roadmap">The roadmap</a>' in dif.split('class="cmpnote"')[-1])
-        check("and its camera row follows the firmware on disk",
-              ("coming, on the camera boards" in cmp_t)
-              == (not any(r["sort"] >= (1, 1, 0) for r in S.firmware_releases())))
-        check("and the table scrolls on a phone with the row names held still",
-              "table.cmp th[scope=row] { position:sticky; left:0;" in dif
-              and ".cmpwrap { overflow-x:auto;" in dif
-              and '<p class="cmphint" aria-hidden="true">The table scrolls sideways' in dif
-              and "p.cmphint { display:none;" in dif
-              # an upper-cased micro sign is a capital mu: MNLEASHED
-              and "table.cmp thead th.us { text-transform:none;" in dif)
-        # Site 1.3.0 (Rob): the second table, against the places people
-        # build a community today, fair to them: they win on reach, and the
-        # note under it says so. Every column's heading links to the page
-        # its cells were checked against, and µnleashed's column is lit.
-        today = dif.split('<table class="cmp today">')[1].split("</table>")[0] \
-            if '<table class="cmp today">' in dif else ""
-        check("/different compares with the apps people use now, fairly and with sources",
-              '<div class="cmpwrap" role="region" aria-label="How it compares with '
-              'the apps" tabindex="0">' in dif
-              and all(f'<a href="{h}">' in today for _n, h in S.COMPARE_TODAY_COLS)
-              and all(h.startswith(("https://", "/")) for _n, h in S.COMPARE_TODAY_COLS)
-              and all("e.g." in n for n, _h in S.COMPARE_TODAY_COLS[1:])
-              and today.count("<tr>") == len(S.COMPARE_TODAY_ROWS) + 1
-              and all(len(c) == len(S.COMPARE_TODAY_COLS) for _l, c in S.COMPARE_TODAY_ROWS)
-              and today.count('<td class="us">') == len(S.COMPARE_TODAY_ROWS)
-              and "They win on reach and ease" in dif
-              and "Easy for new people to find" in today
-              and "Encrypted on the way" in today
-              and dif.index('class="cmp today"') < dif.index('<table class="cmp">'))
-        # Site 1.3.6 (Rob: "this should be a table, one side, green header
-        # 'Privacy forward' the other 'Privacy policies'"): the list became
-        # a two column table, real th and scope, the left header in --live,
-        # one row a topic, and the fair sentence about forums and Mastodon
-        # under it rather than a column painting them as villains.
-        pvt = dif.split('<table class="pv"')[1].split("</table>")[0]             if '<table class="pv"' in dif else ""
-        check("and compares privacy as a table: Privacy forward against Privacy policies",
-              has_h(dif, 2, "Privacy forward, or a privacy policy")
-              and not has_h(dif, 2, "What is on those sites")
-              and '<th scope="col" role="columnheader" class="fwd">Privacy forward</th>' in pvt
-              and '<th scope="col" role="columnheader" class="pol">Privacy policies</th>' in pvt
-              and pvt.count('<th scope="row"') == len(S.PRIVACY_ROWS)
-              and all(f'<th scope="row" role="rowheader">{t}</th>' in pvt
-                      for t in ("Ads", "Tracking and analytics", "Who owns what you post",
-                                "Training AI on your posts", "Suspending your account",
-                                "Age or ID checks", "Where your words are kept"))
-              and pvt.count('<td role="cell" class="fwd">') == len(S.PRIVACY_ROWS)
-              and pvt.count('<span class="pvh" aria-hidden="true">Privacy forward</span>')
-                  == len(S.PRIVACY_ROWS)
-              and "table.pv thead th.fwd { color:var(--live); }" in dif
-              and "table.pv td.fwd .pvh { color:var(--live); }" in dif
-              and "@media (max-width: 600px) {\n  table.pv, table.pv tbody, table.pv tr, "
-                  "table.pv th, table.pv td { display:block;" in dif
-              and 'href="https://discord.com/privacy"' in pvt
-              and 'href="https://discord.com/terms"' in pvt
-              and 'href="https://www.facebook.com/terms.php"' in pvt
-              and 'href="https://about.fb.com/news/2025/04/making-ai-work-harder-for-europeans/"' in pvt
-              and "techcrunch.com/2026/09/22/discords-age-verification" in pvt
-              and "\u2014" not in pvt
-              and dif.index('<table class="pv"') < dif.index("Hosted forums and Mastodon servers")
-              and 'href="https://www.discourse.org/pricing"' in dif
-              and 'href="https://joinmastodon.org/servers">move to another' in " ".join(dif.split())
-              and "This website runs no analytics" in " ".join(dif.split())
-              and "the day's call counts only if the host asks to share them"
-                  in html.unescape(" ".join(dif.split()))
-              and 'href="/privacy">What that means in practice' in dif)
-        # Site 1.3.1: where encryption comes up, SSH is said to be coming on
-        # the S3 boards, and never as a thing already there.
-        flat_today = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", today)).split())
-        flat_dif = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", dif)).split())
-        # Site 1.3.3: with the version Rob set, 1.2.0.
-        check("the encryption row and the honest paragraph say SSH is coming on "
-              "the S3, in firmware 1.2.0",
-              "not yet: plain text, so say only what you would say in public. SSH, "
-              "encrypted, is coming on the S3 boards in firmware 1.2.0" in flat_today
-              and "An encrypted way in, SSH" in flat_dif
-              and "is coming on the ESP32-S3 boards in firmware 1.2.0, beside telnet "
-                  "rather than instead of it; it is on the roadmap and not released "
-                  "yet." in flat_dif
-              and "SSH is supported" not in flat_dif)
-        rmp = get("/roadmap")[1]
-        check("the roadmap keeps SSH under Later, on the S3 boards, in 1.2.0",
-              "<b>An encrypted way in, on the S3 boards, in firmware 1.2.0.</b>" in rmp
-              and rmp.index("An encrypted way in") > rmp.index('id="later"')
-              and "SSH on the S3, 1.2.0" in S.ROADMAP_LABEL
-              and 'href="/hardware#waveshare-esp32-s3-lcd-1-47"' in rmp)
-        check("the BBS table says it in plain words, no computer-you-supply",
-              "a computer you supply" not in dif
-              and "none built in: it runs on a PC you already have" in cmp_t
-              and "not built in" in cmp_t)
-        home = get("/")[1]
-        # Twice since site 1.3.10 (Rob): the quiet link under the hero's
-        # buttons, and the one in its history.
-        check("the front page links to it twice, under the buttons and from its "
-              "history",
-              home.count('href="/different"') == 2
-              and home.index('<p class="diff"><a href="/different">')
-              < home.index('id="before-social-media"')
-              < home.rindex('href="/different"'))
-        face, _w = S.PITCH_FONTS[S.PITCH_FONT]
-        fcode, fctype, fblob = fetch("/font/" + face)
-        lcode, _lt, lblob = fetch("/font/OFL-" + face.split("-")[0].split(".")[0] + ".txt")
-        notices = open("THIRD_PARTY_NOTICES.md", encoding="utf-8").read()
-        check("the pitch is set in its own face, served from here, with its licence",
-              '@font-face { font-family:"Pitch"; src:url("/font/' + face + '")' in home
-              and '.front h1.hero { font-family:"Pitch",' in home
-              and fcode == 200 and fctype.startswith("font/") and len(fblob) > 4000
-              and lcode == 200 and b"SIL OPEN FONT LICENSE Version 1.1" in lblob
-              and "googleapis" not in home and "gstatic" not in home
-              and all(n in notices for n in ("Oxanium", "Chakra Petch", "Orbitron",
-                                             "SIL Open Font License 1.1"))
-              and all(os.path.isfile(os.path.join("static", "fonts", f))
-                      for f, _ in S.PITCH_FONTS.values())
-              and fetch("/font/..%2Fserver.py")[0] == 404
-              and fetch("/font/server.py")[0] == 404)
-        code, rmp = get("/roadmap")
-        art_r = rmp.split("svg.art { display:block;")[1].split("</style>")[0]
-        still_r, moving_r = art_r.split("@media (prefers-reduced-motion: no-preference) {")
-        check("/roadmap renders, with its drawing across and down",
-              code == 200 and has_h(rmp, 1, "Roadmap") and S.ART["roadmap"] in rmp
-              and rmp.count('<svg class="art roadmap wide"') == 1
-              and rmp.count('<svg class="art roadmap tall"') == 1
-              and all(rmp.count(">" + html.escape(s) + "</text>") == 2
-                      for _k, _t, _s, st in S.ROADMAP for s in st))
-        check("and the words say every station again, in three stretches",
-              [k for k, *_ in S.ROADMAP] == ["done", "now", "later"]
-              and has_h(rmp, 2, "Done") and has_h(rmp, 2, "Later")
-              and "Motion-triggered snapshots." in rmp
-              and "Home Assistant" not in rmp and "MQTT" not in rmp
-              and "captive" not in rmp.lower() and "Lua" not in rmp)
-        rm_kf = re.findall(r"@keyframes (rm\w+) \{(.*?)\}\s*\}", art_r, re.S)
-        check("and it moves only where reduced motion allows, by transform and opacity",
-              "svg.art.roadmap .rlamp { animation:" in moving_r
-              and not re.search(r"svg\.art\.roadmap[^{]*\{[^}]*(animation|transition):",
-                                still_r)
-              and len(rm_kf) == 2
-              and all(set(re.findall(r"([a-z-]+):", b)) <= {"transform", "opacity"}
-                      for _, b in rm_kf))
-        check("the roadmap is in the footer and lights What this is, like /different",
-              '>Roadmap</a>' in rmp.split("<footer>")[1]
-              and S.NAV_SECTION.get("/roadmap") == "about:/"
-              and S.NAV_SECTION.get("/different") == "about:/"
-              and re.search(r'<a class="here" href="[^"]*">What this is</a>', rmp)
-              and re.search(r'<a class="here" href="[^"]*">What this is</a>', dif))
-        about4 = get("/", host="about.example")[1]
-        check("What this is links both, in context",
-              'href="/different"' in about4 and 'href="/roadmap"' in about4)
-
-        # Site 1.2.0: the tested boards page, a picture and the facts for
-        # each board from the same table the installer's picker draws, and
-        # the build page's table of chips says the S3 has run.
-        # Site 1.2.1: the chips live on /hardware, and /build points there.
-        check("build links the tested boards, and the chips are said there",
-              'href="/hardware"' in page
-              and "<b>ESP32-S3: yes, on two boards.</b>" in get("/hardware")[1])
-        code, page = get("/hardware")
-        body = page.split("<article>")[1].split("</article>")[0] if "<article>" in page else ""
-        check("the tested boards page draws each board, its build and where to buy it",
-              code == 200 and '<h2 id="esp32-dev-board-base">' in body
-              and '<h2 id="waveshare-esp32-s3-lcd-1-47">' in body
-              and body.count('<div class="hwb">')
-                  == len(S.BOARDS) + len(S.SHOWN_BOARDS) + len(S.SOON_BOARDS)
-              and all(b["buy"] in body for b in S.BOARDS)
-              and all(S.board_html([b["dir"]]) in body for b in S.BOARDS))
-        check("and it is part of Build one, with the drawings' stylesheet and no script",
-              '<a class="here" href="/build">' in page and "svg.art.board {" in page
-              and "<script" not in page)
-        check("and the S3's install steps are on /install, where it points",
-              'href="/install#on-the-waveshare-s3"' in body
-              and '<h2 id="on-the-waveshare-s3">' in get("/install")[1])
-
-        code, page = get("/terminals")
-        check("the terminal page renders its tables",
-              "<table>" in page and "SyncTERM" in page)
-        check("and the menu carries it on every page",
-              ">Apps for joining</a>" in page)
-        code, page = get("/dialing")
-        check("the dialing page leads with the fix, not the registry",
-              page.index("SyncTERM") < page.index("Registry"))
-        check("and warns before any registry editing",
-              'class="warn"' in page and "break unrelated associations" in page)
-        # Two of its sources are Microsoft URLs ending "(v=vs.85)" and
-        # "(v=ws.10)". The link pattern stopped at the first ")", so both
-        # hrefs lost their closing parenthesis and 404'd, and the ")" was
-        # printed after the link text. Nobody saw it because every word was
-        # there.
-        check("a link whose URL carries parentheses keeps them",
-              'aa767914(v=vs.85)"' in page and 'cc771275(v=ws.10)"' in page
-              and "</a>)" not in page)
-        code, _ = get("/nosuchpage")
-        check("an unknown page is not a page", code == 404)
-        code, body = get("/health")
-        check("the health endpoint still answers", code == 200 and "ok" in body)
 
         print("Busy hours")
         # The chart is built from the caller counts a board already
@@ -3526,88 +2967,7 @@ def main():
         # 10.0px at 390 and 16.4px at 1920, and the marker moves 545 to 799
         # across two and a half seconds and does not move at all under
         # reduced motion.
-        print("The manifesto's diagrams are drawn, not typed")
-        _, page = get("/", host="about.example")
-        check("both are inline SVG and no ASCII art is left on the page",
-              '<svg class="wire"' in page
-              and '<svg class="trace bad"' in page
-              and '<svg class="trace good"' in page
-              and "[ YOU ]" not in page and 'pre class="chart"' not in page)
-        # A viewBox with a negative origin is one number per drawing instead
-        # of shifting forty coordinates, and it is what holds the outermost
-        # label off the frame. Without it the title sat 6px from the border.
-        check("and each viewBox leaves a margin, so nothing sits on the frame",
-              'viewBox="-5 -6 354 138"' in page
-              and 'viewBox="-6 -8 356 382"' in page
-              and 'viewBox="-6 -8 356 216"' in page)
-        # 344 units of art inside a 353px phone column is 1:1. Anything wider
-        # reads on a monitor and not on a phone, which is what the ASCII
-        # versions were; the max-width then stops the same art being blown up
-        # to twice size on a 1920 monitor.
-        check("they are sized for the phone column and capped on a monitor",
-              "svg.wire { display:block; width:100%; max-width:28rem;" in page
-              and "svg.trace { display:block; width:100%; max-width:26rem;"
-                  in page)
-        # The comparison is two panels rather than one drawing, because a
-        # viewBox scales and does not lay out again: a single SVG could not
-        # stack on a phone. align-items:start is the argument itself, since
-        # the left panel is tall because four parties keep a record and the
-        # right one is short because one does.
-        check("the comparison is two panels that stack at the one breakpoint",
-              "grid-template-columns:repeat(2, minmax(0, 26rem))" in page
-              and "align-items:start" in page
-              and "@media (max-width: 900px) { .compare "
-                  "{ grid-template-columns:1fr; } }" in page)
-        # Still no JavaScript, and the animation survived the translation.
-        check("the connection still animates, and with no script to do it",
-              "@keyframes wiretrip" in page
-              and "animation:wiretrip 3.2s ease-in-out infinite alternate"
-                  in page
-              and "<script" not in page)
-        # The resting state is not the absence of the diagram: it is what a
-        # screenshot, a printout and a reader with motion sensitivity all
-        # get, so the marker parks half way along the wire rather than at
-        # either end, and the lamp and the caret are lit rather than hidden.
-        rm = page[page.index("@media (prefers-reduced-motion: reduce) {\n"
-                             "  svg.wire"):][:340]
-        check("and it rests half way along the wire when motion is refused",
-              "animation:none" in rm and "transform:translateX(82px)" in rm
-              and "opacity:1" in rm)
-        # Red for a party that keeps a copy of you, green for one that does
-        # not. Both come from the palette at the root: the red used to be a
-        # literal in the diagram's own stylesheet, which is how a colour
-        # carrying an argument drifts away from the site making it.
-        check("the red and the green both come from the root palette",
-              "--risk:#e06c6c;" in page
-              and "svg.trace.bad .keep, svg.trace.bad .pool-box "
-                  "{ stroke:var(--risk); }" in page
-              and "svg.trace.good .keep { stroke:var(--live); }" in page)
-        check("and no diagram colour is typed in as a literal",
-              "#e06c6c" not in page.split("--risk:#e06c6c;")[1]
-              and "#6ee36e" not in page)
-        # An SVG shape with no fill declared is black, and black on #0d0d12
-        # is a shape nobody can see. The lines say so explicitly rather than
-        # relying on nobody noticing they are closed paths.
-        check("every drawn shape declares a fill, including the lines",
-              "svg.trace .link { fill:none; stroke:var(--faint);" in page
-              and "svg.trace .bus { fill:none;" in page
-              and "svg.wire .line { fill:none;" in page
-              and "svg.wire .case { fill:none;" in page)
-        # role="img" makes the whole drawing one object, so the labels inside
-        # it are never announced and the label has to carry the argument. The
-        # point of the pair is a list of parties who keep a record against a
-        # list of one, so that is what it has to say.
-        for want in ('Four of them keep a record',
-                     'One record is kept, a text file you can open and read',
-                     'there is no third party on the line'):
-            check("the drawing says in words what it says in shapes"
-                  f"  <- {want[:34]}", want in page)
-        check("and each one is announced as a picture, not as decoration",
-              page.count('role="img"') >= 3
-              and page.count('aria-label="Calling a ') == 2)
-        # The day chart's viewBox is sized to the column it lives in. A 720
-        # unit box in a 412px cell scaled by 0.57, so an 11px label rendered
-        # at 6.3px and the expanded chart was 110px tall.
+        print("The day chart")
         _, page = get("/directory", host="boards.example")
         check("the day chart is drawn at the size of the column it sits in",
               'viewBox="0 0 380 300"' in page)
@@ -3795,170 +3155,11 @@ def main():
         # at a scratch tree: it needs no second server and no second port,
         # and nothing that looks like a firmware image ever goes near the
         # repository.
-        S_EWT_VERSION = S.EWT_VERSION
-        S_EWT_BASE = S.EWT_BASE
-        S_EWT_SCRIPT = S.EWT_SCRIPT
-        # Which state the deployment is in decides which checks apply. Before
-        # 1.0.0 the firmware repository is private, so the fetcher cannot
-        # reach it and a test release (0.23.0) is committed into firmware/
-        # by hand, for Rob to flash a fresh board from /install. With it
-        # there, "nothing published" is simply not the state any more, and
-        # checking for it reported the working page as four failures.
-        # os.path, not pathlib: this function imports pathlib further down,
-        # which makes the name local here and unbound at this point.
-        fw_repo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware")
-        published = os.path.isdir(fw_repo) and any(
-            os.path.isfile(os.path.join(fw_repo, d, "esp32", "firmware.bin"))
-            for d in os.listdir(fw_repo))
-        code, inst = get("/install")
-        if published:
-            print("The installer page, with a release published")
-            check("there is an install page", code == 200)
-            check("it offers the install button", "<esp-web-install-button" in inst)
-            check("and the only script is this site's own copy of ESP Web Tools",
-                  "<script" in inst and 'src="/install/esp-web-tools/' in inst
-                  and "unpkg" not in inst)
-        else:
-            print("The installer page, with nothing published")
-            check("there is an install page", code == 200)
-            check("it says plainly that no release is published yet",
-                  "No release published yet" in inst
-                  and "no firmware image on this site to install yet" in inst)
-            check("and sends a reader to the build page instead",
-                  '<div class="installer none">' in inst
-                  and 'the <a href="/build">build page</a>' in inst)
-            check("it offers no button and no element to press",
-                  "<esp-web-install-button" not in inst and 'slot="activate"' not in inst)
-            # The whole point of tying the script to the widget: with nothing
-            # published there is no widget, so there is no code on the page
-            # either. A flag would have had to be remembered.
-            check("and loads no script at all", "<script" not in inst)
-        check("no release path is served when there is no release",
-              get("/install/0.22.1/manifest.json")[0] == 404
-              and get("/install/0.22.1/esp32/firmware.bin")[0] == 404)
-        check("and the old /firmware/ paths are gone",
-              get("/firmware/0.22.1/manifest.json")[0] == 404)
-        # The page tells a reader what the installer shows, step by step,
-        # and the facts it leans on are the firmware's and the tool's own.
-        flat_i = " ".join(inst.split())
-        check("the page walks through the install in order",
-              has_h(inst, 2, "What happens, in order") and "<ol>" in inst
-              and "It waits up to 30 seconds." in flat_i
-              and "The board tries for up to 30 seconds." in flat_i)
-        check("and says how to change the Wi-Fi later",
-              has_h(inst, 2, "Changing the Wi-Fi later")
-              and "<b>Change Wi-Fi</b>" in inst)
-        check("and which browsers, checked, and that a phone is untried",
-              "Firefox can do it from version 151" in flat_i
-              and "Chrome on Android has had the same feature since version 148" in flat_i
-              and "untried" in flat_i)
-        check("and points on to calling the board and forwarding the port",
-              'href="/terminals"' in inst and 'href="/forward"' in inst)
-        # The one default password, said plainly, with the limits the
-        # firmware puts on it and the honest limit of those limits.
-        check("the install page gives the default sysop password plainly",
-              has_h(inst, 2, "The sysop password")
-              and "and it is <code>unleashed</code>" in flat_i)
-        check("and says it works only from your own network, and only until changed",
-              "It only works from your own network" in flat_i
-              and "only until you change it" in flat_i)
-        check("and that the board will not list itself while it is set",
-              "the board will not put itself on this directory" in flat_i)
-        # R6, site 1.2.1: the steps with their pictures are /setup's; the
-        # install page says what happens and links them.
-        check("and sends the reader to the first-call steps on /setup",
-              "the board asks for this password by itself, then for one of your own" in flat_i
-              and 'href="/setup#first-become-the-sysop"' in inst
-              and "<b>This board has not been set up yet</b>" not in flat_i)
-        check("and says local only is a guard, not a wall, and why",
-              "is a guard, not a wall" in flat_i
-              and "rewrite forwarded traffic" in flat_i
-              and "Do not <a href=\"/forward\">forward the port</a>" in flat_i)
-        src_i = open(os.path.join("pages", "install.md"), encoding="utf-8").read()
-        check("and the TODO it replaced is gone",
-              "TODO" not in src_i and "TODO" not in inst)
-        check("and the page points on to the setup guide",
-              'href="/setup"' in inst)
-        # A comment is dropped whole, so one left open would swallow the
-        # rest of its page without a word. Every page opens as many as it
-        # closes.
-        unbalanced = [n for n in sorted(os.listdir("pages")) if n.endswith(".md")
-                      and (open(os.path.join("pages", n), encoding="utf-8").read().count("<!--")
-                           != open(os.path.join("pages", n), encoding="utf-8").read().count("-->"))]
-        check("every page closes the comments it opens"
-              + ("" if not unbalanced else "  <- " + ", ".join(unbalanced)),
-              not unbalanced)
-
-        # The installer's code, served from here. It is served whether or
-        # not a release is published, because it is static; the page with
-        # no release never asks for it.
-        print("ESP Web Tools, from this machine")
-        code, ctype, body = fetch(S_EWT_SCRIPT)
-        check("the entry point is served here, as JavaScript",
-              code == 200 and ctype.startswith("text/javascript")
-              and b"esp-web-install-button" in body)
-        ewt_dir = os.path.join("vendor", "esp-web-tools", S_EWT_VERSION)
-        chunks = sorted(n for n in os.listdir(ewt_dir) if n.endswith(".js"))
-        imported = set()
-        for n in chunks:
-            text = open(os.path.join(ewt_dir, n), encoding="utf-8").read()
-            imported.update(re.findall(r'import\("\./([^"]+)"\)', text))
-            imported.update(re.findall(r'from"\./([^"]+)"', text))
-            imported.update(re.findall(r'from "\./([^"]+)"', text))
-        # Every chunk the bundle can ask for is in the directory and comes
-        # back from the server. A missing one fails in the middle of an
-        # install, for one chip family, on somebody else's board.
-        missing = [n for n in sorted(imported)
-                   if n not in chunks or fetch(S_EWT_BASE + n)[0] != 200]
-        check("every chunk it imports is here and is served"
-              + ("" if not missing else "  <- " + ", ".join(missing)),
-              bool(imported) and not missing)
-        # Anything absolute inside it is a link for a person to click, never
-        # an import: no module is fetched from anywhere but here.
-        remote = [n for n in chunks
-                  if re.search(r'(import\(|from ?)"(https?:)?//',
-                               open(os.path.join(ewt_dir, n), encoding="utf-8").read())]
-        check("and nothing in it imports from another origin",
-              not remote)
-        sums = {}
-        for line in open(os.path.join(ewt_dir, "SHA256SUMS"), encoding="utf-8"):
-            if line.strip():
-                digest, name = line.split(None, 1)
-                sums[name.strip().lstrip("*")] = digest
-        on_disk = sorted(n for n in os.listdir(ewt_dir) if n != "SHA256SUMS")
-        import hashlib
-        changed = [n for n in on_disk
-                   if sums.get(n) != hashlib.sha256(
-                       open(os.path.join(ewt_dir, n), "rb").read()).hexdigest()]
-        # Byte for byte as npm published it: a file edited in place, or one
-        # added without a line here, is not the thing the README says it is.
-        check("and it is byte for byte what SHA256SUMS says, with nothing extra"
-              + ("" if not changed else "  <- " + ", ".join(changed[:3])),
-              bool(on_disk) and not changed and set(sums) == set(on_disk))
-        code, ctype, body = fetch(S_EWT_BASE + "LICENSE")
-        check("its licence is served beside it",
-              code == 200 and b"Apache License" in body
-              and fetch(S_EWT_BASE + "THIRD_PARTY_LICENSES.txt")[0] == 200)
-        # Names, not paths: only a chunk-shaped name or a licence file.
-        check("and nothing else in or above that directory is reachable",
-              fetch(S_EWT_BASE + "SHA256SUMS")[0] == 404
-              and fetch(S_EWT_BASE + "nope.js")[0] == 404
-              and fetch("/install/esp-web-tools/1.0.0/install-button.js")[0] == 404
-              and fetch(S_EWT_BASE + "..%2F..%2F..%2Fserver.py")[0] == 404)
-        check("the page is reachable from the build page and the footer",
-              "/install" in get("/build")[1] and '/install">Install</a>' in inst)
-        # A page off the menu still has to say where it is. Without this the
-        # nav marks nothing, or worse marks Boards.
-        check("and the menu marks Build one as the section it belongs to",
-              '<a class="here" href="/build">Build one</a>' in inst)
-
-        # ------------------------------------------------------------------
-        # The setup guide: every CONFIG page, with the board's own screens.
         print("The setup guide")
         code, setup = get("/setup")
         flat_s = " ".join(setup.split())
         check("there is a setup page, under Build one",
-              code == 200 and '<a class="here" href="/build">Build one</a>' in setup)
+              code == 200 and '<a class="here" href="/docs">Guides</a>' in setup)
         check("with every core CONFIG page",
               all(has_h(setup, 2, p)
                   for p in ("board", "limits", "accounts", "backup", "staff", "wifi")))
@@ -3968,7 +3169,7 @@ def main():
               and has_h(setup, 3, "serial and example"))
         check("it starts with becoming the sysop, and points at the password step",
               has_h(setup, 2, "First, become the sysop")
-              and "<code>unleashed</code>" in setup and 'href="/install"' in setup)
+              and "<code>unleashed</code>" in setup and 'href="https://unleashedbbs.com/install"' in setup)
         # The screens are the board's own, drawn as the site's art: a grid of
         # text pinned to its columns, not a picture.
         shots = re.findall(r'<svg class="art shot"[^>]*role="img"[^>]*aria-label="[^"]+"', setup)
@@ -3980,7 +3181,8 @@ def main():
         # row in the page's tables.
         drawn = []
         for shot in ("config-board", "config-area"):
-            doc = json.load(open(os.path.join("shots", shot + ".json"), encoding="utf-8"))
+            doc = json.load(open(os.path.join(DOCS_DIR, "shots", shot + ".json"),
+                                 encoding="utf-8"))
             for row, attr in zip(doc["rows"], doc["attrs"]):
                 if row.startswith(" ") and len(row) > 10 and attr[1] in "bc" and row[1:10].strip():
                     drawn.append(row[1:10].strip())
@@ -3989,88 +3191,21 @@ def main():
               + ("" if not missing_l else "  <- " + ", ".join(missing_l)),
               len(drawn) >= 12 and not missing_l)
         check("each capture says where it came from",
-              all(json.load(open(os.path.join("shots", n), encoding="utf-8"))
+              all(json.load(open(os.path.join(DOCS_DIR, "shots", n), encoding="utf-8"))
                   .get("source", "").startswith("unleashed BBS ")
-                  for n in os.listdir("shots") if n.endswith(".json")))
-        check("the guide is linked from the build and install pages",
-              'href="/setup"' in get("/build")[1] and 'href="/setup"' in get("/install")[1])
+                  for n in os.listdir(os.path.join(DOCS_DIR, "shots")) if n.endswith(".json")))
         check("and says the listing waits for the password to change",
               "the board will not list itself while the default password is still set"
               in flat_s)
-
-        # ------------------------------------------------------------------
-        # Supporting the project: a plain link out, and nothing loaded from
-        # the payment company.
-        print("The support page")
-        code, don = get("/donate")
-        flat_d = " ".join(don.split())
-        check("there is a support page",
-              code == 200 and has_h(don, 1, "Support the project"))
-        check("described by its first sentence, not by the drawing above it",
-              '<meta name="description" content="µnleashed BBS is free software, and it '
-              'stays free.' in don)
-        check("with the cover at the top, as an image with words for a screen reader",
-              re.search(r'<img class="cover" src="/cover\.svg" width="1600" height="310" '
-                        r'alt="[^"]{40,}">', don) is not None
-              and don.split("<article>")[1].index('class="cover"')
-                  < don.split("<article>")[1].index("is free software, and it stays free"))
-        # A plain link, and the page says so: nothing from another origin.
-        srcs_d = re.findall(r'\bsrc="([^"]+)"', don)
-        check("Buy Me a Coffee is a plain link, and nothing on the page is loaded from it",
-              '<a href="https://buymeacoffee.com/unleashed_bbs">' in don
-              and "<script" not in don and "<iframe" not in don
-              and all(u.startswith("/") and not u.startswith("//") for u in srcs_d)
-              and "Nothing on this site loads anything from Buy Me a Coffee" in flat_d)
-        src_d = open(os.path.join("pages", "donate.md"), encoding="utf-8").read()
-        check("its editor note stays in the source and does not reach the page",
-              src_d.count("<!--") == 1 and "<!--" not in don.split("<article>")[1]
-              and "Re-check when this page is edited" not in don)
-        # Rob's line: supporters get posts and news, never features or
-        # priority, and the page must not say they get nothing.
-        check("it says what support buys and what it never buys",
-              "Supporters get posts and development news on Buy Me a Coffee" in flat_d
-              and "What support never buys is features or priority." in flat_d
-              and "Giving buys no features" not in flat_d)
-        # Rob, 2026-09-23: only lifetime members are named, on the ABOUT
-        # screen and on this page. No list of every supporter, no release
-        # notes mention, no page on Unleashed HQ: nobody has time to keep
-        # those up, and a promise nobody keeps is worse than none.
-        check("and how supporters are thanked: lifetime members named, nobody else listed",
-              has_h(don, 2, "Thank you") and "Lifetime members" in flat_d
-              and "ABOUT" in flat_d and "Unleashed HQ" not in flat_d
-              and "release notes" not in flat_d)
-        # The list starts empty, and an empty list says nothing at all.
-        check("an empty thanks list shows no list and no heading",
-              "The thanks list" not in don and 'class="thanks"' not in don)
-        import pathlib
-        was_sup = S.SUPPORTERS_FILE
-        tmp_sup = os.path.join(tempfile.mkdtemp(prefix="dirsup"), "supporters.txt")
-        with open(tmp_sup, "w", encoding="utf-8") as fh:
-            fh.write("# a comment\n\nAda <Lovelace>\n  Grace Hopper  \n")
-        try:
-            S.SUPPORTERS_FILE = pathlib.Path(tmp_sup)
-            shown_t = S.thanks_html()
-        finally:
-            S.SUPPORTERS_FILE = was_sup
-        check("and a name, once there, is listed and escaped, comments left out",
-              shown_t == '<h3>The thanks list</h3><ul class="thanks">'
-                         '<li>Ada &lt;Lovelace&gt;</li><li>Grace Hopper</li></ul>')
-        code, ctype, cov = fetch("/cover.svg")
-        cov = cov.decode("utf-8", "replace")
-        # Laid out for Buy Me a Coffee's crop, with an empty lower half on
-        # purpose; the site shows the band, with the frame closed round it.
-        check("the cover is served cut to its content, frame redrawn",
-              code == 200 and ctype == "image/svg+xml"
-              and 'height="310" viewBox="0 0 1600 310"' in cov
-              and '<path d="M18,8 H1592 V292 L1582,302 H8 V18 Z"' in cov)
-        check("and every face's footer offers it as Donate, in its own colour",
-              all(f'<a class="donate" href="{want}donate">Donate</a>' in page
-                  for page, want in ((get("/")[1], "/"),
-                                     (get("/", host="about.example")[1], "https://boards.example/"),
-                                     (get("/", host="data.example")[1], "https://boards.example/"))))
-
-        # The wordmark is the way home, on every page of every face.
-        # The first-boot setup, as 0.23.0 does it, in the board's own words.
+        body_s = setup.split("</nav>")[1]
+        check("/setup: Visit the web installer, and Build from source beside it",
+              body_s.count('class="btn"') == 1 and body_s.count('class="btn2"') == 1
+              and '<div class="cta"><p class="acts"><a class="btn" '
+                  'href="https://unleashedbbs.com/install">Visit the web installer</a>' in body_s
+              and '<a class="btn2" href="https://unleashedbbs.com/build'
+                  '#for-developers-build-from-source">Build from source</a>' in body_s)
+        check("/setup: and no button there says Install",
+              not re.search(r'class="btn2?"[^>]*>[^<]*Install', body_s))
         check("the setup guide shows the first-boot setup as the board draws it",
               all(f'aria-label="{S.SHOTS[k][1][:30]}' in setup for k in (
                   "shot-setup-offer", "shot-setup-screen", "shot-config-staff",
@@ -4078,62 +3213,7 @@ def main():
               and "This board has not been set up yet." in setup
               and "YOU ARE THE SYSOP" in setup)
 
-        # ------------------------------------------------------------------
-        # /install, drawn: what is about to happen, step by step.
-        print("The install page, drawn")
-        inst2 = get("/install")[1]
-        art_i = re.findall(r'<svg class="art steps" viewBox="[^"]+" aria-hidden="true"', inst2)
-        check("four drawings of what is about to happen, all decoration",
-              len(art_i) == 4
-              and all(S.ART[k] in inst2 for k in ("install-cable", "install-write",
-                                                   "install-boot", "install-wifi")))
-        # The steps are split by the drawings and still count on.
-        check("and the numbered steps carry on across them",
-              '<ol start="5">' in inst2 and '<ol start="6">' in inst2
-              and '<ol start="7">' in inst2)
-        flat_i2 = " ".join(inst2.split())
-        check("the reset section: Change Wi-Fi now, a reflash with erase last",
-              has_h(inst2, 2, "If something goes wrong, reset rather than reflash")
-              and "works while the board is failing to join one" in flat_i2
-              and "nothing on the board is erased" in flat_i2
-              and "press Install on a new board and tick Erase everything first"
-                  in flat_i2)
-        # The BOOT button and the Wi-Fi fallback are firmware 1.1.0's (site
-        # 1.1.0). They moved there from 0.24.0, then from 1.0.1, which is the
-        # badge fields only, then from 1.0.2, which became the restore
-        # security fix and has neither. The repository carries 0.23.0 at
-        # most, so here they must not show; the second server below proves
-        # they stay hidden at 1.0.0, 1.0.1 and 1.0.2 and show at 1.1.0.
-        src_gate = open(os.path.join("pages", "install.md"), encoding="utf-8").read()
-        check("the reset section is gated on 1.1.0, not on 1.0.2, 1.0.1 or 0.24.0",
-              "::: from 1.1.0" in src_gate and "::: from 1.0.2" not in src_gate
-              and "::: from 1.0.1" not in src_gate and "0.24" not in src_gate)
-        check("and nothing of 1.1.0's shows while the newest release is older",
-              "The BOOT button" not in inst2 and S.ART["boot-button"] not in inst2
-              and "takes the board off this directory" not in inst2
-              and "::: from" not in inst2)
-        # "::: until X.Y.Z" (site 1.1.0) is the other half of the gate: what
-        # stops being true when that release lands.
-        fwd2, set2 = get("/forward")[1], get("/setup")[1]
-        flat_f2, flat_s2 = " ".join(fwd2.split()), " ".join(set2.split())
-        check("before 1.1.0, /forward says every board listens on 6400 and the "
-              "announce page's Port carries the outside number",
-              has_h(fwd2, 2, "The same port outside and in")
-              and has_h(fwd2, 2, "One board per port")
-              and "Every board listens on 6400" in flat_f2
-              and "the <b>Port</b> setting on the announce page" in flat_f2
-              and "From firmware 1.1.0" not in flat_f2
-              and "::: until" not in fwd2 and "::: from" not in fwd2)
-        check("and /setup has the wifi page and the announce page's Port, not "
-              "Outside",
-              has_h(set2, 2, "wifi") and not has_h(set2, 2, "network")
-              and "<b>Outside</b>" not in set2
-              and "if you forwarded a different one to the" in flat_s2
-              and "::: until" not in set2 and "::: from" not in set2)
-        check("the setup steps name what the board says, on /setup",
-              "This board has not been set up yet." in set2
-              and "YOU ARE THE SYSOP" in set2
-              and "The board will not take <code>unleashed</code> here." in set2)
+
 
         # ------------------------------------------------------------------
         # Headings carry ids, so a page can be linked part way down: the
@@ -4146,514 +3226,19 @@ def main():
               and '<h1 id="top">Top!</h1>' in ids)
         check("and unique on the page, a second of the same name numbered",
               '<h2 id="wi-fi-2">Wi-Fi</h2>' in ids)
-        page_ids = re.findall(r'<h[1-3] id="([^"]+)"', inst2)
+        page_ids = re.findall(r'<h[1-3] id="([^"]+)"', get("/docs/setup")[1])
         check("including across the pieces a page is rendered in"
               + ("" if len(page_ids) == len(set(page_ids)) else "  <- duplicate ids"),
-              len(page_ids) > 10 and len(page_ids) == len(set(page_ids))
-              and "before-you-start" in page_ids and "other-browsers" in page_ids)
+              (not HAVE_DOCS) or (len(page_ids) > 10 and len(page_ids) == len(set(page_ids))
+                                  and "first-become-the-sysop" in page_ids
+                                  and "board" in page_ids))
 
-        # ------------------------------------------------------------------
-        # /install's top: the title, the card and the steps, in that order,
-        # which is what a phone and a screen reader get; the stylesheet puts
-        # the card beside them from 901px up.
-        print("The install card")
-        top = (inst2.split('<div class="install-top">')[1].split('id="before-you-start"')[0]
-               if '<div class="install-top">' in inst2 else "")
-        check("the title, the card, then the steps, inside one block",
-              top.find('<div class="intro"><h1 ') == 0
-              and 0 < top.find('<div class="installer') < top.find('<div class="steps">')
-              and top.find('<div class="steps">') < top.find('id="what-happens-in-order"'))
-        if published:
-            check("the card's amber box is the page's own words, and links down the page",
-                  '<div class="pre"><p><b>Before you start:</b> Chrome or Edge' in top
-                  and '<a href="#before-you-start">more below</a>' in top)
-            # Site 1.2.0: the board picker, every board with its picture,
-            # name and "how to tell" line, and one version line for each
-            # release a board is offered; a board with nothing on disk says
-            # "Coming soon" and has no buttons.
-            offered = sum(len(S.board_offers(b["dir"])) for b in S.picker_boards())
-            check("and it carries the board picker, a picture a board, and a version "
-                  "line for each release offered",
-                  '<fieldset class="boards"><legend>Your board <a href="/hardware">'
-                  "which is mine?</a></legend>" in top
-                  and all(b["art"] in top and html.escape(b["name"]) in top
-                          and html.escape(b.get("pick") or b["tell"]) in top
-                          for b in S.picker_boards())
-                  and top.count('<input type="radio" name="fwboard"')
-                      == len(S.picker_boards())
-                  and top.count('class="meta ver ') == offered
-                  and top.count("Coming soon") == sum(
-                      1 for b in S.picker_boards() if not S.board_offers(b["dir"]))
-                  and '<svg class="art mini"' not in top)
-            # Site 1.3.15 (Rob: "a more guided process which starts with pick
-            # your board, then flash your board"): four numbered steps at the
-            # top of the left column, before the card in the markup, so a
-            # phone reads them first. The card itself is as it was.
-            intro_g = top.split('<div class="installer')[0]
-            guide_g = (intro_g.split('<ol class="guide">')[1].split("</ol>")[0]
-                       if '<ol class="guide">' in intro_g else "")
-            check("a guided path of four steps opens the left column, before the card",
-                  re.findall(r'<p class="t">([^<]+)</p>', guide_g)
-                  == ["Pick your board", "Flash it", "Join your Wi-Fi",
-                      "Log in and set it up"]
-                  and [int(n) for n in re.findall(
-                      r'<li><span class="n" aria-hidden="true">(\d)</span>', guide_g)]
-                  == [1, 2, 3, 4]
-                  and intro_g.index("</h1>") < intro_g.index('<ol class="guide">')
-                  and "<b>Install on a new board</b>" in guide_g)
-            check("step 1 points at the card, on the right or below, with our picks "
-                  "and a line saying any board there works",
-                  '<p class="d">Choose it <span class="side">in the panel on the '
-                  'right</span><span class="under">in the panel below</span>.</p>'
-                  in guide_g
-                  and '<li><span class="ul">Cheapest</span><label for="fwb0">ESP32 dev '
-                      'board</label>' in guide_g
-                  and '<p class="else">Something else? Every board in the panel works; '
-                      '<a href="/hardware">compare them all</a>.</p>' in guide_g
-                  and "{panel}" not in inst2
-                  # the desktop's words after the phone's, so they win
-                  and S.PAGE.find("article ol.guide .side {{ display:none; }}")
-                      < S.PAGE.find("  article ol.guide .side {{ display:inline; }}\n"
-                                    "  article ol.guide .under {{ display:none; }}"))
-            links_g = re.findall(r'<a href="(#[a-z0-9-]+)">', guide_g)
-            check("steps 2 to 4 link to their part of the page, and each target exists",
-                  links_g == ["#what-happens-in-order", "#step-wifi", "#after-it-boots"]
-                  and all(inst2.count(f'id="{h[1:]}"') == 1 for h in links_g)
-                  and S.ART["install-boot"] + '<span class="anchor" id="step-wifi">'
-                      '</span><ol start="6"><li><b>Wi-Fi.</b> The page asks the board'
-                      in inst2
-                  and S.art_html(["install-boot", "#step-wifi"])
-                      == S.ART["install-boot"] + '<span class="anchor" id="step-wifi"></span>'
-                  and S.art_html(["#Bad Id"]).startswith("<p>art: #Bad Id"))
-            check("the card is as it was: its picker, the dev board picked to start",
-                  '<fieldset class="boards"><legend>Your board <a href="/hardware">'
-                  "which is mine?</a></legend>" in top.split('<div class="installer')[1]
-                  and re.search(r'name="fwboard" id="fwb0" checked>', top) is not None
-                  and "grid-template-columns:minmax(0, 1fr) 26rem" in S.PAGE
-                  and "article .installer .bopt:has(input:checked) {{ border-color:"
-                      "var(--dial);" in S.PAGE)
-            check("the installer's own licence is under Doing it the other way",
-                  S.EWT_BASE + "LICENSE" in inst2.split('id="doing-it-the-other-way"')[1]
-                  and S.EWT_BASE + "LICENSE" not in top)
-        css_i = inst2.split("<style>")[1]
-        check("two columns from 901px, the card sticky and level with the title",
-              "grid-template-columns:minmax(0, 1fr) 26rem" in css_i
-              and "grid-row:1 / span 2" in css_i and "position:sticky" in css_i)
-        # Site 1.0.0: both buttons on the first screen at 1366 x 768 with a
-        # second release offered. Measured with headless Chrome when it was
-        # built (the Update button's bottom went from 831px to about 740px);
-        # here, the rules that bought the room are pinned. Site 1.2.0 put the
-        # board picker where the drawing and the amber box were, and the
-        # amber box under the buttons: 665px for the ESP32 and 719px for the
-        # S3 under its download-mode note, measured the same way.
-        check("the card tightened so both buttons fit the first screen at 1366 x 768",
-              "svg.art.mini" not in css_i
-              and "article .installer { display:flex; flex-direction:column; gap:0.5rem; }"
-                  in css_i
-              and "article .installer .bsec { display:flex; flex-direction:column; "
-                  "gap:0.5rem; }" in css_i
-              # Site 1.3.17: a fifth row, so the picture is a little smaller.
-              and "article .installer .bopt svg.art.board { width:3.8rem; "
-                  "height:2.375rem; }" in css_i
-              and "padding:0 0.625rem 0 0.5rem; border:1px solid #2c3a44;" in css_i
-              and "line-height:1.05; flex:1 1 12rem; }" in css_i
-              and "position:sticky; top:1rem; padding:1rem 1.25rem; }" in css_i
-              and "article .installer button.go { padding-top:0.5625rem; "
-                  "padding-bottom:0.5625rem; }" in css_i)
-        check("each button carries its line-art symbol, at the badges' stroke weight",
-              "article .installer button.go svg.bi { flex:none; width:1.25rem; "
-              "height:1.25rem; fill:none;\n        stroke:currentColor; stroke-width:1.8;"
-              in css_i
-              and (not published
-                   or (S.BTN_ICON_NEW + "Install on a new board</button>" in inst2
-                       and S.BTN_ICON_UPDATE + "Update my board</button>" in inst2)))
-        # The picker, then the buttons, then the amber box, in the markup,
-        # which is the order a phone gets and, since site 1.2.0, a desktop
-        # too: nothing is reordered by the stylesheet any more.
-        check("and on a phone the picker and the button come before the amber box",
-              "{ order:" not in css_i.split("The install card, laid out")[1].split(
-                  "A page's one primary action")[0]
-              and (not published
-                   or 0 < top.find('<fieldset class="boards">')
-                   < top.find("<esp-web-install-button") < top.find('<div class="pre">')))
-        # The board's Improv answer is telnet://, which a browser cannot open.
-        check("the last step says Telnet details, not Visit Device",
-              "<b>Telnet details</b>" in inst2 and "Visit Device" not in inst2)
 
-        # ------------------------------------------------------------------
-        # One primary action on each entry page, drawn like the installer's
-        # button, with the other way round beside it as an outlined one. A
-        # button that goes somewhere says where it goes: only the button on
-        # /install says Install, because only that one installs.
-        print("Calls to action")
-        for path, alt in (("/build", "#for-developers-build-from-source"),
-                          ("/setup", "/build#for-developers-build-from-source")):
-            pg = get(path)[1]
-            body = pg.split("</nav>")[1]
-            check(f"{path}: Visit the web installer, and Build from source beside it",
-                  body.count('class="btn"') == 1 and body.count('class="btn2"') == 1
-                  and '<div class="cta"><p class="acts"><a class="btn" href="/install">'
-                      "Visit the web installer</a>" in body
-                  and f'<a class="btn2" href="{alt}">Build from source</a>' in body)
-            check(f"{path}: and no button there says Install",
-                  not re.search(r'class="btn2?"[^>]*>[^<]*Install', body))
-        check("the from-source button lands on a heading that exists",
-              'id="for-developers-build-from-source"' in get("/build")[1])
-        css_c = get("/build")[1].split("<style>")[1]
-        check("on a phone the two stack, the filled one first, full width",
-              ".cta .acts { flex-direction:column; align-items:stretch; }" in css_c
-              and ".cta a.btn, .cta a.btn2 { display:block; }" in css_c)
-        bld = get("/build")[1].split("</nav>")[1]
-        check("on /build it comes before anything else on the page",
-              bld.index('class="btn"') < bld.index('id="what-you-need"')
-              and 'class="tip"' not in bld)
-        setp = get("/setup")[1].split("</nav>")[1]
-        check("and on /setup before the drawing",
-              setp.index('class="btn"') < setp.index('class="art steps"'))
-        # The board list is the other way round (0.20.1, Rob: "This seems a
-        # bit big for a button there in the middle"): no full size button
-        # anywhere in its flow. It is /directory since site 1.3.0.
-        dirp = get("/directory")[1]
-        dbody_ = dirp.split("</nav>")[1].split("<footer")[0]
-        check("the board list has no full size button in its flow",
-              'class="btn"' not in dbody_ and 'class="btn2"' not in dbody_
-              and 'class="cta"' not in dbody_)
-        # Site 1.3.0 (Rob, marketing round 3): the front page is the pitch.
-        # What it is in today's words first, then the hook, then the proof;
-        # the words BBS and sysop arrive with their glossary notes.
-        home = get("/")[1]
-        hbody = home.split("</nav>")[1].split("<footer")[0]
-        hflat = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", hbody)).split())
-        check("the front page opens with the kicker and the headline",
-              '<p class="kicker">Social, before social media'
-              '<span class="k2"><span class="kd" aria-hidden="true"> &middot; </span>'
-              '<a href="/different#privacy-forward-or-a-privacy-policy">Privacy forward</a></span></p>'
-              '<h1 class="hero">Your own online community, on a device that '
-              "<em>fits in your hand</em>.</h1>" in hbody
-              and hbody.find('<section class="hero">') < hbody.find('<p class="kicker">'))
-        # Site 1.3.1 (Rob): "Privacy forward" with the kicker, linked to the
-        # place on /different that backs it, one line on a desktop and two
-        # on a phone, the dot going.
-        difp = get("/different")[1]
-        check("and Privacy forward links to where /different backs it",
-              'id="privacy-forward-or-a-privacy-policy"' in difp
-              and "has no ads, no trackers and no outside scripts" in difp
-              and ".front p.kicker .k2 { display:block;" in home
-              and ".front p.kicker .kd { display:none; }" in home
-              and "Social, before social media · Privacy forward" in hflat)
-        check("and the sub-head says where it runs and what people join from",
-              "It runs at home or at work" in hflat
-              and "People join from a PC, an Android phone or an iPhone with a free app, "
-                  "and from old computers and terminals too." in hflat)
-        check("two ways on, twice: Build yours and Try one first, neither saying Install",
-              hbody.count('<a class="b1" href="/install">Build yours</a>') == 2
-              and hbody.count('<a class="b2" href="/directory">Try one first</a>') == 2
-              and not re.search(r'class="b[12]"[^>]*>[^<]*Install', hbody))
-        check("a line of facts, and a drawing of the board that says it is one",
-              "About $5 · About five minutes · No subscription · Free software" in hflat
-              and 'role="img" aria-label="Drawing of the ESP32 board' in hbody
-              and "(Photo to come.)" in hbody)
-        order = [hbody.find(f'id="{k}"') for k in (
-            "what-it-is", "who-builds-one", "three-steps", "before-social-media", "see-one")]
-        check("the sections in the approved order",
-              all(i > 0 for i in order) and order == sorted(order))
-        who_ = hbody[order[1]:order[2]]
-        check("six examples, each a situation headed For example, with no names or quotes",
-              who_.count('<p class="eg">For example</p>') == 6
-              and "&ldquo;" not in who_ and "\u201c" not in who_
-              and "&quot;" not in who_)
-        check("the history is the sourced one: CBBS in 1978, about 60,000 at the peak",
-              "<dt>1978</dt>" in hbody and "<dt>1990s</dt>" in hbody
-              and "About 60,000 of them in the United States alone." in hbody
-              and "CBBS, Chicago, 16 February 1978" in hbody)
-        check("BBS and sysop come with their glossary notes, nothing else is a script",
-              hbody.count('class="gl"') >= 4 and "<script" not in home
-              and 'aria-describedby="gl' in hbody)
-        check("and developers get one quiet line, to a heading that exists",
-              '<a href="/build#for-developers-build-from-source">build from source</a>'
-              in hbody)
-        css_h = home.split("<style>")[1]
-        check("the front page's rules reach it, one column on a phone",
-              '.front section.hero { border-top:0; padding-top:1rem; display:grid;' in css_h
-              and ".front .fcards, .front ol.fsteps { grid-template-columns:1fr;" in css_h
-              and ".front section.hero, .front section.then { display:block; }" in css_h)
-        check("and the old front page's pieces are gone",
-              not hasattr(S, "RUN_CARD") and 'class="runcard"' not in home
-              and "listtop" not in css_h and "dirrule" not in css_h)
 
-        # ------------------------------------------------------------------
-        # Upgrading a board that already runs the BBS (0.20.2, Rob: "make
-        # sure the website calls out on the flasher page how to upgrade").
-        print("Upgrading")
-        code, upg = get("/upgrade")
-        check("/upgrade is served, under its own heading",
-              code == 200 and has_h(upg, 1, "Upgrade a board"))
-        check("it lights Build one in the menu, the installer's section",
-              '<a class="here" href="/build">Build one</a>' in upg)
-        uflat = " ".join(html.unescape(re.sub(r"<[^>]+>", " ", upg)).split())
-        check("back up first, through the backup window, said to hold what it holds",
-              '<a href="/setup#backup">the backup window</a>' in upg
-              and 'id="backup"' in get("/setup")[1]
-              and "It does not hold the mail or the information pages." in uflat)
-        # 0.22.1: Rob's own board, on 0.22.1 firmware, was not recognised
-        # and was offered Install, then an erase question that read as
-        # "you are about to lose everything". The page says to press Update
-        # my board, no longer promises the board is always recognised, and
-        # shows the erase screen's new words for a reader who pressed the
-        # other button.
-        check("the update is Update my board, which never asks or erases",
-              "press Update my board and pick the port" in uflat
-              and "Press Update \u00b5nleashed BBS, then Install." in uflat
-              and "It does not ask about erasing and it does not erase." in uflat)
-        check("and it no longer promises that a 0.22.1 board is always recognised",
-              "usually tells the installer its name and version" in uflat
-              and "It may not, if the board is still starting up" in uflat
-              and "the page recognises the board. A board running 0.22.1" not in uflat)
-        check("and shows the erase screen's own words, box unticked, for Install",
-              has_h(upg, 3, "If you pressed Install on a new board instead")
-              and "Install or update \u00b5nleashed BBS" in uflat
-              and "Start fresh? Updating a board you already run? Leave this "
-                  "unticked: your accounts, settings, mail and forums are kept." in uflat
-              and "[ ] Erase everything first" in uflat
-              and "Erase device" not in uflat)
-        check("what is kept, and the screens that go back to stock",
-              "Kept: the accounts, the settings (Wi-Fi included), the mail" in uflat
-              and "Back to stock: the screens in the board's own flash." in uflat)
-        check("an older board: Update from 0.17.0 on, an erase before it",
-              "From 0.17.0 on, use Update my board." in uflat
-              and "Before 0.17.0, the erase cannot be avoided." in uflat
-              and "Use Install on a new board and tick Erase everything first" in uflat
-              and "the board needs your Wi-Fi at the end" in uflat)
-        inst_now = get("/install")[1]
-        check("and every section it sends a reader to exists",
-              'href="/install#changing-the-wi-fi-later"' in upg
-              and 'id="changing-the-wi-fi-later"' in inst_now
-              and 'href="/install#if-something-goes-wrong-reset-rather-than-reflash"' in upg
-              and 'id="if-something-goes-wrong-reset-rather-than-reflash"' in inst_now)
-        check("Upgrade is in the footer's Get started row on every face",
-              all(re.search(r'<span class="lbl">Get started</span>.*?'
-                            r'>Install</a><a href="[^"]*/upgrade">Upgrade</a><a ', p, re.S)
-                  for p in (home, inst_now, get("/", host="about.example")[1],
-                            get("/", host="data.example")[1])))
-        # N1, site 1.2.1: /hardware is in the footer, after Build one.
-        check("and Hardware is in it, after Build one, on every face",
-              all(re.search(r'<span class="lbl">Get started</span><a href="[^"]*/directory">'
-                            r'Communities online</a><a href="[^"]*/build">'
-                            r'Build one</a><a href="[^"]*/hardware">Hardware</a>', p)
-                  for p in (home, inst_now, get("/", host="about.example")[1],
-                            get("/", host="data.example")[1])))
-        # The call-out on /install opens the steps column: beside the card
-        # on a desktop, after it on a phone, so the button keeps its place.
-        itop = inst_now.split('<div class="install-top">')[1].split('id="before-you-start"')[0]
-        check("/install calls it out first in the steps, linking /upgrade",
-              '<div class="steps"><p class="aside"><b>Already running µnleashed?</b> '
-              "Press <b>Update my board</b>, pick the port, then <b>Update \u00b5nleashed "
-              "BBS</b> and <b>Install</b>. It never erases: your accounts, settings, "
-              "mail and forums stay, and your SD card is never touched. "
-              'More on <a href="/upgrade">upgrading a board</a>' in itop
-              and itop.find('<div class="steps"><p class="aside">')
-                  < itop.find('id="what-happens-in-order"'))
-        # The steps no longer promise a recognised board, and name the erase
-        # screen by the words it now shows.
-        flat_top = " ".join(re.sub(r"<[^>]+>", " ", itop).split())
-        check("and the steps name the new buttons and the erase screen's words",
-              "Choose your board, press Install on a new board and pick the port."
-              in flat_top
-              and "offers Install or update \u00b5nleashed BBS ." in flat_top
-              and "may be greeted by name and version" in flat_top
-              and "headed Start fresh? , unless the board was recognised" in flat_top
-              and "tick Erase everything first ." in flat_top
-              and "Erase device" not in flat_top)
-        check("and it is not indented the way a note inside prose is",
-              "article .install-top > .steps > p.aside:first-child { margin:0 0 1.25rem; }"
-              in inst_now)
 
-        # ------------------------------------------------------------------
-        # Rob could not find the donation page. It is in the menu now, last,
-        # and first in the footer's second row, as well as being served.
-        print("Donate")
-        check("the menu offers Donate on every face",
-              all('>Donate</a></nav>' in p for p in (
-                  get("/")[1], get("/install")[1], get("/", host="about.example")[1],
-                  get("/", host="data.example")[1])))
-        check("and marks it on the page itself",
-              '<a class="here" href="/donate">Donate</a>' in don)
 
-        # ------------------------------------------------------------------
-        # /connected: where the installer's last step lands. The address is
-        # in the fragment, which never reaches this server, so a few inline
-        # lines read it; nothing else on the page runs, and nothing leaves.
-        print("The telnet details page")
-        code, conn = get("/connected")
-        flat_c = " ".join(conn.split())
-        scripts_c = re.findall(r"<script[^>]*>(.*?)</script>", conn, re.S)
-        check("there is a /connected page, under Build one",
-              code == 200 and '<a class="here" href="/build">Build one</a>' in conn)
-        check("its one script is the inline one written here, with no src",
-              len(scripts_c) == 1 and "<script src" not in conn
-              and "<script>" + scripts_c[0] + "</script>" == S.CONNECTED_JS)
-        js_c = scripts_c[0] if scripts_c else ""
-        check("which reads the fragment, writes only text, and sends nothing",
-              "location.hash" in js_c and "textContent" in js_c
-              and not any(w in js_c for w in ("innerHTML", "outerHTML", "insertAdjacent",
-                                              "document.write", "fetch", "XMLHttpRequest",
-                                              "sendBeacon", "WebSocket", "eval", "cookie",
-                                              "localStorage", "location.href")))
-        check("and takes a dotted IPv4 address and a port, and nothing else",
-              r"/^#((?:\d{1,3}\.){3}\d{1,3})(?::(\d{1,5}))?$/" in js_c
-              and "+o>255" in js_c and "+v.port>65535" in js_c)
-        check("with the address box hidden until it has one",
-              '<div class="board-at" id="found" hidden>' in conn
-              and '<div class="board-at unknown" id="noaddr">' in conn)
-        check("the address box has the command, a link, SyncTERM and PuTTY",
-              '<pre>telnet <span data-c="host"></span> <span data-c="port"></span></pre>' in conn
-              and 'id="c-link"' in conn
-              and '<code>syncterm telnet://<span data-c="host"></span>:' in conn
-              and '<code>putty -telnet <span data-c="host"></span> -P ' in conn)
-        check("with no address, it says where to find one",
-              "115200 baud" in flat_c and "<code>unleashed</code>" in flat_c
-              and "telnet unleashed.local 6400" in flat_c)
-        # Site 1.0.0: the installer's dashboard sends a board read before it
-        # joined Wi-Fi here with no address, so this is a page people land on.
-        noaddr = (conn.split('<div class="board-at unknown" id="noaddr">')[1]
-                  .split("</div>")[0] if 'id="noaddr"' in conn else "")
-        flat_n = " ".join(re.sub(r"<[^>]+>", " ", html.unescape(noaddr)).split())
-        check("and says why there is none, and the three ways, in order",
-              "before it had joined your Wi-Fi" in flat_n
-              and noaddr.count("<li>") == 3 and "<ol>" in noaddr
-              and flat_n.index("By name.") < flat_n.index("From the board itself.")
-              < flat_n.index("From your router.")
-              and "Hostname" in flat_n and "unleashed.local" in flat_n
-              and "open Logs & Console in the installer, then press the board's reset "
-                  "button" in flat_n
-              and "Reset Device" in flat_n
-              and "online 192.168.0.109 dial in: telnet 192.168.0.109 6400" in flat_n
-              and "list of connected devices" in flat_n)
-        check("and gives the default sysop password, the warning, and the setup guide",
-              "sysop password is <code>unleashed</code>" in flat_c
-              and "Change it before anything else." in flat_c
-              and 'href="/setup"' in conn and 'href="/install#the-sysop-password"' in conn)
 
-        # The copy of ESP Web Tools sends a telnet:// address there, and says
-        # it was changed, as its licence requires.
-        print("The installer's telnet link")
-        dlg = [n for n in os.listdir(os.path.join("vendor", "esp-web-tools", S.EWT_VERSION))
-               if n.startswith("install-dialog-")]
-        dlg_src = open(os.path.join("vendor", "esp-web-tools", S.EWT_VERSION, dlg[0]),
-                       encoding="utf-8").read() if len(dlg) == 1 else ""
-        check("the dialog chunk opens with a notice that it was modified, and how",
-              dlg_src.startswith("/*\n * MODIFIED FILE.")
-              and "Apache License 2.0" in dlg_src[:800]
-              and "/connected#<address>:<port>" in dlg_src[:800])
-        check("and in both places, a telnet link goes to /connected as Telnet details",
-              dlg_src.count('?"/connected#"+this._client.nextUrl.slice(9)') == 2
-              and dlg_src.count('?"Telnet details":"Visit Device"') == 2
-              and dlg_src.count("href=${this._client.nextUrl}") == 0)
-        # Site 1.0.0: the dashboard's item is always there. With no URL yet
-        # (a board read before it joined Wi-Fi) it is Telnet details to
-        # /connected with no fragment; the page after a successful Wi-Fi
-        # step keeps its guard, because by then there is a URL or nothing
-        # to say.
-        dash = (dlg_src[dlg_src.index("_renderDashboard(){"):
-                        dlg_src.index("_renderDashboardNoImprov(){")]
-                if "_renderDashboard(){" in dlg_src else "")
-        check("the dashboard always offers Telnet details, to /connected when the "
-              "board has sent no address yet",
-              'href=${void 0===this._client.nextUrl?"/connected":/^telnet:\\/\\//i.test('
-              'this._client.nextUrl)?"/connected#"+this._client.nextUrl.slice(9)' in dash
-              and '${void 0===this._client.nextUrl||/^telnet:\\/\\//i.test(this._client'
-                  '.nextUrl)?"Telnet details":"Visit Device"}' in dash
-              and 'void 0===this._client.nextUrl?"":s`' not in dash
-              and dlg_src.count('void 0===this._client.nextUrl?"":s`') == 1)
-        check("and the notice at its top says so",
-              "4. The dashboard of a board that answered over Improv always offers"
-              in dlg_src[:6000]
-              and "and to /connected, which says how to find" in dlg_src[:6000])
-        check("and the vendor README records upstream's checksum for the file",
-              "6dcfc30fb4bbf18e19a141c5eb9a694edafc5d4480b45762c221173f47effdb5"
-              in open(os.path.join("vendor", "esp-web-tools", "README.md"),
-                      encoding="utf-8").read())
 
-        # 0.22.1. Rob updated his own board from /install and the dialog
-        # asked "Erase device ... All data on the device will be lost",
-        # which reads as "you are about to lose everything" to somebody with
-        # a board full of accounts. Checked in the chunk as the server hands
-        # it to a browser, at the path the page loads it from.
-        print("The installer's erase question, and the Update button")
-        code, _ct, served = (fetch(S.EWT_BASE + dlg[0]) if len(dlg) == 1
-                             else (0, "", b""))
-        served = served.decode("utf-8") if code == 200 else ""
-        flat_d = " ".join(served.split())
-        check("the served dialog asks Start fresh?, in words that say what is kept",
-              code == 200 and served == dlg_src
-              and '_renderAskErase(){return["Start fresh?",s`' in served
-              and "Updating a board you already run? Leave this unticked: your "
-                  "accounts, settings, mail and forums are kept. Tick it only for a "
-                  "brand-new board, or to wipe this one and start over." in flat_d
-              and "Erase everything first </label>" in flat_d)
-        check("and no longer says all data on the device will be lost",
-              "All data on the device will be lost" not in served
-              and "All data on the device will be erased" not in served
-              and 'return["Erase device"' not in served)
-        check("its Install is Install or update, on both dashboards",
-              served.count("`Install or update ${this._manifest.name}`") == 2
-              and "`Install ${this._manifest.name}`" not in served)
-        # The Update button. Nobody can click through the dialog in a test,
-        # so the proof is the shape of the code: the erase flag is written
-        # in exactly two places, both of which store false under the key,
-        # and the one line that erases reads the argument that is forced
-        # false under the key a second time.
-        check("with unleashed_update, _startInstall stores false whatever it is asked",
-              '_startInstall(e){this._state="INSTALL",this._installErase='
-              '!(this._manifest&&this._manifest.unleashed_update)&&e,' in served
-              and served.count("_installErase=") == 2
-              and "this._installErase=!1," in served)
-        check("and _confirmInstall hands the flasher false, the only thing that erases",
-              "this._manifest,!this._manifest.unleashed_update&&this._installErase)}"
-              in served
-              and served.count(".eraseFlash()") == 2
-              and 's&&(n({state:"erasing"' in served
-              and "!0===this.IS_STUB&&!0===e.eraseAll&&await this.eraseFlash()" in served
-              and served.count("eraseAll:!1") == 1 and "eraseAll:!0" not in served)
-        check("and neither dashboard opens the erase question or offers Erase User Data",
-              "this._isSameFirmware||this._manifest.unleashed_update?this._startInstall(!1)"
-              in served
-              and "this._manifest.unleashed_update?this._startInstall(!1):"
-                  "this._manifest.new_install_prompt_erase" in served
-              and "this._isSameVersion&&!this._manifest.unleashed_update?s`" in served
-              and "this._isSameVersion&&!this._manifest.unleashed_update)"
-                  'e="Erase User Data"' in served)
-        check("and the notice at its top lists the change",
-              "3. A manifest carrying \"unleashed_update\": true" in dlg_src[:4000]
-              and '"Start fresh?"' in dlg_src[:4000]
-              and '"Erase everything first"' in dlg_src[:4000])
-        # A new path for the changed bundle, so a browser holding the old
-        # dialog for its day of cache fetches the new one; the old path
-        # still answers, for a tab left open across a deploy.
-        check("the bundle is served under a path carrying this site's revision",
-              S.EWT_BASE == "/install/esp-web-tools/" + S.EWT_VERSION + "-"
-                            + str(S.EWT_REV) + "/"
-              and S.EWT_REV >= 3
-              and fetch("/install/esp-web-tools/" + S.EWT_VERSION + "/"
-                        + dlg[0])[0] == 200)
-        # 1.0.0 moved it to -3; a tab still holding -2's entry point fetches
-        # the rest of the bundle from -2, so every earlier path answers.
-        old_paths = [fetch("/install/esp-web-tools/" + S.EWT_VERSION + "-" + str(n) + "/"
-                           + dlg[0]) for n in range(1, S.EWT_REV + 1)]
-        # Site 1.3.8. The manifests name the firmware with its micro sign,
-        # and upstream compares that name with what the board sends over
-        # Improv, exactly; firmware up to 1.1.x sends "unleashed BBS".
-        check("the dialog recognises a board whichever way either side spells the name",
-              'String(this._info.firmware).replace("\\xb5","u")'
-              '===String(this._manifest.name).replace("\\xb5","u"))}' in served
-              and "this._info.firmware===this._manifest.name" not in served
-              and S.EWT_REV >= 4
-              and '5. Whether the board already runs this firmware (site 1.3.8).'
-                  in dlg_src[:6000])
-        check("and every earlier revision's path still answers, with today's files",
-              all(c == 200 and b.decode("utf-8") == dlg_src for c, _t, b in old_paths)
-              and fetch("/install/esp-web-tools/" + S.EWT_VERSION + "-"
-                        + str(S.EWT_REV + 1) + "/" + dlg[0])[0] == 404)
 
         # ------------------------------------------------------------------
         # The footer: two rows, then the colophon, on every face.
@@ -4663,12 +3248,12 @@ def main():
         check("the site's version is the changelog's newest heading",
               S.SITE_VERSION == newest)
         feet = [p.split("<footer>")[1] for p in (
-            get("/")[1], get("/install")[1], get("/", host="about.example")[1],
-            get("/", host="data.example")[1])]
+            get("/")[1], get("/data")[1], get("/badges")[1])
+            + ((get("/docs/setup")[1],) if HAVE_DOCS else ())]
         check("every footer has its two rows",
-              all('<span class="lbl">Get started</span>' in f
+              all('<span class="lbl">Directory</span>' in f
                   and '<span class="lbl">Reference</span>' in f
-                  and f.index("Get started") < f.index("Reference") for f in feet))
+                  and f.index("Directory") < f.index("Reference") for f in feet))
         check("and the colophon: version, copyright, and the licence linked",
               all(f'<span>Site version {newest}</span>'
                   '<span>&copy; 2026 Robert Mech</span>' in f
@@ -4698,10 +3283,11 @@ def main():
         # Every page names its own address, on the face it belongs to.
         print("Canonical addresses")
         canon = {("/", None): "https://boards.example/",
-                 ("/setup", None): "https://boards.example/setup",
-                 ("/", "about.example"): "https://about.example/",
-                 ("/about", None): "https://about.example/",
-                 ("/", "data.example"): "https://data.example/"}
+                 ("/directory", None): "https://boards.example/",
+                 ("/data", None): "https://boards.example/data",
+                 ("/badges", None): "https://boards.example/badges"}
+        if HAVE_DOCS:
+            canon[("/docs/setup", None)] = "https://boards.example/docs/setup"
         wrong = []
         for (path, host), want in canon.items():
             page = get(path, host=host)[1]
@@ -4710,14 +3296,8 @@ def main():
                 wrong.append(path + " " + (host or "list"))
         check("each page carries a canonical link and og:url for its own face"
               + ("" if not wrong else "  <- " + ", ".join(wrong)),
-              not wrong and "@CANONICAL@" not in get("/install")[1])
+              not wrong and "@CANONICAL@" not in get("/how")[1])
 
-        # The installer's dialog, dark: Material's own variables, set on the
-        # element from this page (checked by eye in a browser as well).
-        css0 = get("/install")[1].split("<style>")[1]
-        check("the installer's dialog is themed dark from this page",
-              "ewt-install-dialog, ewt-no-port-picked-dialog {" in css0
-              and "--md-sys-color-surface:#14141b" in css0)
 
         # ------------------------------------------------------------------
         # The 0.17.0 outage, so it cannot happen again: setup.sh copied only
@@ -4727,6 +3307,7 @@ def main():
         import shutil
         bare = tempfile.mkdtemp(prefix="dirbare")
         shutil.copy("server.py", os.path.join(bare, "server.py"))
+        shutil.copy("sitekit.py", os.path.join(bare, "sitekit.py"))
         port3 = PORT + 2
         env3 = dict(os.environ, DIRECTORY_PAGE_CACHE="0",
                     DIRECTORY_DB=os.path.join(bare, "d.db"), DIRECTORY_PORT=str(port3))
@@ -4758,7 +3339,8 @@ def main():
               + ("" if up3 else "  <- " + b"".join(out3[-3:]).decode("utf-8", "replace").strip()),
               up3 == 200 and home3 == 200 and inst3 in (200, 404))
         # Second, everything it reads beside itself is installed by setup.sh.
-        srv_text = open("server.py", encoding="utf-8").read()
+        srv_text = (open("server.py", encoding="utf-8").read()
+                    + open("sitekit.py", encoding="utf-8").read())
         read = set()
         for m in re.finditer(r'Path\(__file__\)\.resolve\(\)\.parent\s*/\s*"([^"]+)"'
                              r'(?:\s*/\s*"([^"]+)")?', srv_text):
@@ -4769,7 +3351,10 @@ def main():
         for m in re.finditer(r"for dir in ([^;]+);", code_part):
             loop_dirs.update(m.group(1).split())
         missing_i = []
-        for name in sorted(read):
+        # What this repository carries: the engine also reads folders only
+        # the main site has (static/, firmware/), and the guides arrive from
+        # their own checkout (docs/), all of which it does without.
+        for name in sorted(n for n in read if os.path.exists(n)):
             top = name.split("/")[0]
             named = (top in loop_dirs
                      or re.search(r'\$SRC"?/' + re.escape(top) + r'\b', code_part))
@@ -4779,13 +3364,11 @@ def main():
                 missing_i.append(name)
         check("everything the server reads beside itself is installed by setup.sh"
               + ("" if not missing_i else "  <- " + ", ".join(missing_i)),
-              len(read) >= 8 and not missing_i)
+              len(read) >= 4 and not missing_i)
 
         print("The wordmark goes home")
         homes = {"the board list": (get("/")[1], "/"),
-                 "a page": (get("/setup")[1], "/"),
-                 "the manifesto": (get("/", host="about.example")[1], "https://boards.example/"),
-                 "the data face": (get("/", host="data.example")[1], "https://boards.example/")}
+                 "a page": (get("/data")[1], "/")}
         check("the wordmark links to the board list on every face",
               all(f'<a class="home" href="{want}" aria-label="' in page
                   and '<svg class="logo"' in page.split('<a class="home"')[1].split("</a>")[0]
@@ -4817,8 +3400,7 @@ def main():
         code, ctype, blob = fetch("/apple-touch-icon.png")
         check("and the home-screen icon, 512 square",
               code == 200 and ctype == "image/png" and png_size(blob) == (512, 512))
-        faces_a = [get("/")[1], get("/setup")[1], get("/", host="about.example")[1],
-                   get("/", host="data.example")[1]]
+        faces_a = [get("/")[1], get("/data")[1], get("/badges")[1]]
         # Site 1.3.0: link previews use the 1200 x 630 card, large, and the
         # avatar stays the home-screen icon.
         check("every face names the card for link previews, large, by an absolute address",
@@ -4834,17 +3416,11 @@ def main():
                   for p in faces_a))
         code, ctype, blob = fetch("/og-card.png")
         check("and og:image resolves to a 1200 x 630 PNG",
-              code == 200 and ctype == "image/png" and png_size(blob) == (1200, 630)
-              and os.path.isfile(os.path.join("brand", "make_ogcard.py")))
+              code == 200 and ctype == "image/png" and png_size(blob) == (1200, 630))
         # The pages the round 3 specification gives words of their own.
         def og(path, prop):
             m = re.search(r'<meta property="og:%s" content="([^"]*)">' % prop, get(path)[1])
             return html.unescape(m.group(1)) if m else None
-        check("the front page's preview says what it is, not a board count",
-              og("/", "title") == "\u00b5nleashed: your own online community, on a "
-                                  "device that fits in your hand"
-              and og("/", "description").startswith("Chat and messages for your class")
-              and "listed" not in og("/", "description"))
         check("/directory's preview carries the live figures",
               og("/directory", "title") == "Communities running right now"
               and re.search(r"^\d+ communit(y|ies) online and \d+ (person|people) "
@@ -4855,18 +3431,12 @@ def main():
         check("and as the icon a phone puts on its home screen",
               all('<link rel="apple-touch-icon" href="/apple-touch-icon.png">' in p
                   for p in faces_a))
-        # Not in static/, or the manifesto's gallery would show a logo.
-        check("and it lives in brand/ with its generator, not in static/",
-              os.path.isfile(os.path.join("brand", "make_avatar.py"))
-              and os.path.isfile(os.path.join("brand", "unleashed-avatar.svg"))
-              and not any("avatar" in n for n in os.listdir("static")))
 
         print("Every other page is still script-free")
-        scripted = [p for p in ("/", "/different", "/about", "/data", "/build", "/whofor",
-                                "/terminals", "/firstcall", "/forward", "/how",
-                                "/rules", "/privacy", "/kids", "/teachers",
-                                "/sdcard", "/dialing", "/author", "/donate",
-                                "/setup", "/upgrade")
+        scripted = [p for p in ("/data", "/how", "/rules", "/docs", "/docs/terminals",
+                                "/docs/firstcall", "/docs/forward", "/docs/privacy",
+                                "/docs/sdcard", "/docs/dialing", "/docs/setup",
+                                "/docs/lights", "/docs/camera", "/docs/skins")
                     if "<script" in get(p)[1]]
         check("nothing else on the site loads any JavaScript"
               + ("" if not scripted else "  <- " + ", ".join(scripted)),
@@ -4896,62 +3466,16 @@ def main():
               sorted(set(re.findall(r"location\.\w+", js_b)))
               == ["location.hash", "location.pathname"])
 
-        # ------------------------------------------------------------------
-        # QuantumRob's name on the manifesto goes to a page about him. Every
-        # fact on it is his own account; the checks pin the parts that are
-        # easy to break later: the route, the spelling he confirmed, the
-        # photographs and what they need to be allowed on the page at all.
-        print("The author page")
-        code, auth = get("/author")
-        check("there is an author page", code == 200)
-        check("with his name, both handles and the board he ran",
-              "Robert Mech" in auth and "QuantumRob" in auth
-              and "Daytona" in auth and "Psyberchat" in auth)
-        # The suite runs with an about domain configured, so on the list face
-        # the manifesto's menu entry is that domain rather than /about.
-        check("and it belongs to the manifesto in the menu",
-              '<a class="here" href="https://about.example/">What this is</a>' in auth)
-        code, auth_about = get("/author", host="about.example")
-        check("it is reachable on the about face too, where the link is",
-              code == 200 and '<a class="here" href="/">What this is</a>' in auth_about)
-        _, man = get("/", host="about.example")
-        check("the manifesto links his name there, byline and both signatures",
-              man.count('<a class="author" href="/author">QuantumRob</a>') == 3)
-        imgs = re.findall(r"<img [^>]*>", auth)
-        check("it shows four photographs", len(imgs) == 4)
-        # Wikimedia rejects a hotlinked thumbnail at anything but its
-        # standard widths, with an HTML error page the browser shows as a
-        # broken image. So every thumb width has to be one of those.
-        widths = re.findall(r"/(\d+)px-", " ".join(imgs))
-        std = {"20", "40", "60", "120", "250", "330", "500", "960", "1280",
-               "1920", "3840"}
-        check("every hotlinked thumbnail is at a width Wikimedia serves",
-              widths and set(widths) <= std)
-        check("every picture is Wikimedia's, holds its space and says what it is",
-              all("https://upload.wikimedia.org/" in i and ' alt="' in i
-                  and ' width="' in i and ' height="' in i for i in imgs))
-        check("and none of them tells Wikimedia which page asked",
-              all('referrerpolicy="no-referrer"' in i for i in imgs))
-        check("each is credited with its licence and its Commons page",
-              auth.count('class="credit"') == 4
-              and auth.count("commons.wikimedia.org/wiki/File:") == 4
-              and "CC BY 3.0" in auth and "CC0" in auth)
-        check("and the page says where the pictures come from",
-              "load from Wikimedia Commons" in " ".join(auth.split()))
 
         # ------------------------------------------------------------------
         # The drawings. Same hand as the connection diagram, and every one
         # of them stands still for somebody who has asked for less motion.
         print("The drawings")
-        check("each freedom has its drawing",
-              man.count('<svg class="art icon ') == 12
-              and man.count('<div class="freedom">') == 12)
-        check("and a freedom's drawing is decoration beside its heading",
-              man.count('aria-hidden="true" focusable="false">') >= 12)
         # The rule that makes the resting state the drawing: no animation
         # is declared anywhere but inside the no-preference block, so a
         # reader who asked for less motion is given none at all.
-        art_css = man.split("svg.art { display:block;")[1].split("</style>")[0]
+        art_css = get("/docs/terminals" if HAVE_DOCS else "/how")[1].split(
+            "svg.art { display:block;")[1].split("</style>")[0]
         moving = art_css.split("@media (prefers-reduced-motion: no-preference) {")
         check("every drawing's animation is inside the no-preference block",
               len(moving) == 2 and "animation:" not in moving[0]
@@ -5057,8 +3581,6 @@ def main():
               "svg.art.wiring .p-cs { animation:" in
               sd.split("svg.art { display:block;")[1]
                   .split("@media (prefers-reduced-motion: no-preference) {")[1])
-        check("the build page links to it, as a button",
-              '<a class="go" href="/sdcard">Add an SD card</a>' in get("/build")[1])
 
         # A Chromebook, as it is: one you control usually can, a managed one
         # usually cannot without its administrator, Chrome alone never can.
@@ -5069,7 +3591,7 @@ def main():
               and "A Chromebook can call a board. Chrome cannot." not in flat_t)
         check("and dates the Chrome Apps change the way Google does",
               "ChromeOS 138, in July 2025, was the last release" in flat_t)
-        _, data = get("/data", host="data.example")
+        _, data = get("/data")
         check("the health endpoint is not described as two bytes",
               "Two bytes" not in data)
 
@@ -5077,380 +3599,7 @@ def main():
         # ESP32_BOARD_CHOICE.md, and only the WROOM-32E has been run. The
         # site used to say any module with 4 MB of flash would do, which is
         # true of a C3 with 4 MB of flash and it will not run the board.
-        _, build = get("/build")
-        flat_b = " ".join(build.split())
-        _, hwp = get("/hardware")
-        flat_h = " ".join(hwp.split())
-        # Site 1.2.1 (R1, L1): the chips moved to /hardware as a list, which
-        # reads on a phone where the three-column table broke "ESP32-WROOM-32E"
-        # over three lines. /build keeps a link and no table of its own.
-        check("the tested boards page says which ESP32s run it",
-              "<b>ESP32-WROOM-32E: yes, tested.</b>" in hwp
-              and "<b>ESP32-S2, ESP32-C3 and ESP32-C5: no.</b>" in hwp
-              and "<b>ESP32-P4: no.</b>" in hwp
-              and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hwp
-              and has_h(hwp, 2, "Other chips"))
-        check("and gives no caller count for a part nobody has measured",
-              "which that image does not use" in flat_h
-              and "room for more callers" not in flat_h)
-        check("the build page has no chip table and links the tested boards",
-              "<table" not in build.split("<article>")[1]
-              and "ESP32-C3" not in build and "ESP32-P4" not in build
-              and 'href="/hardware"' in build)
-        check("the build page links the SD card and the lights pages",
-              'href="/sdcard"' in build and 'href="/lights"' in build)
-        # The dev board's facts moved with the chips (R2): memory and power
-        # on /hardware, and the bare-module notes stay with the build.
-        check("the dev board's memory and power are on the tested boards page",
-              "520 KB of SRAM and 4 MB of flash" in flat_h
-              and "a little under 400 mA" in flat_h
-              and "520 KB" not in flat_b and "400 mA" not in flat_b
-              and "EN pulled up" in flat_b)
-        # H1, Rob's spectrum: three stops, four since site 1.3.9, each with
-        # the words the drawing shows said again in the page, with links.
-        # Two drawings of it since 1.3.9, across and down, the roadmap's
-        # way: each carries every stop, and CSS shows one of them.
-        spec_all = S.ART["hardware-spectrum"]
-        spec, spec_tall = spec_all.split("</svg>")[:2]
-        spec, spec_tall = spec + "</svg>", spec_tall + "</svg>"
-        check("the tested boards page opens with the spectrum",
-              spec_all in hwp
-              and hwp.index(spec_all) < hwp.index('id="esp32-dev-board-base"')
-              and spec_all == spec + spec_tall
-              and spec.startswith('<svg class="art spectrum wide" viewBox="-4 -2 552 160"')
-              and spec_tall.startswith('<svg class="art spectrum tall" viewBox="0 0 354 ')
-              and len(S.SPECTRUM_STOPS) == 4
-              and all(f">{s[1]}</text>" in d and f">{html.escape(s[3])}</text>" in d
-                      and f">{s[4]}</text>" in d
-                      for s in S.SPECTRUM_STOPS for d in (spec, spec_tall)))
-        # Four stops, equally spaced, a head at both ends of each of the
-        # three stretches in both drawings, and the one across hidden under
-        # the site's breakpoint and the one down shown.
-        xs = [s[0] for s in S.SPECTRUM_STOPS]
-        check("four stops, equally spaced, an arrow between each pair",
-              len({b - a for a, b in zip(xs, xs[1:])}) == 1
-              and spec.count('class="o arr"') == 3
-              and spec_tall.count('class="o arr"') == 3
-              and "svg.art.spectrum.tall { display:none;" in hwp
-              and re.search(r"@media \(max-width: 900px\) \{\s*svg\.art\.spectrum\.wide "
-                            r"\{ display:none; \}\s*svg\.art\.spectrum\.tall \{ display:block; \}",
-                            hwp) is not None)
-        # Site 1.3.9, Rob: the fourth stop is the advanced build, about $40
-        # and up, and nothing about it is claimed as here: the stretch out
-        # to it is dashed in both drawings, its link goes to a section that
-        # exists, and its words say what is still to come.
-        adv = S.SPECTRUM_STOPS[3]
-        flat_intro = " ".join(re.sub(r"<[^>]+>", " ", hwp.split('id="esp32-dev-board-base"')[0]).split())
-        check("the fourth stop is the advanced build, and says what is not here yet",
-              adv[1] == "Advanced build" and adv[3] == "about $40+"
-              and adv[8] == "fastest"
-              and 'id="esp32-s3-camera-board"' in hwp and adv[6] == "#esp32-s3-camera-board"
-              and "still to be tested" in adv[7] and "firmware 1.2.0" in adv[7]
-              and "not supported yet" in adv[7]
-              and spec.count('class="f sl later"') == 1
-              and spec_tall.count('class="f sl later"') == 1
-              and f'd="M{xs[2]} 79 H532"' in spec
-              and "Four ways to build one." in flat_intro
-              and "An advanced build : display, camera, the works. About $40 and up" in flat_intro
-              and "SSH comes in firmware 1.2.0" in flat_intro
-              and "still to be tested" in flat_intro)
-        # Site 1.2.5, Rob: a speed per board, "Fast, Faster, Fastest", and
-        # every one of them says it is expected, because nothing has been
-        # measured yet. In the spectrum (fast, fast, fastest), in each
-        # board's facts list, the camera boards included, and in one line
-        # of the page's own words.
-        spd = re.findall(r'<text class="ink spd"[^>]*>(\w+) <tspan[^>]*>\(expected\)</tspan></text>', spec)
-        hw5 = hwp.split("<article>")[1].split("</article>")[0]
-        facts_ok = all(
-            f"<dt>Speed</dt><dd>{S.BOARD_SPEED[b['dir']]} "
-            '<span class="exp">(expected, not yet measured)</span></dd>'
-            in S.board_html([b["dir"]]) and S.board_html([b["dir"]]) in hw5
-            for b in S.BOARDS + S.SHOWN_BOARDS + S.SOON_BOARDS)
-        spd_tall = re.findall(r'<text class="ink spd"[^>]*>(\w+) <tspan[^>]*>\(expected\)</tspan></text>', spec_tall)
-        check("the speeds render, each one marked expected",
-              spd == ["fast", "fast", "fastest", "fastest"] and spd_tall == spd
-              and all("Expected to be " in s[7] and "not yet measured" in s[7]
-                      for s in S.SPECTRUM_STOPS)
-              and facts_ok
-              and [S.BOARD_SPEED[d] for d in ("esp32", "esp32-sd", "esp32-fncam",
-                                              "esp32s3", "esp32s3-cam")]
-                  == ["Fast", "Fast", "Faster", "Fastest", "Fastest"]
-              and "The speeds are expected, not measured" in " ".join(hw5.split())
-              and "side by side" in " ".join(hw5.split()))
-        # Site 1.2.5, Rob: a seal on each board's picture, "flash & go" for
-        # all four, the S3 camera board's marked expected, each told to a
-        # screen reader in words, and a line in the intro saying what it
-        # means. Two levels only: "a little wiring" is for add-ons and no
-        # board wears it.
-        seals = re.findall(r'<div class="hwpic[^"]*">.*?(<svg class="art seal[^"]*"[^>]*>.*?</svg>)</div>',
-                           hw5, re.S)
-        # Site 1.3.11: a board /hardware says not to buy wears NOT
-        # SUPPORTED, which is not a level of building, so it is counted
-        # apart: one for each of NOT_BOARDS, and never on a tested board.
-        nos = [x for x in seals if 'class="art seal no"' in x]
-        seals = [x for x in seals if 'class="art seal no"' not in x]
-        # Site 1.2.7: the dev board with a card wears the second level, a
-        # little wiring, the first board to, and the intro says both.
-        go = [x for x in seals if "FLASH &amp; GO</text>" in x]
-        wire = [x for x in seals if ">A LITTLE</text>" in x and ">WIRING</text>" in x]
-        check("every board's picture wears its seal, six flash and go, one a little wiring",
-              len(seals) == 7 and len(go) == 6 and len(wire) == 1
-              and len(nos) == len(S.NOT_BOARDS)
-              and all('role="img" aria-label="Flash and go' in x for x in go)
-              and 'role="img" aria-label="A little wiring' in wire[0]
-              and sum(">expected</text>" in x for x in seals) == 1
-              and ">expected</text>" in S.seal_html(S.BOARD_SEAL["esp32s3-cam"])
-              and all(S.BOARD_SEAL[b["dir"]] == "go" for b in S.BOARDS)
-              and [d for d, v in S.BOARD_SEAL.items() if v == "wire"] == ["esp32-sd"]
-              and "<b>Flash &amp; go</b>:" in hw5 and "<b>A little wiring</b>:" in hw5
-              and "svg.art.seal .rb {" in hwp and "article .hwb .hwpic svg.art.seal {" in hwp)
-        # Site 1.3.3, Rob: the 1.3.1 ribbon was bigger than the board. A seal
-        # the size of FLASH & GO, a padlock and SECURE*, in the opposite
-        # corner, on the two S3 boards' pictures and nowhere else; its
-        # footnote a Secure row of the facts, SSH with its glossary note and
-        # the version linked to the roadmap. Each S3 entry says 1.2.0 in
-        # words, and the classic ESP32 entries say nothing about SSH.
-        hsecs = {sid: hw5.split(f'id="{sid}"')[1].split("<h2")[0]
-                 for sid in ("esp32-dev-board-base",
-                             "esp32-dev-board-base-sd-card-for-storage",
-                             "waveshare-esp32-s3-lcd-1-47",
-                             "freenove-esp32-camera-board", "esp32-cam",
-                             "esp32-s3-camera-board",
-                             "makerfabs-esp32-s3-parallel-tft-3-5-v1-0")}
-        secs = re.findall(r'<svg class="art seal sec"[^>]*>.*?</svg>', hw5, re.S)
-        s3w, s3c = hsecs["waveshare-esp32-s3-lcd-1-47"], hsecs["esp32-s3-camera-board"]
-        # Site 1.3.17: the Makerfabs is an S3 board with no SSH version set
-        # for its 2 MB of PSRAM, so it wears no Secure seal and says so.
-        s3m = hsecs["makerfabs-esp32-s3-parallel-tft-3-5-v1-0"]
-        others = ("esp32-dev-board-base", "esp32-dev-board-base-sd-card-for-storage",
-                  "freenove-esp32-camera-board", "esp32-cam")
-        note = ('<dt>Secure</dt><dd>* Encrypted connections (<span class="gl"')
-        check("the Secure seal is on the two S3 boards' pictures only, FLASH & GO's "
-              "size, bottom right, with its asterisk",
-              len(secs) == 2 and "lockr" not in hw5
-              and '<div class="hwpic">' in s3m and 'class="art seal sec"' not in s3m
-              and "<dt>Secure</dt>" not in s3m
-              and "so it carries no Secure seal until that is settled"
-                  in " ".join(s3m.split())
-              and all('viewBox="0 0 72 24"' in x
-                      and 'SECURE<tspan class="ast">*</tspan></text>' in x
-                      and 'role="img" aria-label="Secure, with an asterisk: encrypted '
-                          'connections over SSH are coming in version 1.2.0' in x
-                      for x in secs)
-              and '<div class="hwpic sec">' in s3w and '<div class="hwpic sec">' in s3c
-              and 'class="art seal sec"' in s3w and 'class="art seal sec"' in s3c
-              and all('class="art seal sec"' not in hsecs[k]
-                      and '<div class="hwpic">' in hsecs[k] for k in others)
-              and "article .hwb .hwpic svg.art.seal.sec {" in hwp
-              and "svg.art.seal tspan.ast {" in hwp
-              and S.BOARD_SSH == {"esp32s3": (1, 2, 0), "esp32s3-cam": (1, 2, 0)}
-              and "a padlock and <b>Secure</b>, with an asterisk for now"
-                  in " ".join(hw5.split()))
-        check("and its footnote is a Secure row of each S3 board's facts, SSH "
-              "explained and the version linked to the roadmap",
-              all(note in x and '<a href="/roadmap">coming in version 1.2.0</a></dd>' in x
-                  and x.index(note) < x.index("</dl>") for x in (s3w, s3c))
-              and all("<dt>Secure</dt>" not in hsecs[k] for k in others))
-        check("and each S3 entry says SSH comes in firmware 1.2.0, in words",
-              "<b>Encrypted connections, coming in firmware 1.2.0.</b>" in s3w
-              and "SSH" in s3w and 'class="gl"' in s3w
-              and "<b>coming in firmware 1.2.0</b> with the Waveshare"
-                  in " ".join(s3c.split())
-              and "not built yet" not in " ".join(hw5.split())
-              and all("SSH" not in re.sub(r"<[^>]+>", "", hsecs[k]) for k in others)
-              and "encrypted" in S.GLOSSARY["SSH"].lower())
-        # Site 1.2.7, Rob: "esp32 is misleading with flash and go, it has to
-        # have an sd card". The bare board says what it does without one and
-        # points at the second entry, which summarises and links /sdcard.
-        sda = "esp32-dev-board-base-sd-card-for-storage"
-        bare = hw5.split('id="esp32-dev-board-base"')[1].split("<h2")[0]
-        sdsec = hw5.split(f'id="{sda}"')[1].split("<h2")[0] if f'id="{sda}"' in hw5 else ""
-        flat_sd = " ".join(sdsec.split())
-        check("the dev board with an SD card is an entry of its own, a little wiring",
-              S.SHOWN_BOARDS[0]["page"] == "/hardware#" + sda
-              and S.board_html(["esp32-sd"]) in sdsec
-              and 'class="art board big wide"' in sdsec
-              and "A LITTLE</text>" in sdsec and "FLASH &amp; GO" not in sdsec
-              and S.buy_html(S.SHOWN_BOARDS[0]) + " on Amazon (affiliate link) "
-                  "for the board; the SD card module is a couple of dollars anywhere" in sdsec
-              and 'aria-label="Buy the ESP32 dev board (Base) on Amazon' in sdsec
-              and "everything the BBS does" in flat_sd and "about $8" in flat_sd
-              and "about half an hour" in flat_sd
-              and "four signal wires plus power" in flat_sd
-              and '<p class="next"><a class="go" href="/sdcard">' in sdsec
-              and "svg.art.board.big.wide {" in hwp)
-        check("and the bare board says what needs a card, and links it",
-              "FLASH &amp; GO" in bare and f'href="#{sda}"' in bare
-              and "chat, mail, accounts" in " ".join(bare.split())
-              and "file areas, forums, backups kept on the card, and the photos"
-                  in " ".join(bare.split()))
-        # Site 1.2.7, Rob's bench: the Freenove's sensor is not the OV2640
-        # Freenove document. His kit carries a GC0308 (640x480, no JPEG),
-        # the firmware drives both, and the board is running, not a port.
-        fn = hw5.split('id="freenove-esp32-camera-board"')[1].split("<h2")[0]
-        flat_fn = " ".join(fn.split())
         _, cam7 = get("/camera")
-        flat_c7 = " ".join(cam7.split())
-        fnb = S.BOARD_BY_DIR["esp32-fncam"]
-        check("the Freenove's camera varies by batch: GC0308 at 640x480, or OV2640",
-              "GC0308" in fnb["camera"] and "OV2640" in fnb["camera"]
-              and "640x480" in fnb["camera"]
-              and "varies between batches" in flat_fn and "GC0308" in flat_fn
-              and "640x480 at most" in flat_fn and "works with either" in flat_fn
-              and "varies between batches" in flat_c7 and "GC0308" in flat_c7
-              and "works with either" in flat_c7
-              and "| Resolution |" not in cam7
-              # Site 1.3.7: the Resolution row points at the sizes section,
-              # which is the one home for each board's sizes.
-              and ("The sizes the board&#x27;s camera can take: see <a "
-                   'href="#what-size-photos-can-i-take">') in cam7
-              and 'id="what-size-photos-can-i-take"' in cam7
-              and "on either camera" not in cam7
-              # Site 1.3.4: /camera now gives every board's largest photo,
-              # so the rule that no size above 640x480 appears beside the
-              # Freenove holds for its own entry, where it always mattered.
-              and not re.search(r"\b(800x600|1024x768|1600x1200)\b|(?<![\d.])[1-9] ?(MP|megapixels?)\b",
-                                flat_fn)
-              # every OV2640 in its entry shares its sentence with the GC0308
-              and all("GC0308" in s for s in re.split(r"(?<=[.:])\s", flat_fn)
-                      if "OV2640" in s))
-        check("and it is running on the bench, still coming soon to the installer",
-              "under way" not in S.board_html(["esp32-fncam"]) and "under way" not in flat_fn
-              and "running on Rob's bench" in S.board_html(["esp32-fncam"])
-              and "coming soon to" in S.board_html(["esp32-fncam"])
-              # Site 1.2.9: in BOARDS, but waiting for a release, so not on
-              # the picker while none on disk carries it.
-              and "esp32-fncam" not in {b["dir"] for b in S.picker_boards()})
-        # Site 1.3.4, Rob: "call out the ESP32-CAM has a better camera than
-        # the Freenove one ... include max pixel sizes and resolution on cam
-        # boards for users to pick, and make recommendations."
-        ecb = S.BOARD_BY_DIR["esp32-cam"]
-        ec = hw5.split('id="esp32-cam"')[1].split("<h2")[0] if 'id="esp32-cam"' in hw5 else ""
-        flat_ec = " ".join(ec.split())
-        # Site 1.3.5 (Rob): on the installer, as a preview, once its set is
-        # on disk. With this suite's firmware/ there is none, so its entry
-        # is still coming soon, and the picker has a row with no buttons.
-        check("the ESP32-CAM has its entry: in BOARDS, taking previews, flash and go, "
-              "its buy link, coming soon while nothing on disk carries it",
-              ecb in S.BOARDS and ecb not in S.SOON_BOARDS
-              and ecb.get("previews", True) is True and "status" not in ecb
-              and S.FLASH_FAMILIES["esp32-cam"] == ("ESP32", 0x1000)
-              and ecb["buy"] == "https://link.amazon/B0enK4lpi"
-              and '<a class="buy" href="https://link.amazon/B0enK4lpi" '
-                  'rel="sponsored nofollow noopener"' in ec
-                  and ">BUY</a> on Amazon (affiliate link)" in ec
-              and S.board_html(["esp32-cam"]) in ec
-              and "coming soon to" in S.board_html(["esp32-cam"])
-              and "<b>Coming soon.</b> The ESP32-CAM" in flat_ec
-              and "on the installer as a preview" not in flat_ec
-              and S.BOARD_SEAL["esp32-cam"] == "go" and S.BOARD_SPEED["esp32-cam"] == "Faster"
-              and "FLASH &amp; GO</text>" in ec and ">expected</text>" not in ec
-              and S.secure_seal_html("esp32-cam") == "" and "esp32-cam" not in S.BOARD_SSH
-              and S.BOARD_ART_ESPCAM.replace('class="art board', 'class="art board big', 1) in ec
-              and [b["dir"] for b in S.picker_boards()][-2:] == ["esp32-cam", "esp32s3-mf35"]
-              and "<b>ESP32-CAM</b>" in inst4 and "esp32-cam/manifest" not in inst4)
-        check("and its facts: the chip, 8 MB of PSRAM with 4 usable, a genuine OV2640 "
-              "at 1600x1200, the programmer board, the two LEDs, and no BOOT button",
-              "ESP32-D0WDQ6" in ecb["part"] and "8 MB PSRAM (4 MB usable)" in ecb["part"]
-              and "OV2640" in ecb["camera"] and "2 MP" in ecb["camera"]
-              and "1600x1200" in ecb["camera"]
-              and "better than the one Rob" in flat_ec
-              and "1600x1200" in flat_ec and "640x480" in flat_ec
-              and "8 MB of" in flat_ec and "the chip can use 4 MB" in flat_ec
-              and "ESP32-CAM-MB" in flat_ec and "micro USB" in flat_ec and "CH340" in flat_ec
-              and "no buttons to press" in flat_ec
-              and "<b>The white LED is the camera&#x27;s flash.</b>" in flat_ec
-              and "<code>CONFIG camera</code>" in flat_ec
-              and "<b>The red LED is the activity light.</b>" in flat_ec
-              and "micro SD slot" in flat_ec and "32 GB" in flat_ec and "SPI mode" in flat_ec
-              and "<b>No BOOT button recovery.</b>" in flat_ec
-              and "<code>BACKUP SD</code>" in flat_ec
-              and "<b>No pins to spare.</b>" in flat_ec and 'href="/lights"' in ec
-              and "SSH" not in re.sub(r"<[^>]+>", "", ec))
-        # Site 1.3.11, Rob: "include the keystudio board on the board
-        # selection website page and indicate why we wont use it. Then
-        # others don't buy it."
-        nr = (hw5.split('id="boards-we-do-not-recommend"')[1]
-              if 'id="boards-we-do-not-recommend"' in hw5 else "")
-        flat_nr = " ".join(nr.split())
-        ks = S.NOT_BY_DIR.get("ks-s3pro", {})
-        ksb = S.board_html(["ks-s3pro"])
-        srcs = re.findall(r'<a href="([^"]+)" rel="([^"]+)">', ksb)
-        check("Boards we do not recommend: the Keyestudio ESP32-S3 PRO, its picture "
-              "with a NOT SUPPORTED seal, why not, no build, no buy link",
-              '<h2 id="boards-we-do-not-recommend">' in hw5
-              and hw5.index('id="other-chips"') < hw5.index('id="boards-we-do-not-recommend"')
-              and '<h3 id="keyestudio-esp32-s3-pro">' in nr
-              and ksb.startswith('<div class="hwb no">') and ksb in nr
-              and S.BOARD_ART_KS_S3PRO.replace('class="art board', 'class="art board big', 1) in ksb
-              and 'class="art seal no"' in ksb and ">SUPPORTED</text>" in ksb
-              and "svg.art.seal.no .rb { stroke:var(--warm); }" in hwp
-              and "<dt>Why not</dt><dd>Its micro SD slot is wired to GPIO 35, 36 and 37" in ksb
-              and "N16R8" in ks.get("part", "") and "8 MB octal PSRAM" in ks.get("part", "")
-              and "<dt>Firmware</dt><dd>None. Not supported" in ksb
-              and "<dt>Buy one</dt>" not in ksb and "<dt>Speed</dt>" not in ksb
-              and "sponsored" not in ksb and "link.amazon" not in ksb
-              and "Keyestudio wired the card slot to GPIO 35, 36 and 37" in flat_nr
-              and "GPIO 33 to 37" in flat_nr
-              and "with the PSRAM on, the card slot does not work" in flat_nr
-              and "file areas, the forums, the backups and the photos" in flat_nr
-              and '<a href="#waveshare-esp32-s3-lcd-1-47">the Waveshare ESP32-S3-LCD-1.47</a>'
-                  in flat_nr
-              and "none is on <a href=\"/install\">the installer</a>" in flat_nr
-              and 'href="#boards-we-do-not-recommend"' in hw5
-              and hw5.count('<div class="hwb">')
-                  == len(S.BOARDS) + len(S.SHOWN_BOARDS) + len(S.SOON_BOARDS))
-        check("and its sources are evidence, not buy links: each rel=nofollow, the "
-              "listing with no affiliate tag, and Keyestudio's and Espressif's own pages",
-              len(srcs) == 3 and all(r == "nofollow" for _u, r in srcs)
-              and srcs[0][0] == "https://www.amazon.com/dp/B0H4Z2RB5M"
-              and all("tag=" not in u for u, _r in srcs)
-              and srcs[1][0].startswith("https://docs.keyestudio.com/projects/KS5034/")
-              and srcs[2][0].startswith("https://docs.espressif.com/projects/esp-idf/")
-              and "esp32s3" in srcs[2][0])
-        check("and it is nowhere the installer looks: not in BOARDS or any table "
-              "beside it, not in the picker, not on /install",
-              "ks-s3pro" not in {b["dir"] for b in S.BOARDS + S.SHOWN_BOARDS + S.SOON_BOARDS}
-              and "ks-s3pro" not in S.BOARD_BY_DIR
-              and "ks-s3pro" not in {b["dir"] for b in S.picker_boards()}
-              and "Keyestudio" not in inst4 and "ks-s3pro" not in inst4
-              and "ks-s3pro" not in S.FLASH_FAMILIES)
-        ch = (hw5.split('id="choosing-a-camera-board"')[1].split("<h2")[0]
-              if 'id="choosing-a-camera-board"' in hw5 else "")
-        flat_ch = " ".join(ch.split())
-        def cells(tr):
-            return [re.sub(r"<[^>]+>", "", re.sub(r'<span class="gt".*?</span>', "", c)).strip()
-                    for c in re.findall(r"<t[hd]>(.*?)</t[hd]>", tr, re.S)]
-        tabs = [[cells(tr) for tr in re.findall(r"<tr>(.*?)</tr>", t, re.S)]
-                for t in re.findall(r"<table>(.*?)</table>", ch, re.S)]
-        heads = [t[0][0] for t in tabs if t and t[0]]
-        facts = [{r[0]: r[1] for r in t[1:] if len(r) == 2} for t in tabs]
-        check("Choosing a camera board: a small table per board, with each one's "
-              "sensor, megapixels and largest photo in pixels",
-              heads == ["ESP32-CAM", "Freenove camera board",
-                        "ESP32-S3 camera board (expected)"]
-              and [f.get("Largest photo") for f in facts]
-                  == ["1600x1200", "640x480, with either camera", "2048x1536"]
-              and [f.get("Megapixels") for f in facts]
-                  == ["2", "0.3 with a GC0308, 2 with an OV2640", "3"]
-              and facts[0].get("Sensor") == "OmniVision OV2640"
-              and "GC0308" in facts[1].get("Sensor", "")
-              and facts[2].get("Sensor") == "OmniVision OV3660"
-              and all(set(f) == {"Sensor", "Megapixels", "Largest photo", "Price",
-                                 "On the board", "Verdict"} for f in facts)
-              and facts[0]["Verdict"] == "The best camera for the money"
-              and 'class="gl"' in ch)
-        check("and the three recommendations, the S3 camera board marked expected",
-              "<b>The best camera for the money: " in flat_ch
-              and '<a href="#esp32-cam">the ESP32-CAM</a>' in flat_ch
-              and "<b>The easiest: " in flat_ch and "plan to swap it" in flat_ch
-              and "<b>The best overall, when tested: " in flat_ch
-              and "expected, not measured" in flat_ch
-              and hw5.index('id="choosing-a-camera-board"')
-                  < hw5.index('id="freenove-esp32-camera-board"')
-                  < hw5.index('id="esp32-cam"') < hw5.index('id="esp32-s3-camera-board"')
-              and 'href="#choosing-a-camera-board"' in hw5
-              and "a genuine OV2640 module fits it in place of a GC0308" in flat_fn)
         c7 = (cam7.split('id="what-size-photos-can-i-take"')[1].split("<h2")[0]
               if 'id="what-size-photos-can-i-take"' in cam7 else "")
         flat_c7s = " ".join(c7.split())
@@ -5458,92 +3607,17 @@ def main():
               "only the sizes its camera, and its build, can take" in flat_c7s
               and "up to 1600x1200" in flat_c7s and "320x240 or 640x480" in flat_c7s
               and "up to 2048x1536 expected" in flat_c7s
-              and 'href="/hardware#choosing-a-camera-board"' in c7
-              and 'href="/hardware#esp32-cam"' in cam7
-              and '<a class="go" href="/hardware#choosing-a-camera-board">' in cam7
+              and 'href="https://unleashedbbs.com/hardware#choosing-a-camera-board"' in c7
+              and 'href="https://unleashedbbs.com/hardware#esp32-cam"' in cam7
+              and '<a class="go" href="https://unleashedbbs.com/hardware#choosing-a-camera-board">' in cam7
               and all(S.gloss_key(w) for w in ("sensor", "megapixels", "PSRAM")))
-        _, diff5 = get("/different")
-        check("and nowhere else",
-              "(expected" not in diff5 and "Fastest" not in diff5)
-        # Site 1.2.2, Rob: each stop is a link to its board, and the drawing
-        # is a group of links a screen reader can reach, each saying in words
-        # what its column shows. The overview names the class of board and
-        # the section it links to names the exact board.
-        stops = re.findall(r'<a class="stp s\d" href="([^"]+)" aria-label="([^"]+)">', spec)
-        stops_tall = re.findall(r'<a class="stp s\d" href="([^"]+)" aria-label="([^"]+)">', spec_tall)
-        check("and each stop is a link, told to a screen reader in words",
-              'role="group" aria-label="Four ways to build a board"' in spec.split(">")[0]
-              and 'role="group" aria-label="Four ways to build a board"' in spec_tall.split(">")[0]
-              and stops_tall == stops
-              and [h for h, _ in stops] == ["#esp32-dev-board-base",
-                                          "#esp32-dev-board-base-sd-card-for-storage",
-                                          "#waveshare-esp32-s3-lcd-1-47",
-                                          "#esp32-s3-camera-board"]
-              and all("About $" in a for _, a in stops)
-              and 'id="esp32-dev-board-base"' in hwp
-              and 'id="waveshare-esp32-s3-lcd-1-47"' in hwp)
-        check("the overview says ESP32-S3 board, never the brand",
-              ">ESP32-S3 board</text>" in spec and "Waveshare" not in spec
-              and "Waveshare" not in hwp.split('id="esp32-dev-board-base"')[0])
-        # The motion: every piece of it declared where reduced motion stops
-        # it, the lamp at rest on the second stop and running from the first
-        # to the last, in both drawings, transforms and opacity only.
-        art_all = hwp.split("svg.art { display:block;")[1].split("</style>")[0]
-        still, moving_s = art_all.split("@media (prefers-reduced-motion: no-preference) {")
-        check("and its motion is declared only where reduced motion stops it",
-              "svg.art.spectrum .sl { transform-box:fill-box" in moving_s
-              and "svg.art.spectrum .sdot { animation:" in moving_s
-              and "svg.art.spectrum a:hover .up," in moving_s
-              and not re.search(r"svg\.art\.spectrum[^{]*\{[^}]*(animation|transition):",
-                                still)
-              and "svg.art.spectrum.tall .sdot { animation:" in moving_s
-              and "specgoy" in moving_s
-              and S.SPECTRUM_PARK == 1
-              and f'<circle class="dh" cx="{xs[1]}" cy="79"' in spec
-              and f'style="--from:{xs[0] - xs[1]}px;--to:{xs[3] - xs[1]}px"' in spec
-              and 'style="--from:-104px;--to:208px"' in spec_tall)
-        spec_kf = re.findall(r"@keyframes (spec\w+) \{(.*?)\}\s*\}", art_all, re.S)
-        check("and it moves by transform and opacity alone",
-              len(spec_kf) == 7
-              and all(set(re.findall(r"([a-z-]+):", body)) <= {"transform", "opacity"}
-                      for _, body in spec_kf))
-        check("and says it in words too, every figure an estimate",
-              "functional, and the lowest cost. About $5" in flat_h
-              and "economical and usable. About $8" in flat_h
-              and "advanced capabilities. About $20" in flat_h
-              and "display, camera, the works. About $40 and up" in flat_h
-              and all(s[3].startswith("about ") and s[4].startswith("about ")
-                      for s in S.SPECTRUM_STOPS))
-        s3sec = hwp.split('id="waveshare-esp32-s3-lcd-1-47"')[1].split('id="other-chips"')[0]
-        check("the S3's section says it needs no wiring, and no build pages",
-              "No wiring, and none of the build pages" in " ".join(s3sec.split())
-              and 'href="/sdcard"' in s3sec and 'href="/lights"' in s3sec)
-        check("no page says any 4 MB module will do",
-              "Any module with the same flash will do" not in flat_b
-              and "Any module with 4 MB of flash works" not in
-                  " ".join(get("/teachers")[1].split()))
-
-        # Site 1.2.2, Rob on /build: "Need clearer calls to action. The blue
-        # blends in and tested boards reads wierd after 'a board' its a
-        # microcontroller and it should read like something like 'A
-        # compatible ESP32 board' and then go into it."
-        need = build.split('id="what-you-need"')[1].split("<h2")[0]
-        flat_n = " ".join(need.split())
-        check("/build's What you need leads each item with the thing itself",
-              "<li><b>A compatible ESP32 board.</b> A small computer with Wi-Fi built in" in flat_n
-              and "<li><b>A USB data cable.</b>" in flat_n
-              and "<li><b>2.4 GHz Wi-Fi.</b>" in flat_n
-              and "Tested boards</a> has" not in flat_n
-              and "special handling" not in flat_n and "EN pulled up" not in flat_n)
-        check("and its next step is a button to the tested boards",
-              '<p class="next"><a class="go" href="/hardware">Choose a board</a></p>'
-              in need and 'href="#on-a-bare-module"' in need
-              and 'id="on-a-bare-module"' in build)
         # A next step is a button, one a section at most, and a button that
         # is not the installer's own never says Install.
         crowded, says_install = [], []
-        for md in sorted(pathlib.Path("pages").glob("*.md")):
-            body = get("/" + md.stem)[1]
+        own_md = sorted(pathlib.Path("pages").glob("*.md"))
+        docs_md = sorted(pathlib.Path(DOCS_DIR, "pages").glob("*.md")) if HAVE_DOCS else []
+        for md in own_md + docs_md:
+            body = get(("/docs/" if md in docs_md else "/") + md.stem)[1]
             for part in body.split("<h2")[1:] or [body]:
                 if part.count('<p class="next">') > 1:
                     crowded.append(md.stem)
@@ -5557,7 +3631,7 @@ def main():
         # A page's title used as a sentence's subject ("Tested boards has the
         # two ...") reads as a typo to anybody who has not seen that page yet.
         subj = []
-        for md in sorted(pathlib.Path("pages").glob("*.md")):
+        for md in own_md + docs_md:
             text = re.sub(r"<!--.*?-->", "", md.read_text(encoding="utf-8"), flags=re.S)
             flat_md = " ".join(text.split())
             for m in re.finditer(r"(?:^|[.!?] |\*\* |- )\[([A-Z][^\]]*)\]\((?:/|#)[^)]*\) "
@@ -5569,7 +3643,7 @@ def main():
         # The body link is 1.02:1 from the text around it, so the underline is
         # what marks it (WCAG 1.4.1): a deliberate one, heavier under the
         # pointer. The outlined buttons' edge is 4.2:1 on the page.
-        css_l = get("/build")[1]
+        css_l = get("/data")[1]
         check("a link is marked by its underline, not its colour alone",
               "a { color:var(--dial); text-decoration-thickness:0.075em;" in css_l
               and "a:hover { text-decoration-thickness:0.14em; }" in css_l
@@ -5597,13 +3671,15 @@ def main():
               and S.software_shown("Mystic") == "Mystic"
               and S.software_shown("unleashed-fork") == "unleashed-fork"
               and S.software_shown("") == "" and S.software_shown(None) == "")
-        sweep_paths = sorted({"/", "/directory", "/badges", "/about", "/author",
-                              "/data", "/how", "/rules", "/build", "/no-such-page"}
+        sweep_paths = sorted({"/", "/directory", "/badges", "/data", "/how", "/rules",
+                              "/docs", "/docs/no-such-page"}
                              | {"/" + n[:-3] for n in os.listdir("pages")
-                                if n.endswith(".md")})
+                                if n.endswith(".md")}
+                             | ({"/docs/" + n[:-3] for n in os.listdir(os.path.join(DOCS_DIR, "pages"))
+                                 if n.endswith(".md")} if HAVE_DOCS else set()))
         slipped, not_utf8 = [], []
         for path in sweep_paths:
-            for host in (None, "about.example", "data.example"):
+            for host in (None, "boards.example"):
                 if host and path != "/":
                     continue
                 req = urllib.request.Request(BASE + path)
@@ -5627,17 +3703,16 @@ def main():
                 slipped += [where + " " + b for b in sweeper.bad]
         check("no page shows a plain unleashed outside the identifier allowlist"
               + ("" if not slipped else "  <- " + " | ".join(slipped[:4])),
-              len(sweep_paths) > 30 and not slipped)
+              len(sweep_paths) > (20 if HAVE_DOCS else 6) and not slipped)
         check("every page says UTF-8, in its header and first thing in its head"
               + ("" if not not_utf8 else "  <- " + ", ".join(not_utf8[:4])),
               not not_utf8)
         front = get("/")[1]
         check("and the name arrives as the micro sign, in the title and the preview",
-              "<title>\u00b5nleashed" in front
+              "- \u00b5nleashed BBS directory</title>" in front
               and '<meta property="og:site_name" content="%s">'
                   % html.escape(S.SITE_NAME, quote=True) in front
-              and S.SITE_NAME.startswith("\u00b5nleashed")
-              and '<meta property="og:title" content="\u00b5nleashed' in front)
+              and S.SITE_NAME.startswith("\u00b5nleashed"))
         probe = NameSweep()
         probe.feed('<p>Run unleashed.local and <code>unleashed</code>, see '
                    'unleashedbbs.com and unleashed_BBS.</p>'
@@ -5657,20 +3732,21 @@ def main():
 
         print("The glossary")
         glossed = {}
-        for f in sorted(pathlib.Path("pages").glob("*.md")):
+        for f in (sorted(pathlib.Path("pages").glob("*.md"))
+                  + (sorted(pathlib.Path(DOCS_DIR, "pages").glob("*.md")) if HAVE_DOCS else [])):
             for m in re.finditer(r"\[\[([^\[\]]+)\]\]", f.read_text(encoding="utf-8")):
                 glossed.setdefault(m.group(1), f.name)
         unknown = [f"{w} ({f})" for w, f in glossed.items() if S.gloss_key(w) is None]
         check("every [[term]] in the pages has an entry in the table"
               + ("" if not unknown else "  <- " + ", ".join(unknown)),
-              glossed and not unknown)
+              (glossed or not HAVE_DOCS) and not unknown)
         check("and every entry is one sentence or two, short enough for the box",
               all(20 <= len(d) <= 160 and d.endswith(".") for d in S.GLOSSARY.values())
               and all(S.gloss_key(k) is not None for k in S.GLOSSARY_FORMS)
               and set(S.GLOSSARY_FORMS.values()) <= set(S.GLOSSARY))
-        leaked = [p_ for p_ in ("/", "/directory", "/whofor", "/firstcall", "/build",
-                                "/terminals", "/forward", "/install", "/hardware",
-                                "/different", "/privacy", "/teachers", "/setup")
+        leaked = [p_ for p_ in ("/", "/directory", "/badges", "/data", "/how")
+                  + (("/docs/firstcall", "/docs/terminals", "/docs/forward",
+                      "/docs/privacy", "/docs/setup") if HAVE_DOCS else ())
                   if "[[" in get(p_)[1].split("</nav>")[1]]
         check("no page shows the markup instead of the term"
               + ("" if not leaked else "  <- " + ", ".join(leaked)), not leaked)
@@ -5691,7 +3767,7 @@ def main():
               and ".gl { position:relative; border-bottom:1px dotted currentColor;" in css_g)
         check("and on a phone it is a bar across the foot of the screen, not off its edge",
               ".gl .gt { position:fixed; left:1rem; right:1rem; top:auto; bottom:1rem;" in css_g)
-        ids = re.findall(r'aria-describedby="(gl\d+)"', get("/different")[1])
+        ids = re.findall(r'aria-describedby="(gl\d+)"', get("/docs/terminals")[1])
         check("ids are unique on a page", ids and len(ids) == len(set(ids)))
 
         # The one step between "Try one first" and a board.
@@ -5708,7 +3784,7 @@ def main():
                   in js_
               and 'href="https://apps.apple.com/us/app/muffinterm/id1583236494"' in js_
               and 'href="https://syncterm.bbsdev.net/"' in js_
-              and 'href="/terminals">Apps for joining</a>' in js_
+              and 'href="/docs/terminals">Apps for joining</a>' in js_
               and 'class="gl"' in js_)
         # Site 1.3.1 (Rob's own app on Android): Termius, beside TERMinator,
         # on the join step and on /terminals.
@@ -5723,9 +3799,6 @@ def main():
               and '<a href="https://termius.com/">Termius</a>' in tp
               and "Telnet is in the free plan." in tp
               and "telnet is in its free plan" in " ".join(tp.split()))
-        check("the menu's first entry is Communities online, and the wordmark goes home",
-              '<nav><a href="/directory">Communities online</a>' in get("/whofor")[1]
-              and '<a class="home" href="/"' in get("/whofor")[1])
 
         # The Telnet BBS Guide, on /how.
         hw = get("/how")[1]
@@ -5740,9 +3813,8 @@ def main():
 
         print("The freedoms in the header")
         faces = {"the board list": get("/directory")[1],
-                 "a page from the menu": get("/terminals")[1],
-                 "the manifesto": man,
-                 "the data face": get("/", host="data.example")[1]}
+                 "a page from the menu": get("/how")[1],
+                 "the data page": get("/data")[1]}
 
         def ticker_of(page):
             m = re.search(r'<div class="ticker">(.*?)</ul></div>', page, re.S)
@@ -5809,14 +3881,14 @@ def main():
         # Each section of the menu opens on a different freedom, or a reader
         # clicking round would only ever see the first two.
         firsts = []
-        for path, host in (("/directory", None), ("/", "about.example"), ("/whofor", None),
-                           ("/terminals", None), ("/firstcall", None),
-                           ("/build", None), ("/forward", None), ("/how", None)):
+        sections_ = [("/directory", None), ("/badges", None), ("/how", None),
+                     ("/rules", None), ("/data", None)] + ([("/docs/setup", None)] if HAVE_DOCS else [])
+        for path, host in sections_:
             first = re.search(r"<li>.*?<b>(.*?)</b>",
                               ticker_of(get(path, host=host)[1]), re.S)
             firsts.append(first.group(1) if first else None)
         check("and each section of the menu opens on a different one",
-              None not in firsts and len(set(firsts)) == 8)
+              None not in firsts and len(set(firsts)) == len(sections_))
 
         # No overflow. The panel is not shown until it fits beside the
         # wordmark, and the width at which it fits is arithmetic, not a
@@ -5848,1194 +3920,119 @@ def main():
               max(len(l) for l in labels) * (0.602 * bsize + bspace) <= column
               and max(len(n) for _l, n in wanted) * 0.602 * isize <= column)
 
+
+
         # ------------------------------------------------------------------
-        print("The manifest is built from what is on disk")
-        import pathlib
+        # Releases on disk. The main site's installer keeps them; the
+        # directory reads the same folder (DIRECTORY_FIRMWARE_DIR), for the
+        # update arrow on a board that is behind, the banner above the list,
+        # and the guides' "::: from" gates. In-process first, then over HTTP
+        # against a second directory pointed at scratch releases.
+        print("Versions, and the update arrow")
         import shutil
+        import sitekit as K
         fwroot = tempfile.mkdtemp(prefix="dirfw")
-        was_dir = S.FIRMWARE_DIR
-
-        def put(version, chip, names, extra=None):
-            d = os.path.join(fwroot, version, chip)
-            os.makedirs(d, exist_ok=True)
-            for n in names:
-                with open(os.path.join(d, n), "w") as fh:
-                    fh.write("placeholder, not firmware\n")
-            for n, body in (extra or {}).items():
-                with open(os.path.join(fwroot, version, n), "w") as fh:
-                    fh.write(body)
-
         whole = ["bootloader.bin", "partitions.bin", "ota_data_initial.bin",
                  "firmware.bin", "storage.bin"]
-        put("0.19.2", "esp32", whole,
-            {"release.txt": "2026-09-21\nA short note.\n",
-             "THIRD_PARTY_NOTICES.md": "notices\n"})
-        put("0.19.1", "esp32", whole,
-            {"release.txt": "2026-09-01\nimprov: yes\nOlder.\n"})
-        put("0.18.0", "esp32", whole)                  # a third, beyond the cap
-        put("9.9.9", "esp32", whole[:4])               # storage.bin missing
-        put("0.19.2", "esp32x9", whole)                # not a chip family we know
-        os.makedirs(os.path.join(fwroot, "NOT-A-RELEASE", "esp32"), exist_ok=True)
 
+        def put(version, chip, names):
+            d_ = os.path.join(fwroot, version, chip)
+            os.makedirs(d_, exist_ok=True)
+            for n in names:
+                with open(os.path.join(d_, n), "wb") as fh:
+                    fh.write(pt_bin(ESP32_LAYOUT) if n == "partitions.bin"
+                             else b"placeholder, not firmware\n")
+
+        put("1.0.0", "esp32", whole)
+        put("1.0.1", "esp32", whole)
+        was_dir = S.FIRMWARE_DIR
+        S.FIRMWARE_DIR = K.FIRMWARE_DIR = pathlib.Path(fwroot)
         try:
-            S.FIRMWARE_DIR = pathlib.Path(fwroot)
-            rels = S.firmware_releases()
-            check("two releases are offered, newest first",
-                  [r["version"] for r in rels] == ["0.19.2", "0.19.1"])
-            # Not merely unlisted. A version left on disk past the cap must
-            # not be reachable by typing its number either, or "two live"
-            # would be a statement about the page and not about the site.
-            check("a third on disk is not offered and is not reachable",
-                  S.firmware_manifest("0.18.0") is None
-                  and S.firmware_file("0.18.0/esp32/firmware.bin") is None)
-            # The property the whole design exists for: a release cannot be
-            # half-published, because a part is only ever emitted for a file
-            # that was just found on disk.
-            check("a release missing one part is not offered at all",
-                  S.firmware_manifest("9.9.9") is None)
+            vk = S.version_key
+            check("versions compare part by part: 1.0.10 is newer than 1.0.9",
+                  vk("1.0.10") > vk("1.0.9") and vk("1.0.1") == vk("1.0.1")
+                  and vk("0.23.0") < vk("1.0.0") < vk("1.0.1") < vk("1.1.0")
+                  and vk("v1.0.1") == vk("1.0.1") and vk(" 1.0.1 ") == vk("1.0.1"))
+            check("a pre-release is older than its release, and newer than the one "
+                  "before; build metadata does not count",
+                  vk("1.0.1-rc.2") < vk("1.0.1") and vk("1.0.1-rc.2") > vk("1.0.0")
+                  and vk("1.0.1+build.7") == vk("1.0.1"))
+            check("anything that is not three numbers is not a version",
+                  all(vk(g) is None for g in ("", None, "1.0", "1", "dev", "1.0.0.1",
+                                               "1.0.x", "one.two.three", "1..0",
+                                               "<b>1.0.0</b>", "1.0.0 beta",
+                                               "1.0.0-", "-1.0.0")))
+            latest = S.newest_release()
 
-            man = S.firmware_manifest("0.19.2")
-            check("the top level is exactly the keys ESP Web Tools reads",
-                  set(man) == {"name", "version", "new_install_prompt_erase",
-                               "new_install_improv_wait_time", "builds"})
-            check("the person is asked before the chip is erased, not after",
-                  man["new_install_prompt_erase"] is True)
-            # The Update button's manifest (0.22.1): the same in every key,
-            # plus the one the dialog served here reads as "never erase". It
-            # keeps new_install_prompt_erase, because ESP Web Tools erases by
-            # default without it, and a copy of the dialog that does not know
-            # the extra key (upstream's, or a cached one from before 0.22.1)
-            # must fall back to asking, box unticked, rather than to erasing.
-            upd = S.firmware_manifest("0.19.2", update=True)
-            check("the Update manifest is the install one plus unleashed_update",
-                  upd is not None and upd.get("unleashed_update") is True
-                  and {k: v for k, v in upd.items() if k != "unleashed_update"} == man
-                  and "unleashed_update" not in man)
-            check("and it still sets new_install_prompt_erase, so no dialog erases by default",
-                  upd["new_install_prompt_erase"] is True)
-            got = S.firmware_file("0.19.2/manifest-update.json")
-            check("it is served beside the other, as JSON that carries the key",
-                  got is not None and got[1].startswith("application/json")
-                  and json.loads(got[0].decode()).get("unleashed_update") is True
-                  and S.firmware_file("0.18.0/manifest-update.json") is None
-                  and S.firmware_file("0.19.2/manifest-other.json") is None)
-            check("only the chip families we know about are in it",
-                  [b["chipFamily"] for b in man["builds"]] == ["ESP32"])
+            # A stored row, listed ten days: past new, short of a month,
+            # so the directory adds no badge of its own to it.
+            def brow(**kw):
+                r = {"software": "unleashed", "version": "1.0.0", "system": "",
+                     "terminals": "", "guests": None, "features": "", "support": "",
+                     "interests": "", "public_at": int(time.time()) - 10 * 86400,
+                     "first_seen": int(time.time()) - 10 * 86400}
+                r.update(kw)
+                return r
 
-            # The offsets, read from the firmware repository's partitions.csv
-            # and its generated sdkconfig rather than from a tutorial. The
-            # bootloader is at 0x1000 because this is an ESP32; an S3 or a C3
-            # would be 0x0, which is why it comes from FLASH_FAMILIES.
-            parts = man["builds"][0]["parts"]
-            check("the parts are the bootloader, the table, otadata, the app and the screens",
-                  [p["path"] for p in parts]
-                  == ["esp32/bootloader.bin", "esp32/partitions.bin",
-                      "esp32/ota_data_initial.bin", "esp32/firmware.bin",
-                      "esp32/storage.bin"])
-            check("at the offsets the partition table actually uses",
-                  [p["offset"] for p in parts]
-                  == [4096, 32768, 61440, 131072, 3932160])
-            # Site 1.3.8: the name a reader sees in the dialog, with its
-            # micro sign. The board still sends "unleashed BBS" over Improv,
-            # and the dialog served here folds the sign to match it.
-            check("under the name a reader sees, with the micro sign",
-                  man["name"] == "\u00b5nleashed BBS" == S.MANIFEST_NAME
-                  and man["version"] == "0.19.2")
-            # Their type is `offset: number`, JSON has no hex literal, and a
-            # string would be handed to the flasher unparsed. This is the one
-            # mistake in the schema that would write a board at the wrong
-            # address, so it is pinned as a type and not only as a value.
-            check("and every offset is a number, never a hex string",
-                  all(isinstance(p["offset"], int) for p in parts))
-            check("nothing that is not a version number is mistaken for one",
-                  all(re.match(r"^\d+\.\d+\.\d+$", r["version"]) for r in rels))
+            check("the newest release is the one /install offers first",
+                  latest == "1.0.1" and latest == S.firmware_releases()[0]["version"])
+            check("a board on an older version is behind; one that is equal, newer "
+                  "or unparseable is not",
+                  S.update_for(brow(version="1.0.0"), latest) == "1.0.1"
+                  and S.update_for(brow(version="0.23.0"), latest) == "1.0.1"
+                  and S.update_for(brow(version="1.0.1-rc.1"), latest) == "1.0.1"
+                  and S.update_for(brow(version="1.0.1"), latest) == ""
+                  and S.update_for(brow(version="1.0.2"), latest) == ""
+                  and S.update_for(brow(version="1.0.10"), latest) == ""
+                  and S.update_for(brow(version="garbage"), latest) == ""
+                  and S.update_for(brow(version=""), latest) == "")
+            check("other software is never flagged, whatever its version",
+                  S.update_for(brow(software="Mystic", version="0.0.1"), latest) == ""
+                  and S.update_for(brow(software="unleashed-fork", version="0.0.1"),
+                                   latest) == ""
+                  and S.update_for(brow(software="", version="0.0.1"), latest) == "")
+            check("and nothing is flagged with no release on disk",
+                  S.update_for(brow(), "") == "" and "update" not in S.row_keys(
+                      brow(), int(time.time()), False, ""))
+            bb1 = S.board_badges(brow(system="ESP32"), int(time.time()), False, latest)
+            check("a board that is behind has the arrow on its software badge, "
+                  "linked to /upgrade, before the machine",
+                  '<span class="bid"><span class="bd k-soft" role="img"' in bb1
+                  and '>µnleashed 1.0.0</span><a class="bu" href="https://unleashedbbs.com/upgrade" ' in bb1
+                  and bb1.index('class="bu"') < bb1.index('class="bd k-sys"')
+                  and 'data-tip="Update available: 1.0.0 → 1.0.1. Plug it in and '
+                      'use Update my board on /install."' in bb1
+                  and 'aria-label="Update available: 1.0.0 → 1.0.1.' in bb1
+                  and "update" in S.row_keys(brow(), int(time.time()), False, latest))
+            check("and none for a board on the newest, or for other software",
+                  'class="bu"' not in S.board_badges(brow(version="1.0.1"),
+                                                     int(time.time()), False, latest)
+                  and 'class="bu"' not in S.board_badges(
+                      brow(software="Mystic", version="0.0.1"), int(time.time()),
+                      False, latest))
+            ul = S.update_link('1.0.0"><script>x</script>', "1.0.1")
+            check("the arrow's tooltip is escaped, once, in both attributes",
+                  "<script>" not in ul and '"><' not in ul.split(">", 1)[0]
+                  and ul.count("1.0.0&quot;&gt;&lt;script&gt;x&lt;/script&gt;") == 2)
+            check("without a system badge the software badge is alone on its row; "
+                  "with nothing else there is no second row",
+                  S.board_badges(brow(version="1.0.1"), int(time.time()), False, latest)
+                  == '<span class="badges"><span class="bid">'
+                     + S.badge("soft", "µnleashed 1.0.1",
+                               "Software: µnleashed 1.0.1, as the board reports it.")
+                     + "</span></span>"
+                  and S.board_badges(brow(software="", version=""), int(time.time()),
+                                     False, latest) == "")
 
-            # Every release speaks Improv now, and the first boot after an
-            # erase formats two filesystems before it answers.
-            check("every release waits thirty seconds for the Wi-Fi step",
-                  man["new_install_improv_wait_time"] == 30
-                  and S.firmware_manifest("0.19.1")["new_install_improv_wait_time"] == 30)
-            check("the date and note beside a release are read from it",
-                  rels[0]["date"] == "2026-09-21"
-                  and rels[0]["note"] == "A short note.")
-            check("and an old improv line is skipped, not shown as the note",
-                  rels[1]["note"] == "Older.")
-
-            # Names are checked, not paths, the same way static_file does it.
-            climbs = ["../server.py", "0.19.2/../../server.py",
-                      "0.19.2/esp32/../../../server.py", "0.19.2/esp32/release.txt",
-                      "0.19.2/esp32x9/firmware.bin", "", "manifest.json"]
-            climbs += ["0.19.2/esp32/littlefs.bin", "0.19.2/release.txt",
-                       "0.19.2/manifest.json/x"]
-            check("no path under /install/ climbs out of it, or reaches past the five parts",
-                  all(S.firmware_file(c) is None for c in climbs))
-            got = S.firmware_file("0.19.2/esp32/firmware.bin")
-            check("a real part is served as a binary",
-                  got is not None and got[1] == "application/octet-stream")
-            got = S.firmware_file("0.19.2/manifest.json")
-            check("and the manifest as JSON that parses",
-                  got is not None
-                  and json.loads(got[0].decode())["version"] == "0.19.2")
-
-            shown = S.installer_html()
-            check("with an image published the page offers the element",
-                  "<esp-web-install-button" in shown
-                  and 'manifest="/install/0.19.2/esp32/manifest.json"' in shown)
-            check("with our own button and both refusal messages in its slots",
-                  'slot="activate"' in shown and 'slot="unsupported"' in shown
-                  and 'slot="not-allowed"' in shown)
-            # "Kept" means a reader can go back to it, which a link to a
-            # JSON file never let them do. It is a choice in the card's
-            # board slot now, two native radios and no script: the checked
-            # one decides which button, version line and notices link show.
-            check("the older release is kept as a choice, the newest picked",
-                  'manifest="/install/0.19.1/esp32/manifest.json"' in shown
-                  and shown.count('name="fwver0"') == 2
-                  and '<input type="radio" name="fwver0" id="fwv0_0" checked> 0.19.2'
-                      in shown
-                  and ".installer .b0 .r1{display:none}" in shown
-                  and ".installer:has(#fwv0_1:checked) .b0 .r1{display:block}" in shown
-                  and shown.count('<span class="no" slot="unsupported">') == 2)
-            # The card said the version three times: on the button, in a
-            # line under it, and again as release.txt's first line.
-            check("the card says each version once, not on the button",
-                  shown.count('class="meta ver r0"') == 1
-                  and "Version 0.19.2, released 2026-09-21." in shown
-                  and shown.count(">Install on a new board</button>") == 2
-                  and "Install 0.19.2" not in shown and "A short note." not in shown)
-            # Two buttons per release (0.22.1, Rob): the install as it was,
-            # and Update my board on the manifest that can never erase. The
-            # update one says nothing of its own on a browser that cannot
-            # use it, and hides, so the reason is given once.
-            check("each release has Install on a new board and Update my board",
-                  shown.count(">Update my board</button>") == 2
-                  and '<esp-web-install-button class="r0 upd" manifest="/install/'
-                      '0.19.2/esp32/manifest-update.json"><button class="go upd" '
-                      'slot="activate">' + S.BTN_ICON_UPDATE + 'Update my board</button>'
-                      in shown
-                  and 'manifest="/install/0.19.1/esp32/manifest-update.json"' in shown
-                  and shown.index('manifest="/install/0.19.2/esp32/manifest.json"')
-                      < shown.index('manifest="/install/0.19.2/esp32/manifest-update.json"')
-                  and shown.count('<span slot="unsupported"></span>'
-                                  '<span slot="not-allowed"></span>') == 2)
-            # Site 1.2.0: the board slot is the board picker. The ESP32 is
-            # picked to start with and says which firmware it would get; the
-            # S3, with nothing on disk, says so and has no buttons.
-            check("the picker offers each board, the ESP32 picked, its version said",
-                  '<input type="radio" name="fwboard" id="fwb0" checked>'
-                  + S.BOARD_ART_ESP32 in shown
-                  and '<input type="radio" name="fwboard" id="fwb1">' + S.BOARD_ART_S3
-                      in shown
-                  and '<span class="bv">Firmware 0.19.2</span>' in shown
-                  and '<span class="bv soon">Coming soon<span class="sep"' in shown
-                  and '<div class="bsec b1"><p class="soon">There is no image for this '
-                      "board on this site yet." in shown
-                  and ".installer .bsec.b1{display:none}"
-                      ".installer:has(#fwb1:checked) .bsec.b0{display:none}"
-                      ".installer:has(#fwb1:checked) .bsec.b1{display:flex}" in shown
-                  and "Board: ESP32" not in shown)
-            g0 = S.guide_html(["Pick your board | Choose it {panel}."])
-            check("a pick with nothing to install is neither framed nor in the guide",
-                  shown.count('<label class="bopt rec">') == 1
-                  and "Most powerful" not in shown + g0
-                  and "Best with a camera" not in shown + g0
-                  and '<label for="fwb0">ESP32 dev board</label>' in g0
-                  and S.guide_html([]) == "")
-            # Site 1.2.7, Rob: the dev board with a card is a second entry on
-            # /hardware and a display split only. The picker still has one
-            # ESP32, and the new entry names the ESP32's own firmware.
-            # Site 1.2.9 (Rob): the dev board is the Base choice, with or
-            # without a card, and says so under its name. The Freenove is
-            # in BOARDS but waits for a release, so with none carrying it
-            # the picker has the same two rows as before.
-            check("the picker still offers exactly one ESP32, and the card entry "
-                  "takes the ESP32's firmware",
-                  # Site 1.3.5: plus the ESP32-CAM's row, coming soon with
-                  # nothing on disk for it.
-                  # Site 1.3.17: and the Makerfabs's, coming soon the same way.
-                  shown.count('<input type="radio" name="fwboard"') == 4
-                  and shown.count("<b>ESP32 dev board (Base)</b>") == 1
-                  and '<span class="tell pick">With or without an SD card: one '
-                      "image</span>" in shown
-                  and "Two rows of pins and a USB socket" not in shown
-                  and all(len(b.get("pick", "")) <= 39 for b in S.BOARDS)
-                  and "SD card, for storage" not in shown
-                  and "Freenove" not in shown
-                  and [b["dir"] for b in S.BOARDS] == ["esp32", "esp32s3", "esp32-fncam",
-                                                       "esp32-cam", "esp32s3-mf35"]
-                  and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3",
-                                                                "esp32-cam", "esp32s3-mf35"]
-                  and all("image" not in b for b in S.BOARDS)
-                  and "<dt>Firmware</dt><dd>0.19.2 <a href=\"/install\">on the "
-                      "installer</a>. The same image as the bare board: choose ESP32 "
-                      "dev board (Base) on the installer.</dd>"
-                      in S.board_html(["esp32-sd"])
-                  and "Each image is for its own chip." in shown
-                  and '<p class="meta early' not in shown)
-            # Site 1.0.0: a symbol on each button, a fresh chip with a
-            # sparkle and a chip in an arrow going round it. Decoration: the
-            # words say it, so a screen reader is not told twice.
-            check("each button has its symbol before its words, hidden from a "
-                  "screen reader",
-                  shown.count('slot="activate">' + S.BTN_ICON_NEW
-                              + "Install on a new board</button>") == 2
-                  and shown.count('slot="activate">' + S.BTN_ICON_UPDATE
-                                  + "Update my board</button>") == 2
-                  and all(ic.startswith('<svg class="bi" viewBox="0 0 24 24" '
-                                        'aria-hidden="true" focusable="false">')
-                          and not re.search(r"<text|\sid=|<script|href", ic)
-                          for ic in (S.BTN_ICON_NEW, S.BTN_ICON_UPDATE))
-                  and S.BTN_ICON_NEW != S.BTN_ICON_UPDATE)
-            check("the words inside the block are the card's amber box",
-                  '<div class="pre"><p><b>Before you start:</b> x</p></div>'
-                  in S.installer_html(["**Before you start:** x"]))
-            check("and the licences of what is being installed are linked",
-                  "/install/0.19.2/THIRD_PARTY_NOTICES.md" in shown
-                  and S.EWT_BASE + "LICENSE" in S.installer_terms_html()
-                  and S.EWT_BASE + "THIRD_PARTY_LICENSES.txt" in S.installer_terms_html())
-
-            # ------------------------------------------------------------------
-            # Site 1.2.0: one board a manifest, and a preview for a board no
-            # release carries. The firmware's pre-release (vX.Y.Z-dev.N)
-            # carries both chips; the ESP32 stays on its release, the S3 is
-            # offered the preview, and the preview is never "the newest
-            # release" (no gates, no banner, no update arrows).
-            print("Boards, one manifest each, and a preview")
-            put("0.20.0-dev.3", "esp32", whole + ["version.txt"])
-            put("0.20.0-dev.3", "esp32s3", whole,
-                {"release.txt": "version 0.20.0-dev.3\ncommit abc1234\n",
-                 "THIRD_PARTY_NOTICES.md": "notices\n"})
-            with open(os.path.join(fwroot, "0.20.0-dev.3", "esp32", "version.txt"), "w") as fh:
-                fh.write("0.20.0-dev.3\n")
-            with open(os.path.join(fwroot, "0.20.0-dev.3", "esp32s3", "version.txt"),
-                      "w") as fh:
-                fh.write("0.20.0-dev.3 (S3 1.0.0)\n")
-            os.makedirs(os.path.join(fwroot, "0.20.0-", "esp32"), exist_ok=True)
-            os.makedirs(os.path.join(fwroot, "0.20.0-a..b", "esp32"), exist_ok=True)
-            check("a preview is not a release, and nothing else changes",
-                  [r["version"] for r in S.firmware_releases()] == ["0.19.2", "0.19.1"]
-                  and S.newest_release() == "0.19.2")
-            check("the ESP32 is offered its releases; the S3, which no release "
-                  "carries, the preview",
-                  [r["version"] for r in S.board_offers("esp32")] == ["0.19.2", "0.19.1"]
-                  and [r["version"] for r in S.board_offers("esp32s3")] == ["0.20.0-dev.3"]
-                  and S.board_offers("esp32s3")[0]["pre"] is True)
-            m3 = S.firmware_manifest("0.20.0-dev.3", chip="esp32s3")
-            check("a board's manifest holds that board's build and nothing else",
-                  m3 is not None and [b["chipFamily"] for b in m3["builds"]] == ["ESP32-S3"]
-                  and [b["chipFamily"] for b in S.firmware_manifest(
-                      "0.19.2", chip="esp32")["builds"]] == ["ESP32"])
-            check("at the S3's offsets, bootloader at 0, the parts beside it",
-                  [(p["path"], p["offset"]) for p in m3["builds"][0]["parts"]]
-                  == [("bootloader.bin", 0), ("partitions.bin", 32768),
-                      ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
-                      ("storage.bin", 3932160)])
-            check("under the version the board shows, from its version.txt",
-                  m3["version"] == "0.20.0-dev.3 (S3 1.0.0)"
-                  and S.firmware_manifest("0.19.2", chip="esp32")["version"] == "0.19.2")
-            check("the Update manifest for a board is the same plus the key that "
-                  "forbids the erase",
-                  {k: v for k, v in S.firmware_manifest(
-                      "0.20.0-dev.3", update=True, chip="esp32s3").items()
-                   if k != "unleashed_update"} == m3)
-            got3 = S.firmware_file("0.20.0-dev.3/esp32s3/manifest.json")
-            check("served from inside the board's own folder",
-                  got3 is not None and json.loads(got3[0].decode()) == m3
-                  and S.firmware_file("0.20.0-dev.3/esp32s3/firmware.bin") is not None
-                  and json.loads(S.firmware_file("0.19.2/esp32/manifest.json")[0]
-                                 .decode())["builds"][0]["parts"][0]["path"]
-                      == "bootloader.bin")
-            check("the old path is the ESP32's alone, and the preview has none",
-                  [b["chipFamily"] for b in json.loads(
-                      S.firmware_file("0.19.2/manifest.json")[0].decode())["builds"]]
-                  == ["ESP32"]
-                  and S.firmware_file("0.20.0-dev.3/manifest.json") is None)
-            # The preview's own ESP32 set is not offered while the ESP32 has
-            # a release, so it is not reachable by guessing either.
-            check("a set that is not offered is not served",
-                  S.firmware_file("0.20.0-dev.3/esp32/firmware.bin") is None
-                  and S.firmware_file("0.20.0-dev.3/esp32/manifest.json") is None
-                  and S.firmware_file("0.19.2/esp32s3/manifest.json") is None
-                  and S.firmware_file("0.20.0-dev.3/esp32s3/version.txt") is None
-                  and S.firmware_file("0.20.0-dev.3/esp32s3/../esp32/firmware.bin") is None)
-            check("a pre-release name that is not one is not a version",
-                  S.FIRMWARE_VER.match("0.20.0-") is None
-                  and S.FIRMWARE_VER.match("0.20.0-a..b") is None
-                  and S.FIRMWARE_VER.match("0.20.0-dev.3") is not None
-                  and all(r["version"] not in ("0.20.0-", "0.20.0-a..b")
-                          for r in S.firmware_sets()))
-            check("the firmware's own release.txt is not taken for a note",
-                  S.board_offers("esp32s3")[0]["note"] == ""
-                  and S.board_offers("esp32s3")[0]["date"] == "")
-            pick = S.installer_html()
-            check("the picker says preview, and the line under the buttons the "
-                  "exact version",
-                  '<span class="bv">Firmware 0.20.0 preview (S3 1.0.0)<span class="sep"' in pick
-                  and '<p class="meta ver r0">Version 0.20.0-dev.3 (S3 1.0.0), a preview.'
-                      "</p>" in pick
-                  and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest.json"' in pick
-                  and 'manifest="/install/0.20.0-dev.3/esp32s3/manifest-update.json"'
-                      in pick
-                  # Site 1.3.5: the ESP32-CAM, with nothing on disk here, is
-                  # a row still coming soon, and since 1.3.17 the Makerfabs.
-                  and pick.count("Coming soon") == 2
-                  and '<b>ESP32-CAM</b><span class="tell pick">On a USB programmer; '
-                      'card out first</span><span class="bv soon">Coming soon' in pick)
-            check("and the S3's section says download mode first, before its buttons",
-                  pick.find('<div class="bsec b1"><p class="first"><b>First:</b> hold '
-                            "<b>BOOT</b>, tap <b>RESET</b>, let go of BOOT.")
-                  > 0
-                  and pick.find('<div class="bsec b1"><p class="first">')
-                      < pick.find('manifest="/install/0.20.0-dev.3/esp32s3/manifest.json"')
-                  and '<div class="bsec b0"><p class="first">' not in pick)
-            hw = S.board_html(["esp32s3"])
-            check("the tested boards page draws the same board, build and buy link",
-                  S.BOARD_ART_S3.replace('class="art board"', 'class="art board big"')
-                  in hw
-                  and "<dt>Firmware</dt><dd>0.20.0 preview (S3 1.0.0)" in hw
-                  and "the board calls it 0.20.0-dev.3 (S3 1.0.0)" in hw
-                  and ('<a class="buy" href="https://link.amazon/B0bb1oJqt" '
-                       'rel="sponsored nofollow noopener"') in hw
-                  and ">BUY</a> on Amazon (affiliate link)" in hw
-                  and ('<a class="buy" href="https://link.amazon/B08MTidlU" '
-                       'rel="sponsored nofollow noopener"') in S.board_html(["esp32"])
-                  and "<dt>Firmware</dt><dd>0.19.2 " in S.board_html(["esp32"])
-                  and S.board_html(["esp32x9"]) == "" and S.board_html([]) == "")
-            # A version.txt that is not a version is not read: the folder's
-            # name stands in for it.
-            with open(os.path.join(fwroot, "0.20.0-dev.3", "esp32s3", "version.txt"),
-                      "w") as fh:
-                fh.write("<b>0.20.0</b>\n")
-            check("a version.txt that is not a version is not believed",
-                  S.firmware_manifest("0.20.0-dev.3", chip="esp32s3")["version"]
-                  == "0.20.0-dev.3")
-            # A release that carries the S3 takes it over from the preview.
-            put("0.19.3", "esp32s3", whole)
-            check("once a release carries the S3, the preview is not offered at all",
-                  [r["version"] for r in S.board_offers("esp32s3")] == ["0.19.3"]
-                  and S.firmware_file("0.20.0-dev.3/esp32s3/manifest.json") is None)
-            for gone in ("0.19.3", "0.20.0-dev.3", "0.20.0-", "0.20.0-a..b"):
-                shutil.rmtree(os.path.join(fwroot, gone), ignore_errors=True)
-            check("and with them gone the card is as it was",
-                  S.installer_html() == shown)
-
-            # --------------------------------------------------------------
-            # Site 1.2.9: firmware 1.1.0, the release that carries three
-            # image sets, the Freenove's among them. Before it, nothing of
-            # the Freenove shows; with it on disk, the picker offers it, the
-            # S3 is a release rather than a preview, /hardware says tested,
-            # the "from 1.1.0" gates open, and a .0 release says it is out
-            # early for testing until its .1 arrives.
-            print("Firmware 1.1.0: three boards, the gates, the early line")
-            fw110 = tempfile.mkdtemp(prefix="dirfw110")
-
-            def put110(version, chip, shown, date="2026-09-26"):
-                d = os.path.join(fw110, version, chip)
-                os.makedirs(d, exist_ok=True)
-                for n in whole:
-                    with open(os.path.join(d, n), "w") as fh:
-                        fh.write("placeholder, not firmware\n")
-                with open(os.path.join(d, "version.txt"), "w") as fh:
-                    fh.write(shown + "\n")
-                with open(os.path.join(fw110, version, "release.txt"), "w") as fh:
-                    fh.write(date + "\n")
-
-            def render(name):
-                return S.md_render(open(os.path.join("pages", name + ".md"),
-                                        encoding="utf-8").read())
-
-            put110("1.0.3", "esp32", "1.0.3", "2026-09-23")
-            # A preview carrying the Freenove, and the S3, before 1.1.0.
-            put110("1.1.0-dev.15", "esp32s3", "1.1.0-dev.15 (S3 1.1.0)")
-            put110("1.1.0-dev.15", "esp32-fncam", "1.1.0-dev.15 (FNCAM 1.0.2)")
-            S.FIRMWARE_DIR = pathlib.Path(fw110)
-            try:
-                pick0 = S.installer_html()
-                hw0, inst0, cam0 = render("hardware"), render("install"), render("camera")
-                check("before 1.1.0 the Freenove shows nowhere on the installer, "
-                      "even with a preview carrying it",
-                      S.board_offers("esp32-fncam") == []
-                      and [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3",
-                                                                    "esp32-cam", "esp32s3-mf35"]
-                      and "Freenove" not in pick0 and "esp32-fncam" not in pick0
-                      and S.firmware_file("1.1.0-dev.15/esp32-fncam/manifest.json") is None
-                      and S.firmware_file("1.1.0-dev.15/esp32-fncam/firmware.bin") is None
-                      and 'id="on-the-freenove-camera-board"' not in inst0
-                      and "Each image is for its own chip." in pick0)
-                check("and /hardware still calls it coming soon, the S3 a preview",
-                      "coming soon to" in S.board_html(["esp32-fncam"])
-                      and "<b>Coming soon.</b> Freenove" in hw0
-                      and "<b>ESP32-WROVER: should work, not yet tested.</b>" in hw0
-                      and "1.1.0 preview (S3 1.1.0)" in S.board_html(["esp32s3"])
-                      and "arrives with firmware 1.1 for the camera boards" in cam0
-                      and "is on <a href=\"/install\">the installer</a>" not in cam0
-                      and S.early_note() == "" and '<p class="meta early' not in pick0)
-                # Site 1.3.1: the lock ribbon turns to SUPPORTED on a release
-                # only. With SSH marked as from 1.1.0 and only a 1.1.0
-                # preview carrying the S3, it still says coming.
-                was_ssh = dict(S.BOARD_SSH)
-                try:
-                    S.BOARD_SSH["esp32s3"] = (1, 1, 0)
-                    check("the Secure seal ignores a preview carrying SSH",
-                          S.ssh_state("esp32s3") == "coming"
-                          and '<tspan class="ast">*</tspan>' in S.secure_seal_html("esp32s3")
-                          and "<dt>Secure</dt>" in S.secure_note_html("esp32s3"))
-                finally:
-                    S.BOARD_SSH.clear()
-                    S.BOARD_SSH.update(was_ssh)
-
-                # 1.1.0 lands, with all three sets.
-                put110("1.1.0", "esp32", "1.1.0")
-                put110("1.1.0", "esp32s3", "1.1.0 (S3 1.1.0)")
-                put110("1.1.0", "esp32-fncam", "1.1.0 (FNCAM 1.0.2)")
-                pick1 = S.installer_html()
-                hw1, inst1, cam1 = render("hardware"), render("install"), render("camera")
-                setup1, sd1, lights1 = render("setup"), render("sdcard"), render("lights")
-                upg1, who1, dif1 = render("upgrade"), render("whofor"), render("different")
-                early = ("1.1.0 is out early for testing; it has not been through the "
-                         "full regression yet. 1.1.1 follows with anything it finds.")
-                check("with 1.1.0 on disk the picker offers three boards, the "
-                      "Freenove by its picture and a line saying why",
-                      [b["dir"] for b in S.picker_boards()] == ["esp32", "esp32s3", "esp32-fncam",
-                                                                "esp32-cam", "esp32s3-mf35"]
-                      # Site 1.3.5: and the ESP32-CAM's row, coming soon
-                      # until a set of its own is on disk; 1.3.17 the Makerfabs'.
-                      and pick1.count('<input type="radio" name="fwboard"') == 5
-                      and '<input type="radio" name="fwboard" id="fwb2">'
-                          + S.BOARD_ART_FNCAM in pick1
-                      and "<b>Freenove ESP32 camera board</b>" in pick1
-                      and '<span class="tell pick">Same chip as the dev board: see '
-                          "picture</span>" in pick1
-                      and '<span class="bv">Firmware 1.1.0 (FNCAM 1.0.2)</span>' in pick1
-                      and 'manifest="/install/1.1.0/esp32-fncam/manifest.json"' in pick1
-                      and 'manifest="/install/1.1.0/esp32-fncam/manifest-update.json"' in pick1
-                      and '<p class="first"><b>Check the picture:</b> the installer '
-                          "cannot tell this board from the dev board." in pick1
-                      and ".installer:has(#fwb2:checked) .bsec.b2{display:flex}" in pick1)
-                check("and says the dev board and the Freenove share a chip, by name",
-                      "Each image is for its own chip." not in pick1
-                      and "The ESP32 dev board (Base) and the Freenove ESP32 camera "
-                          "board have the same chip, so between those the picture is "
-                          "the only check." in pick1)
-                check("the S3 is a released board now, not a preview",
-                      [r["version"] for r in S.board_offers("esp32s3")] == ["1.1.0"]
-                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)<span class="sep"' in pick1
-                      and "preview" not in pick1
-                      and S.firmware_file("1.1.0-dev.15/esp32s3/manifest.json") is None)
-                man = S.firmware_manifest("1.1.0", chip="esp32-fncam")
-                check("the Freenove's manifest holds its own build, at the ESP32's offsets",
-                      man is not None and man["version"] == "1.1.0 (FNCAM 1.0.2)"
-                      and [b["chipFamily"] for b in man["builds"]] == ["ESP32"]
-                      and [(p["path"], p["offset"]) for p in man["builds"][0]["parts"]]
-                          == [("bootloader.bin", 4096), ("partitions.bin", 32768),
-                              ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
-                              ("storage.bin", 3932160)]
-                      and S.firmware_file("1.1.0/esp32-fncam/firmware.bin") is not None
-                      and S.firmware_file("1.1.0/esp32-fncam/../esp32/firmware.bin") is None)
-                # Site 1.3.3, Rob: on the picker no seal or badge, only the
-                # word Secure with a letter-sized lock, a link to the board's
-                # section on /hardware, and no footnote. Once BOARD_SSH names
-                # a release on disk carrying the board's set, and not before,
-                # the seal loses its asterisk and the footnote goes.
-                rows1 = pick1.split('<label class="bopt')[1:]
-                was_ssh = dict(S.BOARD_SSH)
-                try:
-                    S.BOARD_SSH["esp32s3"] = (1, 1, 0)
-                    S.BOARD_SSH["esp32s3-cam"] = (1, 1, 0)
-                    shipped = (S.ssh_state("esp32s3"), S.secure_seal_html("esp32s3"),
-                               S.secure_pick_html(S.BOARD_BY_DIR["esp32s3"]),
-                               S.ssh_state("esp32s3-cam"), S.secure_note_html("esp32s3"),
-                               S.board_html(["esp32s3"]),
-                               S.secure_note_html("esp32s3-cam"))
-                    S.BOARD_SSH["esp32s3"] = (1, 2, 0)
-                    later = S.ssh_state("esp32s3")
-                finally:
-                    S.BOARD_SSH.clear()
-                    S.BOARD_SSH.update(was_ssh)
-                check("the picker says Secure on the S3's row alone: a word and a "
-                      "small lock, linking to the board's section, no seal, no footnote",
-                      len(rows1) == 5
-                      and ['class="secure"' in r for r in rows1]
-                          == [False, True, False, False, False]
-                      and pick1.count('class="secure"') == 1
-                      and '<a class="secure" href="/hardware#waveshare-esp32-s3-lcd-1-47" '
-                          'aria-label="Secure: encrypted connections over SSH, coming in '
-                          'version 1.2.0, on the board\'s page"><svg class="lockg"' in rows1[1]
-                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)<span class="sep" '
-                          'aria-hidden="true"> · </span><a class="secure"' in rows1[1]
-                      and "</svg>Secure</a></span></span></label>" in rows1[1]
-                      and "seal" not in pick1 and "lockr" not in pick1
-                      and "Encrypted connections" not in pick1 and "SECURE" not in pick1
-                      and "article .installer .bopt a.secure {{" in S.PAGE
-                      and "article .installer .bopt a.secure svg.lockg {{" in S.PAGE)
-                check("and SSH shipping takes the asterisk and the footnote away by "
-                      "itself, the S3 camera board staying coming with no set",
-                      shipped[0] == "supported"
-                      and ">SECURE</text>" in shipped[1] and "ast" not in shipped[1]
-                      and 'aria-label="Secure: this board takes encrypted' in shipped[1]
-                      and "</svg>Secure</a>" in shipped[2] and "coming" not in shipped[2]
-                      and shipped[3] == "coming" and shipped[4] == ""
-                      and "<dt>Secure</dt>" not in shipped[5]
-                      and ">SECURE</text>" in shipped[5]
-                      and "<dt>Secure</dt>" in shipped[6] and later == "coming"
-                      and S.BOARD_SSH == {"esp32s3": (1, 2, 0), "esp32s3-cam": (1, 2, 0)}
-                      and S.secure_seal_html("esp32") == ""
-                      and S.secure_seal_html("esp32-fncam") == ""
-                      and S.secure_seal_html("esp32-sd") == ""
-                      and S.secure_note_html("esp32") == ""
-                      and S.secure_pick_html(S.BOARD_BY_DIR["esp32"]) == "")
-                check("each board's version line says 1.1.0 is out early, and no other",
-                      pick1.count('<p class="meta early r0">' + early + "</p>") == 3
-                      and '<p class="meta early r1">' not in pick1
-                      and '<p class="early">' + early + "</p>" in upg1)
-                fnsec = hw1.split('id="freenove-esp32-camera-board"')[1].split("<h2")[0]
-                check("/hardware calls the Freenove tested, with its firmware and "
-                      "installer link, and keeps the GC0308",
-                      "<dt>Firmware</dt><dd>1.1.0 (FNCAM 1.0.2) <a href=\"/install\">on "
-                      "the installer</a></dd>" in fnsec
-                      and "coming soon" not in fnsec.lower()
-                      and "GC0308" in fnsec
-                      and 'href="/install#on-the-freenove-camera-board"' in fnsec
-                      and "<b>ESP32-WROVER: yes, on one board.</b>" in hw1
-                      and "should work, not yet tested" not in hw1
-                      and "coming soon to" in S.board_html(["esp32s3-cam"]))
-                check("/install has the Freenove's own steps and the closed board",
-                      '<h2 id="on-the-freenove-camera-board">On the Freenove camera '
-                      "board</h2>" in inst1
-                      and "A new board starts closed." in inst1
-                      and "<b>Temporarily stop taking calls</b>" in inst1
-                      and "the Freenove camera board has neither" in inst1
-                      and "A new board starts closed." not in inst0
-                      and "Until you open it, the board is closed to everybody else"
-                          in setup1)
-                check("the 1.1.0 gates read as released: /camera, /lights, "
-                      "backups, the camera row",
-                      "arrives with firmware 1.1 for the camera boards" not in cam1
-                      and "The Freenove camera board is on" in cam1
-                      and "arrive with firmware 1.1.0" not in lights1
-                      and "The card can also keep the board" in sd1
-                      and "Firmware 1.1.0 gives the card one more job" not in sd1
-                      and "on the Freenove camera board" in dif1.split('class="cmp"')[1]
-                      and "coming, on the camera boards" not in dif1
-                      and "The Freenove camera board</a> lets a" in who1
-                      and "SCREENS INSTALL" not in sd1)
-
-                # The .1 lands, for the ESP32 alone: the early line goes
-                # everywhere, and the other boards stay on 1.1.0.
-                put110("1.1.1", "esp32", "1.1.1", "2026-09-30")
-                pick2 = S.installer_html()
-                check("and the early line goes once 1.1.1 is on disk, "
-                      "and SCREENS INSTALL appears",
-                      S.early_note() == "" and "early for testing" not in pick2
-                      and '<p class="early">' not in render("upgrade")
-                      and [r["version"] for r in S.board_offers("esp32-fncam")] == ["1.1.0"]
-                      and "<code>SCREENS INSTALL</code>" in render("sdcard"))
-
-                # ----------------------------------------------------------
-                # Site 1.3.5 (Rob: "get the esp32-cam (original) out there on
-                # the website flasher now its confirmed working with sd"):
-                # the ESP32-CAM's set arrives on a pre-release, and the board
-                # is offered it as a preview. Before it, the board-gated prose
-                # still says coming soon; with it, the pages switch by
-                # themselves, and the card-out step is on both.
-                print("The ESP32-CAM, from a pre-release")
-                g_none = S.md_render("::: until esp32-cam\nold\n:::\n\n"
-                                     "::: from esp32-cam\nnew\n:::")
-                hw2, inst2 = render("hardware"), render("install")
-                cam2, who2 = render("camera"), render("whofor")
-                put110("1.1.1-dev.0", "esp32-cam", "1.1.1-dev.0 (ESPCAM 1.0.1)",
-                       "2026-09-26")
-                g_have = S.md_render("::: until esp32-cam\nold\n:::\n\n"
-                                     "::: from esp32-cam\nnew\n:::")
-                g_else = S.md_render("::: from esp32x9\nnew\n:::\n::: until esp32x9\nold\n:::")
-                check("a gate on a board switches when the installer offers it anything, "
-                      "a preview included, and a board with nothing never opens one",
-                      g_none == "<p>old</p>" and g_have == "<p>new</p>"
-                      and g_else == "<p>old</p>"
-                      and S.firmware_releases()[0]["version"] == "1.1.1")
-                pick3 = S.installer_html()
-                hw3, inst3 = render("hardware"), render("install")
-                cam3, who3 = render("camera"), render("whofor")
-                rows3 = pick3.split('<label class="bopt')[1:]
-                ecb3 = S.BOARD_BY_DIR["esp32-cam"]
-                check("the picker offers the ESP32-CAM its preview, by its picture, "
-                      "labelled preview",
-                      [r["version"] for r in S.board_offers("esp32-cam")] == ["1.1.1-dev.0"]
-                      and [b["dir"] for b in S.picker_boards()]
-                          == ["esp32", "esp32s3", "esp32-fncam", "esp32-cam", "esp32s3-mf35"]
-                      and len(rows3) == 5 and pick3.count("Coming soon") == 1
-                      and "Coming soon" in rows3[4]
-                      and '<input type="radio" name="fwboard" id="fwb3">'
-                          + S.BOARD_ART_ESPCAM in pick3
-                      # Site 1.3.15: our camera pick, so its name carries the tag.
-                      and '<b>ESP32-CAM</b><span class="rec"><span class="vh">Our pick: '
-                          '</span>Best with a camera</span><span class="tell pick">'
-                          "On a USB programmer; card out first</span>" in rows3[3]
-                      and '<span class="bv">Firmware 1.1.1 preview (ESPCAM 1.0.1)</span>'
-                          in rows3[3]
-                      and 'manifest="/install/1.1.1-dev.0/esp32-cam/manifest.json"' in pick3
-                      and 'manifest="/install/1.1.1-dev.0/esp32-cam/manifest-update.json"'
-                          in pick3
-                      and '<p class="meta ver r0">Version 1.1.1-dev.0 (ESPCAM 1.0.1), a '
-                          "preview, published 2026-09-26.</p>" in pick3
-                      and ".installer:has(#fwb3:checked) .bsec.b3{display:flex}" in pick3)
-                b3 = pick3.split('<div class="bsec b3">')[1] if '<div class="bsec b3">' in pick3 else ""
-                check("and choosing it shows the card-out step before its buttons",
-                      "SD card out" in ecb3["before"]
-                      and "put the card back" in ecb3["before"]
-                      and "plug it in" in ecb3["before"]
-                      and b3.startswith('<p class="first"><b>First:</b> SD card out. '
-                                        "<b>When it is done:</b> unplug the board, put "
-                                        "the card back, plug it in. "
-                                        '<a href="#on-the-esp32-cam">Why</a></p>')
-                      and b3.find('<p class="first">')
-                          < b3.find('manifest="/install/1.1.1-dev.0/esp32-cam/manifest.json"'))
-                check("and the same-chip line names all three ESP32 boards",
-                      "The ESP32 dev board (Base), the Freenove ESP32 camera board and "
-                      "the ESP32-CAM have the same chip, so between those the picture "
-                      "is the only check." in pick3)
-
-                # Site 1.3.15 (Rob): our three picks wear a thin gold frame and
-                # a small tag in the card, and the guide's first step names
-                # them, each name a label for its radio. With every board
-                # offered here, all three are picks and the Freenove is not.
-                print("Our picks: the frames and the guide")
-                rows3g = pick3.split('<label class="bopt')[1:]
-                guide3 = S.guide_html(["Pick your board | Choose it {panel}.",
-                                       "Flash it | x"])
-                check("the three picks are framed and tagged in the card, "
-                      "the Freenove is not, and the rows keep their order",
-                      [r.startswith(' rec">') for r in rows3g]
-                          == [True, True, False, True, False]
-                      and [re.search(r'<span class="rec"><span class="vh">Our pick: '
-                                     r'</span>([^<]+)</span>', r).group(1)
-                           for r in (rows3g[0], rows3g[1], rows3g[3])]
-                          == ["Cheapest", "Most powerful", "Best with a camera"]
-                      and 'class="rec"' not in rows3g[2]
-                      and re.search(r'name="fwboard" id="fwb0" checked>', pick3) is not None
-                      and all(len(b["rec"]["label"]) <= 18 and len(b["rec"]["short"]) <= 16
-                              and len(b["rec"]["why"]) <= 34
-                              for b in S.BOARDS if b.get("rec")))
-                check("gold frames a pick, a --warm tag names it, and a picked row "
-                      "still turns cyan",
-                      "border-color:#8a6d39; }}" in S.PAGE
-                      and "article .installer .bopt.rec {{ position:relative; "
-                          "border-color:#8a6d39; }}" in S.PAGE
-                      and "article .installer .bopt .rec {{ position:absolute;" in S.PAGE
-                      and "letter-spacing:0.04em; color:var(--warm); }}" in S.PAGE
-                      and "article .installer .bopt:has(input:checked) {{ border-color:"
-                          "var(--dial);" in S.PAGE
-                      and "@media (forced-colors: active) {{\n  article .installer "
-                          ".bopt.rec {{ border:2px solid CanvasText; }}" in S.PAGE)
-                check("the guide names the picks in order, each a label for its "
-                      "row's radio, filled when that row is picked",
-                      re.findall(r'<li><span class="ul">([^<]+)</span><label '
-                                 r'for="(fwb\d)">([^<]+)</label>', guide3)
-                      == [("Cheapest", "fwb0", "ESP32 dev board"),
-                          ("Most powerful", "fwb1", "Waveshare S3"),
-                          ("Best with a camera", "fwb3", "ESP32-CAM")]
-                      and all(f'id="fwb{j}"' in pick3 for j in (0, 1, 3))
-                      and all(f".install-top:has(#fwb{j}:checked) .uc label[for=fwb{j}]"
-                              "{background:#102630}" in pick3 for j in (0, 1, 3))
-                      and "label[for=fwb2]" not in pick3
-                      and guide3.count('<p class="else">') == 1
-                      and guide3.count('<ul class="uc">') == 1
-                      and guide3.index('<ul class="uc">') < guide3.index("Flash it"))
-
-                # Site 1.3.18 (Rob: "this should be a BUY button not BUY ONE and
-                # I wanted one near each board"): a tiny BUY on each board's row
-                # with a link, from that board's "buy" and nothing else, beside
-                # the row's label and never in it, so pressing it never picks a
-                # board. The Buy one block under the buttons (1.3.16) is gone.
-                print("BUY: the buy buttons on the card's rows")
-                pb3 = S.picker_boards()
-                aff3 = [b.get("affiliate", True) is not False for b in pb3]
-
-                def buy_a(b):
-                    # An affiliate link's button, written out here in full.
-                    return ('<a class="buy" href="' + html.escape(b["buy"], quote=True)
-                            + '" rel="sponsored nofollow noopener" target="_blank" '
-                            'aria-label="Buy the ' + html.escape(b["name"], quote=True)
-                            + ' on Amazon (affiliate link, opens in a new tab)">BUY</a>')
-                picker3 = pick3.split("</fieldset>")[0]
-                rowsb = picker3.split('<div class="brow">')[1:]
-                check("each board with a link has one BUY, from BOARDS, in a new tab, "
-                      "just after its row's label and outside it, sponsored and nofollow "
-                      "when it is an affiliate link",
-                      all(b.get("buy") for b in pb3) and len(rowsb) == len(pb3)
-                      and all(r.endswith("</label>" + (buy_a(b) if a else S.buy_html(b))
-                                         + "</div>")
-                              and r.count('<a class="buy"') == 1
-                              and r.count("<label") == 1 and r.count("</label>") == 1
-                              and r.index('<a class="buy"') > r.index("</label>")
-                              and ('rel="sponsored nofollow noopener"' in r) == a
-                              and 'target="_blank"' in r
-                              for r, b, a in zip(rowsb, pb3, aff3))
-                      and all('class="buy"' not in lab
-                              for lab in re.findall(r"<label.*?</label>", pick3, re.S))
-                      and pick3.count('<a class="buy"') == len(pb3)
-                      and "\u2014" not in pick3)
-                check("the line saying what BUY is opens the card's small print, once, "
-                      "under every board's buttons, naming a maker's own shop as the "
-                      "exception, and the Buy one block under the buttons is gone",
-                      pick3.count('<p class="meta aff">') == 1
-                      and S.buy_note_html(pb3) + '<p class="meta fam">' in pick3
-                      and pick3.rindex('<div class="bsec ')
-                          < pick3.index('<p class="meta aff">')
-                      and ("BUY links are affiliate links, except the one to Makerfabs: "
-                           "buying through them helps support µnleashed.") in pick3
-                      and S.buy_note_html([b for b, a in zip(pb3, aff3) if a])
-                          == ('<p class="meta aff">BUY links are affiliate links: buying '
-                              "through them helps support µnleashed.</p>")
-                      and "not affiliate links" in S.buy_note_html(
-                          [b for b, a in zip(pb3, aff3) if not a])
-                      and S.buy_note_html([]) == ""
-                      and "Buy one" not in pick3 and 'class="buyone"' not in pick3
-                      and "Affiliate link: buying" not in pick3
-                      and "Buy one" not in render("install"))
-                s3b = S.BOARD_BY_DIR["esp32s3"]
-                s3buy = s3b.pop("buy")
-                try:
-                    none3 = S.buy_html(s3b)
-                    rowsn = S.installer_html().split("</fieldset>")[0].split(
-                        '<div class="brow">')[1:]
-                    every = [dict(b) for b in S.BOARDS]
-                    for b in S.BOARDS:
-                        b.pop("buy", None)
-                    try:
-                        bare = S.installer_html()
-                    finally:
-                        for b, was in zip(S.BOARDS, every):
-                            b.update(was)
-                finally:
-                    s3b["buy"] = s3buy
-                check("a board with no link has no BUY, and with none at all there is "
-                      "no line either",
-                      none3 == "" and 'class="buy"' not in rowsn[1]
-                      and rowsn[1].endswith("</label></div>")
-                      and sum('class="buy"' in r for r in rowsn) == len(pb3) - 1
-                      and 'class="buy"' not in bare and 'class="meta aff"' not in bare)
-                check("BUY is small, bold and red, white on #c62828 and not --risk, "
-                      "at the end of the version line, which keeps clear of it",
-                      "article a.buy {{ display:inline-block; font-size:0.625rem; "
-                      "font-weight:700;" in S.PAGE
-                      and "color:#fff; background:#c62828;" in S.PAGE
-                      and "article a.buy:focus-visible {{ outline:3px solid #ffd35c;" in S.PAGE
-                      and "article .installer .brow {{ position:relative; }}" in S.PAGE
-                      and "article .installer .brow > a.buy {{ position:absolute; "
-                          "right:0.1875rem;" in S.PAGE
-                      and "article .installer .brow:has(> a.buy) .bv {{ "
-                          "padding-right:1.125rem; }}" in S.PAGE
-                      and "article .installer a.buy" not in S.PAGE)
-                hwbs = [b for b in S.BOARDS + S.SHOWN_BOARDS + S.SOON_BOARDS if b.get("buy")]
-                check("/hardware: each board with a link has the same BUY in its Buy one "
-                      "row, and keeps its words: an affiliate link, or the maker's shop",
-                      all(S.board_html([b["dir"]]).count('<a class="buy"') == 1
-                          and '<dt>Buy one</dt><dd>' + S.buy_html(b) in S.board_html([b["dir"]])
-                          and ((">BUY</a> on Amazon (affiliate link)" in S.board_html([b["dir"]])
-                                and 'rel="sponsored nofollow noopener" target="_blank"'
-                                    in S.board_html([b["dir"]]))
-                               if b.get("affiliate", True) is not False else
-                               (">BUY</a> from Makerfabs, their own shop (not an affiliate "
-                                "link)" in S.board_html([b["dir"]])
-                                and "sponsored" not in S.board_html([b["dir"]])))
-                          for b in hwbs)
-                      and len(hwbs) == len(S.BOARDS) + len(S.SHOWN_BOARDS)
-                          + len(S.SOON_BOARDS)
-                      and render("hardware").count('<a class="buy"') == len(hwbs))
-                man3 = S.firmware_manifest("1.1.1-dev.0", chip="esp32-cam")
-                check("its manifest holds its own build, at the ESP32's offsets",
-                      man3 is not None and man3["version"] == "1.1.1-dev.0 (ESPCAM 1.0.1)"
-                      and [b["chipFamily"] for b in man3["builds"]] == ["ESP32"]
-                      and [(p["path"], p["offset"]) for p in man3["builds"][0]["parts"]]
-                          == [("bootloader.bin", 4096), ("partitions.bin", 32768),
-                              ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
-                              ("storage.bin", 3932160)]
-                      and S.firmware_file("1.1.1-dev.0/esp32-cam/firmware.bin") is not None
-                      and [r["version"] for r in S.board_offers("esp32")] == ["1.1.1", "1.1.0"]
-                      and [r["version"] for r in S.board_offers("esp32-fncam")] == ["1.1.0"])
-                ec2 = hw2.split('id="esp32-cam"')[1].split("<h2")[0]
-                ec3 = hw3.split('id="esp32-cam"')[1].split("<h2")[0]
-                flat_ec3 = " ".join(ec3.split())
-                warn3 = re.findall(r'<p class="warn">(.*?)</p>', ec3, re.S)
-                check("/hardware: before its set, coming soon; with it, a preview on the "
-                      "installer, the card-out step as a warning",
-                      "<b>Coming soon.</b> The ESP32-CAM" in " ".join(ec2.split())
-                      and "coming soon to" in ec2 and '<p class="warn">' not in ec2
-                      and "<dt>Firmware</dt><dd>1.1.1 preview (ESPCAM 1.0.1) <a href="
-                          '"/install">on the installer</a>; the board calls it '
-                          "1.1.1-dev.0 (ESPCAM 1.0.1)</dd>" in ec3
-                      and "Coming soon" not in ec3 and "coming soon" not in ec3
-                      and "on <a href=\"/install\">the installer</a> as a preview" in flat_ec3
-                      and len(warn3) == 1
-                      and "<b>Take the SD card out to install it.</b>" in warn3[0]
-                      and "put the card back" in warn3[0]
-                      and 'href="/install#on-the-esp32-cam"' in warn3[0]
-                      and "And two with a camera" in hw3 and "And two with a camera" not in hw2
-                      and "ESP32-CAM once its build is published" in hw2
-                      and "once its build is published" not in hw3
-                      and "its SD card comes out while it is installed or updated"
-                          in " ".join(hw3.split())
-                      and hw3.count("<b>ESP32-D0WDQ6: yes, on one board.</b>") == 1)
-                ic3 = (inst3.split('id="on-the-esp32-cam"')[1].split("<h2")[0]
-                       if 'id="on-the-esp32-cam"' in inst3 else "")
-                flat_ic3 = " ".join(ic3.split())
-                check("/install: its own section once it is offered, the card-out warning "
-                      "first, then the steps in order",
-                      'id="on-the-esp32-cam"' not in inst2
-                      and '<h2 id="on-the-esp32-cam">On the ESP32-CAM</h2>' in inst3
-                      and re.search(r'<p class="warn"><b>Take the micro SD card out '
-                                    r"first</b>, every time you install or update\.", ic3)
-                         is not None
-                      and "start-up pins high" in flat_ic3
-                      and ic3.find('<p class="warn">') < ic3.find("<ol>")
-                      and len(re.findall(r"<li>", ic3.split("<ol>")[1].split("</ol>")[0])) == 3
-                      and "<b>Take the micro SD card out</b> of its slot." in ic3
-                      and "<b>Unplug the board, put the card back, and plug it in again.</b>"
-                          in ic3
-                      and "<b>Failed to initialize. Try resetting your device or "
-                          "holding the BOOT button while clicking INSTALL.</b>, and "
-                          "nothing is written." in flat_ic3
-                      and "Freenove camera board" in flat_ic3 and "no buttons to press" in flat_ic3
-                      and "<b>It is a preview</b>" in flat_ic3
-                      and "The ESP32-CAM has no BOOT button reset" in inst3
-                      and "The ESP32-CAM has no BOOT button reset" not in inst2)
-                check("/camera and /whofor say it is on the installer, once it is",
-                      "The ESP32-CAM goes on once its build is published" in " ".join(cam2.split())
-                      and "The Freenove camera board and the ESP32-CAM are on"
-                          in " ".join(cam3.split())
-                      and "once its build is published" not in cam3
-                      and "the ESP32-CAM and an ESP32-S3 camera board follow"
-                          in " ".join(who2.split())
-                      and "let a board look out of the window" in " ".join(who3.split())
-                      and "::: from" not in hw3 + inst3 + cam3 + who3
-                      and "::: until" not in hw3 + inst3 + cam3 + who3)
-
-                # ----------------------------------------------------------
-                # Site 1.3.7 (Rob, 2026-09-25): firmware 1.1.1-dev.1 is the
-                # Freenove's 1.1.1 preview (FNCAM 1.0.4). The Freenove takes
-                # it ahead of its 1.1.0 release, with 1.1.0 beside it; the
-                # ESP32 and the S3 stay on their releases although the same
-                # pre-release carries their sets; and the size prose gated on
-                # "esp32-fncam 1.1.1" switches with it, both ways.
-                print("The Freenove's 1.1.1 preview, ahead of its release")
-                gate_fn = ("::: until esp32-fncam 1.1.1\nold\n:::\n\n"
-                           "::: from esp32-fncam 1.1.1\nnew\n:::")
-                gate_later = ("::: from esp32-fncam 1.1.2\nnew\n:::\n"
-                              "::: until esp32-fncam 1.1.2\nold\n:::")
-                g_fn0 = S.md_render(gate_fn)
-                g_fn_later0 = S.md_render(gate_later)
-                pick4a = S.installer_html()
-                put110("1.1.1-dev.1", "esp32", "1.1.1-dev.1", "2026-09-27")
-                put110("1.1.1-dev.1", "esp32s3", "1.1.1-dev.1 (S3 1.1.1)", "2026-09-27")
-                put110("1.1.1-dev.1", "esp32-fncam", "1.1.1-dev.1 (FNCAM 1.0.4)",
-                       "2026-09-27")
-                put110("1.1.1-dev.1", "esp32-cam", "1.1.1-dev.1 (ESPCAM 1.0.2)",
-                       "2026-09-27")
-                g_fn1 = S.md_render(gate_fn)
-                g_fn_later1 = S.md_render(gate_later)
-                g_fn_other = S.md_render("::: from esp32s3 1.1.1\nnew\n:::\n"
-                                         "::: until esp32s3 1.1.1\nold\n:::")
-                offers4 = {c: [r["version"] for r in S.board_offers(c)]
-                           for c in ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")}
-                check("a gate on a board and a version opens when the installer offers "
-                      "that board that version, its preview included, and not before",
-                      g_fn0 == "<p>old</p>" and g_fn1 == "<p>new</p>"
-                      and g_fn_later0 == "<p>old</p>" and g_fn_later1 == "<p>old</p>"
-                      # the S3's set is in the pre-release, but not offered
-                      and g_fn_other == "<p>old</p>")
-                check("the Freenove takes the pre-release as a preview, ahead of 1.1.0; "
-                      "the ESP32 and the S3 do not, and the ESP32-CAM moves to it",
-                      offers4 == {"esp32": ["1.1.1", "1.1.0"], "esp32s3": ["1.1.0"],
-                                  "esp32-fncam": ["1.1.1-dev.1", "1.1.0"],
-                                  "esp32-cam": ["1.1.1-dev.1"]}
-                      and S.firmware_file("1.1.1-dev.1/esp32-fncam/manifest.json") is not None
-                      and S.firmware_file("1.1.0/esp32-fncam/manifest.json") is not None
-                      and S.firmware_file("1.1.1-dev.1/esp32s3/manifest.json") is None
-                      and S.firmware_file("1.1.1-dev.1/esp32/manifest.json") is None
-                      and S.firmware_releases()[0]["version"] == "1.1.1")
-                pick4 = S.installer_html()
-                rows4 = pick4.split('<label class="bopt')[1:]
-                b2 = (pick4.split('<div class="bsec b2">')[1].split('<div class="bsec b3">')[0]
-                      if '<div class="bsec b2">' in pick4 else "")
-                check("the picker labels the Freenove's row the 1.1.1 preview, with "
-                      "1.1.0 to choose beside it, and the S3's row unchanged",
-                      len(rows4) == 5
-                      and '<span class="bv">Firmware 1.1.1 preview (FNCAM 1.0.4)</span>'
-                          in rows4[2]
-                      and '<span class="bv">Firmware 1.1.0 (S3 1.1.0)<span class="sep"'
-                          in rows4[1]
-                      and "preview" not in rows4[0] + rows4[1]
-                      and '<p class="vers" role="radiogroup" aria-label="Version">' in b2
-                      and '<input type="radio" name="fwver2" id="fwv2_0" checked> '
-                          "1.1.1-dev.1 (preview)</label>" in b2
-                      and '<input type="radio" name="fwver2" id="fwv2_1"> 1.1.0</label>' in b2
-                      and 'manifest="/install/1.1.1-dev.1/esp32-fncam/manifest.json"' in b2
-                      and 'manifest="/install/1.1.0/esp32-fncam/manifest.json"' in b2
-                      and '<p class="meta ver r0">Version 1.1.1-dev.1 (FNCAM 1.0.4), a '
-                          "preview, published 2026-09-27.</p>" in b2
-                      and '<p class="meta ver r1">Version 1.1.0 (FNCAM 1.0.2), released '
-                          "2026-09-26.</p>" in b2
-                      and ".installer:has(#fwv2_1:checked) .b2 .r1{display:block}" in pick4
-                      and "1.1.1-dev.1/esp32s3" not in pick4
-                      and "1.1.1-dev.1/esp32/" not in pick4
-                      and "Freenove" in pick4a and "1.1.1-dev.1" not in pick4a)
-                hw4, inst4, cam4 = render("hardware"), render("install"), render("camera")
-
-                def part(page, anchor):
-                    return (page.split(f'id="{anchor}"')[1].split("<h2")[0]
-                            if f'id="{anchor}"' in page else "")
-
-                fn3 = part(hw3, "freenove-esp32-camera-board")
-                fn4 = part(hw4, "freenove-esp32-camera-board")
-                ch3 = part(hw3, "choosing-a-camera-board")
-                ch4 = part(hw4, "choosing-a-camera-board")
-                sz3 = part(cam3, "what-size-photos-can-i-take")
-                sz4 = part(cam4, "what-size-photos-can-i-take")
-                flat_fn3, flat_fn4 = " ".join(fn3.split()), " ".join(fn4.split())
-                flat_sz3, flat_sz4 = " ".join(sz3.split()), " ".join(sz4.split())
-                check("before the preview: the Freenove's largest photo is 640x480 "
-                      "with either camera, and nothing claims 1.1.1",
-                      "<td>640x480, with either camera</td>" in ch3
-                      and "from firmware 1.1.1" not in ch3
-                      and "firmware 1.1.0 takes 640x480 photos at most with either"
-                          in flat_fn3
-                      and "1600x1200" not in flat_fn3 and "1.1.1" not in flat_fn3
-                      and "320x240 or 640x480, whichever camera it came with" in flat_sz3
-                      and "1.1.1" not in flat_sz3
-                      and "Two versions to choose from" not in inst3)
-                check("with it: 640x480 with a GC0308, up to 1600x1200 with an OV2640 "
-                      "from firmware 1.1.1, the swap and the fixes, and the preview named",
-                      "<td>640x480 with a GC0308; 1600x1200 with an OV2640, from "
-                      "firmware 1.1.1</td>" in ch4
-                      and "with either camera" not in ch4
-                      and ch4.count("<table") == 3
-                      and "With a GC0308, 320x240 or 640x480. With an OV2640, from "
-                          "firmware 1.1.1, up to 1600x1200" in flat_sz4
-                      and "whichever camera it came with" not in flat_sz4
-                      and "can be swapped for another" in flat_sz4
-                      and "with an OV2640 it takes photos up to 1600x1200" in flat_fn4
-                      and "at most with either" not in flat_fn4
-                      and "green cast" in flat_fn4 and "washed photos out" in flat_fn4
-                      and "<b>Auto levels</b>, a new setting, on as shipped, which "
-                          "evens out a flat or washed-out photo on any camera." in flat_fn4
-                      and "for the GC0308" not in flat_fn4
-                      and "the watermark no longer costs the photo any detail" in flat_fn4
-                      and "The installer offers it first, with 1.1.0 beside it, and its "
-                          "version line says whether 1.1.1 is still a preview" in flat_fn4
-                      and "<dt>Firmware</dt><dd>1.1.1 preview (FNCAM 1.0.4) <a href="
-                          '"/install">on the installer</a>; the board calls it '
-                          "1.1.1-dev.1 (FNCAM 1.0.4)</dd>" in fn4
-                      and "<b>Two versions to choose from.</b>" in inst4
-                      and "seconds" not in flat_fn4.split("Better photos")[-1]
-                      and "::: from" not in hw4 + inst4 + cam4
-                      and "::: until" not in hw4 + inst4 + cam4)
-                check("the ESP32-CAM entry says its camera is a swappable ribbon module too",
-                      "On both boards the camera is a module on a ribbon, so it can be "
-                      "swapped for another." in " ".join(part(hw4, "esp32-cam").split()))
-                # A release of 1.1.1 carrying the Freenove takes over from the
-                # preview, and the "until 1.1.1" preview lines go.
-                put110("1.1.1", "esp32-fncam", "1.1.1 (FNCAM 1.0.4)", "2026-09-30")
-                hw5b, inst5b = render("hardware"), render("install")
-                flat_fn5 = " ".join(part(hw5b, "freenove-esp32-camera-board").split())
-                check("and once a 1.1.1 release carries the Freenove, the preview is not "
-                      "offered and the 1.1.1 facts stay",
-                      [r["version"] for r in S.board_offers("esp32-fncam")]
-                          == ["1.1.1", "1.1.0"]
-                      and S.firmware_file("1.1.1-dev.1/esp32-fncam/manifest.json") is None
-                      and "<b>Two versions to choose from.</b>" in inst5b
-                      and "preview (FNCAM" not in flat_fn5
-                      and "<dt>Firmware</dt><dd>1.1.1 (FNCAM 1.0.4) <a" in flat_fn5
-                      and "with an OV2640 it takes photos up to 1600x1200" in flat_fn5)
-
-                # ----------------------------------------------------------
-                # Site 1.3.17 (Rob): the Makerfabs ESP32-S3 Parallel TFT 3.5"
-                # v1.0 as a preview, from a board pre-release that carries its
-                # set alone. Before it, its prose says coming soon and its
-                # picker row has no buttons; with it, a preview, by its
-                # picture, with the v1.0 line under its name and the USB-TTL
-                # step before its buttons.
-                print("The Makerfabs 3.5 inch, from a board pre-release")
-                mfb = S.BOARD_BY_DIR["esp32s3-mf35"]
-                mfa = "makerfabs-esp32-s3-parallel-tft-3-5-v1-0"
-                hw6a, inst6a = hw5b, inst5b
-                put110("1.1.1-mf35.1", "esp32s3-mf35", "1.1.1 (MF35 1.0.0)", "2026-09-26")
-                pick6 = S.installer_html()
-                hw6, inst6 = render("hardware"), render("install")
-                rows6 = pick6.split('<label class="bopt')[1:]
-                mfsec = (pick6.split('<div class="bsec b4">')[1].split('<p class="meta fam">')[0]
-                         if '<div class="bsec b4">' in pick6 else "")
-                check("the Makerfabs is its own board: an S3 set at the S3's offsets, in "
-                      "BOARDS last, flash and go, fastest expected, no SSH version set",
-                      mfb in S.BOARDS and S.BOARDS[-1] is mfb
-                      and mfb.get("previews", True) is True and "status" not in mfb
-                      and S.FLASH_FAMILIES["esp32s3-mf35"] == ("ESP32-S3", 0x0)
-                      and S.FLASH_FAMILIES["esp32s3"] == ("ESP32-S3", 0x0)
-                      and mfb["name"] == 'Makerfabs ESP32-S3 Parallel TFT 3.5" (v1.0)'
-                      and "N16R2" in mfb["part"] and "2 MB PSRAM" in mfb["part"]
-                      and mfb["page"] == "/hardware#" + mfa
-                      and S.BOARD_SEAL["esp32s3-mf35"] == "go"
-                      and S.BOARD_SPEED["esp32s3-mf35"] == "Fastest"
-                      and "esp32s3-mf35" not in S.BOARD_SSH
-                      and S.secure_seal_html("esp32s3-mf35") == ""
-                      and 'viewBox="0 0 96 60"' in S.BOARD_ART_MF35
-                      and 'aria-hidden="true"' in S.BOARD_ART_MF35
-                      # v2.0 has no board and no image yet (Rob): nowhere.
-                      and "esp32s3-mf35v2" not in S.FLASH_FAMILIES
-                      and all(b["dir"] != "esp32s3-mf35v2" for b in S.BOARDS)
-                      and "mf35v2" not in open(os.path.join("deploy", "fetch_release.py"),
-                                               encoding="utf-8").read())
-                check("the picker offers it its preview, by its picture and name, with "
-                      "the v1.0 line under its name, labelled preview",
-                      [r["version"] for r in S.board_offers("esp32s3-mf35")]
-                          == ["1.1.1-mf35.1"]
-                      and [r["version"] for r in S.board_offers("esp32s3")] == ["1.1.0"]
-                      and S.firmware_releases()[0]["version"] == "1.1.1"
-                      and len(rows6) == 5 and "Coming soon" not in pick6
-                      and '<input type="radio" name="fwboard" id="fwb4">'
-                          + S.BOARD_ART_MF35 in pick6
-                      and '<b>Makerfabs Parallel TFT 3.5&quot; (v1.0)</b>'
-                          '<span class="tell pick">Check the back says v1.0; v2.0 '
-                          "coming</span>" in rows6[4]
-                      and '<span class="bv">Firmware 1.1.1 preview (MF35 1.0.0)</span>'
-                          in rows6[4]
-                      and 'class="rec"' not in rows6[4]
-                      and 'manifest="/install/1.1.1-mf35.1/esp32s3-mf35/manifest.json"'
-                          in pick6
-                      and 'manifest="/install/1.1.1-mf35.1/esp32s3-mf35/manifest-update.json"'
-                          in pick6
-                      and '<p class="meta ver r0">Version 1.1.1 (MF35 1.0.0), a preview, '
-                          "published 2026-09-26.</p>" in mfsec
-                      and ".installer:has(#fwb4:checked) .bsec.b4{display:flex}" in pick6)
-                check("and choosing it shows the v1.0 and USB-TTL step before its "
-                      "buttons, and its BUY goes to Makerfabs, not an affiliate link",
-                      mfsec.startswith('<p class="first"><b>First:</b> check the back says '
-                                       "<b>v1.0</b>, and plug into the USB-C marked "
-                                       '<b>USB-TTL</b>. <a href="#on-the-makerfabs-3-5">'
-                                       "Why</a></p>")
-                      and mfsec.find('<p class="first">')
-                          < mfsec.find('manifest="/install/1.1.1-mf35.1/esp32s3-mf35/'
-                                       'manifest.json"')
-                      and "</label>" + S.buy_html(mfb) + "</div>" in rows6[4]
-                      and 'class="buy"' not in mfsec and "sponsored" not in S.buy_html(mfb)
-                      and 'rel="noopener"' in S.buy_html(mfb)
-                      and "from Makerfabs, its maker (not an affiliate link"
-                          in S.buy_html(mfb)
-                      and "BUY links are affiliate links, except the one to Makerfabs: "
-                          "buying through them helps support µnleashed." in pick6)
-                check("the same-chip line names both families that share a chip, the "
-                      "Waveshare and the Makerfabs together",
-                      "The ESP32 dev board (Base), the Freenove ESP32 camera board and the "
-                      "ESP32-CAM have the same chip, and so do the Waveshare "
-                      "ESP32-S3-LCD-1.47 and the Makerfabs ESP32-S3 Parallel TFT 3.5&quot; "
-                      "(v1.0), so between those the picture is the only check." in pick6)
-                man6 = S.firmware_manifest("1.1.1-mf35.1", chip="esp32s3-mf35")
-                check("its manifest holds its own build, at the S3's offsets",
-                      man6 is not None and man6["version"] == "1.1.1 (MF35 1.0.0)"
-                      and [b["chipFamily"] for b in man6["builds"]] == ["ESP32-S3"]
-                      and [(p["path"], p["offset"]) for p in man6["builds"][0]["parts"]]
-                          == [("bootloader.bin", 0), ("partitions.bin", 32768),
-                              ("ota_data_initial.bin", 61440), ("firmware.bin", 131072),
-                              ("storage.bin", 3932160)]
-                      and S.firmware_file("1.1.1-mf35.1/esp32s3-mf35/firmware.bin")
-                          is not None
-                      and S.firmware_file("1.1.1-mf35.1/esp32s3/firmware.bin") is None)
-                mf6a, mf6 = part(hw6a, mfa), part(hw6, mfa)
-                flat_mf6a, flat_mf6 = " ".join(mf6a.split()), " ".join(mf6.split())
-                warn6 = re.findall(r'<p class="warn">(.*?)</p>', mf6, re.S)
-                check("/hardware: its entry, coming soon before its set and a preview on "
-                      "the installer with it, after the Waveshare's",
-                      '<h2 id="' + mfa + '">Makerfabs ESP32-S3 Parallel TFT 3.5&quot; '
-                          "(v1.0)</h2>" in hw6
-                      and hw6.index('id="waveshare-esp32-s3-lcd-1-47"') < hw6.index(
-                          'id="' + mfa + '"') < hw6.index('id="choosing-a-camera-board"')
-                      and S.board_html(["esp32s3-mf35"]) in mf6
-                      and "<b>Coming soon.</b> A board built round a 3.5 inch touch screen"
-                          in flat_mf6a and "coming soon to" in mf6a
-                      and "on <a href=\"/install\">the installer</a> as a preview"
-                          in flat_mf6
-                      and "<dt>Firmware</dt><dd>1.1.1 preview (MF35 1.0.0) <a href="
-                          '"/install">on the installer</a>; the board calls it 1.1.1 '
-                          "(MF35 1.0.0)</dd>" in mf6
-                      and "<b>Coming soon.</b>" not in flat_mf6
-                      and "FLASH &amp; GO</text>" in mf6 and 'class="art seal sec"' not in mf6
-                      and "<dt>Speed</dt><dd>Fastest" in mf6)
-                check("and says v1.0 only, what v2.0 is, to read the back, and that the "
-                      "SPI TFT is not the one",
-                      len(warn6) == 2
-                      and "<b>Check the back of the board: this build is for v1.0.</b>"
-                          in warn6[0]
-                      and "the one they sell today is v2.0" in " ".join(warn6[0].split())
-                      and "A build for v2.0 is coming." in " ".join(warn6[0].split())
-                      and "the wrong image does not start" in " ".join(warn6[0].split())
-                      and "<b>The Parallel TFT, not the SPI TFT.</b>" in warn6[1]
-                      and "it is not supported" in " ".join(warn6[1].split()))
-                check("and its benefits and its limits, in words",
-                      all(w in flat_mf6 for w in (
-                          "<b>A big status screen.</b> 480 by 320",
-                          "what each caller is doing, for how long, and on which terminal",
-                          "a graph of the last ten minutes",
-                          "<b>No lag from the screen.</b> It is wired to the chip by a "
-                          "16-bit parallel bus",
-                          "<b>16 MB of flash</b> and a micro SD card slot",
-                          "Grove-style sockets", "Mabee",
-                          "the firmware does not use yet",
-                          "<b>Less PSRAM than the Waveshare.</b> v1.0 has 2 MB",
-                          "it will take fewer encrypted callers at once",
-                          "<b>No activity LED.</b>",
-                          "<b>USB-TTL</b>", "it has ten caller lines"))
-                      and 'href="/skins"' in mf6
-                      and "The firmware with skins is in testing" in flat_mf6)
-                check("and where to buy it: Makerfabs' own page, plainly, and the Elecrow "
-                      "named as looked at, not supported, not installable",
-                      '<dt>Buy one</dt><dd><a class="buy" href="https://www.makerfabs.com/'
-                          'esp32-s3-parallel-tft-with-touch-ili9488.html" rel="noopener"' in mf6
-                      and ">BUY</a> from Makerfabs, their own shop (not an affiliate "
-                          "link)</dd>" in mf6
-                      and 'rel="sponsored"' not in mf6
-                      and "link.amazon" not in mf6 and "tag=" not in mf6
-                      and 'href="https://www.amazon.com/dp/B0C4SJXP9N"' in mf6
-                      and "It is not supported yet" in flat_mf6
-                      and "Elecrow" not in pick6
-                      and all("Elecrow" not in b["name"] for b in S.BOARDS)
-                      and "apart from one" in " ".join(hw6.split()))
-                im6 = (inst6.split('id="on-the-makerfabs-3-5"')[1].split("<h2")[0]
-                       if 'id="on-the-makerfabs-3-5"' in inst6 else "")
-                flat_im6 = " ".join(im6.split())
-                check("/install: its own section once it is offered, the steps in order: "
-                      "the back, the USB-TTL socket, the choice",
-                      'id="on-the-makerfabs-3-5"' not in inst6a
-                      and '<h2 id="on-the-makerfabs-3-5">On the Makerfabs 3.5&quot;</h2>'
-                          in inst6
-                      and flat_im6.index("<b>Turn it over and find the version</b>")
-                          < flat_im6.index("<b>Plug the cable into the USB-C socket marked "
-                                           "USB-TTL.</b>")
-                          < flat_im6.index("<b>Choose the Makerfabs in the card</b>")
-                      and "This build is for <b>v1.0</b>." in flat_im6
-                      and "<b>It has the same chip as the Waveshare S3.</b>" in flat_im6
-                      and 'href="#when-the-board-does-not-appear"' in im6
-                      and "<b>It is a preview</b>" in flat_im6)
-                check("and /hardware's chip list and spectrum count it without its brand",
-                      "<b>ESP32-S3: yes, on two boards.</b> The Waveshare and the "
-                      "Makerfabs above." in " ".join(hw6.split())
-                      and "the only screen the firmware drives" not in hw6
-                      and "Makerfabs" not in hw6.split("The prices are typical")[0]
-                      and 'href="#' + mfa + '"' in hw6.split('id="esp32-dev-board-base"')[0])
-            finally:
-                S.FIRMWARE_DIR = pathlib.Path(fwroot)
-                shutil.rmtree(fw110, ignore_errors=True)
-
-            # The same, end to end, over HTTP: a second server pointed at
-            # the scratch releases, so the route, the content types and the
-            # page's script tag are tested as a browser meets them.
-            print("The installer page, with a release published")
+            # Over HTTP: a second directory, pointed at the scratch releases,
+            # with two boards announced to it.
             port2 = PORT + 1
             base2 = f"http://127.0.0.1:{port2}"
             db2 = os.path.join(tempfile.gettempdir(), f"dirtest{os.getpid()}b.db")
             env2 = dict(os.environ, DIRECTORY_PAGE_CACHE="0", DIRECTORY_DB=db2,
                         DIRECTORY_PORT=str(port2), DIRECTORY_FIRMWARE_DIR=fwroot,
-                        # Two boards are listed here to see the update arrow
-                        # follow the releases on disk (site 1.0.0).
+                        DIRECTORY_DOCS_DIR=DOCS_DIR,
+                        DIRECTORY_HOME_URL="https://unleashedbbs.com",
                         DIRECTORY_PENDING_HOURS="0.0006", DIRECTORY_MIN_SECONDS="0",
                         DIRECTORY_ADDRESS_PER_MINUTE="0")
             server2 = subprocess.Popen([sys.executable, "server.py"], env=env2,
@@ -7050,239 +4047,21 @@ def main():
                         break
                     except Exception:
                         time.sleep(0.1)
-                # Two boards for the update arrow, announced now so their
-                # pending window has passed by the time 1.0.1 is on disk.
                 behind = {"software": "unleashed", "version": "1.0.0",
                           "name": "Behind Board", "port": 6400, "token": "",
                           "system": "ESP32-WROOM-32E", "features": ["chat"]}
                 other = {"software": "Mystic", "version": "0.0.1",
                          "name": "Other Board", "port": 23, "token": ""}
-                t_listed = time.time()
                 _c, tb = post_from(behind, "192.0.2.61", base2)
                 _c, to = post_from(other, "192.0.2.62", base2)
-                code, ctype, page2 = fetch("/install", base2)
-                page2 = page2.decode("utf-8")
-                srcs = re.findall(r'<script[^>]*src="([^"]+)"', page2)
-                check("the page offers the button, with the module from here",
-                      code == 200 and "<esp-web-install-button" in page2
-                      and srcs == [S.EWT_SCRIPT])
-                # No script from anywhere else, and none written inline.
-                check("and no script from any other origin, nor any inline",
-                      all(u.startswith("/") and not u.startswith("//") for u in srcs)
-                      and page2.count("<script") == len(srcs)
-                      and "unpkg" not in page2)
-                code, ctype, body = fetch("/install/0.19.2/manifest.json", base2)
-                m2 = json.loads(body.decode()) if code == 200 else {}
-                check("the manifest is served at /install/<version>/, as JSON",
-                      code == 200 and ctype.startswith("application/json")
-                      and m2.get("version") == "0.19.2"
-                      and [p["offset"] for p in m2["builds"][0]["parts"]]
-                          == [4096, 32768, 61440, 131072, 3932160])
-                # Each part fetched the way ESP Web Tools does it: relative to
-                # the manifest's own URL.
-                got = [fetch("/install/0.19.2/" + p["path"], base2)
-                       for p in m2.get("builds", [{}])[0].get("parts", [])]
-                check("and every part it names comes back, as a binary",
-                      len(got) == 5
-                      and all(g[0] == 200 and g[1] == "application/octet-stream"
-                              for g in got))
-                check("while a version past the cap, or not on disk, does not",
-                      fetch("/install/0.18.0/manifest.json", base2)[0] == 404
-                      and fetch("/install/9.9.9/manifest.json", base2)[0] == 404)
-                # The Update button's manifest, over HTTP, as the dialog
-                # fetches it: the key that forbids the erase, the prompt
-                # kept for any dialog that ignores it, and the same parts.
-                code, ctype, body = fetch("/install/0.19.2/manifest-update.json", base2)
-                u2 = json.loads(body.decode()) if code == 200 else {}
-                check("the Update manifest is served beside it and cannot erase",
-                      code == 200 and ctype.startswith("application/json")
-                      and u2.get("unleashed_update") is True
-                      and u2.get("new_install_prompt_erase") is True
-                      and u2.get("builds") == m2.get("builds")
-                      and fetch("/install/0.18.0/manifest-update.json", base2)[0] == 404)
-                check("and the page offers both buttons, the update one hidden "
-                      "where it cannot work",
-                      ">Install on a new board</button>" in page2
-                      and ">Update my board</button>" in page2
-                      and "article .installer esp-web-install-button.upd"
-                          "[install-unsupported] { display:none; }" in page2)
-                check("and the bundle is served to this server too",
-                      fetch(S.EWT_SCRIPT, base2)[0] == 200)
-
-                # The announcement banner appears by itself when a release
-                # of 1.0.0 or later lands, and not a moment before.
-                print("The announcement banner")
-                home2 = fetch("/", base2)[2].decode("utf-8")
-                check("no banner while the newest release is before 1.0.0",
-                      'class="banner"' not in home2)
-                check("and none on a directory with no release at all",
-                      'class="banner"' not in get("/")[1])
-                # Absent means absent: the heading follows the menu directly,
-                # with no empty box and no margin standing in for one.
-                check("and nothing takes its place: the pitch follows the menu",
-                      '</nav><div class="front"><section class="hero">' in home2
-                      and '</nav><div class="front">' in get("/")[1])
-                check("and the page has no full size button without it either",
-                      'class="btn"' not in home2.split("</nav>")[1]
-                      and 'class="b1"' in home2)
-                put("1.0.0", "esp32", whole)
-                home2 = fetch("/", base2)[2].decode("utf-8")
-                bn = (home2.split('<div class="banner"')[1].split("</div>")[0]
-                      if '<div class="banner"' in home2 else "")
-                check("the banner shows once a 1.0.0 release is on disk",
-                      '<div class="banner" role="note"><p>\u00b5nleashed BBS 1.0.0 is out. '
-                      '<a href="/install">Install it from your browser.</a></p></div>'
-                      in home2)
-                dir2 = fetch("/directory", base2)[2].decode("utf-8")
-                check("above the pitch and the directory heading, straight under the menu",
-                      '</nav><div class="banner"' in home2
-                      and home2.index('<div class="banner"')
-                          < home2.index('<div class="front">')
-                      and '</nav><div class="banner"' in dir2
-                      and dir2.index('<div class="banner"')
-                          < dir2.index("<h1>Communities online</h1>"))
-                check("one sentence and one link: no buttons and no drawing",
-                      bn.count("<a ") == 1 and "btn" not in bn and "<svg" not in bn
-                      and 'class="btn"' not in home2.split("</nav>")[1])
-                check("slim: small type, a hairline, a lamp, and nothing animated",
-                      ".banner { display:flex; align-items:center;" in home2
-                      and "font-size:0.8125rem;" in home2.split(".banner {")[1].split("}")[0]
-                      and ".banner::before {" in home2
-                      and "bannerled" not in home2)
-                # The words live in one constant, so Rob changes them in one
-                # place; empty switches the banner off. In-process, where
-                # FIRMWARE_DIR is these same scratch releases.
-                was_ann = S.ANNOUNCEMENT
-                S.ANNOUNCEMENT = "Version {version}, **now**. [Read](/about)"
-                one = S.announcement_banner()
-                S.ANNOUNCEMENT = "   "
-                none_ann = S.announcement_banner()
-                S.ANNOUNCEMENT = was_ann
-                check("the words come from one constant, the version filled in",
-                      one == '<div class="banner" role="note"><p>Version 1.0.0, '
-                             '<b>now</b>. <a href="/about">Read</a></p></div>')
-                check("and an empty announcement renders nothing at all",
-                      none_ann == "")
-                # 1.0.0 sorts above 0.19.2, is served, and is what the card
-                # offers first, with the one before it kept as the choice.
-                rels_1 = S.firmware_releases()
-                code, _ct, man1 = fetch("/install/1.0.0/manifest.json", base2)
-                inst4 = fetch("/install", base2)[2].decode("utf-8")
-                check("a 1.0.0 release is found, served and offered as the newest",
-                      [r["version"] for r in rels_1] == ["1.0.0", "0.19.2"]
-                      and code == 200 and json.loads(man1.decode())["version"] == "1.0.0"
-                      and 'manifest="/install/1.0.0/esp32/manifest.json"' in inst4
-                      and 'id="fwv0_0" checked> 1.0.0 (newest)' in inst4)
-                # 1.0.0 has no BOOT button reset, and neither has 1.0.1,
-                # which is the badge fields only: it is 1.0.2's.
-                check("with 1.0.0 on disk, the BOOT button section still waits",
-                      "The BOOT button" not in inst4 and S.ART["boot-button"] not in inst4
-                      and "::: from" not in inst4)
-                put("1.0.1", "esp32", whole)
-                inst41 = fetch("/install", base2)[2].decode("utf-8")
-                check("and with 1.0.1, the badge release, it still waits",
-                      'id="fwv0_0" checked> 1.0.1 (newest)' in inst41
-                      and "The BOOT button" not in inst41
-                      and S.ART["boot-button"] not in inst41
-                      and "goes back to the last network that worked" not in inst41
-                      and "::: from" not in inst41)
-
-                # ----------------------------------------------------------
-                # Site 1.0.0 (Rob: "a version number should apply to all
-                # honestly. Then when an unleashed board is behind, mark on
-                # there a subtle up arrow"). In-process first, where
-                # FIRMWARE_DIR is these scratch releases, newest 1.0.1.
-                print("Versions, and the update arrow")
-                vk = S.version_key
-                check("versions compare part by part: 1.0.10 is newer than 1.0.9",
-                      vk("1.0.10") > vk("1.0.9") and vk("1.0.1") == vk("1.0.1")
-                      and vk("0.23.0") < vk("1.0.0") < vk("1.0.1") < vk("1.1.0")
-                      and vk("v1.0.1") == vk("1.0.1") and vk(" 1.0.1 ") == vk("1.0.1"))
-                check("a pre-release is older than its release, and newer than the one "
-                      "before; build metadata does not count",
-                      vk("1.0.1-rc.2") < vk("1.0.1") and vk("1.0.1-rc.2") > vk("1.0.0")
-                      and vk("1.0.1+build.7") == vk("1.0.1"))
-                check("anything that is not three numbers is not a version",
-                      all(vk(g) is None for g in ("", None, "1.0", "1", "dev", "1.0.0.1",
-                                                   "1.0.x", "one.two.three", "1..0",
-                                                   "<b>1.0.0</b>", "1.0.0 beta",
-                                                   "1.0.0-", "-1.0.0")))
-                latest = S.newest_release()
-
-                # A stored row, listed ten days: past new, short of a month,
-                # so the directory adds no badge of its own to it.
-                def brow(**kw):
-                    r = {"software": "unleashed", "version": "1.0.0", "system": "",
-                         "terminals": "", "guests": None, "features": "", "support": "",
-                         "interests": "", "public_at": int(time.time()) - 10 * 86400,
-                         "first_seen": int(time.time()) - 10 * 86400}
-                    r.update(kw)
-                    return r
-
-                check("the newest release is the one /install offers first",
-                      latest == "1.0.1" and latest == S.firmware_releases()[0]["version"])
-                check("a board on an older version is behind; one that is equal, newer "
-                      "or unparseable is not",
-                      S.update_for(brow(version="1.0.0"), latest) == "1.0.1"
-                      and S.update_for(brow(version="0.23.0"), latest) == "1.0.1"
-                      and S.update_for(brow(version="1.0.1-rc.1"), latest) == "1.0.1"
-                      and S.update_for(brow(version="1.0.1"), latest) == ""
-                      and S.update_for(brow(version="1.0.2"), latest) == ""
-                      and S.update_for(brow(version="1.0.10"), latest) == ""
-                      and S.update_for(brow(version="garbage"), latest) == ""
-                      and S.update_for(brow(version=""), latest) == "")
-                check("other software is never flagged, whatever its version",
-                      S.update_for(brow(software="Mystic", version="0.0.1"), latest) == ""
-                      and S.update_for(brow(software="unleashed-fork", version="0.0.1"),
-                                       latest) == ""
-                      and S.update_for(brow(software="", version="0.0.1"), latest) == "")
-                check("and nothing is flagged with no release on disk",
-                      S.update_for(brow(), "") == "" and "update" not in S.row_keys(
-                          brow(), int(time.time()), False, ""))
-                bb1 = S.board_badges(brow(system="ESP32"), int(time.time()), False, latest)
-                check("a board that is behind has the arrow on its software badge, "
-                      "linked to /upgrade, before the machine",
-                      '<span class="bid"><span class="bd k-soft" role="img"' in bb1
-                      and '>\u00b5nleashed 1.0.0</span><a class="bu" href="/upgrade" ' in bb1
-                      and bb1.index('class="bu"') < bb1.index('class="bd k-sys"')
-                      and 'data-tip="Update available: 1.0.0 → 1.0.1. Plug it in and '
-                          'use Update my board on /install."' in bb1
-                      and 'aria-label="Update available: 1.0.0 → 1.0.1.' in bb1
-                      and "update" in S.row_keys(brow(), int(time.time()), False, latest))
-                check("and none for a board on the newest, or for other software",
-                      'class="bu"' not in S.board_badges(brow(version="1.0.1"),
-                                                         int(time.time()), False, latest)
-                      and 'class="bu"' not in S.board_badges(
-                          brow(software="Mystic", version="0.0.1"), int(time.time()),
-                          False, latest))
-                ul = S.update_link('1.0.0"><script>x</script>', "1.0.1")
-                check("the arrow's tooltip is escaped, once, in both attributes",
-                      "<script>" not in ul and '"><' not in ul.split(">", 1)[0]
-                      and ul.count("1.0.0&quot;&gt;&lt;script&gt;x&lt;/script&gt;") == 2)
-                check("without a system badge the software badge is alone on its row; "
-                      "with nothing else there is no second row",
-                      S.board_badges(brow(version="1.0.1"), int(time.time()), False, latest)
-                      == '<span class="badges"><span class="bid">'
-                         + S.badge("soft", "\u00b5nleashed 1.0.1",
-                                   "Software: \u00b5nleashed 1.0.1, as the board reports it.")
-                         + "</span></span>"
-                      and S.board_badges(brow(software="", version=""), int(time.time()),
-                                         False, latest) == "")
-                check("the arrow is drawn in a dim cyan, a link and not an image",
-                      ".bu { --bc:#5ab4b4;" in inst41
-                      and ".k-upd { --bc:#5ab4b4;" in inst41
-                      and 'role="img"' not in ul and "tabindex" not in ul)
-
-                # Over HTTP: the two boards announced when this server
-                # started, now past their pending window.
-                time.sleep(max(0.0, 2.5 - (time.time() - t_listed)))
+                time.sleep(2.5)
                 post_from(dict(behind, token=tb.get("token", "")), "192.0.2.61", base2)
                 post_from(dict(other, token=to.get("token", "")), "192.0.2.62", base2)
                 home3 = fetch("/directory", base2)[2].decode("utf-8")
                 brow3, orow3 = badge_row(home3, "Behind Board"), badge_row(home3, "Other Board")
                 check("on the list, the board behind carries the arrow and the other "
                       "software does not",
-                      '>\u00b5nleashed 1.0.0</span><a class="bu" href="/upgrade" ' in brow3
+                      '>µnleashed 1.0.0</span><a class="bu" href="https://unleashedbbs.com/upgrade" ' in brow3
                       and "1.0.0 → 1.0.1." in brow3
                       and ">Mystic 0.0.1</span>" in orow3 and 'class="bu"' not in orow3)
                 upd_rows = list_rows(fetch("/?b=update", base2)[2].decode("utf-8"))
@@ -7295,46 +4074,28 @@ def main():
                       j3.get("Behind Board", {}).get("version") == "1.0.0"
                       and j3.get("Other Board", {}).get("software") == "Mystic"
                       and j3.get("Other Board", {}).get("version") == "0.0.1")
-                # 1.0.2 is the restore security fix: still no BOOT reset.
+                check("the arrow is drawn in a dim cyan, a link and not an image",
+                      ".bu { --bc:#5ab4b4;" in home3
+                      and ".k-upd { --bc:#5ab4b4;" in home3
+                      and 'role="img"' not in ul and "tabindex" not in ul)
+                check("the banner shows once a 1.0.0 release is on disk",
+                      '<div class="banner" role="note"><p>µnleashed BBS 1.0.1 is out. '
+                      '<a href="https://unleashedbbs.com/install">Install it from your '
+                      'browser.</a></p></div>' in home3
+                      and home3.index('<div class="banner"')
+                          < home3.index("<h1>Communities online</h1>"))
+                check("and none on a directory with no release at all",
+                      'class="banner"' not in get("/")[1])
                 put("1.0.2", "esp32", whole)
-                inst42 = fetch("/install", base2)[2].decode("utf-8")
-                check("and with 1.0.2, the security fix, it still waits",
-                      'id="fwv0_0" checked> 1.0.2 (newest)' in inst42
-                      and "The BOOT button" not in inst42
-                      and S.ART["boot-button"] not in inst42
-                      and "goes back to the last network that worked" not in inst42)
                 check("and the update arrow follows the newest release on disk",
                       "1.0.0 → 1.0.2." in badge_row(fetch("/directory", base2)[2].decode("utf-8"),
                                                          "Behind Board"))
                 put("1.1.0", "esp32", whole)
-                inst5 = fetch("/install", base2)[2].decode("utf-8")
-                flat5 = " ".join(inst5.split())
-                check("with a release of 1.1.0 or later, the BOOT button shows",
-                      "The BOOT button" in inst5 and S.ART["boot-button"] in inst5
-                      and "Press and let go of <b>RESET</b>" in flat5
-                      and "goes back to the last network that worked" in flat5
-                      and "::: from" not in inst5)
-                # The words from the firmware's copy for 1.1.0, section 6: the
-                # listing goes with a factory reset, and the box saying so is
-                # read before step 1.
-                boot = flat5[flat5.index("The BOOT button"):]
-                check("with the warning that a factory reset takes the board off the "
-                      "directory, above step 1, and the two bullets that say so",
-                      "A factory reset also takes the board off this directory." in boot
-                      and boot.index("takes the board off this directory")
-                      < boot.index("Press and let go of <b>RESET</b>")
-                      and '<p class="warn">A factory reset' in boot.split("Press and let go")[0]
-                      and "Until you choose a new password, the board keeps itself off "
-                          "the directory." in boot
-                      and "the accounts, the settings, the Wi-Fi, the mail and the logs "
-                          "are wiped" in boot
-                      and "is no longer on the directory unless you restore a backup."
-                          in boot)
                 check("and the arrow now says 1.1.0",
                       "1.0.0 → 1.1.0." in badge_row(fetch("/directory", base2)[2].decode("utf-8"),
                                                          "Behind Board"))
-                fwd5 = " ".join(fetch("/forward", base2)[2].decode("utf-8").split())
-                set5 = fetch("/setup", base2)[2].decode("utf-8")
+                fwd5 = " ".join(fetch("/docs/forward", base2)[2].decode("utf-8").split())
+                set5 = fetch("/docs/setup", base2)[2].decode("utf-8")
                 flat_set5 = " ".join(set5.split())
                 check("with 1.1.0 on disk, /forward gives each board its own Port and "
                       "explains Outside, and the account for older firmware is gone",
@@ -7374,24 +4135,17 @@ def main():
                     except OSError:
                         pass
         finally:
-            S.FIRMWARE_DIR = was_dir
+            S.FIRMWARE_DIR = K.FIRMWARE_DIR = was_dir
             shutil.rmtree(fwroot, ignore_errors=True)
 
         # ------------------------------------------------------------------
-        # The last hop of the build pipeline: update.sh fetches the newest
-        # GitHub release and installs it. Tested against a release served
-        # from 127.0.0.1, never GitHub, with every way it should refuse.
-        print("The release fetcher")
+        # Deploying it. Site 1.2.1: the 1.2.0 deploy stuck on the droplet.
+        # The pull moved HEAD, setup.sh failed, and every later run found
+        # nothing to pull and never installed. setup.sh records the commit it
+        # installed, last, and update.sh installs whenever that record is not
+        # HEAD, for this repository and, since the split, for the guides.
+        print("Deploying it")
         upd = open(os.path.join("deploy", "update.sh"), encoding="utf-8").read()
-        check("update.sh runs the fetcher whether or not the site changed",
-              "deploy/fetch_release.py" in upd
-              and len(re.findall(r"\n +fetch_release\n", upd)) == 3)
-        # Site 1.2.1: the 1.2.0 deploy stuck on the droplet. The pull moved
-        # HEAD, setup.sh failed, and every later run found nothing to pull
-        # and never installed. setup.sh now records the commit it installed,
-        # last, and update.sh installs whenever that record is not HEAD.
-        # The behaviour is exercised in a sandbox by hand (git, stubs for
-        # id, systemctl and curl); these pin the shape of it.
         setup_sh2 = open(os.path.join("deploy", "setup.sh"), encoding="utf-8").read()
         check("setup.sh records the commit it installed, after everything else",
               '> "$DEST/.installed.new"' in setup_sh2
@@ -7400,555 +4154,44 @@ def main():
               and setup_sh2.index(".installed.new") > setup_sh2.index("systemctl restart"))
         check("update.sh installs when the last install did not finish",
               'INSTALLED="$(cat "$INSTALLED_FILE" 2>/dev/null || true)"' in upd
-              and 'if [ "$INSTALLED" = "$OLD" ]; then' in upd
+              and '[ "$INSTALLED" != "$OLD" ] && stale=1' in upd
               and "the last install did not finish" in upd
               and upd.index("the last install did not finish") < upd.index('loud "Installing..."')
               and "/srv/unleashed_directory/.installed" in upd)
         check("and the record is never committed",
               "/.installed" in open(".gitignore", encoding="utf-8").read())
-        import hashlib
-        import http.server
-        relroot = tempfile.mkdtemp(prefix="dirrel")
-        dest = tempfile.mkdtemp(prefix="dirdest")
-        rel_state = {"tag": "v1.0.0", "missing": None, "tamper": None, "status": 200,
-                     "secret": False}
-        rel_list = []
-
-        def list_release(tag, fams=("esp32",), pre=False, draft=False, tamper=None,
-                         missing=None, versions=None):
-            """One release of the list: every set in fams (the ESP32's plain,
-            the rest prefixed), version.txt files from versions, notices and
-            SHA256SUMS over all of it."""
-            d = os.path.join(relroot, "list", tag)
-            shutil.rmtree(d, ignore_errors=True)
-            os.makedirs(d)
-            files = {}
-            for fam in fams:
-                pre_ = "" if fam == "esp32" else fam + "-"
-                for n in ("bootloader.bin", "partitions.bin", "ota_data_initial.bin",
-                          "firmware.bin", "storage.bin"):
-                    files[pre_ + n] = (fam + n + tag).encode() * 32
-            for fam, text in (versions or {}).items():
-                files[("" if fam == "esp32" else fam + "-") + "version.txt"] = text.encode()
-            files["THIRD_PARTY_NOTICES.md"] = b"notices\n"
-            files["SHA256SUMS"] = "".join(
-                f"{hashlib.sha256(b).hexdigest()}  {n}\n" for n, b in files.items()).encode()
-            if tamper:
-                files[tamper] += b"x"
-            for n, b in files.items():
-                if n != missing:
-                    with open(os.path.join(d, n), "wb") as fh:
-                        fh.write(b)
-            rel_list.append({"tag": tag, "pre": pre, "draft": draft})
-
-        def make_release():
-            d = os.path.join(relroot, "assets")
-            shutil.rmtree(d, ignore_errors=True)
-            os.makedirs(d)
-            files = {}
-            for n in ("bootloader.bin", "partitions.bin", "ota_data_initial.bin",
-                      "firmware.bin", "storage.bin"):
-                body = (n + rel_state["tag"]).encode() * 64
-                if n == "storage.bin":
-                    body += (b"\nsysop_password = hunter2\n" if rel_state["secret"]
-                             else b"\nsysop_password =\ntoken       =    ; only if\n")
-                files[n] = body
-            files["THIRD_PARTY_NOTICES.md"] = b"notices\n"
-            sums = "".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n" for n, b in files.items())
-            files["SHA256SUMS"] = sums.encode()
-            if rel_state["tamper"]:
-                files[rel_state["tamper"]] = files[rel_state["tamper"]] + b"x"
-            for n, b in files.items():
-                if n != rel_state["missing"]:
-                    with open(os.path.join(d, n), "wb") as fh:
-                        fh.write(b)
-
-        class Rel(http.server.BaseHTTPRequestHandler):
-            def log_message(self, *a):
-                pass
-
-            def do_GET(self):
-                port = self.server.server_address[1]
-                if self.path == "/releases":
-                    body = json.dumps([
-                        {"tag_name": r["tag"], "prerelease": r.get("pre", False),
-                         "draft": r.get("draft", False),
-                         "published_at": "2026-10-02T12:00:00Z",
-                         "assets": [{"name": n, "browser_download_url":
-                                     f"http://127.0.0.1:{port}/dl2/{r['tag']}/{n}"}
-                                    for n in sorted(os.listdir(
-                                        os.path.join(relroot, "list", r["tag"])))]}
-                        for r in rel_list]).encode()
-                elif self.path.startswith("/dl2/"):
-                    tag, _s, name = self.path[5:].partition("/")
-                    f = os.path.join(relroot, "list", tag, name)
-                    if not os.path.isfile(f):
-                        self.send_response(404)
-                        self.end_headers()
-                        return
-                    body = open(f, "rb").read()
-                elif self.path == "/releases/latest":
-                    if rel_state["status"] != 200:
-                        self.send_response(rel_state["status"])
-                        self.end_headers()
-                        return
-                    names = sorted(os.listdir(os.path.join(relroot, "assets")))
-                    body = json.dumps({
-                        "tag_name": rel_state["tag"],
-                        "published_at": "2026-10-01T12:00:00Z",
-                        "assets": [{"name": n, "browser_download_url":
-                                    f"http://127.0.0.1:{port}/dl/{n}"} for n in names],
-                    }).encode()
-                elif self.path.startswith("/dl/"):
-                    f = os.path.join(relroot, "assets", self.path[4:])
-                    if not os.path.isfile(f):
-                        self.send_response(404)
-                        self.end_headers()
-                        return
-                    body = open(f, "rb").read()
-                else:
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-        relsrv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Rel)
-        threading.Thread(target=relsrv.serve_forever, daemon=True).start()
-        relenv = dict(os.environ, UNLEASHED_RELEASE_API=
-                      f"http://127.0.0.1:{relsrv.server_address[1]}/releases/latest")
-
-        def run_fetch():
-            r = subprocess.run([sys.executable, os.path.join("deploy", "fetch_release.py"),
-                                "--dest", dest], env=relenv, capture_output=True,
-                               text=True, timeout=60)
-            return r.returncode, r.stdout
-
-        def tree(ver):
-            d = os.path.join(dest, ver)
-            if not os.path.isdir(d):
-                return None
-            out = {}
-            for root, _dirs, fs in os.walk(d):
-                for f in fs:
-                    p = os.path.join(root, f)
-                    out[os.path.relpath(p, d).replace(os.sep, "/")] = open(p, "rb").read()
-            return out
-
-        try:
-            make_release()
-            rc, out = run_fetch()
-            t = tree("1.0.0")
-            check("a good release is installed where the installer looks",
-                  rc == 0 and "Installed firmware 1.0.0" in out and t is not None
-                  and all("esp32/" + n in t for n in ("bootloader.bin", "partitions.bin",
-                                                      "ota_data_initial.bin", "firmware.bin",
-                                                      "storage.bin"))
-                  and "THIRD_PARTY_NOTICES.md" in t and "SHA256SUMS" in t
-                  and t.get("release.txt") == b"2026-10-01\n")
-            # Read by the server exactly as a hand-placed release would be.
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                man_f = S.firmware_manifest("1.0.0")
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("and the server builds its manifest from it",
-                  man_f is not None and len(man_f["builds"][0]["parts"]) == 5)
-            rc, out = run_fetch()
-            check("a second run changes nothing and says so",
-                  rc == 0 and "already installed" in out and tree("1.0.0") == t)
-
-            # Every refusal leaves 1.0.0 exactly as it was.
-            rel_state.update(tag="v1.0.1", tamper="firmware.bin")
-            make_release()
-            rc, out = run_fetch()
-            check("a file that does not match SHA256SUMS installs nothing",
-                  rc == 1 and "does not match SHA256SUMS" in out
-                  and tree("1.0.1") is None and tree("1.0.0") == t)
-            rel_state.update(tamper=None, missing="storage.bin")
-            make_release()
-            rc, out = run_fetch()
-            check("nor does a release missing a part",
-                  rc == 1 and "missing storage.bin" in out and tree("1.0.1") is None)
-            rel_state.update(missing=None, secret=True)
-            make_release()
-            rc, out = run_fetch()
-            check("nor one whose screens carry a password",
-                  rc == 1 and "carries a password" in out and tree("1.0.1") is None)
-            rel_state.update(secret=False, tag="1.0.1")
-            make_release()
-            rc, out = run_fetch()
-            check("nor one whose tag is not vX.Y.Z",
-                  rc == 1 and "not vX.Y.Z" in out and tree("1.0.1") is None)
-            rel_state.update(status=404, tag="v1.0.1")
-            rc, out = run_fetch()
-            check("and a private repository or no release gets a clear message",
-                  rc == 1 and "no public release" in out and "private until 1.0.0" in out
-                  and tree("1.0.0") == t)
-            check("with nothing left behind from any of them",
-                  not [n for n in os.listdir(dest) if n.startswith(".")])
-
-            # Newest two are kept.
-            rel_state.update(status=200, tag="v1.0.1")
-            make_release()
-            run_fetch()
-            rel_state.update(tag="v1.1.0")
-            make_release()
-            rc, out = run_fetch()
-            kept = sorted(n for n in os.listdir(dest) if re.match(r"^\d+\.\d+\.\d+$", n))
-            check("the newest two releases are kept and the older removed",
-                  rc == 0 and kept == ["1.0.1", "1.1.0"] and "Removed older releases: 1.0.0" in out)
-
-            # --------------------------------------------------------------
-            # Site 1.2.0: the list of releases, a board to each image set,
-            # and a pre-release serving the board no release carries.
-            relenv["UNLEASHED_RELEASE_API"] = (
-                f"http://127.0.0.1:{relsrv.server_address[1]}/releases")
-            shutil.rmtree(dest, ignore_errors=True)
-            os.makedirs(dest)
-            list_release("v1.3.0-dev.1", ("esp32", "esp32s3"), pre=True)
-            list_release("v1.3.0-dev.2", ("esp32", "esp32s3"), pre=True,
-                         versions={"esp32": "1.3.0-dev.2\n",
-                                   "esp32s3": "1.3.0-dev.2 (S3 1.0.0)\n"})
-            list_release("v1.4.0", ("esp32", "esp32s3"), draft=True)
-            list_release("v1.2.9", ("esp32", "esp32s3"), pre=True)   # tagged like a release
-            list_release("v1.2.0")
-            # GitHub lists newest first.
-            rel_list.reverse()
-            rc, out = run_fetch()
-            t12 = tree("1.2.0")
-            tp = tree("1.3.0-dev.2")
-            check("the latest release is installed, and the S3 from the newest pre-release",
-                  rc == 0 and "Installed firmware 1.2.0 for the browser installer." in out
-                  and "Installed firmware 1.3.0-dev.2 (a preview, for the esp32s3 image) "
-                      "for the browser installer." in out
-                  and t12 is not None and "esp32s3/firmware.bin" not in t12
-                  and tp is not None
-                  and all("esp32s3/" + n in tp for n in ("bootloader.bin", "partitions.bin",
-                                                          "ota_data_initial.bin",
-                                                          "firmware.bin", "storage.bin"))
-                  and tp.get("esp32s3/version.txt") == b"1.3.0-dev.2 (S3 1.0.0)\n"
-                  and tp.get("esp32/version.txt") == b"1.3.0-dev.2\n")
-            check("never a draft, an older preview, or a pre-release tagged like a release",
-                  sorted(os.listdir(dest)) == ["1.2.0", "1.3.0-dev.2"])
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                offers = ([r["version"] for r in S.board_offers("esp32")],
-                          [r["version"] for r in S.board_offers("esp32s3")])
-                m3 = S.firmware_manifest("1.3.0-dev.2", chip="esp32s3")
-                newest = S.newest_release()
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("and the site serves the ESP32 its release and the S3 the preview",
-                  offers == (["1.2.0"], ["1.3.0-dev.2"]) and newest == "1.2.0"
-                  and m3["version"] == "1.3.0-dev.2 (S3 1.0.0)"
-                  and [b["chipFamily"] for b in m3["builds"]] == ["ESP32-S3"])
-            rc, out = run_fetch()
-            check("a second run changes nothing",
-                  rc == 0 and "Firmware 1.2.0 is already installed." in out
-                  and "Firmware 1.3.0-dev.2 is already installed." in out
-                  and tree("1.3.0-dev.2") == tp)
-            # A preview copied in by hand, which GitHub does not list, stays
-            # until a release or a newer preview here carries its board: the
-            # daily run must not delete the only copy.
-            shutil.copytree(os.path.join(dest, "1.3.0-dev.2"), os.path.join(dest, "1.3.0-dev.9"))
-            rc, out = run_fetch()
-            check("a preview copied in by hand is kept while it serves its board",
-                  rc == 0 and "Removed" not in out
-                  and sorted(os.listdir(dest)) == ["1.2.0", "1.3.0-dev.2", "1.3.0-dev.9"])
-            shutil.rmtree(os.path.join(dest, "1.3.0-dev.9"))
-            # A newer pre-release that is broken leaves the one before serving.
-            list_release("v1.3.0-dev.3", ("esp32", "esp32s3"), pre=True,
-                         tamper="esp32s3-firmware.bin")
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            check("a broken preview installs nothing and the one before stays",
-                  rc == 1 and "esp32s3-firmware.bin does not match SHA256SUMS" in out
-                  and tree("1.3.0-dev.3") is None and tree("1.3.0-dev.2") == tp
-                  and tree("1.2.0") == t12)
-            rel_list.pop(0)
-            # A half-published S3 set is refused, not half installed.
-            list_release("v1.2.1", ("esp32", "esp32s3"), missing="esp32s3-storage.bin")
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            check("a release missing part of a set is refused, naming the part",
-                  rc == 1 and "missing esp32s3-storage.bin" in out and tree("1.2.1") is None
-                  and tree("1.2.0") == t12 and tree("1.3.0-dev.2") == tp)
-            rel_list.pop(0)
-            # A version.txt the sums name and the release does not carry is a
-            # set half published, like a missing part.
-            list_release("v1.2.4", ("esp32", "esp32s3"), missing="esp32s3-version.txt",
-                         versions={"esp32s3": "1.2.4 (S3 1.0.0)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            check("and one whose sums name a version.txt it does not carry",
-                  rc == 1 and "missing esp32s3-version.txt" in out and tree("1.2.4") is None
-                  and tree("1.3.0-dev.2") == tp)
-            rel_list.pop(0)
-            # A version.txt that does not name a version is refused too.
-            list_release("v1.2.2", ("esp32",), versions={"esp32": "<b>hi</b>\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            check("and one whose version.txt is not a version",
-                  rc == 1 and "version.txt is not one line naming a version" in out
-                  and tree("1.2.2") is None)
-            rel_list.pop(0)
-            # A release that carries the S3 takes it over, and the preview goes.
-            list_release("v1.3.0", ("esp32", "esp32s3"),
-                         versions={"esp32s3": "1.3.0 (S3 1.0.0)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            check("once a release carries the S3, the preview is removed",
-                  rc == 0 and "Installed firmware 1.3.0 for the browser installer." in out
-                  and sorted(os.listdir(dest)) == ["1.2.0", "1.3.0"]
-                  and "Removed older releases: 1.3.0-dev.2." in out
-                  and (tree("1.3.0") or {}).get("esp32s3/version.txt") == b"1.3.0 (S3 1.0.0)\n")
-            # Two ESP32-only patches after it: the S3 stays on the release
-            # that carries it, however old, and is never handed back to a
-            # pre-release, and that release is kept past the newest two.
-            t130 = tree("1.3.0")
-            list_release("v1.3.1")
-            rel_list.insert(0, rel_list.pop())
-            rc1, out1 = run_fetch()
-            list_release("v1.3.2")
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                offers = ([r["version"] for r in S.board_offers("esp32")],
-                          [r["version"] for r in S.board_offers("esp32s3")])
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("a board the newest release lacks stays on the older release that "
-                  "carries it, kept past the newest two",
-                  rc1 == 0 and rc == 0 and "Removed older releases: 1.2.0." in out1
-                  and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"]
-                  and tree("1.3.0") == t130 and "preview" not in out1 + out
-                  and "Removed" not in out
-                  and offers == (["1.3.2", "1.3.1"], ["1.3.0"]))
-            # Newest by version, not by the order GitHub lists them: a patch
-            # to an older line, published last, is not the newest release.
-            list_release("v1.2.3")
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            check("the newest release is the highest version, not the last published",
-                  rc == 0 and "Installed firmware" not in out
-                  and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"])
-            # Site 1.2.9: the Freenove's set, esp32-fncam, from firmware
-            # 1.1.0. It waits for a release: a pre-release carrying it is
-            # never installed for it, so nothing of it shows early.
-            list_release("v1.4.0-dev.1", ("esp32", "esp32s3", "esp32-fncam"), pre=True,
-                         versions={"esp32-fncam": "1.4.0-dev.1 (FNCAM 1.0.2)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            fetch_src = open(os.path.join("deploy", "fetch_release.py"), encoding="utf-8").read()
-            check("a pre-release is never taken for the Freenove's set",
-                  rc == 0 and 'FAMILIES = ("esp32", "esp32s3", "esp32-fncam", "esp32-cam", '
-                      '"esp32s3-mf35")' in fetch_src
-                  and 'NO_PREVIEW = ("esp32-fncam",)' in fetch_src
-                  and tree("1.4.0-dev.1") is None
-                  and sorted(os.listdir(dest)) == ["1.3.0", "1.3.1", "1.3.2"])
-            list_release("v1.4.0", ("esp32", "esp32s3", "esp32-fncam"),
-                         versions={"esp32": "1.4.0\n", "esp32s3": "1.4.0 (S3 1.1.0)\n",
-                                   "esp32-fncam": "1.4.0 (FNCAM 1.0.2)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            t140 = tree("1.4.0") or {}
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                fn_offers = [r["version"] for r in S.board_offers("esp32-fncam")]
-                fn_man = S.firmware_manifest("1.4.0", chip="esp32-fncam")
-                fn_part = S.firmware_file("1.4.0/esp32-fncam/firmware.bin")
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("a release carrying all three installs the Freenove's set, "
-                  "from its prefixed assets",
-                  rc == 0 and "Installed firmware 1.4.0 for the browser installer." in out
-                  and all("esp32-fncam/" + n in t140 for n in (
-                      "bootloader.bin", "partitions.bin", "ota_data_initial.bin",
-                      "firmware.bin", "storage.bin"))
-                  and t140.get("esp32-fncam/version.txt") == b"1.4.0 (FNCAM 1.0.2)\n"
-                  and t140.get("esp32-fncam/firmware.bin", b"").startswith(b"esp32-fncamfirmware.bin")
-                  and fn_offers == ["1.4.0"]
-                  and fn_man is not None and fn_man["version"] == "1.4.0 (FNCAM 1.0.2)"
-                  and [b["chipFamily"] for b in fn_man["builds"]] == ["ESP32"]
-                  and fn_man["builds"][0]["parts"][0] == {"path": "bootloader.bin",
-                                                          "offset": 4096}
-                  and fn_part is not None)
-            # Site 1.3.5: the ESP32-CAM's set, esp32-cam, first on a
-            # pre-release that carries it alone. Unlike the Freenove's it is
-            # taken from one, and served as a preview while no release has it.
-            list_release("v1.4.1-dev.0", ("esp32-cam",), pre=True,
-                         versions={"esp32-cam": "1.4.1-dev.0 (ESPCAM 1.0.1)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            t141 = tree("1.4.1-dev.0") or {}
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                ec_offers = [r["version"] for r in S.board_offers("esp32-cam")]
-                ec_man = S.firmware_manifest("1.4.1-dev.0", chip="esp32-cam")
-                ec_rest = [[r["version"] for r in S.board_offers(c)]
-                           for c in ("esp32", "esp32s3", "esp32-fncam")]
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("a pre-release carrying only the ESP32-CAM's set installs it as a "
-                  "preview, from its prefixed assets, at the ESP32's offsets",
-                  rc == 0 and "Installed firmware 1.4.1-dev.0 (a preview, for the "
-                              "esp32-cam image) for the browser installer." in out
-                  and 'NO_PREVIEW = ("esp32-fncam",)' in fetch_src
-                  and all("esp32-cam/" + n in t141 for n in (
-                      "bootloader.bin", "partitions.bin", "ota_data_initial.bin",
-                      "firmware.bin", "storage.bin"))
-                  and t141.get("esp32-cam/version.txt") == b"1.4.1-dev.0 (ESPCAM 1.0.1)\n"
-                  and t141.get("esp32-cam/firmware.bin", b"").startswith(b"esp32-camfirmware.bin")
-                  and not any(k.startswith("esp32/") for k in t141)
-                  and ec_offers == ["1.4.1-dev.0"]
-                  and ec_man is not None and ec_man["version"] == "1.4.1-dev.0 (ESPCAM 1.0.1)"
-                  and [b["chipFamily"] for b in ec_man["builds"]] == ["ESP32"]
-                  and ec_man["builds"][0]["parts"][0] == {"path": "bootloader.bin",
-                                                          "offset": 4096}
-                  and ec_rest[2] == ["1.4.0"] and ec_rest[0][0] == "1.4.0")
-            rc, out = run_fetch()
-            check("and the next run keeps it while it serves the board",
-                  rc == 0 and "Firmware 1.4.1-dev.0 is already installed." in out
-                  and "1.4.1-dev.0" in os.listdir(dest) and "Removed" not in out)
-            # Site 1.3.7: a pre-release carrying every set. The Freenove,
-            # which a release carries, takes it ahead of that release; the
-            # ESP32-CAM moves to it; the ESP32 and the S3 stay on 1.4.0.
-            list_release("v1.4.1-dev.1", ("esp32", "esp32s3", "esp32-fncam", "esp32-cam"),
-                         pre=True,
-                         versions={"esp32-fncam": "1.4.1-dev.1 (FNCAM 1.0.4)\n",
-                                   "esp32-cam": "1.4.1-dev.1 (ESPCAM 1.0.2)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            fetch_src = open(os.path.join("deploy", "fetch_release.py"), encoding="utf-8").read()
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                ah_offers = {c: [r["version"] for r in S.board_offers(c)]
-                             for c in ("esp32", "esp32s3", "esp32-fncam", "esp32-cam")}
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("a pre-release goes ahead of the Freenove's release as a preview, "
-                  "and never ahead of the ESP32's or the S3's",
-                  rc == 0 and 'AHEAD = ("esp32-fncam",)' in fetch_src
-                  and "Installed firmware 1.4.1-dev.1 (a preview, for the esp32-fncam "
-                      "and esp32-cam images) for the browser installer." in out
-                  and (tree("1.4.1-dev.1") or {}).get("esp32-fncam/version.txt")
-                      == b"1.4.1-dev.1 (FNCAM 1.0.4)\n"
-                  and ah_offers["esp32"][0] == "1.4.0" and ah_offers["esp32s3"][0] == "1.4.0"
-                  and ah_offers["esp32-fncam"] == ["1.4.1-dev.1", "1.4.0"]
-                  and ah_offers["esp32-cam"] == ["1.4.1-dev.1"]
-                  and "1.4.1-dev.0" not in os.listdir(dest)
-                  and "1.4.0" in os.listdir(dest))
-            rc, out = run_fetch()
-            check("and the next run keeps it, with the release it goes ahead of",
-                  rc == 0 and "Firmware 1.4.1-dev.1 is already installed." in out
-                  and "1.4.1-dev.1" in os.listdir(dest) and "1.4.0" in os.listdir(dest)
-                  and "Removed" not in out)
-            # A release carrying the Freenove, newer than the preview, takes
-            # over, and the preview goes once it serves no board.
-            list_release("v1.4.1", ("esp32", "esp32s3", "esp32-fncam", "esp32-cam"),
-                         versions={"esp32-fncam": "1.4.1 (FNCAM 1.0.4)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                fn_after = [r["version"] for r in S.board_offers("esp32-fncam")]
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("a newer release carrying the Freenove takes over, and the preview goes",
-                  rc == 0 and "Installed firmware 1.4.1 for the browser installer." in out
-                  and "1.4.1-dev.1" not in os.listdir(dest)
-                  and fn_after == ["1.4.1", "1.4.0"])
-            # Site 1.3.17: the Makerfabs's set, esp32s3-mf35, on a board
-            # pre-release that carries it alone, tagged the way the firmware
-            # tags one (v1.1.1-mf35.1). Served as a preview, at the S3's
-            # offsets, and the Waveshare's set, whose assets share the
-            # "esp32s3-" start, is untouched.
-            list_release("v1.4.1-mf35.1", ("esp32s3-mf35",), pre=True,
-                         versions={"esp32s3-mf35": "1.4.1 (MF35 1.0.0)\n"})
-            rel_list.insert(0, rel_list.pop())
-            rc, out = run_fetch()
-            tmf = tree("1.4.1-mf35.1") or {}
-            was_fw = S.FIRMWARE_DIR
-            S.FIRMWARE_DIR = pathlib.Path(dest)
-            try:
-                mf_offers = [r["version"] for r in S.board_offers("esp32s3-mf35")]
-                mf_man = S.firmware_manifest("1.4.1-mf35.1", chip="esp32s3-mf35")
-                mf_s3 = [r["version"] for r in S.board_offers("esp32s3")]
-            finally:
-                S.FIRMWARE_DIR = was_fw
-            check("a board pre-release carrying only the Makerfabs's set installs it "
-                  "as a preview, from its prefixed assets, at the S3's offsets",
-                  rc == 0 and "Installed firmware 1.4.1-mf35.1 (a preview, for the "
-                              "esp32s3-mf35 image) for the browser installer." in out
-                  and all("esp32s3-mf35/" + n in tmf for n in (
-                      "bootloader.bin", "partitions.bin", "ota_data_initial.bin",
-                      "firmware.bin", "storage.bin"))
-                  and tmf.get("esp32s3-mf35/version.txt") == b"1.4.1 (MF35 1.0.0)\n"
-                  and tmf.get("esp32s3-mf35/firmware.bin", b"").startswith(
-                      b"esp32s3-mf35firmware.bin")
-                  and not any(k.startswith(("esp32/", "esp32s3/")) for k in tmf)
-                  and mf_offers == ["1.4.1-mf35.1"] and mf_s3 == ["1.4.1", "1.4.0"]
-                  and mf_man is not None and mf_man["version"] == "1.4.1 (MF35 1.0.0)"
-                  and [b["chipFamily"] for b in mf_man["builds"]] == ["ESP32-S3"]
-                  and mf_man["builds"][0]["parts"][0] == {"path": "bootloader.bin",
-                                                          "offset": 0})
-            rc, out = run_fetch()
-            check("and the next run keeps it while it serves the board",
-                  rc == 0 and "Firmware 1.4.1-mf35.1 is already installed." in out
-                  and "1.4.1-mf35.1" in os.listdir(dest) and "Removed" not in out)
-        finally:
-            relsrv.shutdown()
-            shutil.rmtree(relroot, ignore_errors=True)
-            shutil.rmtree(dest, ignore_errors=True)
-        check("fetched releases are kept out of git",
-              "/firmware/[0-9]*/" in open(".gitignore", encoding="utf-8").read())
-
-        # The code a visitor runs is the code in this repository, at an
-        # exact version, and cannot change between one reader and the next.
-        # The path carries this site's revision of the bundle as well
-        # (0.22.1), so a changed file is fetched fresh rather than a day late.
-        check("ESP Web Tools is pinned to an exact version, served from here",
-              re.match(r"^\d+\.\d+\.\d+$", S.EWT_VERSION) is not None
-              and isinstance(S.EWT_REV, int)
-              and S.EWT_SCRIPT == "/install/esp-web-tools/" + S.EWT_VERSION
-                                  + "-" + str(S.EWT_REV) + "/install-button.js"
-              and "unpkg.com" not in open("server.py", encoding="utf-8").read())
-        # A release committed here is published the moment Rob deploys, so
-        # the one leak this suite can see is checked on every run: the
-        # screens image carries data/system.cfg, and a developer's copy has
-        # the staff passwords, the Wi-Fi key and the directory token in it.
-        # The keys are there, empty, in every clean build; a value is not.
-        leaky = []
-        secret = re.compile(
-            rb"^[ \t]*(sysop_password|cosysop1_password|cosysop2_password|"
-            rb"wifi_ssid|wifi_password)[ \t]*=[ \t]*[^\r\n \t]"
-            rb"|^[ \t]*token[ \t]*=[ \t]*[^\r\n \t;#]", re.M)
-        for rel in sorted(os.listdir("firmware")):
-            if not re.match(r"^\d+\.\d+\.\d+$", rel):
-                continue
-            for chip in sorted(os.listdir(os.path.join("firmware", rel))):
-                img = os.path.join("firmware", rel, chip, "storage.bin")
-                if os.path.isfile(img) and secret.search(open(img, "rb").read()):
-                    leaky.append(rel + "/" + chip)
-        check("no release in firmware/ carries a password, a Wi-Fi key or a token"
-              + ("" if not leaky else "  <- " + ", ".join(leaky)),
-              not leaky)
-        # And the scan finds one when there is one to find.
-        check("and the check finds one when it is there",
-              secret.search(b"x\nsysop_password = hunter2\n") is not None
-              and secret.search(b"token       =              ; only if\n") is None
-              and secret.search(b"wifi_password =\n") is None)
+        check("update.sh pulls the guides named in /etc/unleashed-directory/docs, and "
+              "installs when they moved or their last install did not finish",
+              "DOCS_FILE=/etc/unleashed-directory/docs" in upd
+              and 'git -C "$DOCS" merge --ff-only "$DOCS_NEW"' in upd
+              and '[ "$INSTALLED_DOCS" != "$DOCS_OLD" ] && stale=1' in upd
+              and 'DOCS_SRC="$DOCS" "$SRC/deploy/setup.sh" $DOMAINS' in upd
+              and '"$DEST/.installed-docs"' in setup_sh2)
+        check("and no longer fetches firmware, which is the main site's",
+              "fetch_release" not in upd and not os.path.exists(
+                  os.path.join("deploy", "fetch_release.py")))
+        # One Caddy file per service, and /announce never redirected.
+        caddy_part = setup_sh2[setup_sh2.index('say "Web front end"'):
+                               setup_sh2.index('say "Firewall"')]
+        check("setup.sh writes its own sites file and a Caddyfile that gathers them",
+              'MINE="$SITES/directory.caddy"' in caddy_part
+              and "import /etc/caddy/sites/*.caddy" in caddy_part
+              and "caddy validate" in caddy_part)
+        check("with /announce answered over plain HTTP and everything else sent "
+              "up to HTTPS on the name it was asked for",
+              caddy_part.index("@announce path /announce")
+              < caddy_part.index("redir https://{host}{uri} permanent"))
+        check("and it refuses a domain another service already serves, and will "
+              "not replace an old Caddyfile that would leave a name unserved",
+              "is already served by" in caddy_part
+              and "and nothing in $SITES would after this" in caddy_part)
+        unit = open(os.path.join("deploy", "unleashed-directory.service"),
+                    encoding="utf-8").read()
+        check("the unit names the site, the guides and the site's firmware folder",
+              "Environment=DIRECTORY_URL=https://unleashedbbs.net" in unit
+              and "Environment=DIRECTORY_HOME_URL=https://unleashedbbs.com" in unit
+              and "Environment=DIRECTORY_DOCS_DIR=/srv/unleashed_directory/docs" in unit
+              and "Environment=DIRECTORY_FIRMWARE_DIR=/srv/unleashed_site/firmware" in unit)
 
         # Last, because it uses up everything one address may hold.
         #
