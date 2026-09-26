@@ -14,6 +14,21 @@
 
 # Changelog
 
+## 1.3.16, 2026-09-26
+
+A Buy button on /install's card (Rob).
+
+- **Buy one**, a small red button in the install card, under the
+  Install and Update buttons and the version line, for the board that
+  is picked, linking to that board's Amazon affiliate link
+  from the same board data /hardware reads. It follows the picker with no
+  script, the way the board's own buttons do, and a board with no link
+  shows none. Under it, one line: "Affiliate link: buying through it
+  helps support µnleashed."
+- It is a link, outside every row's label, so pressing it never changes
+  the board picked. It opens in a new tab and carries
+  `rel="sponsored nofollow noopener"`.
+
 ## 1.3.15, 2026-09-26
 
 /install gets a guided path, and the card marks our three picks (Rob: "the

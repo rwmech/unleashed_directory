@@ -3247,6 +3247,24 @@ def guide_html(lines):
     return "".join(out)
 
 
+def buy_html(b):
+    """Buy one (site 1.3.16, Rob): a board's affiliate link as a small red
+    button, and the line saying what it is, at the end of the board's own
+    section in the install card, so the :has() rules that show the section
+    for the board picked show this with it. From the board's "buy" in
+    BOARDS and nowhere else; a board with none gets nothing. A link and not
+    part of any <label>, so pressing it never picks a board."""
+    if not b.get("buy"):
+        return ""
+    return ('<div class="buyone"><a class="buy" href="'
+            + html.escape(b["buy"], quote=True)
+            + '" rel="sponsored nofollow noopener" target="_blank" '
+            'aria-label="Buy one, the ' + html.escape(b["name"], quote=True)
+            + ', on Amazon (affiliate link, opens in a new tab)">Buy one</a>'
+            '<p class="meta aff">Affiliate link: buying through it helps '
+            "support µnleashed.</p></div>")
+
+
 def installer_html(lines=()):
     """The ::: installer block: the install card, or an honest account of
     why there is no button.
@@ -3327,7 +3345,7 @@ def installer_html(lines=()):
             out.append('<p class="soon">There is no image for this board on this '
                        "site yet. When one is published, its buttons appear here. "
                        f'<a href="{b["page"]}">About this board</a>.</p>')
-            out.append("</div>")
+            out.append(buy_html(b) + "</div>")
             continue
         if len(o) > 1:
             # Short labels, so both fit on one line of the card: the line
@@ -3402,7 +3420,9 @@ def installer_html(lines=()):
                            + html.escape(rel["version"], quote=True)
                            + '/THIRD_PARTY_NOTICES.md">What is inside it, and under '
                            "what terms</a></p>")
-        out.append("</div>")
+        # Last in the section, under the buttons and the line naming the
+        # version: shopping after installing, never between the two.
+        out.append(buy_html(b) + "</div>")
 
     # Two boards on one chip family (the dev board and the Freenove, from
     # firmware 1.1.0) are the case the installer cannot check, so the line
@@ -5871,6 +5891,25 @@ article .installer .pre {{ color:#f0c674; background:#241d10;
         padding:0.625rem 0.875rem; font-size:0.8125rem; }}
 article .installer .pre p {{ margin:0; line-height:1.45; }}
 article .installer .pre b {{ color:#ffd35c; }}
+/* Buy one (site 1.3.16, Rob): a small red button under the picked
+   board's buttons and version line, the end of its section, and the line
+   saying it is an affiliate link under it. Not --risk: that red means somebody keeping a copy of you, and this
+   is a shop. White on #c62828 is 5.6:1, the button against the card 3.3:1;
+   the hover is #d32f2f, 5.0:1. Small on purpose: it is not how to install,
+   and it must not look like the Install button's rival. */
+article .installer .buyone {{ display:flex; flex-direction:column; align-items:center;
+        gap:0.25rem; }}
+article .installer a.buy {{ display:inline-block; font-size:0.8125rem; line-height:1.4;
+        color:#fff; background:#c62828; border:1px solid #e57373;
+        border-radius:0.375rem; padding:0.25rem 1rem; text-decoration:none; }}
+article .installer a.buy:hover {{ background:#d32f2f; color:#fff; }}
+article .installer a.buy:focus-visible {{ outline:3px solid #ffd35c;
+        outline-offset:2px; }}
+article .installer .buyone .aff {{ font-size:0.75rem; text-align:center;
+        text-wrap:balance; }}
+@media (forced-colors: active) {{
+  article .installer a.buy {{ border:1px solid LinkText; }}
+}}
 /* The board picker (site 1.2.0, Rob: "select the board type ... include an
    image for confirmation so the user flashes the right one. Small picture
    in the pick list"). A fieldset of native radios, one row a board: the

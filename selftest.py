@@ -6467,6 +6467,67 @@ def main():
                       and guide3.count('<p class="else">') == 1
                       and guide3.count('<ul class="uc">') == 1
                       and guide3.index('<ul class="uc">') < guide3.index("Flash it"))
+
+                # Site 1.3.16 (Rob): Buy one, under the buttons, for the board
+                # picked, from that board's "buy" and nothing else. It sits at
+                # the end of the board's own section, so the rules that show
+                # the section for the board picked show it too.
+                print("Buy one: the affiliate button on the card")
+                pb3 = S.picker_boards()
+
+                def buy_block(b):
+                    return ('<div class="buyone"><a class="buy" href="'
+                            + html.escape(b["buy"], quote=True)
+                            + '" rel="sponsored nofollow noopener" target="_blank" '
+                            'aria-label="Buy one, the ' + html.escape(b["name"], quote=True)
+                            + ', on Amazon (affiliate link, opens in a new tab)">'
+                            "Buy one</a><p class=\"meta aff\">Affiliate link: buying "
+                            "through it helps support µnleashed.</p></div>")
+
+                def secs(page, n):
+                    # Each board's section, up to the next one or the end of
+                    # the last one's own div.
+                    cut = [page.index(f'<div class="bsec b{j}">') for j in range(n)]
+                    return [page[c:(cut[j + 1] if j + 1 < n else
+                                    page.index('<p class="meta fam">'))]
+                            for j, c in enumerate(cut)]
+                sec3 = secs(pick3, len(pb3))
+                check("each board with a link has its Buy one, from BOARDS, sponsored "
+                      "and nofollow, in a new tab, outside every label",
+                      all(b.get("buy") for b in pb3)
+                      and pick3.count('<a class="buy"') == len(pb3)
+                      and 'class="buy"' not in pick3.split("</fieldset>")[0]
+                      and "\u2014" not in pick3)
+                check("each sits at the end of its own board's section, under that "
+                      "board's buttons and version line, so it follows the pick",
+                      all(sec.endswith(buy_block(b) + "</div>")
+                          and sec.index("Update my board</button>")
+                              < sec.index('<p class="meta ver r0">')
+                              < sec.index('<a class="buy"')
+                          and sec.count('<a class="buy"') == 1
+                          for sec, b in zip(sec3, pb3))
+                      and all(f".installer:has(#fwb{j}:checked) .bsec.b{j}{{display:flex}}"
+                              in pick3 for j in range(1, len(pb3))))
+                s3b = S.BOARD_BY_DIR["esp32s3"]
+                s3buy = s3b.pop("buy")
+                try:
+                    pick3n = S.installer_html()
+                    none3 = S.buy_html(s3b)
+                finally:
+                    s3b["buy"] = s3buy
+                sec3n = secs(pick3n, len(pb3))
+                check("a board with no link has no button and no line",
+                      none3 == "" and 'class="buyone"' not in sec3n[1]
+                      and pick3n.count('<a class="buy"') == len(pb3) - 1
+                      and pick3n.count("Affiliate link: buying") == len(pb3) - 1
+                      and all(buy_block(b) in sec for sec, b in zip(sec3n, pb3)
+                              if b is not s3b))
+                check("the button is a small red one, white on #c62828, and not --risk",
+                      "article .installer a.buy {{ display:inline-block; font-size:0.8125rem;"
+                      in S.PAGE
+                      and "color:#fff; background:#c62828;" in S.PAGE
+                      and "article .installer a.buy:focus-visible {{ outline:3px solid "
+                          "#ffd35c;" in S.PAGE)
                 man3 = S.firmware_manifest("1.1.1-dev.0", chip="esp32-cam")
                 check("its manifest holds its own build, at the ESP32's offsets",
                       man3 is not None and man3["version"] == "1.1.1-dev.0 (ESPCAM 1.0.1)"

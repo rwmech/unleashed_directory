@@ -920,6 +920,18 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   rows, the label placed on the frame's edge out of the row's flow. Rob
   turned down 1.3.13, which rebuilt the card and moved the picker into the
   left column: the card on the right is to stay as it is.
+- **Buy one, in the install card (site 1.3.16, Rob).** One small red
+  button for the board picked, the last thing in its `.bsec` (under the
+  buttons and the version line, above the amber box), from that board's
+  `"buy"` in BOARDS through `buy_html()` (never retyped), so the same
+  `:has(#fwbN:checked)` rules that show the section show it, with
+  "Affiliate link: buying through it helps support µnleashed." under it.
+  `rel="sponsored nofollow noopener"`, `target="_blank"`, an aria-label
+  that starts with the visible "Buy one" and names the board. A board with
+  no link gets neither. Not --risk: that red keeps its one meaning. Rob
+  considered it in the guide's step 1 and on every row first, and chose
+  this. Not at the very foot of the card: the card is sticky and taller
+  than 768px, so the foot is out of reach while it is pinned.
 - **The installer always offers Telnet details (site 1.0.0).** The fourth
   change to the vendored dialog: `_renderDashboard` renders the link item
   whether or not the device sent a URL, to `/connected` with no fragment
