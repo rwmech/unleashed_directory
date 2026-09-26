@@ -884,6 +884,17 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   communities online. Not a filter key: it is a state, and the filter is
   badges. A heartbeat that flips it drops the page cache. The front page
   has no top ten since 1.3.0, so /directory's order is the ranking.
+- **Boards we do not recommend (site 1.3.11, Rob).** /hardware names a
+  board so nobody buys it for this: the Keyestudio ESP32-S3 PRO, whose card
+  slot sits on GPIO 35-37, inside its octal PSRAM's pins, so the card and
+  the PSRAM cannot both work (the firmware's CLAUDE.md rejects it for the
+  same reason). `NOT_BOARDS` in server.py, drawn by the same `::: board`
+  block through `not_board_html()`: a NOT SUPPORTED seal in --warm, rows
+  for Why not and Sources, no version, no speed, no buy link, and every
+  source `rel="nofollow"` with no affiliate tag. It is in no other table,
+  not BOARDS (so never the picker or the fetcher) and not `BOARD_BY_DIR`
+  (so nothing counting tested boards counts it); its block is
+  `class="hwb no"`, which the tested-boards count does not match.
 - **The installer always offers Telnet details (site 1.0.0).** The fourth
   change to the vendored dialog: `_renderDashboard` renders the link item
   whether or not the device sent a URL, to `/connected` with no fragment

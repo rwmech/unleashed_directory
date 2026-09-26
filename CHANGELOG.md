@@ -14,6 +14,34 @@
 
 # Changelog
 
+## 1.3.11, 2026-09-26
+
+/hardware names a board not to buy (Rob: "include the keystudio board on
+the board selection website page and indicate why we wont use it. Then
+others don't buy it").
+
+- **Boards we do not recommend**, a section at the foot of /hardware, and a
+  line pointing to it beside the buy links. Its first entry is the
+  Keyestudio ESP32-S3 PRO: an ESP32-S3-WROOM-1 N16R8 with 8 MB of octal
+  PSRAM, whose micro SD slot is wired to GPIO 35, 36 and 37. Octal PSRAM
+  uses GPIO 33 to 37, so the card and the PSRAM cannot both work, which
+  Keyestudio's own listing says. The paragraph says what is wrong, why it
+  matters for a BBS, and to buy the Waveshare ESP32-S3-LCD-1.47 instead.
+- **Drawn like the tested boards and kept out of everything else.** A line
+  picture of the board from Keyestudio's photo, with a NOT SUPPORTED seal
+  in amber, and rows for its chip, how to tell it, why not and the
+  sources. No version, no speed, no buy link. `NOT_BOARDS` in server.py is
+  not BOARDS, so it is never in the installer's picker or the release
+  fetcher, and not `BOARD_BY_DIR`, so nothing counting the tested boards
+  counts it.
+- **Sources, as evidence and not as a place to buy:** Keyestudio's listing
+  (no affiliate tag), Keyestudio's guide for the card pins, and
+  Espressif's ESP-IDF GPIO guide for the PSRAM pins, each
+  `rel="nofollow"`.
+- Self-test: the section, its seal and rows, the sources' rel and the
+  absent tag, the pointer to it, and that the board is on neither /install
+  nor any table the installer reads.
+
 ## 1.3.10, 2026-09-25
 
 A board whose sysop has closed it shows as **Temporarily closed** (Rob).

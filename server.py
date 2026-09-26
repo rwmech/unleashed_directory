@@ -2824,6 +2824,111 @@ SHOWN_BOARDS = (
 )
 BOARD_BY_DIR = {b["dir"]: b for b in BOARDS + SHOWN_BOARDS + SOON_BOARDS}
 
+# The Keyestudio ESP32-S3 PRO (KS5034), drawn from Keyestudio's own photo
+# of it on their guide: an Arduino Uno shaped board, 69 x 54 mm, the RESET
+# and BOOT buttons in one corner, two USB-C sockets (USB PROG and OTG) and
+# a round DC 7-12V socket down the same end, header strips along the long
+# edges, rows of three-pin sensor headers in the middle, and the ESP32-S3
+# module at the other end with its antenna at the edge. The card slot is
+# not on the front, so it is not drawn.
+BOARD_ART_KS_S3PRO = (
+    '<svg class="art board" viewBox="0 0 96 60" aria-hidden="true" focusable="false" '
+    'preserveAspectRatio="xMidYMid meet">'
+    '<path class="o" d="M14 5 H81 L84 8 V21 L86.5 23.5 V51 L84 53.5 V55 '
+    'Q84 57 82 57 H14 Q12 57 12 55 V7 Q12 5 14 5 Z"/>'
+    '<rect class="g" x="33" y="6.5" width="25" height="3.5" rx="0.8"/>'
+    '<rect class="g" x="61" y="6.5" width="21" height="3.5" rx="0.8"/>'
+    '<rect class="g" x="38" y="52" width="20" height="3.5" rx="0.8"/>'
+    '<rect class="g" x="61" y="52" width="20" height="3.5" rx="0.8"/>'
+    '<rect class="o" x="14.5" y="7.5" width="4" height="4" rx="0.6"/>'
+    '<circle class="k" cx="16.5" cy="9.5" r="1.1"/>'
+    '<rect class="o" x="20" y="7.5" width="4" height="4" rx="0.6"/>'
+    '<circle class="k" cx="22" cy="9.5" r="1.1"/>'
+    '<rect class="gb" x="8" y="15" width="9" height="6.5" rx="2.6"/>'
+    '<rect class="d" x="10" y="17.2" width="5" height="2.1" rx="1"/>'
+    '<rect class="gb" x="8" y="25" width="9" height="6.5" rx="2.6"/>'
+    '<rect class="d" x="10" y="27.2" width="5" height="2.1" rx="1"/>'
+    '<rect class="gb" x="7" y="41" width="12" height="10" rx="1"/>'
+    '<circle class="d" cx="11.5" cy="46" r="2.2"/>'
+    '<rect class="d" x="21" y="15" width="6" height="9" rx="0.6"/>'
+    '<rect class="g" x="31" y="13" width="21" height="9" rx="0.6"/>'
+    '<rect class="g" x="55" y="13" width="17" height="9" rx="0.6"/>'
+    '<path class="d" d="M31 16 H52 M31 19 H52 M55 16 H72 M55 19 H72"/>'
+    '<rect class="g" x="33" y="27" width="4" height="20" rx="0.6"/>'
+    '<rect class="g" x="40" y="29" width="12" height="18" rx="0.6"/>'
+    '<rect class="o" x="57" y="27" width="26" height="23" rx="1"/>'
+    '<rect class="k" x="58.5" y="28.5" width="18" height="20" rx="0.8"/>'
+    '<path class="d" d="M78.5 30 H81.5 V33 H79 V36 H81.5 V39 H79 V42 H81.5 V45 H79 V48 H81.5"/>'
+    '<circle class="lf" cx="24" cy="30" r="1.1"/>'
+    "</svg>")
+
+# Boards /hardware names so that nobody buys one for this (site 1.3.11,
+# Rob: "include the keystudio board on the board selection website page
+# and indicate why we wont use it. Then others don't buy it"). Drawn by the
+# same ::: board block, with a NOT SUPPORTED seal and rows of their own,
+# and deliberately in no other table: not BOARDS, so the installer's picker
+# and the release fetcher never see them, and not BOARD_BY_DIR, so nothing
+# that counts or prices the tested boards counts these. There is no buy
+# link. "why" is the one row that says what is wrong; "sources" are where
+# each fact was read, and the vendor's listing among them is evidence, not
+# a place to buy, so every link carries rel="nofollow" and no affiliate tag.
+#
+# The Keyestudio ESP32-S3 PRO, checked 2026-09-26:
+#   the module, ESP32-S3-WROOM-1 N16R8 (16 MB flash, 8 MB PSRAM): the
+#     Amazon listing's title and keyestudio.com's product page (KS5034,
+#     "WR00M-1-N16R8 Module", $15.60);
+#   the card slot's pins, CLK 37, CMD 35, D0 36: Keyestudio's KS5034 guide,
+#     its SD card test code;
+#   octal PSRAM takes GPIO 33 to 37: Espressif's ESP-IDF 5.3.1 GPIO guide
+#     for the ESP32-S3 ("When using Octal flash or Octal PSRAM or both,
+#     GPIO33 ~ GPIO37 are connected to SPIIO4 ~ SPIIO7 and SPIDQS"), and the
+#     ESP32-S3-WROOM-1 datasheet (IO35, IO36 and IO37 are connected to the
+#     octal PSRAM on the modules that carry it and not available otherwise);
+#   the consequence, in Keyestudio's own words on the listing: "When PSRAM
+#     is enabled, GPIO pins 33-37 are reserved for internal use, and the
+#     on-board microSD card (which uses GPIO pins 35, 36 and 37) will not
+#     function properly."
+NOT_BOARDS = (
+    {"dir": "ks-s3pro", "name": "Keyestudio ESP32-S3 PRO",
+     "part": "ESP32-S3-WROOM-1 N16R8, 16 MB flash, 8 MB octal PSRAM",
+     "tell": "Shaped like an Arduino Uno: two USB-C sockets and a round "
+             "power socket along one end",
+     "art": BOARD_ART_KS_S3PRO,
+     "why": "its micro SD slot is wired to GPIO 35, 36 and 37, which the "
+            "8 MB of PSRAM needs for itself, so the two cannot work at once",
+     "sources": (
+         ("Keyestudio's listing", "https://www.amazon.com/dp/B0H4Z2RB5M"),
+         ("Keyestudio's guide, for the card pins",
+          "https://docs.keyestudio.com/projects/KS5034/en/latest/docs/"
+          "KS5034%20Keyestudio%20ESP32%20S3%20PRO%20Development%20Board.html"),
+         ("Espressif, for the PSRAM pins",
+          "https://docs.espressif.com/projects/esp-idf/en/v5.3.1/esp32s3/"
+          "api-reference/peripherals/gpio.html"))},
+)
+NOT_BY_DIR = {b["dir"]: b for b in NOT_BOARDS}
+
+
+def not_board_html(b):
+    """The ::: board block for a board /hardware says not to buy: its
+    picture with a NOT SUPPORTED seal, and rows saying there is no build,
+    what it is, how to tell it, what is wrong, and where each fact was
+    read. No Firmware version, no speed, no buy link."""
+    src = "; ".join(
+        f'<a href="{html.escape(u, quote=True)}" rel="nofollow">{html.escape(t)}</a>'
+        for t, u in b["sources"])
+    return ('<div class="hwb no"><div class="hwpic">'
+            + b["art"].replace('class="art board', 'class="art board big', 1)
+            + seal_html("no") + "</div>"
+            + "<dl>"
+            + '<dt>Firmware</dt><dd>None. Not supported, and not on '
+              '<a href="/install">the installer</a></dd>'
+            + "<dt>Chip</dt><dd>" + html.escape(b["part"]) + "</dd>"
+            + "<dt>Looks like</dt><dd>" + html.escape(b["tell"]) + "</dd>"
+            + "<dt>Why not</dt><dd>"
+            + html.escape(b["why"][:1].upper() + b["why"][1:]) + "</dd>"
+            + "<dt>Sources</dt><dd>" + src + "</dd>"
+            + "</dl></div>")
+
 # How fast each board is expected to be (site 1.2.5, Rob: "Fast, Faster,
 # Fastest ... instead of numbers for now"). Expected, not measured: a
 # benchmark runs once all three kinds are running side by side, and the
@@ -2867,6 +2972,19 @@ def seal_html(kind):
                 'text-anchor="middle">A LITTLE</text>'
                 '<text class="sl1" x="32" y="27" font-size="9.5" '
                 'text-anchor="middle">WIRING</text></svg>')
+    if kind == "no":
+        # A board /hardware says not to buy (site 1.3.11), in amber, the
+        # site's caution colour, never --risk, which here means somebody
+        # keeping a copy of you. The same ribbon and the same two lines as
+        # A LITTLE WIRING, so it reads as a seal of the same family.
+        return ('<svg class="art seal no" viewBox="0 0 72 34" role="img" '
+                'aria-label="Not supported: this board has no build, and is '
+                'not on the installer">'
+                '<path class="rb" d="M1 1 H71 L65 17 L71 33 H1 Z"/>'
+                '<text class="sl1" x="32" y="15" font-size="9.5" '
+                'text-anchor="middle">NOT</text>'
+                '<text class="sl1" x="32" y="27" font-size="9.5" '
+                'text-anchor="middle">SUPPORTED</text></svg>')
     exp = kind.endswith("-expected")
     h = 34 if exp else 24
     label = ("Flash and go, expected: everything should be on the board, "
@@ -3219,6 +3337,8 @@ def board_html(lines):
     inside the block is the board's folder name ("esp32", "esp32s3"); an
     unknown one renders nothing, the way an unknown drawing does."""
     name = next((l.strip() for l in lines if l.strip()), "")
+    if name in NOT_BY_DIR:
+        return not_board_html(NOT_BY_DIR[name])
     b = BOARD_BY_DIR.get(name)
     if b is None:
         return ""
@@ -8869,6 +8989,10 @@ svg.art.seal text.sl2 { fill:var(--dim); }
 svg.art.seal .lk { fill:none; stroke:var(--live); stroke-width:1.8;
         stroke-linejoin:round; stroke-linecap:round; }
 svg.art.seal tspan.ast { fill:var(--warm); }
+/* NOT SUPPORTED (site 1.3.11), on a board /hardware says not to buy:
+   the same ribbon in amber, the site's caution colour. */
+svg.art.seal.no .rb { stroke:var(--warm); }
+svg.art.seal.no text.sl1 { fill:var(--warm); }
 
 /* The machines on /terminals, one strip under each heading. Narrower
    than the first call strip, because there are eight of them on one page

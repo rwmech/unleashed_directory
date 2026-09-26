@@ -4903,12 +4903,18 @@ def main():
         # board wears it.
         seals = re.findall(r'<div class="hwpic[^"]*">.*?(<svg class="art seal[^"]*"[^>]*>.*?</svg>)</div>',
                            hw5, re.S)
+        # Site 1.3.11: a board /hardware says not to buy wears NOT
+        # SUPPORTED, which is not a level of building, so it is counted
+        # apart: one for each of NOT_BOARDS, and never on a tested board.
+        nos = [x for x in seals if 'class="art seal no"' in x]
+        seals = [x for x in seals if 'class="art seal no"' not in x]
         # Site 1.2.7: the dev board with a card wears the second level, a
         # little wiring, the first board to, and the intro says both.
         go = [x for x in seals if "FLASH &amp; GO</text>" in x]
         wire = [x for x in seals if ">A LITTLE</text>" in x and ">WIRING</text>" in x]
         check("every board's picture wears its seal, five flash and go, one a little wiring",
               len(seals) == 6 and len(go) == 5 and len(wire) == 1
+              and len(nos) == len(S.NOT_BOARDS)
               and all('role="img" aria-label="Flash and go' in x for x in go)
               and 'role="img" aria-label="A little wiring' in wire[0]
               and sum(">expected</text>" in x for x in seals) == 1
@@ -5070,6 +5076,54 @@ def main():
               and "<code>BACKUP SD</code>" in flat_ec
               and "<b>No pins to spare.</b>" in flat_ec and 'href="/lights"' in ec
               and "SSH" not in re.sub(r"<[^>]+>", "", ec))
+        # Site 1.3.11, Rob: "include the keystudio board on the board
+        # selection website page and indicate why we wont use it. Then
+        # others don't buy it."
+        nr = (hw5.split('id="boards-we-do-not-recommend"')[1]
+              if 'id="boards-we-do-not-recommend"' in hw5 else "")
+        flat_nr = " ".join(nr.split())
+        ks = S.NOT_BY_DIR.get("ks-s3pro", {})
+        ksb = S.board_html(["ks-s3pro"])
+        srcs = re.findall(r'<a href="([^"]+)" rel="([^"]+)">', ksb)
+        check("Boards we do not recommend: the Keyestudio ESP32-S3 PRO, its picture "
+              "with a NOT SUPPORTED seal, why not, no build, no buy link",
+              '<h2 id="boards-we-do-not-recommend">' in hw5
+              and hw5.index('id="other-chips"') < hw5.index('id="boards-we-do-not-recommend"')
+              and '<h3 id="keyestudio-esp32-s3-pro">' in nr
+              and ksb.startswith('<div class="hwb no">') and ksb in nr
+              and S.BOARD_ART_KS_S3PRO.replace('class="art board', 'class="art board big', 1) in ksb
+              and 'class="art seal no"' in ksb and ">SUPPORTED</text>" in ksb
+              and "svg.art.seal.no .rb { stroke:var(--warm); }" in hwp
+              and "<dt>Why not</dt><dd>Its micro SD slot is wired to GPIO 35, 36 and 37" in ksb
+              and "N16R8" in ks.get("part", "") and "8 MB octal PSRAM" in ks.get("part", "")
+              and "<dt>Firmware</dt><dd>None. Not supported" in ksb
+              and "<dt>Buy one</dt>" not in ksb and "<dt>Speed</dt>" not in ksb
+              and "sponsored" not in ksb and "link.amazon" not in ksb
+              and "Keyestudio wired the card slot to GPIO 35, 36 and 37" in flat_nr
+              and "GPIO 33 to 37" in flat_nr
+              and "with the PSRAM on, the card slot does not work" in flat_nr
+              and "file areas, the forums, the backups and the photos" in flat_nr
+              and '<a href="#waveshare-esp32-s3-lcd-1-47">the Waveshare ESP32-S3-LCD-1.47</a>'
+                  in flat_nr
+              and "none is on <a href=\"/install\">the installer</a>" in flat_nr
+              and 'href="#boards-we-do-not-recommend"' in hw5
+              and hw5.count('<div class="hwb">')
+                  == len(S.BOARDS) + len(S.SHOWN_BOARDS) + len(S.SOON_BOARDS))
+        check("and its sources are evidence, not buy links: each rel=nofollow, the "
+              "listing with no affiliate tag, and Keyestudio's and Espressif's own pages",
+              len(srcs) == 3 and all(r == "nofollow" for _u, r in srcs)
+              and srcs[0][0] == "https://www.amazon.com/dp/B0H4Z2RB5M"
+              and all("tag=" not in u for u, _r in srcs)
+              and srcs[1][0].startswith("https://docs.keyestudio.com/projects/KS5034/")
+              and srcs[2][0].startswith("https://docs.espressif.com/projects/esp-idf/")
+              and "esp32s3" in srcs[2][0])
+        check("and it is nowhere the installer looks: not in BOARDS or any table "
+              "beside it, not in the picker, not on /install",
+              "ks-s3pro" not in {b["dir"] for b in S.BOARDS + S.SHOWN_BOARDS + S.SOON_BOARDS}
+              and "ks-s3pro" not in S.BOARD_BY_DIR
+              and "ks-s3pro" not in {b["dir"] for b in S.picker_boards()}
+              and "Keyestudio" not in inst4 and "ks-s3pro" not in inst4
+              and "ks-s3pro" not in S.FLASH_FAMILIES)
         ch = (hw5.split('id="choosing-a-camera-board"')[1].split("<h2")[0]
               if 'id="choosing-a-camera-board"' in hw5 else "")
         flat_ch = " ".join(ch.split())

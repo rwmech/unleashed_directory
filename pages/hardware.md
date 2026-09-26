@@ -77,7 +77,9 @@ The buy links below are Amazon affiliate links: a purchase through one may
 earn the project a small commission, at no extra cost to you. Each goes to the
 listing for the board that was tested, or for a camera board, the one being
 tested, and any board that matches the picture and the chip will do, bought
-anywhere.
+anywhere. One board that looks like a good buy is not, for this: it is at the
+foot of the page, under [boards we do not
+recommend](#boards-we-do-not-recommend).
 
 ## ESP32 dev board (Base)
 
@@ -475,3 +477,39 @@ would take turns on one core and callers would feel it, and doing that
 properly means rebuilding the core of the BBS rather than changing a setting.
 A board is listed as tested once a build has actually run on it, and it goes
 on the installer then.
+
+## Boards we do not recommend
+
+<!-- Site 1.3.11 (Rob, 2026-09-26: "include the keystudio board on the board selection website page and indicate why we wont use it. Then others don't buy it"). The board's facts and their sources are in the comment above NOT_BOARDS in server.py, checked 2026-09-26: the module from the listing's title and keyestudio.com (KS5034, ESP32-S3-WROOM-1 N16R8, $15.60), the card pins from Keyestudio's KS5034 guide (CLK 37, CMD 35, D0 36), GPIO 33-37 for octal PSRAM from Espressif's ESP-IDF 5.3.1 GPIO guide for the ESP32-S3, and the clash in Keyestudio's own words on the Amazon listing. The firmware's CLAUDE.md rejects it on the same ground. The Waveshare comparison is the firmware's: its S3 profile runs octal PSRAM (sdkconfig.defaults.esp32s3) and its card on GPIO 14, 15, 16 and 21 (src/board.h). The listing is linked as evidence only, rel="nofollow", with no affiliate tag. -->
+Some boards look like a good buy and are not, for this. They are here so
+nobody buys one expecting it to run µnleashed. None of them has a build of
+the firmware, none is on [the installer](/install), and the installer's list
+of boards does not offer them.
+
+### Keyestudio ESP32-S3 PRO
+
+::: board
+ks-s3pro
+:::
+
+On paper it is a strong board: an ESP32-S3 module with 16 MB of flash and
+8 MB of [[PSRAM]], a micro SD slot and two USB-C sockets, for about $15. The
+trouble is that two of those parts share pins. The PSRAM, the board's extra
+memory, is the fast octal kind, and inside the module it uses GPIO 33 to 37.
+Keyestudio wired the card slot to GPIO 35, 36 and 37, three of the same pins.
+So the two cannot work at once: with the PSRAM on, the card slot does not
+work, and for the card to work the PSRAM has to stay off. Keyestudio's own
+listing says as much, and it is the first of the sources above.
+
+That is a bad trade for a BBS, whichever half you give up. The card holds
+the file areas, the forums, the backups and the photos. The PSRAM is what
+lets a stronger board do more, such as the encrypted [[SSH]] connections on
+their way to the S3 boards. µnleashed is built for boards that can use
+everything they carry, so this one gets no build. It is a capable board for
+projects that need only one of the two; the clash matters for one that
+needs both, and a BBS does.
+
+If you want an ESP32-S3 board, [the Waveshare
+ESP32-S3-LCD-1.47](#waveshare-esp32-s3-lcd-1-47) above has the same 16 MB of
+flash and 8 MB of PSRAM, a card slot that works beside them, and a screen,
+for about $20.
