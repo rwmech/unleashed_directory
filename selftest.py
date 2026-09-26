@@ -4185,6 +4185,12 @@ def main():
               "not replace an old Caddyfile that would leave a name unserved",
               "is already served by" in caddy_part
               and "and nothing in $SITES would after this" in caddy_part)
+        check("and it refuses the site's own domain, which would loop its 301s, and "
+              "clears guides left in the install from before the split",
+              "is the project's own site (DIRECTORY_HOME_URL), not the directory." in setup_sh2
+              and setup_sh2.index("(DIRECTORY_HOME_URL), not the directory")
+                  < setup_sh2.index('say "Packages"')
+              and 'rm -f "$DEST"/pages/*.md' in setup_sh2)
         unit = open(os.path.join("deploy", "unleashed-directory.service"),
                     encoding="utf-8").read()
         check("the unit names the site, the guides and the site's firmware folder",

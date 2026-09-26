@@ -54,7 +54,8 @@ is below: that was one server for all three.
   writes `/etc/caddy/sites/directory.caddy` plus a Caddyfile that imports
   `/etc/caddy/sites/*.caddy`; it refuses a domain another service's file
   serves, and will not replace an old all-in-one Caddyfile while any name
-  in it would go unserved. `update.sh` pulls the guides named in
+  in it would go unserved, nor take the site's own domain
+  (`DIRECTORY_HOME_URL`), whose 301s would loop. `update.sh` pulls the guides named in
   `/etc/unleashed-directory/docs` and no longer fetches firmware. The unit
   sets `DIRECTORY_URL=https://unleashedbbs.net`, `DIRECTORY_HOME_URL`,
   `DIRECTORY_DOCS_DIR` and `DIRECTORY_FIRMWARE_DIR`.

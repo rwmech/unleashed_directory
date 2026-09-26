@@ -54,6 +54,21 @@ say() { printf '\n== %s\n' "$1"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "run this with sudo"; exit 1; }
 
+# The directory must not answer as the site it sends its old paths to: a
+# path it does not have is a 301 to DIRECTORY_HOME_URL, and on the same name
+# that is a loop. This is also what stops a domains file from before 2.0.0,
+# which held the site's names too, from being installed as it stands.
+HOME_HOST="$(sed -n 's|^Environment=DIRECTORY_HOME_URL=https\{0,1\}://\([^/]*\).*|\1|p' \
+             "$SRC/deploy/unleashed-directory.service" | head -1)"
+for d in "${DOMAINS[@]}"; do
+    if [ -n "$HOME_HOST" ] && { [ "$d" = "$HOME_HOST" ] || [ "www.$d" = "$HOME_HOST" ]; }; then
+        echo "$d is the project's own site (DIRECTORY_HOME_URL), not the directory."
+        echo "Give setup.sh the directory's domain alone, and put only that in"
+        echo "/etc/unleashed-directory/domains (see UPGRADING in README.md)."
+        exit 1
+    fi
+done
+
 command -v apt-get >/dev/null || {
     echo "This script installs packages with apt, so it wants Debian or Ubuntu."
     echo "On anything else, install python3 and a web server yourself and run"
@@ -145,6 +160,13 @@ install -m 644 "$SRC/badges.json" "$DEST/badges.json"
 # Pages are prose in Markdown and are replaced on every install, because the
 # repository is where they get edited.
 install -d -m 755 "$DEST/pages"
+# A page removed from the repository goes from the install too: before the
+# split (2.0.0) the guides were pages here, and one left behind would be
+# served in place of the 301 to /docs. Only when the checkout is not the
+# install itself, where git has already removed it.
+if [ "$(cd "$SRC" && pwd -P)" != "$(cd "$DEST" && pwd -P)" ]; then
+    rm -f "$DEST"/pages/*.md
+fi
 for page in "$SRC"/pages/*.md; do
     [ -f "$page" ] && install -m 644 "$page" "$DEST/pages/"
 done
