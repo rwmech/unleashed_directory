@@ -156,7 +156,24 @@ The same values are in the JSON body, for implementations that would rather pars
 | `200` | listed or updated |
 | `400` | the payload is malformed, has no name, or an impossible port |
 | `413` | body too large |
-| `429` | heartbeats are arriving too fast |
+| `429` | heartbeats are arriving too fast. See [Rate limits](#rate-limits) |
+
+## Rate limits
+
+Two limits, and a directory implementing this protocol should apply both, the same way, so a board behaves the same whichever directory it announces to.
+
+| Limit | unleashedbbs.com | Counts |
+|---|---|---|
+| **Per board** | one accepted announce every 30 seconds | A board is its listing when it sends a token the directory issued, wherever it posts from. A post with no token, or a token the directory does not know, is the address it came from plus the `port` it announced. |
+| **Per address** | 20 accepted announces in any one minute | Every announce from one source address, whatever board it says it is. |
+
+**Per board, not per address.** Several boards can share one public address, one port each, which is how a sysop with two boards behind one home router has to run them. Each has its own clock, so one board's heartbeat never gets another board's update refused. A board's first announce, before it has a token, also starts the clock of the listing it creates, so the first heartbeat that carries the new token is timed from it.
+
+**The per-address ceiling is the abuse stop**, because tokens are free and a per-board clock alone would let one address post as many boards as it likes. It sits well above what real boards send: a directory lets one address hold only a handful of listings, and each is held to two announces a minute.
+
+**A refused announce changes nothing.** It moves no clock and counts against no ceiling, so a board that is told `429` and waits the right time is heard. A board should treat `429` as "try again later", keep its data, and send its next heartbeat or update when it is due; retrying at once only earns another `429`.
+
+The figures are this directory's settings (`DIRECTORY_MIN_SECONDS` and `DIRECTORY_ADDRESS_PER_MINUTE`); another directory may choose its own. The one-listing-per-address rule below is a separate thing and is not a rate limit: it decides whether a new listing is published or queued.
 
 ## The token
 
@@ -194,7 +211,7 @@ Silence for seven days deletes the listing and frees its name and token.
 - Hold a new listing back until it has sustained heartbeats for a few hours. This is the anti-spam measure that costs a spammer real infrastructure and costs a real board nothing, because it was going to be up anyway.
 - Charge those hours once. A board that has already earned its listing and then goes quiet for a while should come back to it, not re-earn it. Getting this wrong is worse than it sounds: if the public list does not render the holding state, then reconnecting, rather than disconnecting, is what removes a board from the page.
 - Limit automatic listings per source address, counting per `/64` on IPv6, and queue the rest for a human. Addresses are the scarce resource, which makes this the control that actually bites.
-- Rate limit the endpoint.
+- Rate limit the endpoint per board, with a ceiling per address, and never let a refusal restart a clock. See [Rate limits](#rate-limits).
 - Never publish anything the board did not send.
 - Never connect outwards to verify a listing. See the README for why.
 - Treat activity figures as self-reported, because they are. If you rank by them, say so, and pair them with something you measured yourself, such as how long the board has been continuously up.

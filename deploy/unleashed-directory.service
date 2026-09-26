@@ -29,7 +29,14 @@ Environment=DIRECTORY_URL=https://unleashedbbs.com
 Environment=DIRECTORY_PENDING_HOURS=3
 Environment=DIRECTORY_EXPIRE_DAYS=7
 Environment=DIRECTORY_PER_ADDRESS=1
+# The rate limit (site 1.3.12). MIN_SECONDS is per board: its token, or
+# its address and port when it has none, so two boards behind one home
+# address each have their own clock. ADDRESS_PER_MINUTE is the abuse stop:
+# accepted announces from one address in a minute, whatever boards it posts
+# as. One address holds at most four listings, each held to two a minute,
+# so 20 is well clear of real boards. A refused post moves neither.
 Environment=DIRECTORY_MIN_SECONDS=30
+Environment=DIRECTORY_ADDRESS_PER_MINUTE=20
 # Who may tell the server where a request came from. Caddy reaches it over
 # loopback, so loopback is the whole list. X-Forwarded-For is a header any
 # stranger can send, and it is believed only on a connection from one of

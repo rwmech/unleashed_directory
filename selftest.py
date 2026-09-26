@@ -10,7 +10,8 @@ Module:       Directory server / tests
 Purpose:      Starts a directory on a scratch database and walks it through
               the whole life of a listing: first announce, token issue,
               the pending window, going public, a second board from the
-              same address queueing, the rate limit, and going quiet.
+              same address queueing, the rate limit (per board, with a
+              ceiling per address), and going quiet.
 
 Usage:        python3 selftest.py
 
@@ -412,7 +413,8 @@ def start_server(db, port):
     """A directory on its own port and database, its output drained, and
     whether it came up. The caller terminates it."""
     env = dict(os.environ, DIRECTORY_PAGE_CACHE="0", DIRECTORY_DB=db,
-               DIRECTORY_PORT=str(port), DIRECTORY_MIN_SECONDS="0")
+               DIRECTORY_PORT=str(port), DIRECTORY_MIN_SECONDS="0",
+               DIRECTORY_ADDRESS_PER_MINUTE="0")
     proc = subprocess.Popen([sys.executable, "server.py"], env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out = []
@@ -710,7 +712,7 @@ def badge_checks(S, db):
     # With no table the heartbeat must not write the stored causes away:
     # every board would lose its badges to one missing file.
     mem_db = os.path.join(tempfile.gettempdir(), f"dirnotab{os.getpid()}.db")
-    was_db, was_ok = S.DB_PATH, S.BADGE_CODES_OK
+    was_db, was_ok, was_min = S.DB_PATH, S.BADGE_CODES_OK, S.MIN_SECONDS
     try:
         S.DB_PATH = mem_db
         S.setup()
@@ -718,15 +720,17 @@ def badge_checks(S, db):
                                      "support": ["mntlh"], "interests": ["c64"]},
                                     "192.0.2.90")
         S.BADGE_CODES_OK = False
-        # From another address, so the rate limit (30 s in this process)
-        # cannot be what left the row alone.
+        # The rate limit is per board since 1.3.12, so another address no
+        # longer gets this past it: the clock is switched off instead, so
+        # the rate limit cannot be what left the row alone.
+        S.MIN_SECONDS = 0
         st2, _b, _h = S.announce({"name": "Kept", "port": 6400, "token": first["token"],
                                   "support": [], "interests": []}, "192.0.2.91")
         con_n = sqlite3.connect(mem_db)
         kept = con_n.execute("SELECT support, interests FROM boards").fetchone()
         con_n.close()
     finally:
-        S.DB_PATH, S.BADGE_CODES_OK = was_db, was_ok
+        S.DB_PATH, S.BADGE_CODES_OK, S.MIN_SECONDS = was_db, was_ok, was_min
         for leftover in (mem_db, mem_db + "-wal", mem_db + "-shm"):
             try:
                 os.remove(leftover)
@@ -1326,7 +1330,8 @@ def badge_checks(S, db):
     port4 = PORT + 3
     base4 = f"http://127.0.0.1:{port4}"
     env4 = dict(os.environ, DIRECTORY_PAGE_CACHE="0", DIRECTORY_DB=old_db,
-                DIRECTORY_PORT=str(port4), DIRECTORY_MIN_SECONDS="0")
+                DIRECTORY_PORT=str(port4), DIRECTORY_MIN_SECONDS="0",
+                DIRECTORY_ADDRESS_PER_MINUTE="0")
     server4 = subprocess.Popen([sys.executable, "server.py"], env=env4,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     out4 = []
@@ -1719,6 +1724,100 @@ def directory_checks(S):
                 pass
 
 
+def rate_checks(S):
+    """Site 1.3.12. The heartbeat rate limit is per board, not per address:
+    Rob runs Unleashed HQ on 6400 and The Rusty Antenna on 6405 behind one
+    home address, and one board's heartbeat got the other's caller-join
+    update refused. In this process, on a scratch database, with the
+    shipped 30 s clock; time passes by ageing the rate tables, which is
+    how the rest of the suite moves a clock it does not own."""
+    import sqlite3
+    print("The rate limit is per board")
+    dbr = os.path.join(tempfile.gettempdir(), f"dirrate{os.getpid()}.db")
+    for leftover in (dbr, dbr + "-wal", dbr + "-shm"):
+        if os.path.exists(leftover):
+            os.remove(leftover)
+    was = (S.DB_PATH, S.MIN_SECONDS, S.ADDRESS_PER_MINUTE)
+    home = "198.51.100.7"
+
+    def beat(name, port, token="", addr=home):
+        st, body, _h = S.announce({"name": name, "port": port, "token": token}, addr)
+        return st, body
+
+    def age(seconds):
+        con_a = sqlite3.connect(dbr)
+        con_a.execute("UPDATE beatclock SET at = at - ?", (seconds,))
+        con_a.execute("UPDATE addrminute SET start = start - ?", (seconds,))
+        con_a.commit()
+        con_a.close()
+
+    try:
+        S.DB_PATH, S.MIN_SECONDS, S.ADDRESS_PER_MINUTE = dbr, 30, 20
+        S.setup()
+        st_hq, hq = beat("Unleashed HQ", 6400)
+        st_tra, tra = beat("The Rusty Antenna", 6405)
+        check("two boards behind one address, on two ports, are both listed "
+              "at once", st_hq == 200 and st_tra == 200)
+        st_hq2, hq2 = beat("Unleashed HQ", 6400, hq.get("token", ""))
+        check("one board posting twice inside 30 s is still refused, "
+              "the post with its new token timed from the one that made it",
+              st_hq2 == 429 and hq2.get("error") == "slow down")
+        st_again, _b = beat("Unleashed HQ", 6400)
+        check("and so is a board that forgot its token, posting again from "
+              "the same address and port", st_again == 429)
+        age(31)
+        st_hq3, _b = beat("Unleashed HQ", 6400, hq["token"])
+        st_tra3, _b = beat("The Rusty Antenna", 6405, tra["token"])
+        check("each heartbeats inside 30 s of the other and both are accepted",
+              st_hq3 == 200 and st_tra3 == 200)
+        age(20)
+        st_early, _b = beat("Unleashed HQ", 6400, hq["token"])
+        age(11)
+        st_later, _b = beat("Unleashed HQ", 6400, hq["token"])
+        check("a refused post does not restart the clock: 20 s early is "
+              "refused, and 11 s after that refusal is accepted",
+              st_early == 429 and st_later == 200)
+        age(31)
+        st_moved, _b = beat("Unleashed HQ", 6400, hq["token"], "203.0.113.50")
+        st_moved2, _b = beat("Unleashed HQ", 6400, hq["token"], "198.51.100.7")
+        check("a board is its token wherever it posts from: a new address "
+              "does not buy it a second heartbeat", st_moved == 200 and st_moved2 == 429)
+
+        print("A ceiling per address")
+        S.ADDRESS_PER_MINUTE = 3
+        busy = "198.51.100.8"
+        codes = [beat(f"Busy {i}", 7000 + i, addr=busy) for i in range(4)]
+        check("past the ceiling an address is refused, whatever board it "
+              "says it is", [c for c, _b in codes] == [200, 200, 200, 429]
+              and codes[3][1].get("error") == "too many announces from this address")
+        st_other, _b = beat("Elsewhere", 6400, addr="198.51.100.9")
+        check("and another address is not", st_other == 200)
+        age(61)
+        st_next, _b = beat("Busy 3", 7003, addr=busy)
+        check("the next minute it is heard again, the refusal not counted",
+              st_next == 200)
+        con_r = sqlite3.connect(dbr)
+        n_now = con_r.execute("SELECT n FROM addrminute WHERE address=?",
+                              (busy,)).fetchone()
+        tables = {r[0] for r in con_r.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        con_r.close()
+        check("a refused post counts nothing against its address",
+              n_now == (1,))
+        check("the old per-address table is gone, and the two clocks are there",
+              "hits" not in tables and {"beatclock", "addrminute"} <= tables)
+        S.ADDRESS_PER_MINUTE = 0
+        many = [beat(f"Many {i}", 8000 + i, addr="198.51.100.10")[0] for i in range(4)]
+        check("0 switches the ceiling off", many == [200] * 4)
+    finally:
+        S.DB_PATH, S.MIN_SECONDS, S.ADDRESS_PER_MINUTE = was
+        for leftover in (dbr, dbr + "-wal", dbr + "-shm"):
+            try:
+                os.remove(leftover)
+            except OSError:
+                pass
+
+
 def closed_checks(S):
     """Site 1.3.10 (Rob: a board whose sysop has closed it shows as
     "Temporarily closed"; if its heartbeats stop, the stale and delisting
@@ -2059,6 +2158,7 @@ def main():
                DIRECTORY_PORT=str(PORT),
                DIRECTORY_PENDING_HOURS="0.0006",     # about two seconds
                DIRECTORY_MIN_SECONDS="0",
+               DIRECTORY_ADDRESS_PER_MINUTE="0",
                DIRECTORY_LIST_DOMAIN="boards.example",
                DIRECTORY_ABOUT_DOMAIN="about.example",
                DIRECTORY_DATA_DOMAIN="data.example")
@@ -6409,7 +6509,8 @@ def main():
                         DIRECTORY_PORT=str(port2), DIRECTORY_FIRMWARE_DIR=fwroot,
                         # Two boards are listed here to see the update arrow
                         # follow the releases on disk (site 1.0.0).
-                        DIRECTORY_PENDING_HOURS="0.0006", DIRECTORY_MIN_SECONDS="0")
+                        DIRECTORY_PENDING_HOURS="0.0006", DIRECTORY_MIN_SECONDS="0",
+                        DIRECTORY_ADDRESS_PER_MINUTE="0")
             server2 = subprocess.Popen([sys.executable, "server.py"], env=env2,
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.STDOUT)
@@ -7326,6 +7427,7 @@ def main():
         badge_checks(S, db)
         directory_checks(S)
         closed_checks(S)
+        rate_checks(S)
     finally:
         server.terminate()
         try:

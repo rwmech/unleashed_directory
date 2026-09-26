@@ -62,10 +62,26 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 - **If the forwarded headers ever stop arriving, the directory can publish
   exactly one board.** Every heartbeat collapses to one `group_key`, so one
   listing goes public and the rest queue for ever, the fifth distinct board
-  evicts the stalest, and a shared rate limit bucket 429s any two announces
-  inside `DIRECTORY_MIN_SECONDS`. The server prints its trusted list at
+  evicts the stalest, and every board then shares one address's ceiling of
+  `DIRECTORY_ADDRESS_PER_MINUTE` (the per-board clock survives, since
+  1.3.12 it is keyed on the token). The server prints its trusted list at
   startup and logs one warning on an announce with no forwarded headers, so
   this is visible in the journal rather than silent.
+- **The heartbeat rate limit is per board, with a ceiling per address**
+  (1.3.12). It was per address from the first commit, and Rob runs Unleashed
+  HQ on 6400 and The Rusty Antenna on 6405 behind one home address, which the
+  go-public guide tells every sysop to do: one board's heartbeat got the
+  other's caller-join update refused, and the list lagged its callers. A
+  board is now its token, or its address and port when it has none
+  (`rate_keys`), timed by `DIRECTORY_MIN_SECONDS`; one address gets
+  `DIRECTORY_ADDRESS_PER_MINUTE` accepted announces a minute whatever it
+  posts as, because tokens are free. **A refusal moves no clock.** The old
+  code wrote the clock on every post, refused or not; nothing recorded why,
+  and it added nothing a limit needs, while turning one early retry into a
+  refusal for the next one. **The token is looked up before the limit, but
+  the row is read after `settle()`**: the first cut read the whole row
+  first, and the UPDATE wrote its pre-settle state back, so a board could
+  never go public. The suite caught it.
 - `role_for(host)` serves three faces from one process by Host header: the
   board list, the argument (the manifesto), and the machine-readable data.
 - Pages are cached and the cache is dropped only when `settle()` actually

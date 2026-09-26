@@ -122,7 +122,22 @@ PENDING_HOURS = float(os.environ.get("DIRECTORY_PENDING_HOURS", "3"))
 RELIST_DAYS   = float(os.environ.get("DIRECTORY_RELIST_DAYS", "4"))
 EXPIRE_DAYS   = float(os.environ.get("DIRECTORY_EXPIRE_DAYS", "7"))
 PER_ADDRESS   = int(os.environ.get("DIRECTORY_PER_ADDRESS", "1"))
+# The heartbeat rate limit is per BOARD (site 1.3.12): the least time
+# between two accepted announces from one board. A board is its listing when
+# it presents a token the directory issued, and otherwise the address it
+# posted from plus the port it announced, so two boards behind one home
+# address, one per port as the go-public guide says, each have their own
+# clock. Until 1.3.12 this was per address, and one board's heartbeat got
+# the other board's caller-join update refused.
 MIN_SECONDS   = int(os.environ.get("DIRECTORY_MIN_SECONDS", "30"))
+# And a ceiling per ADDRESS, the abuse stop the per-board clock is not:
+# accepted announces from one address in any one minute. Tokens are free,
+# so the per-board clock alone lets one address post as many boards as it
+# likes. One address can hold PER_ADDRESS + SPARE_ROWS listings (4 as
+# shipped) and each board is held to two announces a minute by MIN_SECONDS,
+# so 20 is more than twice what one address full of real boards can send,
+# and still caps a loop at one post every three seconds. 0 switches it off.
+ADDRESS_PER_MINUTE = int(os.environ.get("DIRECTORY_ADDRESS_PER_MINUTE", "20"))
 # How many extra entries one address may hold beyond its published one,
 # waiting for a human. Small on purpose: it is the stop on a board that has
 # forgotten its token, or on somebody posting in a loop.
@@ -380,9 +395,19 @@ CREATE TABLE IF NOT EXISTS reports (
     address  TEXT NOT NULL DEFAULT '',
     reason   TEXT NOT NULL DEFAULT ''
 );
-CREATE TABLE IF NOT EXISTS hits (
+-- The rate limit's clocks: when each board last had an announce accepted,
+-- keyed "b<id>" for a listing and "p<address> <port>" for a post with no
+-- token the directory knows; and each address's current minute. Scratch,
+-- a few seconds deep, emptied as it goes stale. Until 1.3.12 this was one
+-- table, hits, keyed by address alone; setup() drops it.
+CREATE TABLE IF NOT EXISTS beatclock (
+    key TEXT PRIMARY KEY,
+    at  INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS addrminute (
     address TEXT PRIMARY KEY,
-    at      INTEGER NOT NULL
+    start   INTEGER NOT NULL,
+    n       INTEGER NOT NULL
 );
 """
 
@@ -658,6 +683,9 @@ def db():
 def setup():
     with db() as con:
         con.executescript(SCHEMA)
+        # The per-address rate limit's table, replaced in 1.3.12 by
+        # beatclock and addrminute. Nothing in it outlives thirty seconds.
+        con.execute("DROP TABLE IF EXISTS hits")
         # Databases made before the feed existed have no public_at column.
         have = {r["name"] for r in con.execute("PRAGMA table_info(boards)")}
         if "public_at" not in have:
@@ -3929,10 +3957,50 @@ def firmware_file(rest):
     return None
 
 
-def rate_limited(con, address, now):
-    row = con.execute("SELECT at FROM hits WHERE address=?", (address,)).fetchone()
-    con.execute("REPLACE INTO hits(address, at) VALUES(?, ?)", (address, now))
-    return bool(row) and (now - row["at"]) < MIN_SECONDS
+def rate_keys(row, address, port):
+    """The clocks an announce is timed on. A post carrying a token the
+    directory knows is that board, wherever it posts from. Anything else is
+    the address and the port it announced, which tells apart two boards
+    behind one address and still holds back a board that has lost its
+    token and posts as a stranger every time."""
+    return [f"b{row['id']}"] if row else [f"p{address} {port}"]
+
+
+def rate_refused(con, address, keys, now):
+    """Why this announce is refused, or None. Only reads: a refusal moves
+    no clock, so a board that is told to slow down and then does is not
+    held back a second time for having asked. The first version, from the
+    first commit, wrote the clock on every post, refused or not, which
+    added nothing a limit needs (a post in a loop is refused either way,
+    and the per-address minute is what stops a loop now) and turned one
+    early retry into a refusal for the next one too."""
+    con.execute("DELETE FROM beatclock WHERE at <= ?", (now - MIN_SECONDS,))
+    con.execute("DELETE FROM addrminute WHERE start <= ?", (now - 60,))
+    if ADDRESS_PER_MINUTE > 0:
+        win = con.execute("SELECT n FROM addrminute WHERE address=?",
+                          (address,)).fetchone()
+        if win and win["n"] >= ADDRESS_PER_MINUTE:
+            return "too many announces from this address"
+    marks = ",".join("?" for _ in keys)
+    if con.execute(f"SELECT 1 FROM beatclock WHERE key IN ({marks}) AND at > ?",
+                   keys + [now - MIN_SECONDS]).fetchone():
+        return "slow down"
+    return None
+
+
+def rate_record(con, address, keys, now):
+    """An announce was accepted: start its board's clock and count it
+    against its address's minute."""
+    for key in keys:
+        con.execute("REPLACE INTO beatclock(key, at) VALUES(?, ?)", (key, now))
+    con.execute(
+        "INSERT INTO addrminute(address, start, n) VALUES(?, ?, 1) "
+        "ON CONFLICT(address) DO UPDATE SET n=n+1", (address, now))
+
+
+def rate_record_board(con, board_id, now):
+    """A new listing's clock, started by the post that made it."""
+    con.execute("REPLACE INTO beatclock(key, at) VALUES(?, ?)", (f"b{board_id}", now))
 
 
 # --------------------------------------------------------------------------
@@ -4021,14 +4089,24 @@ def announce(payload, address):
         fields["interests"] = ",".join(s for s in INTEREST_CODES if s in got)
 
     with db() as con:
-        if rate_limited(con, address, now):
-            return 429, {"error": "slow down"}, {}
+        # Which board this is decides which clock it is timed on, so the
+        # token is looked up before the rate limit. Only its id: the row
+        # itself is read after settle(), which may have just moved it, and
+        # a row read before would write its old state back.
+        known = None
+        if token:
+            known = con.execute("SELECT id FROM boards WHERE token=?", (token,)).fetchone()
+        keys = rate_keys(known, address, port)
+        why = rate_refused(con, address, keys, now)
+        if why:
+            return 429, {"error": why}, {}
+        rate_record(con, address, keys, now)
         if settle(con, now):
             _cache.clear()                             # somebody came or went
 
         row = None
-        if token:
-            row = con.execute("SELECT * FROM boards WHERE token=?", (token,)).fetchone()
+        if known:
+            row = con.execute("SELECT * FROM boards WHERE id=?", (known["id"],)).fetchone()
 
         if row:                                        # a board we already know
             sets = ", ".join(f"{k}=?" for k in fields)
@@ -4128,6 +4206,9 @@ def announce(payload, address):
             f"streak_start, beats, tracked_since) VALUES(?, {marks}, ?, ?, ?, ?, 1, ?)",
             [token] + list(fields.values()) + [state, now, now, now, now])
         fresh = con.execute("SELECT * FROM boards WHERE token=?", (token,)).fetchone()
+        # Its clock under its listing too, so the first heartbeat carrying
+        # the token it was just given is timed from this one.
+        rate_record_board(con, fresh["id"], now)
         sample(con, fresh["id"], fields.get("busy") or 0, tz, now)
         tally(con, fresh["id"], now)
         _cache.clear()                                 # a board we had not met before

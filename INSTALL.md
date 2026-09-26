@@ -194,7 +194,8 @@ All of them live in `/etc/systemd/system/unleashed-directory.service` as environ
 | `DIRECTORY_PENDING_HOURS` | `3` | continuous heartbeats before a listing goes public |
 | `DIRECTORY_EXPIRE_DAYS` | `7` | silence before a listing is deleted |
 | `DIRECTORY_PER_ADDRESS` | `1` | automatic listings per address, per `/64` on IPv6 |
-| `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats |
+| `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one board |
+| `DIRECTORY_ADDRESS_PER_MINUTE` | `20` | most accepted announces from one address in a minute. `0` switches it off |
 | `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page is reused |
 | `DIRECTORY_NAME` | | the title on the page |
 

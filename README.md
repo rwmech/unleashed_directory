@@ -74,7 +74,8 @@ Settings come from the environment, so a deployment never edits the code:
 | `DIRECTORY_PENDING_HOURS` | `3` | continuous heartbeats before a listing is public |
 | `DIRECTORY_EXPIRE_DAYS` | `7` | silence before a listing is deleted and its name freed |
 | `DIRECTORY_PER_ADDRESS` | `1` | automatic listings per address, per `/64` on IPv6. The rest queue for a human |
-| `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one address |
+| `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one board: its token, or its address and port when it has none |
+| `DIRECTORY_ADDRESS_PER_MINUTE` | `20` | most accepted announces from one address in a minute, whatever boards it posts as. `0` switches it off |
 | `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page and feed are reused |
 | `DIRECTORY_FIRMWARE_DIR` | `firmware/` | where the browser installer's firmware images live |
 | `DIRECTORY_FIRMWARE_KEEP` | `2` | how many releases `/install` offers for each board, newest first |

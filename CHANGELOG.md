@@ -14,6 +14,42 @@
 
 # Changelog
 
+## 1.3.12, 2026-09-26
+
+The heartbeat rate limit is per board, not per address (Rob runs Unleashed
+HQ on 6400 and The Rusty Antenna on 6405 behind one home address, and the
+go-public guide tells sysops to run "one board per port").
+
+- **The bug.** `DIRECTORY_MIN_SECONDS` (30 s) was keyed on the source
+  address, so a second announce from the same address inside 30 s got a
+  429 whichever board sent it. One board's heartbeat got the other board's
+  caller-join update refused, and the list lagged who was on.
+- **Per board now.** A board is its listing when it sends a token the
+  directory knows, wherever it posts from, and otherwise the address plus
+  the port it announced. A new listing's clock starts with the post that
+  made it, so the first heartbeat carrying its new token is timed from it.
+- **A ceiling per address**, the abuse stop, since tokens are free:
+  `DIRECTORY_ADDRESS_PER_MINUTE`, 20 accepted announces from one address in
+  any minute, whatever boards it posts as. One address holds at most four
+  listings, each held to two a minute, so real boards never reach it. `0`
+  switches it off. The one-listing-per-address (/64) rule is unchanged.
+- **A refused announce changes nothing.** The old limit wrote its clock on
+  every post, refused or not, so a board that retried early was refused
+  again for having asked. Nothing recorded a reason for it, and it added
+  nothing a limit needs: a loop is refused either way, and the per-address
+  ceiling is what stops one now. A refusal now moves no clock and counts
+  against no ceiling.
+- **The table changes:** `hits` (keyed by address) is dropped at start and
+  replaced by `beatclock` (per board) and `addrminute` (per address), both
+  scratch a minute deep and emptied as they go stale.
+- PROTOCOL.md gains a Rate limits section so other directories match it;
+  README, INSTALL and the systemd unit carry the new setting.
+- The self-test: two boards from one address are both accepted inside 30 s
+  of each other, one board twice is refused (with and without its token,
+  and from a new address), a refused post does not restart its clock, the
+  per-address ceiling refuses past its count, does not count refusals, and
+  lets the next minute in, and 0 switches it off.
+
 ## 1.3.11, 2026-09-26
 
 /hardware names a board not to buy (Rob: "include the keystudio board on
