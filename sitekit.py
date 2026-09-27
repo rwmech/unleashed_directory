@@ -528,6 +528,23 @@ GLOSSARY_FORMS = {
 _GL_SEQ = itertools.count(1)
 _MD_GLOSS = re.compile(r"\[\[([^\[\]|]{1,40})\]\]")
 
+# U+00B5 MICRO SIGN upper-cases to U+039C GREEK CAPITAL MU under
+# text-transform:uppercase, which is the letter shape a reader sees as a
+# plain "M": "µnleashed" becomes "MNLEASHED" wherever it lands in a nav
+# label, a kicker or a heading. One helper, called wherever such text is
+# built, rather than a CSS override at each place the bug can occur: that
+# already happened once, for the compare table's own column (table.cmp
+# thead th.us), and stayed a one-off nobody thought to repeat for nav.
+MU = "µ"
+
+
+def safe_mu(text):
+    """text with every literal µ wrapped in a span that turns off
+    text-transform, so an uppercased ancestor can never reach it. Call
+    this last, after any HTML escaping: the span it inserts is markup and
+    must not itself be escaped."""
+    return text.replace(MU, '<span class="mu">' + MU + "</span>")
+
 
 def gloss_key(words):
     """The GLOSSARY entry a written form belongs to, or None."""
@@ -1029,7 +1046,10 @@ def _md_render(text):
             quote.append(line[2:])            # consecutive lines are one warning
         elif line.startswith("# "):
             flush()
-            out.append(f'<h1 id="{md_id(line[2:])}">{md_inline(line[2:])}</h1>')
+            # h1 is text-transform:uppercase; safe_mu() keeps a page title's
+            # µ from becoming a capital Greek mu (see nav_html for the bug
+            # this guards against).
+            out.append(f'<h1 id="{md_id(line[2:])}">{safe_mu(md_inline(line[2:]))}</h1>')
         elif line.startswith("- "):
             if para or steps:
                 flush()
@@ -1636,6 +1656,10 @@ nav a.here {{ background:var(--name); color:var(--bg);
 @media (prefers-reduced-motion: reduce) {{
   nav a.here {{ animation:none; }}
 }}
+/* safe_mu()'s span: an upper-cased micro sign is a Greek capital mu, and
+   the name would read MNLEASHED. One rule, used by every literal µ the
+   helper wraps, rather than a text-transform override per heading. */
+.mu {{ text-transform:none; }}
 /* The page title outranks the text under it. It used not to: h1 was 13px
    against a 15px article h2, so a section heading four screens down
    outranked the page's own name, and on the board list the live figures

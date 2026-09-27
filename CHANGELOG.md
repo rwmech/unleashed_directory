@@ -14,6 +14,30 @@
 
 # Changelog
 
+## 2.0.2, 2026-09-27
+
+- **The top nav read "MNLEASHED BBS".** `nav a` is
+  `text-transform:uppercase`, and upper-casing U+00B5 MICRO SIGN gives
+  U+039C GREEK CAPITAL MU, which reads as a plain "M". The nav's own
+  "µnleashed BBS" link (back to the project's site) has carried this
+  since the site split (2.0.0) added it; the compare table's own
+  "µnleashed" column had the same trap and was fixed with a CSS
+  selector in the site's history, one-off rather than as a rule.
+- **Fixed with one helper, not a selector per place it can happen.**
+  `sitekit.safe_mu()` wraps a literal µ in `<span class="mu">`, and `.mu`
+  turns text-transform off; called from `nav_html()` (every label, not
+  just this one) and from the markdown `# heading` renderer (`_md_render`,
+  so a future page title carrying µ is covered too). No visible change
+  anywhere the sign was already safe, such as the footer's own
+  "µnleashed BBS" link, which is not inside an upper-cased element.
+- Same fix in `sitekit.py` in unleashed_site (the file is shared, kept
+  byte-identical between the two repositories) and applied defensively in
+  that repository's own `nav_html()`, though nothing in its nav carries a
+  µ today.
+- New selftest check: the nav's own µ sits inside the no-transform span,
+  scoped to `<nav>` so it cannot be satisfied or broken by the footer's
+  separate, correctly-unwrapped copy of the same words.
+
 ## 2.0.1, 2026-09-26
 
 - **GET /announce is 405 again.** 2.0.0's catch-all for moved pages took

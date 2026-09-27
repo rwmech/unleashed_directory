@@ -3717,6 +3717,19 @@ def main():
               and '<meta property="og:site_name" content="%s">'
                   % html.escape(S.SITE_NAME, quote=True) in front
               and S.SITE_NAME.startswith("\u00b5nleashed"))
+        # nav a is text-transform:uppercase, and a bare micro sign upper-cases
+        # to a capital Greek mu, which reads as a plain "M": the nav's own
+        # "\u00b5nleashed BBS" entry read "MNLEASHED BBS" until safe_mu()
+        # wrapped the sign in a span that turns the transform back off. The
+        # footer carries the same words unwrapped and correctly so (footer
+        # links are not uppercased), so this checks the nav alone.
+        nav_block = re.search(r"<nav>.*?</nav>", front)
+        check('the nav\'s own \u00b5 sits inside the no-transform span, not bare '
+              "under text-transform:uppercase (the bug read \"MNLEASHED\")",
+              nav_block is not None
+              and '<a href="https://unleashedbbs.com/">'
+                  '<span class="mu">\u00b5</span>nleashed BBS</a>' in nav_block.group(0)
+              and '>\u00b5nleashed BBS</a>' not in nav_block.group(0))
         probe = NameSweep()
         probe.feed('<p>Run unleashed.local and <code>unleashed</code>, see '
                    'unleashedbbs.com and unleashed_BBS.</p>'

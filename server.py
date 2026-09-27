@@ -301,7 +301,10 @@ def nav_html(role, here=""):
     for target, path, label in nav_items():
         href = site_url(target, role, path)
         cls = ' class="here"' if href == here else ""
-        out.append('<a' + cls + ' href="' + href + '">' + label + '</a>')
+        # nav a is text-transform:uppercase (a whole row reads as a menu
+        # bar); safe_mu() keeps the home entry's µ from becoming a capital
+        # Greek mu that reads as a plain M.
+        out.append('<a' + cls + ' href="' + href + '">' + safe_mu(label) + '</a>')
     return "<nav>" + "".join(out) + "</nav>"
 
 
