@@ -14,6 +14,42 @@
 
 # Changelog
 
+## 2.0.3, 2026-09-27
+
+- **The header comes from a file** (Rob: "a config file so someone (not
+  me) that runs a directory can modify it along with header, etc. So its
+  in their control easily on their directory but for us it means a more
+  unified header"). `/etc/unleashed-directory/header.json`
+  (`DIRECTORY_HEADER`) says the wordmark and where it goes, a suffix
+  after it, whether the freedoms panel shows, and the menu item by item,
+  each `local` (a page here, lit while it is being read) or `external`.
+  It is read again when it changes on disk. INSTALL.md, "Your header",
+  has the format for other operators.
+- **unleashedbbs.net reads as part of unleashedbbs.com.** Its file,
+  `deploy/header.unleashedbbs.json`, which `setup.sh` installs for that
+  domain alone: the wordmark goes to unleashedbbs.com, and ".NET" is set
+  after it in plain text, on the wordmark's baseline, in the link colour,
+  going to this directory's own list. The menu keeps the directory's six
+  items and ends with µnleashed BBS, back to .com. The drawing gives up
+  the suffix's width, so the two stay on one line at 390 wide.
+- **No file, a neutral header**: the directory's own name as text, its
+  own pages, no suffix and no link to anybody else's site. A file that is
+  not JSON, has a key it does not know, or a link that is not a path or
+  http(s) gets the neutral header too, with one `header:` line on the
+  console saying why: never a 500 and never half a header. Labels and the
+  suffix are escaped.
+- **SyncTERM's link goes to its SourceForge project.** syncterm.bbsdev.net
+  stopped answering, so "Get SyncTERM" on /docs/terminals and the join
+  step on the list were dead (Rob found it). Now
+  https://sourceforge.net/projects/syncterm/, and a check that no page
+  links the old site.
+- Selftest: the header file's suffix, wordmark and menu with the right
+  item lit on each page; neutral with no file; a bad file, a bad link and
+  an unknown key each falling back with a logged reason; an operator's
+  file read again on change, escaped; the parser's refusals; setup.sh
+  installing the file for unleashedbbs.net alone. The main suite runs
+  with unleashedbbs.net's file, as the droplet does.
+
 ## 2.0.2, 2026-09-27
 
 - **The top nav read "MNLEASHED BBS".** `nav a` is

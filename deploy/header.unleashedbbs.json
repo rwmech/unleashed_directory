@@ -1,0 +1,17 @@
+{
+  "wordmark": true,
+  "wordmark_url": "https://unleashedbbs.com/",
+  "wordmark_label": "µnleashed BBS: the project's home",
+  "suffix": ".NET",
+  "suffix_url": "/",
+  "panel": true,
+  "nav": [
+    {"label": "Communities online", "url": "/", "kind": "local"},
+    {"label": "Badges", "url": "/badges", "kind": "local"},
+    {"label": "Get listed", "url": "/how", "kind": "local"},
+    {"label": "House rules", "url": "/rules", "kind": "local"},
+    {"label": "Data", "url": "/data", "kind": "local"},
+    {"label": "Guides", "url": "/docs", "kind": "local"},
+    {"label": "µnleashed BBS", "url": "https://unleashedbbs.com/", "kind": "external"}
+  ]
+}

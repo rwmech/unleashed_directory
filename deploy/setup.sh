@@ -157,6 +157,21 @@ install -m 644 "$SRC/CHANGELOG.md" "$DEST/CHANGELOG.md"
 # there, so it is installed with the code, every time.
 install -m 644 "$SRC/badges.json" "$DEST/badges.json"
 
+# The header (2.0.3): what the top of every page says, read from
+# /etc/unleashed-directory/header.json (DIRECTORY_HEADER in the unit). The
+# project's own file, the wordmark home to unleashedbbs.com with ".NET"
+# after it, is installed for unleashedbbs.net alone, every time, because the
+# repository is where it is edited. Any other directory's file is its
+# operator's and is never touched here; with none, the header is neutral:
+# the directory's own name and pages. INSTALL.md has the format.
+for d in "${DOMAINS[@]}"; do
+    if [ "$d" = "unleashedbbs.net" ]; then
+        install -m 644 "$SRC/deploy/header.unleashedbbs.json" /etc/unleashed-directory/header.json
+        echo "header: unleashedbbs.net's own"
+        break
+    fi
+done
+
 # Pages are prose in Markdown and are replaced on every install, because the
 # repository is where they get edited.
 install -d -m 755 "$DEST/pages"

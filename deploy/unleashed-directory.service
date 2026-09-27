@@ -26,7 +26,7 @@ Environment=DIRECTORY_PORT=8080
 # silently turned this into just "unleashed".
 Environment="DIRECTORY_NAME=µnleashed BBS directory"
 Environment=DIRECTORY_URL=https://unleashedbbs.net
-# The project's own site (since the split, 2026-09-26): the menu names it,
+# The project's own site (since the split, 2026-09-26): the footer names it,
 # and a path this directory no longer serves (/install, /about, the
 # old guide paths are the directory's own /docs) is sent there with a 301.
 # Empty it for a directory of your own.
@@ -34,6 +34,10 @@ Environment=DIRECTORY_HOME_URL=https://unleashedbbs.com
 # The guides (unleashed_documentation), installed here by setup.sh from
 # the checkout named in /etc/unleashed-directory/docs.
 Environment=DIRECTORY_DOCS_DIR=/srv/unleashed_directory/docs
+# The header: the wordmark, the suffix after it and the menu (2.0.3).
+# setup.sh installs the project's own for unleashedbbs.net; with no file
+# the header is neutral, the directory's own name and pages.
+Environment=DIRECTORY_HEADER=/etc/unleashed-directory/header.json
 # The firmware releases the main site's installer offers, read, never
 # written: the newest release lights the update arrow on a board that is
 # behind, and opens the guides' "::: from" gates. On a box without the

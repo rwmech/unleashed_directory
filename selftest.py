@@ -183,6 +183,15 @@ def pt_bin(rows):
     return (body + md5).ljust(0xC00, b"\xff")
 
 
+def _raises(fn, *args):
+    """Whether fn(*args) raises ValueError."""
+    try:
+        fn(*args)
+    except ValueError:
+        return True
+    return False
+
+
 def check(label, ok):
     global passed, failed
     print(f"  {'PASS' if ok else 'FAIL'}  {label}")
@@ -2346,6 +2355,10 @@ def main():
                DIRECTORY_ADDRESS_PER_MINUTE="0",
                DIRECTORY_LIST_DOMAIN="boards.example",
                DIRECTORY_HOME_URL="https://unleashedbbs.com",
+               # The header unleashedbbs.net runs with (2.0.3), which
+               # setup.sh installs there.
+               DIRECTORY_HEADER=os.path.abspath(os.path.join(
+                   "deploy", "header.unleashedbbs.json")),
                DIRECTORY_DOCS_DIR=DOCS_DIR,
                # No releases on disk: the suite makes its own where it needs one.
                DIRECTORY_FIRMWARE_DIR=os.path.join(tempfile.gettempdir(),
@@ -3371,9 +3384,9 @@ def main():
               len(read) >= 4 and not missing_i)
 
         print("The wordmark goes home")
-        homes = {"the board list": (get("/")[1], "/"),
-                 "a page": (get("/data")[1], "/")}
-        check("the wordmark links to the board list on every face",
+        homes = {"the board list": (get("/")[1], "https://unleashedbbs.com/"),
+                 "a page": (get("/data")[1], "https://unleashedbbs.com/")}
+        check("the wordmark links to the project's site on every face (the header file)",
               all(f'<a class="home" href="{want}" aria-label="' in page
                   and '<svg class="logo"' in page.split('<a class="home"')[1].split("</a>")[0]
                   for page, want in homes.values()))
@@ -3391,6 +3404,124 @@ def main():
               and '<pre class="logo"' not in homes["a page"][0]
               and "svg.logo { display:block; width:min(35rem, calc(100vw - 2.5rem));"
                   in homes["a page"][0])
+
+        # The header file (2.0.3): the wordmark, a suffix after it, the
+        # menu, from /etc/unleashed-directory/header.json; neutral without.
+        print("The header file")
+        front = get("/")[1]
+        brand = re.search(r'<div class="brand">.*?</div>', front, re.S)
+        check("unleashedbbs.net's file: the wordmark goes to .com and .NET, plain "
+              "text after it, to this directory's own list",
+              brand is not None
+              and '<a class="home" href="https://unleashedbbs.com/" aria-label="' in brand.group(0)
+              and brand.group(0).endswith('<a class="sfx" href="/">.NET</a></div>')
+              and ".masthead a.sfx {" in front)
+        navs = {path: re.search(r"<nav>.*?</nav>", get(path)[1]).group(0)
+                for path in ("/", "/badges", "/how", "/rules", "/data", "/docs/setup")}
+        want_here = {"/": "/", "/badges": "/badges", "/how": "/how", "/rules": "/rules",
+                     "/data": "/data", "/docs/setup": "/docs"}
+        check("its menu: the directory's six, then back to µnleashed BBS, "
+              "each local one lit on its own pages and the link home never",
+              all(n.count("<a") == 7 and n.count('class="here"') == 1
+                  and f'<a class="here" href="{want_here[p]}">' in n
+                  and n.endswith('<a href="https://unleashedbbs.com/"><span class="mu">'
+                                 'µ</span>nleashed BBS</a></nav>')
+                  for p, n in navs.items()))
+        hdr_path = os.path.join(tempfile.gettempdir(), f"dirtest{os.getpid()}-header.json")
+        port3 = PORT + 3
+        env3 = dict(env, DIRECTORY_PORT=str(port3), DIRECTORY_HEADER=hdr_path,
+                    DIRECTORY_DB=db + "-hdr.db")
+        if os.path.exists(hdr_path):
+            os.remove(hdr_path)
+        server3 = subprocess.Popen([sys.executable, "server.py"], env=env3,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        log3 = []
+        threading.Thread(target=lambda: [log3.append(line.decode("utf-8", "replace"))
+                                         for line in server3.stdout], daemon=True).start()
+        base3 = f"http://127.0.0.1:{port3}"
+        try:
+            for _ in range(50):
+                try:
+                    fetch("/health", base3)
+                    break
+                except Exception:
+                    time.sleep(0.1)
+            page3 = fetch("/how", base3)[2].decode("utf-8")
+            nav3 = re.search(r"<nav>.*?</nav>", page3).group(0)
+            check("with no header file the header is neutral: the directory's own "
+                  "name, its own pages, no suffix and no link to unleashedbbs.com",
+                  '<div class="masthead"><a class="home dname" href="/">'
+                  + html.escape(S.SITE_NAME) + "</a>" in page3
+                  and 'class="sfx"' not in page3 and "<svg class=\"logo\"" not in page3
+                  and "unleashedbbs.com" not in page3[page3.index('<div class="masthead">'):
+                                                      page3.index("</nav>")]
+                  and nav3.count("<a") == 6 and '<a class="here" href="/how">' in nav3)
+            with open(hdr_path, "w", encoding="utf-8") as f:
+                f.write('{"suffix": ".NET", "nav": [')
+            code3, _t, body3 = fetch("/how", base3)
+            body3 = body3.decode("utf-8")
+            check("a header file that is not JSON: the neutral header, never a 500, "
+                  "and a line on the console saying why",
+                  code3 == 200 and '<a class="home dname" href="/">' in body3
+                  and 'class="sfx"' not in body3
+                  and any("header:" in ln and "not JSON" in ln and "neutral" in ln
+                          for ln in log3))
+            time.sleep(0.05)
+            with open(hdr_path, "w", encoding="utf-8") as f:
+                json.dump({"suffix": ".NET", "nav": [
+                    {"label": "Boards", "url": "javascript:alert(1)", "kind": "external"}]}, f)
+            body3 = fetch("/how", base3)[2].decode("utf-8")
+            check("one that links somewhere that is not http or https: neutral too",
+                  '<a class="home dname" href="/">' in body3 and "javascript:" not in body3
+                  and any("must start http" in ln for ln in log3))
+            time.sleep(0.05)
+            with open(hdr_path, "w", encoding="utf-8") as f:
+                json.dump({"sufix": ".NET"}, f)
+            body3 = fetch("/how", base3)[2].decode("utf-8")
+            check("one with a key it does not know: neutral, naming the key",
+                  '<a class="home dname" href="/">' in body3
+                  and any("unknown key 'sufix'" in ln for ln in log3))
+            time.sleep(0.05)
+            with open(hdr_path, "w", encoding="utf-8") as f:
+                json.dump({"wordmark": True, "suffix": "<b>.ORG</b>", "suffix_url": "/",
+                           "panel": False,
+                           "nav": [{"label": "Boards", "url": "/", "kind": "local"},
+                                   {"label": "Rules", "url": "/rules", "kind": "local"},
+                                   {"label": "Elsewhere", "url": "https://example.org/",
+                                    "kind": "external"}]}, f)
+            body3 = fetch("/rules", base3)[2].decode("utf-8")
+            nav3 = re.search(r"<nav>.*?</nav>", body3).group(0)
+            check("an operator's own file is read again when it changes, escaped, "
+                  "and says the whole header: its menu, its suffix, no panel",
+                  '<a class="sfx" href="/">&lt;b&gt;.ORG&lt;/b&gt;</a>' in body3
+                  and '<div class="ticker">' not in body3
+                  and nav3 == ('<nav><a href="/">Boards</a><a class="here" href="/rules">'
+                               'Rules</a><a href="https://example.org/">Elsewhere</a></nav>')
+                  and '<a class="home" href="/" aria-label="µnleashed: the board list">'
+                      in body3)
+        finally:
+            server3.terminate()
+            server3.wait(timeout=10)
+            for leftover in (hdr_path, db + "-hdr.db", db + "-hdr.db-wal", db + "-hdr.db-shm"):
+                try:
+                    os.remove(leftover)
+                except OSError:
+                    pass
+        check("the parser refuses what a header cannot be",
+              all(_raises(S.header_parse, t) for t in (
+                  "[]", '{"nav": {}}', '{"suffix": "' + "x" * 13 + '"}',
+                  '{"nav": [{"label": "A", "url": "https://x/", "kind": "local"}]}',
+                  '{"nav": [{"label": "A", "url": "//evil/", "kind": "local"}]}',
+                  '{"wordmark": "yes"}', '{"nav": [{"label": "", "url": "/"}]}')))
+        check("setup.sh installs unleashedbbs.net's header file there and nowhere else",
+              'if [ "$d" = "unleashedbbs.net" ]; then' in open(os.path.join(
+                  "deploy", "setup.sh"), encoding="utf-8").read()
+              and 'install -m 644 "$SRC/deploy/header.unleashedbbs.json" '
+                  "/etc/unleashed-directory/header.json" in open(os.path.join(
+                      "deploy", "setup.sh"), encoding="utf-8").read()
+              and "Environment=DIRECTORY_HEADER=/etc/unleashed-directory/header.json"
+                  in open(os.path.join("deploy", "unleashed-directory.service"),
+                          encoding="utf-8").read())
 
         # The avatar: link previews and the home-screen icon.
         print("The avatar")
@@ -3800,7 +3931,7 @@ def main():
               and 'href="https://apps.apple.com/us/app/terminator-bbs-terminal/id6759012939"'
                   in js_
               and 'href="https://apps.apple.com/us/app/muffinterm/id1583236494"' in js_
-              and 'href="https://syncterm.bbsdev.net/"' in js_
+              and 'href="https://sourceforge.net/projects/syncterm/"' in js_
               and 'href="/docs/terminals">Apps for joining</a>' in js_
               and 'class="gl"' in js_)
         # Site 1.3.1 (Rob's own app on Android): Termius, beside TERMinator,
@@ -3816,6 +3947,20 @@ def main():
               and '<a href="https://termius.com/">Termius</a>' in tp
               and "Telnet is in the free plan." in tp
               and "telnet is in its free plan" in " ".join(tp.split()))
+
+        # SyncTERM's old site stopped answering in September 2026 (Rob found
+        # the Get SyncTERM button dead); its home now is its SourceForge
+        # project. No page this directory serves may link the old one.
+        dead_at = []
+        for path in (["/", "/directory", "/how", "/badges", "/rules", "/data", "/docs"]
+                     + (["/docs/" + n[:-3] for n in os.listdir(os.path.join(DOCS_DIR, "pages"))
+                         if n.endswith(".md") and n != "index.md"] if HAVE_DOCS else [])):
+            if re.search(r"syncterm\.(bbsdev\.)?net", get(path)[1], re.I):
+                dead_at.append(path)
+        check("no page links to SyncTERM's old site, syncterm.bbsdev.net"
+              + (f"  <- {dead_at[:4]}" if dead_at else ""),
+              not dead_at and 'href="https://sourceforge.net/projects/syncterm/"'
+              in get("/docs/terminals")[1])
 
         # The Telnet BBS Guide, on /how.
         hw = get("/how")[1]
@@ -3844,7 +3989,8 @@ def main():
         resting = head_css[at:mv]
         moving = head_css[mv:head_css.index("\n}\n", mv)]
         check("every face carries the panel beside the wordmark",
-              all(re.search(r'<div class="masthead"><a class="home" [^>]*><svg class="logo"', p)
+              all(re.search(r'<div class="masthead"><div class="brand"><a class="home" '
+                            r'[^>]*><svg class="logo"', p)
                   and ticker_of(p) for p in faces.values()))
         check("with all ten freedoms, each with the line saying what it means",
               len(wanted) == 10

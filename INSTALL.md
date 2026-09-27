@@ -194,6 +194,60 @@ All of them live in `/etc/systemd/system/unleashed-directory.service` as environ
 | `DIRECTORY_ADDRESS_PER_MINUTE` | `20` | most accepted announces from one address in a minute. `0` switches it off |
 | `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page is reused |
 | `DIRECTORY_NAME` | | the title on the page |
+| `DIRECTORY_HEADER` | `/etc/unleashed-directory/header.json` | the header file: see [Your header](#your-header) |
+
+## Your header
+
+The top of every page, the wordmark, what sits after it and the menu, comes
+from one JSON file, `/etc/unleashed-directory/header.json`. It is yours: edit
+it and reload the page, no restart needed. `setup.sh` never touches it on your
+directory (it installs the project's own, `deploy/header.unleashedbbs.json`,
+only on unleashedbbs.net).
+
+With no file your directory gets a neutral header: its own name (`DIRECTORY_NAME`)
+as text, linking to its board list, and its own pages in the menu, with no link
+to anybody else's site. A file that is not valid JSON, or holds something the
+server does not understand, gets the neutral header too, and one line in the
+log saying why:
+
+```bash
+journalctl -u unleashed-directory | grep 'header:'
+```
+
+A file that uses every key:
+
+```json
+{
+  "wordmark": true,
+  "wordmark_url": "https://example.com/",
+  "wordmark_label": "Example BBS: our home page",
+  "suffix": ".NET",
+  "suffix_url": "/",
+  "panel": true,
+  "nav": [
+    {"label": "Boards", "url": "/", "kind": "local"},
+    {"label": "Get listed", "url": "/how", "kind": "local"},
+    {"label": "Our club", "url": "https://example.com/", "kind": "external"}
+  ]
+}
+```
+
+| Key | Neutral value | What it does |
+|---|---|---|
+| `wordmark` | `false` | `true` shows the µnleashed drawing; `false` shows your directory's name as text |
+| `wordmark_url` | `/` | where the wordmark (or the name) goes |
+| `wordmark_label` | | what a screen reader says for the wordmark link, 80 characters at most |
+| `suffix` | none | up to 12 characters of plain text set after the wordmark, on its baseline, such as `.NET` |
+| `suffix_url` | `/` | where the suffix goes |
+| `panel` | `true` | the freedoms panel beside the wordmark, on a wide screen |
+| `nav` | your pages | the menu, up to 12 items, in order |
+
+Every key is optional; one left out keeps its neutral value. Each menu item
+has a `label` (32 characters at most), a `url` and a `kind`. A `local` item is a
+page of this directory, a path starting `/`, and is highlighted while somebody
+is reading it; a `/docs` item is left out on a directory with no guides. An
+`external` item is a full `http://` or `https://` address and is never
+highlighted. Nothing else is accepted as a link.
 
 ## If something is wrong
 

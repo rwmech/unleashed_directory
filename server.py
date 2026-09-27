@@ -96,7 +96,8 @@ LIST_DOMAIN   = os.environ.get("DIRECTORY_LIST_DOMAIN", "")
 
 # The project's own site, for the pages this server no longer has. A path
 # that is not the directory's and not a guide is sent there with a 301, so
-# an old link to /install on this domain still lands, and the menu names it.
+# an old link to /install on this domain still lands, and the footer names
+# it. The menu is the header file's (HEADER_FILE, below).
 # Empty for a directory that is not part of the project: those paths are
 # then simply not found.
 HOME_URL      = os.environ.get("DIRECTORY_HOME_URL", "").rstrip("/")
@@ -263,15 +264,15 @@ def site_url(target, role, path="/"):
 
 
 # The menu. The board list first, because it is what this site is; then
-# what a sysop needs to be on it; then the data, the guides when this
-# directory carries them, and the project's own site when there is one.
+# what a sysop needs to be on it; then the data and the guides when this
+# directory carries them. This is the neutral menu, the one a directory
+# serves with no header file (below): its own pages and nothing else.
 NAV = (("list",  "/",       "Communities online"),
        ("list",  "/badges", "Badges"),
        ("list",  "/how",    "Get listed"),
        ("list",  "/rules",  "House rules"),
        ("data",  "/",       "Data"),
-       ("docs",  "/",       "Guides"),
-       ("home",  "/",       "µnleashed BBS"))
+       ("docs",  "/",       "Guides"))
 
 # A page that is not in the menu still has a place in it.
 NAV_SECTION = {
@@ -279,12 +280,176 @@ NAV_SECTION = {
 }
 
 
+# --------------------------------------------------------------------------
+# The header file (2.0.3, Rob: "a config file so someone (not me) that runs
+# a directory can modify it along with header, etc. So its in their control
+# easily on their directory but for us it means a more unified header").
+#
+# JSON, at DIRECTORY_HEADER (/etc/unleashed-directory/header.json, beside
+# the domains and docs files setup.sh already keeps there). It says what the
+# top of every page is: the wordmark and where it goes, a short suffix set
+# after it as plain text (".NET" on unleashedbbs.net, so the directory reads
+# as part of unleashedbbs.com and the wordmark takes a reader back there),
+# whether the freedoms panel shows, and the menu, item by item. The
+# project's own file is deploy/header.unleashedbbs.json, which setup.sh
+# installs only for unleashedbbs.net.
+#
+# With no file a directory gets the neutral header: its own name as text,
+# its own pages, no suffix and no link to anybody else's site. A file that
+# will not parse, or says something this does not understand, gets the
+# neutral header too, with one line on the console saying why: never a 500,
+# and never half a header. It is read again when it changes on disk, so an
+# operator edits it and reloads the page.
+#
+#   {
+#     "wordmark": true,                      the µnleashed drawing, or false
+#                                            for the directory's name as text
+#     "wordmark_url": "https://example.com/",
+#     "wordmark_label": "Example: home",     what a screen reader says
+#     "suffix": ".NET",                      12 characters at most, or ""
+#     "suffix_url": "/",
+#     "panel": true,                         the freedoms beside the wordmark
+#     "nav": [ {"label": "Communities online", "url": "/", "kind": "local"},
+#              {"label": "Example", "url": "https://example.com/",
+#               "kind": "external"} ]
+#   }
+#
+# Every key is optional. A "local" item is a page of this directory (a path
+# starting "/") and is lit when it is the page being read; an "external" one
+# is a full http(s) address and never is. A local item under /docs is left
+# out on a directory with no guides, as the neutral Guides entry is.
+# --------------------------------------------------------------------------
+HEADER_FILE   = os.environ.get("DIRECTORY_HEADER", "/etc/unleashed-directory/header.json")
+HEADER_MAX    = 16 * 1024          # a header file bigger than this is not one
+HEADER_KEYS   = ("wordmark", "wordmark_url", "wordmark_label", "suffix",
+                 "suffix_url", "panel", "nav")
+HEADER_ITEMS  = 12
+_header_lock  = threading.Lock()
+_header_seen  = {"key": None, "cfg": None}
+
+
+def header_neutral():
+    """The header a directory has with no header file: its name as text,
+    linking to its own board list, and its own pages."""
+    nav = []
+    for target, path, label in NAV:
+        if target == "docs" and not docs_names():
+            continue
+        nav.append((label, site_url(target, "list", path), True))
+    return {"wordmark": False, "wordmark_url": "/", "wordmark_label": "",
+            "suffix": "", "suffix_url": "/", "panel": True, "nav": tuple(nav)}
+
+
+def _header_url(value, local, what):
+    """A link from the header file, or raise ValueError saying what is
+    wrong with it. local: a path on this directory; otherwise a full http or
+    https address, which also rules out javascript: and the like."""
+    if not isinstance(value, str) or not value or len(value) > 300 or CLEAN.search(value) \
+            or any(c.isspace() for c in value):
+        raise ValueError(f"{what} is not a link")
+    if local:
+        if not value.startswith("/") or value.startswith("//"):
+            raise ValueError(f"{what} is local, so it must be a path starting with /")
+    elif not re.match(r"^https?://[^/\s]+", value):
+        raise ValueError(f"{what} must start http:// or https://")
+    return value
+
+
+def _header_text(value, most, what):
+    if not isinstance(value, str) or len(value) > most or CLEAN.search(value):
+        raise ValueError(f"{what} must be text of at most {most} characters")
+    return value.strip()
+
+
+def header_parse(text):
+    """The header file's words as the header, or raise ValueError saying
+    what is wrong. Anything left out takes the neutral header's value."""
+    try:
+        raw = json.loads(text)
+    except ValueError as e:
+        raise ValueError(f"not JSON ({e})")
+    if not isinstance(raw, dict):
+        raise ValueError("not a JSON object")
+    unknown = sorted(k for k in raw if k not in HEADER_KEYS)
+    if unknown:
+        raise ValueError("unknown key " + ", ".join(repr(k) for k in unknown))
+    cfg = header_neutral()
+    for key in ("wordmark", "panel"):
+        if key in raw:
+            if not isinstance(raw[key], bool):
+                raise ValueError(f"{key} must be true or false")
+            cfg[key] = raw[key]
+    if "wordmark_url" in raw:
+        url = raw["wordmark_url"]
+        cfg["wordmark_url"] = _header_url(url, str(url).startswith("/"), "wordmark_url")
+    if "wordmark_label" in raw:
+        cfg["wordmark_label"] = _header_text(raw["wordmark_label"], 80, "wordmark_label")
+    if "suffix" in raw:
+        cfg["suffix"] = _header_text(raw["suffix"], 12, "suffix")
+    if "suffix_url" in raw:
+        url = raw["suffix_url"]
+        cfg["suffix_url"] = _header_url(url, str(url).startswith("/"), "suffix_url")
+    if "nav" in raw:
+        items = raw["nav"]
+        if not isinstance(items, list) or len(items) > HEADER_ITEMS:
+            raise ValueError(f"nav must be a list of at most {HEADER_ITEMS} items")
+        nav = []
+        for i, item in enumerate(items, 1):
+            if not isinstance(item, dict) or set(item) - {"label", "url", "kind"}:
+                raise ValueError(f"nav item {i} must have label, url and kind only")
+            kind = item.get("kind", "local")
+            if kind not in ("local", "external"):
+                raise ValueError(f"nav item {i}: kind is local or external")
+            label = _header_text(item.get("label"), 32, f"nav item {i}'s label")
+            if not label:
+                raise ValueError(f"nav item {i} has no label")
+            url = _header_url(item.get("url"), kind == "local", f"nav item {i}'s url")
+            if kind == "local" and (url == "/docs" or url.startswith("/docs/")) \
+                    and not docs_names():
+                continue
+            nav.append((label, url, kind == "local"))
+        cfg["nav"] = tuple(nav)
+    return cfg
+
+
+def header_cfg():
+    """The header for this render: the file's, read again only when it has
+    changed on disk, or the neutral one. A bad file is said once, on the
+    console, each time it changes, and the neutral header stands in."""
+    try:
+        st = os.stat(HEADER_FILE)
+        key = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = None
+    with _header_lock:
+        if key is not None and key == _header_seen["key"]:
+            return _header_seen["cfg"]
+    cfg = None
+    if key is not None:
+        try:
+            if key[1] > HEADER_MAX:
+                raise ValueError(f"larger than {HEADER_MAX} bytes")
+            with open(HEADER_FILE, encoding="utf-8") as f:
+                cfg = header_parse(f.read())
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            print(f"header: {HEADER_FILE}: {e}; using the neutral header", flush=True)
+            cfg = None
+    if cfg is None:
+        # Not remembered: the neutral header follows the guides, which can
+        # come and go without the header file changing.
+        with _header_lock:
+            _header_seen["key"] = key
+            _header_seen["cfg"] = None
+        return header_neutral()
+    with _header_lock:
+        _header_seen["key"] = key
+        _header_seen["cfg"] = cfg
+    return cfg
+
+
 def nav_items():
-    """The menu as this directory serves it: no Guides without guides, and
-    no link home without a home."""
-    return tuple(n for n in NAV
-                 if (n[0] != "docs" or docs_names())
-                 and (n[0] != "home" or HOME_URL))
+    """The menu this directory serves, as (label, link, local)."""
+    return header_cfg()["nav"]
 
 
 def nav_here(role, here):
@@ -295,34 +460,79 @@ def nav_here(role, here):
     return NAV_SECTION.get(here, here)
 
 
-def nav_html(role, here=""):
+def nav_html(role, here="", items=None):
     here = nav_here(role, here)
     out = []
-    for target, path, label in nav_items():
-        href = site_url(target, role, path)
-        cls = ' class="here"' if href == here else ""
+    for label, href, local in (nav_items() if items is None else items):
+        cls = ' class="here"' if local and href == here else ""
         # nav a is text-transform:uppercase (a whole row reads as a menu
-        # bar); safe_mu() keeps the home entry's µ from becoming a capital
-        # Greek mu that reads as a plain M.
-        out.append('<a' + cls + ' href="' + href + '">' + safe_mu(label) + '</a>')
+        # bar); safe_mu() keeps a µ in a label, such as the link back to
+        # µnleashed BBS, from becoming a capital Greek mu that reads as a
+        # plain M. Escaped first: the labels can come from the header file.
+        out.append('<a' + cls + ' href="' + html.escape(href, quote=True) + '">'
+                   + safe_mu(html.escape(label)) + '</a>')
     return "<nav>" + "".join(out) + "</nav>"
 
 
+# The header's own few rules, riding with it (the way the site's drawings
+# carry theirs) so sitekit's page, shared byte for byte with the project's
+# site, is untouched.
+#
+# The suffix sits after the wordmark on its baseline, as the ".NET" of a
+# domain would: the drawing is 62 cells by 6 rows, and the last row is only
+# the µ's descender, so the baseline is 10/60 of the drawing's height above
+# its foot, plus the drawing's own 0.375rem margin. The drawing gives up the
+# suffix's width (--sfx) rather than wrapping it on to a line of its own.
+HEADER_CSS = """<style>
+.masthead .brand { flex:none; display:flex; align-items:flex-end; gap:0 0.375rem;
+        --sfx:4.25rem; }
+.masthead .brand svg.logo { width:min(35rem, calc(100vw - 2.5rem - var(--sfx))); }
+.masthead a.sfx { flex:none; color:var(--dial); text-decoration:none; font-weight:bold;
+        font-size:1.375rem; line-height:1; letter-spacing:0.02em; white-space:nowrap;
+        margin-bottom:calc(0.375rem + min(35rem, 100vw - 2.5rem - var(--sfx)) * 10 / 372
+                           - 0.2em); }
+.masthead a.sfx:hover { background:var(--dial); color:var(--bg); }
+.masthead a.sfx:focus-visible { outline:3px solid #ffd35c; outline-offset:4px; }
+.masthead a.home.dname { color:var(--name); font-weight:bold; font-size:1.75rem;
+        line-height:1.2; padding:0.75rem 0 0.5rem; }
+@media (max-width: 900px) {
+  .masthead .brand { --sfx:3rem; }
+  .masthead a.sfx { font-size:1rem; }
+  .masthead a.home.dname { font-size:1.375rem; }
+}
+</style>"""
+
+
 def head_html(role, here=""):
-    """The top of every page: wordmark and the freedoms beside it, then the
-    same menu everywhere. The wordmark goes to the board list."""
-    return ('<div class="masthead">'
-            + logo_html("/")
-            + ticker_html(nav_index(role, here)) + "</div>"
-            + nav_html(role, here))
+    """The top of every page, from the header file or the neutral header:
+    the wordmark or the directory's name, the suffix after it, the freedoms
+    beside them, then the menu."""
+    cfg = header_cfg()
+    href = html.escape(cfg["wordmark_url"], quote=True)
+    if cfg["wordmark"]:
+        label = cfg["wordmark_label"] or (
+            "µnleashed: the board list" if cfg["wordmark_url"] == "/"
+            else "µnleashed")
+        mark = ('<a class="home" href="' + href + '" aria-label="'
+                + html.escape(label, quote=True) + '">' + LOGO_SVG + "</a>")
+    else:
+        mark = ('<a class="home dname" href="' + href + '">'
+                + html.escape(SITE_NAME) + "</a>")
+    if cfg["suffix"]:
+        mark = ('<div class="brand">' + mark + '<a class="sfx" href="'
+                + html.escape(cfg["suffix_url"], quote=True) + '">'
+                + html.escape(cfg["suffix"]) + "</a></div>")
+    panel = ticker_html(nav_index(role, here, cfg["nav"])) if cfg["panel"] else ""
+    return (HEADER_CSS + '<div class="masthead">' + mark + panel + "</div>"
+            + nav_html(role, here, cfg["nav"]))
 
 
-def nav_index(role, here=""):
+def nav_index(role, here="", items=None):
     """The position in the menu of the section this page belongs to, or 0
     for a page that belongs to none."""
     here = nav_here(role, here)
-    for i, (target, path, _label) in enumerate(nav_items()):
-        if site_url(target, role, path) == here:
+    for i, (_label, href, local) in enumerate(nav_items() if items is None else items):
+        if local and href == here:
             return i
     return 0
 
@@ -2964,7 +3174,7 @@ JOIN_STEP = ('<div class="joinstep" role="note"><h2>First time? You need a free 
                  "[Android](https://play.google.com/store/apps/details?id=com.server.auditor.ssh.client) "
                  "and [iPhone](https://apps.apple.com/us/app/termius-modern-ssh-client/id549039908), "
                  "works well too. "
-                 "On a computer: **[SyncTERM](https://syncterm.bbsdev.net/)**, "
+                 "On a computer: **[SyncTERM](https://sourceforge.net/projects/syncterm/)**, "
                  "for Windows, macOS and Linux.")
              + '</p><p class="more">' + md_inline(
                  "Then type a board's address and port into the app, or click "
