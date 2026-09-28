@@ -14,6 +14,20 @@
 
 # Changelog
 
+## 2.0.5, 2026-09-28
+
+- **The tagline is a science-fiction subtitle now** (Rob: "should be
+  italic, think STTNG but doesnt have to be that font and should be
+  slightly larger"), the same as on .com and .org: Orbitron at its
+  lightest weight, in capitals, spaced and slanted by a skew, 1rem on a
+  desktop and 0.8125rem on a phone, in the dim grey.
+- **The face is served from here**, `static/fonts/Orbitron.ttf` at
+  `/font/Orbitron.ttf`: the upstream file, unmodified, under the SIL Open
+  Font License 1.1, its text beside it and the notice in
+  THIRD_PARTY_NOTICES.md. `setup.sh` installs `static/` now, and a page
+  fetches the face only when its header has a tagline. Still no font
+  service.
+
 ## 2.0.4, 2026-09-28
 
 - **"The next-generation BBS" under the wordmark** (Rob: "Lets start

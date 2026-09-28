@@ -17,7 +17,15 @@
 
 ## What is in this repository
 
-Its own code and nothing else. There is no `node_modules`, no lockfile, no vendored code and no build step. Every file here was written for this project and is under the GNU General Public License v3 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
+Its own code and one font. There is no `node_modules`, no lockfile, no vendored code and no build step. Every file here but the font was written for this project and is under the GNU General Public License v3 or later, the same terms as [µnleashed BBS](https://github.com/rwmech/unleashed_BBS) itself. See [LICENSE](LICENSE).
+
+The font, since 2.0.5, is the face of the tagline under the wordmark, served from this machine at `/font/Orbitron.ttf`:
+
+| File | From | Copyright | Changes |
+|---|---|---|---|
+| `static/fonts/Orbitron.ttf` | [Orbitron](https://github.com/theleagueof/orbitron) | 2018 The Orbitron Project Authors, Reserved Font Name "Orbitron" | none: the upstream `Orbitron[wght].ttf` as published, because a subset is a Modified Version under the licence and may not carry a Reserved Font Name |
+
+It is under the SIL Open Font License 1.1, whose text is beside it in `static/fonts/OFL-Orbitron.txt`. It is not sold, alone or otherwise.
 
 That is a deliberate choice rather than an accident of scale. A directory that anybody can run has to be a directory anybody can read, and a dependency tree is the fastest way to make a small program unauditable.
 

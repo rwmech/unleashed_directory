@@ -3999,6 +3999,16 @@ def main():
               all('.NET</a></div><p class="tagline">The next-generation BBS</p></div>'
                   '<div class="ticker">' in p for p in faces.values())
               and all(".masthead p.tagline {" in p for p in faces.values()))
+        # 1.5.3 / 2.0.5 (Rob: "should be italic, think STTNG"): Orbitron,
+        # served from here, light, in capitals, slanted by a skew, larger.
+        tl_code, tl_type, tl_blob = fetch("/font/Orbitron.ttf")
+        check("the tagline is set in Orbitron from this machine, slanted, spaced, "
+              "a little larger",
+              all('@font-face { font-family:"Tagline"; src:url("/font/Orbitron.ttf")' in p
+                  and 'font:400 1rem/1.3 "Tagline",' in p
+                  and "transform:skewX(-14deg)" in p and "text-transform:uppercase" in p
+                  and "fonts.googleapis" not in p for p in faces.values())
+              and tl_code == 200 and tl_type == "font/ttf" and len(tl_blob) > 30000)
         check("with all ten freedoms, each with the line saying what it means",
               len(wanted) == 10
               and all(all(f"<b>{l}</b> <i>{n}</i>" in ticker_of(p)

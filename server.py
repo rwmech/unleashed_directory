@@ -507,13 +507,24 @@ HEADER_CSS = """<style>
   .masthead a.sfx { font-size:1rem; }
   .masthead a.home.dname { font-size:1.375rem; }
 }
-/* The tagline (2.0.4): one quiet line under the wordmark, the same rules as
-   the project's site, in its dim grey and small type. The wordmark, any
-   suffix and the line are one column, so the freedoms panel is untouched. */
+/* The tagline (2.0.4): one line under the wordmark, the same rules as the
+   project's site, in its dim grey. The wordmark, any suffix and the line are
+   one column, so the freedoms panel is untouched. Since 2.0.5 (Rob: "should
+   be italic, think STTNG ... slightly larger") it is the slanted, wide,
+   spaced subtitle of a 1980s science-fiction title: Orbitron, from
+   static/fonts/ (upstream, unmodified, OFL 1.1), at its lightest weight, in
+   capitals, slanted with a skew because Orbitron has no italic. Served from
+   this machine; the face is fetched only on a page with a tagline. */
+@font-face { font-family:"Tagline"; src:url("/font/Orbitron.ttf") format("truetype");
+        font-weight:400 900; font-style:normal; font-display:swap; }
 .masthead .mcol { flex:none; }
-.masthead p.tagline { margin:-0.125rem 0 0.5rem; color:var(--dim);
-        font-size:0.8125rem; line-height:1.3; letter-spacing:0.06em; }
-@media (max-width: 900px) { .masthead p.tagline { font-size:0.75rem; } }
+.masthead p.tagline { margin:0.125rem 0 0.625rem; color:var(--dim);
+        font:400 1rem/1.3 "Tagline",ui-monospace,Menlo,Consolas,monospace;
+        letter-spacing:0.14em; text-transform:uppercase;
+        transform:skewX(-14deg); transform-origin:0 100%; }
+@media (max-width: 900px) {
+  .masthead p.tagline { font-size:0.8125rem; letter-spacing:0.1em; }
+}
 </style>"""
 
 

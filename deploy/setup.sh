@@ -187,13 +187,13 @@ for page in "$SRC"/pages/*.md; do
 done
 
 # Everything else the server reads from beside itself: brand/, the avatar
-# and the link preview card. Replaced on every install, because the
+# and the link preview card, and static/fonts/, the tagline's face (2.0.5). Replaced on every install, because the
 # repository is where they are edited. A server started without a folder it
 # read at import died once (the 2026-09-23 outage), so anything the server
 # reads beside itself is installed here, and the suite checks that it is.
 # Copied to a .new and moved into place so a checkout that IS the
 # destination still ends up with its files.
-for dir in brand; do
+for dir in brand static; do
     if [ -d "$SRC/$dir" ]; then
         rm -rf "$DEST/$dir.new"
         cp -r "$SRC/$dir" "$DEST/$dir.new"
