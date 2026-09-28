@@ -14,6 +14,19 @@
 
 # Changelog
 
+## 2.0.8, 2026-09-28
+
+- **The hardware preview's boards are known image sets** (sitekit 1.2.0):
+  `esp32s3-ws43b`, `esp32s3-ws2` and `esp32s3-eth`, the three new
+  Waveshare ESP32-S3 boards of v1.1.2-hardware-preview, in FLASH_FAMILIES
+  beside the Makerfabs, each placed by its own partitions.bin. The
+  directory reads the site's firmware folder for the update arrow and the
+  guides' board gates, so a `::: from esp32s3-eth` gate works here too.
+- **The /install picker's rules** (sitekit 1.2.0, the site's 1.5.6): one-line
+  tiles two a row, labels on their top border, the picked board's detail
+  line, a 28rem card. The directory serves no installer; the rules ride in
+  the shared page engine.
+
 ## 2.0.7, 2026-09-28
 
 - **The tagline reads "The next-generation BBS software"** (Rob), bold,

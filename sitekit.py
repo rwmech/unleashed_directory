@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.0.0"
+SITEKIT_VERSION = "1.2.0"
 import struct
 
 import html
@@ -201,7 +201,17 @@ FLASH_FAMILIES = {
     # a second set on it, laid out on the same 4 MB as the Waveshare's. Its
     # PSRAM is quad where the Waveshare's is octal, so each image refuses to
     # boot on the other board, and the installer cannot tell them apart.
+    # From firmware 1.1.2 (MF35 1.1.1, v1.1.2-hardware-preview) it is on the
+    # S3's 8 MB layout, read from its own partitions.bin like every set.
     "esp32s3-mf35": ("ESP32-S3", 0x0),
+    # The three Waveshare boards of v1.1.2-hardware-preview (site 1.5.5): the
+    # ESP32-S3-Touch-LCD-4.3B (WS43B), the ESP32-S3-Touch-LCD-2 (WS2) and the
+    # ESP32-S3-ETH (ETH), each on the S3's 8 MB layout. Five sets on one chip
+    # family now: the installer reads "ESP32-S3" off every one of them, so
+    # the picker asks which board and never guesses.
+    "esp32s3-ws43b": ("ESP32-S3", 0x0),
+    "esp32s3-ws2": ("ESP32-S3", 0x0),
+    "esp32s3-eth": ("ESP32-S3", 0x0),
     "esp32c3": ("ESP32-C3", 0x0),
 }
 
@@ -2983,80 +2993,96 @@ article a.buy:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
 @media (forced-colors: active) {{
   article a.buy {{ border:1px solid LinkText; }}
 }}
-/* On /install the row's label and its BUY share a box, the button outside
-   the label so pressing it never picks a board, at the right-hand end of
-   the row's last line, the version line, level with its words. The button
-   stands mostly in the row's own right padding, and the version line ends
-   1.125rem short of the words' column, which is all the room it needs. */
-article .installer .brow {{ position:relative; }}
-article .installer .brow > a.buy {{ position:absolute; right:0.1875rem;
-        bottom:0.125rem; }}
-article .installer .brow:has(> a.buy) .bv {{ padding-right:1.125rem; }}
 /* The board picker (site 1.2.0, Rob: "select the board type ... include an
    image for confirmation so the user flashes the right one. Small picture
-   in the pick list"). A fieldset of native radios, one row a board: the
-   radio, the picture, then the name, how to tell it and the version this
-   page would put on it. The chosen row is outlined in --dial on the
-   buttons' own dark blue, and keyboard focus rings the whole row. A
-   board's buttons, version line and notices are its own section, .bsec,
-   shown by the rules under the card. */
-article .installer fieldset.boards {{ border:0; margin:0; padding:0; min-width:0;
-        display:flex; flex-direction:column; gap:0.25rem; }}
-article .installer fieldset.boards legend {{ padding:0; margin:0 0 0.25rem;
+   in the pick list"). A fieldset of native radios. The chosen board is
+   outlined in --dial on the buttons' own dark blue, and keyboard focus
+   rings the whole tile. A board's buttons, version line and notices are
+   its own section, .bsec, shown by the rules under the card.
+
+   Site 1.5.6 (tty-ux, the /install picker spec of 2026-09-28): nine boards
+   with the hardware preview, and three-line rows put the buttons 150px
+   below the fold. So a board is a one-line tile, two a row on a desktop
+   and one on a phone: the radio, a small picture, a short name and, after
+   an S3's, the lock. Labels sit on the tile's top border, the way the
+   picks' did: our pick, or a board's own tag, on the left; Preview (with
+   a dashed border) or Coming soon, and BUY, on the right. The picked
+   board's full name, how to tell it, a bigger picture and Secure (SSH) are
+   said once in its section, .bsel, above the buttons. */
+article .installer fieldset.boards {{ border:0; margin:0.375rem 0 0; padding:0;
+        min-width:0; display:grid;
+        grid-template-columns:repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+        gap:0.4375rem 0.5rem; }}
+article .installer fieldset.boards legend {{ padding:0; margin:0 0 0.625rem;
         font-size:0.8125rem; color:var(--dim); }}
 article .installer fieldset.boards legend a {{ margin-left:0.5rem; }}
-/* Site 1.3.5: a fourth board (the ESP32-CAM) put the Update button past
-   the first screen at 1366 x 768, so each row is tighter: an eighth of a
-   rem of padding above and below where it was a quarter, and the three
-   lines at 1.15 rather than 1.25. About 12px a row.
-   Site 1.3.17: a fifth board (the Makerfabs) did it again, so again each
-   row is tighter: no padding above and below, the lines at 1.05, and the
-   picture at 2.375rem tall, the text's own height. About 9px a row. */
-article .installer .bopt {{ display:flex; align-items:center; gap:0.625rem;
-        padding:0 0.625rem 0 0.5rem; border:1px solid #2c3a44;
-        border-radius:0.375rem; cursor:pointer; }}
+/* On a phone there is no fold rule, so the tiles get room for their
+   border labels. */
+@media (max-width: 900px) {{
+  article .installer fieldset.boards {{ gap:0.75rem; }}
+}}
+article .installer .brow {{ position:relative; min-width:0; }}
+article .installer .bopt {{ position:relative; display:flex; flex-wrap:nowrap;
+        align-items:center; gap:0.375rem; padding:0.0625rem 0.5rem 0.0625rem 0.375rem;
+        border:1px solid #2c3a44; border-radius:0.375rem; cursor:pointer;
+        min-width:0; }}
 article .installer .bopt input {{ flex:none; margin:0; accent-color:var(--dial); }}
 article .installer .bopt:has(input:checked) {{ border-color:var(--dial);
         background:#102630; }}
 article .installer .bopt:has(input:focus-visible) {{ outline:3px solid #ffd35c;
         outline-offset:2px; }}
-article .installer .bopt .bt {{ display:flex; flex-direction:column; min-width:0;
-        font-size:0.8125rem; line-height:1.05; flex:1 1 12rem; }}
-article .installer .bopt .bt b {{ color:var(--ink); }}
-article .installer .bopt svg.art.board {{ width:3.8rem; height:2.375rem; }}
-article .installer .bopt .tell {{ color:var(--dim); font-size:0.75rem; }}
-article .installer .bopt .tell.pick {{ color:var(--ink); }}
-article .installer .bopt .bv {{ color:var(--dial); font-size:0.75rem; }}
-article .installer .bopt .bv.soon {{ color:var(--faint); }}
+article .installer .bopt svg.art.board {{ flex:none; width:1.8rem; height:1.125rem; }}
+article .installer .bopt .bt {{ display:flex; align-items:center; min-width:0;
+        font-size:0.8125rem; line-height:1.2; white-space:nowrap; }}
+article .installer .bopt .bt b {{ color:var(--ink); font-weight:normal;
+        overflow:hidden; text-overflow:ellipsis; }}
+article .installer .bopt .bt svg.lockg {{ flex:none; width:0.6em; height:0.76em;
+        margin:0 0 0 0.3em; overflow:visible; color:var(--dial); }}
+article .installer .bopt .bt svg.lockg .lk {{ fill:none; stroke:currentColor;
+        stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }}
+/* The border labels: small capitals on the card's own colour, sitting on
+   the tile's top edge. */
+article .installer .bopt .rec, article .installer .bopt .tag,
+article .installer .bopt .pv {{ position:absolute; top:-0.45em; padding:0 0.3em;
+        background:#12121a; font-size:0.625rem; line-height:0.9;
+        text-transform:uppercase; letter-spacing:0.04em; white-space:nowrap; }}
+article .installer .bopt .rec, article .installer .bopt .tag {{ left:0.5rem;
+        color:var(--warm); }}
+article .installer .bopt .pv {{ right:0.5rem; color:var(--dim); }}
+article .installer .bopt .pv.soon {{ color:var(--faint); }}
+article .installer .brow:has(> a.buy) .pv {{ right:2.5rem; }}
 /* Our picks (site 1.3.15, Rob): a thin gold frame, the amber box's own bar
-   colour, and the pick's label in --warm sitting on the frame's top edge
-   at the right, the card's own colour behind it, the way a label sits on
-   a border. Out of the row's flow, so the row lays out exactly as it did
-   before: in the flow it widened the words and pushed a long name under
-   the picture, and inside the row's corner it ran over the longest name
-   at 1366. A picked row still turns cyan as it always has. */
-article .installer .bopt.rec {{ position:relative; border-color:#8a6d39; }}
-article .installer .bopt .rec {{ position:absolute; top:-0.45em; right:0.625rem;
-        padding:0 0.3em; background:#12121a;
-        font-size:0.625rem; line-height:0.9; text-transform:uppercase;
-        letter-spacing:0.04em; color:var(--warm); }}
+   colour. A picked tile still turns cyan as it always has. A preview's
+   frame is dashed, a second cue beside its label; a board with nothing
+   to install is quieter. */
+article .installer .bopt.rec {{ border-color:#8a6d39; }}
+article .installer .bopt.pre {{ border-style:dashed; }}
+article .installer .bopt.none .bt b {{ color:var(--dim); }}
 /* Windows' high contrast drops the gold, so the frame is heavier and the
    tag boxed: the words still say "our pick". */
 @media (forced-colors: active) {{
   article .installer .bopt.rec {{ border:2px solid CanvasText; }}
   article .installer .bopt .rec {{ border:1px solid CanvasText; padding:0 0.25em; }}
 }}
-/* Secure (site 1.3.3) after an S3 board's version, in the row's own small
-   type, so the row is no taller for it; the lock no taller than its
-   letters. */
-article .installer .bopt {{ flex-wrap:wrap; }}
-article .installer .bopt .bv .sep {{ color:var(--faint); }}
-article .installer .bopt a.secure {{ white-space:nowrap; }}
-article .installer .bopt a.secure svg.lockg {{ width:0.6em; height:0.76em;
+/* BUY (site 1.3.18) on the tile's top border at the right, outside the
+   label so pressing it never picks a board. */
+article .installer .brow > a.buy {{ position:absolute; top:-0.5rem; right:0.5rem;
+        z-index:1; }}
+/* The picked board, said once (site 1.5.6): its picture a size up, its
+   whole name, how to tell it, and Secure (SSH), the first thing in its
+   section, so the rules that show a section show it too. */
+article .installer .bsel {{ display:flex; gap:0.625rem; align-items:center; }}
+article .installer .bsel svg.art.board {{ flex:none; width:3rem; height:1.875rem; }}
+article .installer .bsel p {{ margin:0; font-size:0.75rem; line-height:1.3;
+        color:var(--dim); min-width:0; }}
+article .installer .bsel p b {{ display:block; color:var(--ink); font-size:0.8125rem; }}
+article .installer .bsel .sep {{ color:var(--faint); }}
+article .installer .bsel a.secure {{ white-space:nowrap; }}
+article .installer .bsel a.secure svg.lockg {{ width:0.6em; height:0.76em;
         margin:0 0.3em 0 0; vertical-align:-0.06em; overflow:visible; }}
-article .installer .bopt a.secure svg.lockg .lk {{ fill:none; stroke:currentColor;
+article .installer .bsel a.secure svg.lockg .lk {{ fill:none; stroke:currentColor;
         stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }}
-article .installer .bsec {{ display:flex; flex-direction:column; gap:0.5rem; }}
+article .installer .bsec {{ display:flex; flex-direction:column; gap:0.375rem; }}
 article .installer .bsec > * {{ margin:0; }}
 /* What a board needs done before either button: an instruction rather than
    a warning, so the calm box and not the amber one. */
@@ -3093,14 +3119,19 @@ article .install-top > .steps > p.aside:first-child {{ margin:0 0 1.25rem; }}
    amber box under the buttons, and the column is 26rem so a board's name
    and its version line each keep to one line beside the picture. Measured
    with two releases for the ESP32: its Update button ends at 665px, and
-   the S3's, under its download-mode note, at 719px. */
+   the S3's, under its download-mode note, at 719px.
+   Site 1.5.6 (tty-ux, nine boards): the card is 28rem, so two picker tiles
+   sit side by side, and its top padding 0.75rem. Measured over 127.0.0.1 at
+   1366 x 768 with the dev board picked, off a screenshot of the real
+   buttons: Update ends at 708px with the eight boards, and at 748px with a
+   ninth tile added. */
 @media (min-width: 901px) {{
-  article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 26rem;
+  article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 28rem;
         grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}
   article .install-top > .intro {{ grid-column:1; grid-row:1; }}
   article .install-top > .installer {{ grid-column:2; grid-row:1 / span 2; margin:0;
-        position:sticky; top:1rem; padding:1rem 1.25rem; }}
-  article .installer button.go {{ padding-top:0.5625rem; padding-bottom:0.5625rem; }}
+        position:sticky; top:1rem; padding:0.75rem 1.25rem 1rem; }}
+  article .installer button.go {{ padding-top:0.5rem; padding-bottom:0.5rem; }}
   article .install-top > .steps {{ grid-column:1; grid-row:2; }}
   article .install-top .steps svg.art.steps {{ margin:1rem 0 1.25rem; }}
 }}
