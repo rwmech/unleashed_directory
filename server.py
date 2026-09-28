@@ -514,16 +514,20 @@ HEADER_CSS = """<style>
    spaced subtitle of a 1980s science-fiction title: Orbitron, from
    static/fonts/ (upstream, unmodified, OFL 1.1), at its lightest weight, in
    capitals, slanted with a skew because Orbitron has no italic. Served from
-   this machine; the face is fetched only on a page with a tagline. */
+   this machine; the face is fetched only on a page with a tagline.
+   Since 2.0.7 (Rob): bold, in the blue at the foot of the wordmark's
+   gradient (LOGO_COLOURS[-1], #3f6cab, held to it by the suite), one
+   line on a desktop, wrapping at a word on a phone. */
 @font-face { font-family:"Tagline"; src:url("/font/Orbitron.ttf") format("truetype");
         font-weight:400 900; font-style:normal; font-display:swap; }
 .masthead .mcol { flex:none; }
-.masthead p.tagline { margin:0.125rem 0 0.625rem; color:var(--dim);
-        font:400 1rem/1.3 "Tagline",ui-monospace,Menlo,Consolas,monospace;
-        letter-spacing:0.14em; text-transform:uppercase;
+.masthead p.tagline { margin:0.125rem 0 0.625rem; color:#3f6cab;
+        font:700 1rem/1.3 "Tagline",ui-monospace,Menlo,Consolas,monospace;
+        letter-spacing:0.14em; text-transform:uppercase; white-space:nowrap;
         transform:skewX(-14deg); transform-origin:0 100%; }
 @media (max-width: 900px) {
-  .masthead p.tagline { font-size:0.8125rem; letter-spacing:0.1em; }
+  .masthead .mcol { flex:0 1 auto; min-width:0; max-width:100%; }
+  .masthead p.tagline { font-size:0.8125rem; letter-spacing:0.1em; white-space:normal; }
 }
 </style>"""
 

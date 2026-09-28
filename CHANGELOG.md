@@ -14,6 +14,14 @@
 
 # Changelog
 
+## 2.0.7, 2026-09-28
+
+- **The tagline reads "The next-generation BBS software"** (Rob), bold,
+  in the blue at the foot of the wordmark's gradient (#3f6cab, the
+  logo's own last colour, held to it by the suite). One line on a
+  desktop; on a phone it may wrap at a word. The header file's text
+  changed with it; the site matches (1.5.4).
+
 ## 2.0.6, 2026-09-28
 
 - **The suite holds the page and the JSON to one list.** A report had `/`

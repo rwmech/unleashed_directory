@@ -4013,7 +4013,7 @@ def main():
                             r'<a class="home" [^>]*><svg class="logo"', p)
                   and ticker_of(p) for p in faces.values()))
         check("and the header file's tagline under the wordmark and .NET (2.0.4)",
-              all('.NET</a></div><p class="tagline">The next-generation BBS</p></div>'
+              all('.NET</a></div><p class="tagline">The next-generation BBS software</p></div>'
                   '<div class="ticker">' in p for p in faces.values())
               and all(".masthead p.tagline {" in p for p in faces.values()))
         # 1.5.3 / 2.0.5 (Rob: "should be italic, think STTNG"): Orbitron,
@@ -4022,7 +4022,9 @@ def main():
         check("the tagline is set in Orbitron from this machine, slanted, spaced, "
               "a little larger",
               all('@font-face { font-family:"Tagline"; src:url("/font/Orbitron.ttf")' in p
-                  and 'font:400 1rem/1.3 "Tagline",' in p
+                  and 'font:700 1rem/1.3 "Tagline",' in p
+                  and "color:" + S.LOGO_COLOURS[-1] + ";" in p.split(".masthead p.tagline {")[1][:80]
+                  and "white-space:nowrap" in p
                   and "transform:skewX(-14deg)" in p and "text-transform:uppercase" in p
                   and "fonts.googleapis" not in p for p in faces.values())
               and tl_code == 200 and tl_type == "font/ttf" and len(tl_blob) > 30000)
