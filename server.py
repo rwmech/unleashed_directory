@@ -2426,7 +2426,11 @@ def update_for(r, latest):
     if (r["software"] or "").strip().lower() != "unleashed":
         return ""
     have, want = version_key(r["version"]), version_key(latest)
-    if have is None or want is None or have >= want:
+    # Only the three numbers decide (directory 2.0.9, Rob). A board on a
+    # pre-release of the newest X.Y.Z, or of a newer one, gets no arrow: a
+    # hardware preview announces "1.1.2-hw.2", which version_key ranks under
+    # 1.1.2, and the arrow would point it at a release with no image for it.
+    if have is None or want is None or have[:3] >= want[:3]:
         return ""
     return latest
 

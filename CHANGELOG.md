@@ -14,6 +14,26 @@
 
 # Changelog
 
+## 2.0.9, 2026-09-28
+
+- **No update arrow for a preview of the newest release.** A hardware
+  preview board announces `1.1.2-hw.2`, which sorts under 1.1.2, so the
+  listing offered it "1.1.2", a release with no image for that board. Now
+  only the three numbers decide: a pre-release of the newest X.Y.Z, or of a
+  newer one, gets no arrow, and one of an older X.Y.Z still does. The suite
+  holds `1.1.2-hw.2` against 1.1.2 (none) and `1.1.1-dev.0` against 1.1.2
+  (an arrow).
+- **The home banner's dot pings** (sitekit 1.2.1, the site's 1.5.7): two
+  rings of box-shadow go out from it and fade every two seconds, pure CSS,
+  with the still dot for a reader who asked for less motion. Neither the
+  dot nor the banner moves.
+- **The shared description says "from about $15"** (Rob's price for a
+  classic ESP32 dev board), not "$5".
+- **Shared rules for the site's 1.5.7**: /hardware's folded boards (a
+  Details button, the picks' gold frame), and the picker's preview tiles on
+  a class of their own, `prv`, so they stop wearing the Before you start
+  box's amber fill and gold bar.
+
 ## 2.0.8, 2026-09-28
 
 - **The hardware preview's boards are known image sets** (sitekit 1.2.0):

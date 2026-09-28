@@ -4179,12 +4179,22 @@ def main():
                   "or unparseable is not",
                   S.update_for(brow(version="1.0.0"), latest) == "1.0.1"
                   and S.update_for(brow(version="0.23.0"), latest) == "1.0.1"
-                  and S.update_for(brow(version="1.0.1-rc.1"), latest) == "1.0.1"
+                  and S.update_for(brow(version="1.0.0-rc.1"), latest) == "1.0.1"
                   and S.update_for(brow(version="1.0.1"), latest) == ""
                   and S.update_for(brow(version="1.0.2"), latest) == ""
                   and S.update_for(brow(version="1.0.10"), latest) == ""
                   and S.update_for(brow(version="garbage"), latest) == ""
                   and S.update_for(brow(version=""), latest) == "")
+            # Directory 2.0.9 (Rob): only the three numbers decide. A hardware
+            # preview announces 1.1.2-hw.2, and the newest release, 1.1.2, has
+            # no image for it: no arrow. A pre-release of an older X.Y.Z still
+            # gets one, and so does nothing newer.
+            check("a pre-release of the newest X.Y.Z, or of a newer one, has no arrow; "
+                  "one of an older X.Y.Z has",
+                  S.update_for(brow(version="1.1.2-hw.2"), "1.1.2") == ""
+                  and S.update_for(brow(version="1.1.1-dev.0"), "1.1.2") == "1.1.2"
+                  and S.update_for(brow(version="1.0.1-rc.1"), latest) == ""
+                  and S.update_for(brow(version="1.2.0-dev.1"), "1.1.2") == "")
             check("other software is never flagged, whatever its version",
                   S.update_for(brow(software="Mystic", version="0.0.1"), latest) == ""
                   and S.update_for(brow(software="unleashed-fork", version="0.0.1"),

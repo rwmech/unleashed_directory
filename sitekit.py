@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.2.0"
+SITEKIT_VERSION = "1.2.1"
 import struct
 
 import html
@@ -78,8 +78,8 @@ SITE_NAME     = "\u00b5nleashed BBS"
 # What a paste of the link says about itself, in a forum, a chat or a search
 # result. A directory spreads by somebody pasting it somewhere, and until
 # now that paste produced a bare link with no title card at all.
-SITE_DESC     = ("Community bulletin boards (BBSes) you can run on a $5 device "
-                 "and join with a free app. No ads, no tracking, no platform.")
+SITE_DESC     = ("Community bulletin boards (BBSes) you can run on a device "
+                 "from about $15 and join with a free app. No ads, no tracking, no platform.")
 
 # Who is allowed to tell us where a request came from.
 #
@@ -1538,6 +1538,19 @@ svg.logo {{ display:block; width:min(35rem, calc(100vw - 2.5rem)); height:auto;
         font-size:0.8125rem; line-height:1.45; }}
 .banner::before {{ content:""; flex:none; width:0.4375rem; height:0.4375rem;
         border-radius:50%; background:#ffd35c; }}
+/* Site 1.5.7 (Rob): the dot pings, two rings going out from it and fading,
+   every two seconds. Rings of box-shadow, so neither the dot nor the
+   banner moves or grows; a reader who asked for less motion keeps the
+   still dot. */
+@media (prefers-reduced-motion: no-preference) {{
+  .banner::before {{ animation:bping 2s ease-out infinite; }}
+}}
+@keyframes bping {{
+  0%   {{ box-shadow:0 0 0 0 rgba(255,211,92,0.7), 0 0 0 0 rgba(255,211,92,0); }}
+  30%  {{ box-shadow:0 0 0 0.25rem rgba(255,211,92,0.4), 0 0 0 0 rgba(255,211,92,0.7); }}
+  70%  {{ box-shadow:0 0 0 0.625rem rgba(255,211,92,0), 0 0 0 0.3125rem rgba(255,211,92,0.3); }}
+  100% {{ box-shadow:0 0 0 0.625rem rgba(255,211,92,0), 0 0 0 0.625rem rgba(255,211,92,0); }}
+}}
 .banner p {{ margin:0; min-width:0; }}
 .banner a {{ color:#ffd35c; }}
 .banner a:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
@@ -3056,7 +3069,7 @@ article .installer .brow:has(> a.buy) .pv {{ right:2.5rem; }}
    frame is dashed, a second cue beside its label; a board with nothing
    to install is quieter. */
 article .installer .bopt.rec {{ border-color:#8a6d39; }}
-article .installer .bopt.pre {{ border-style:dashed; }}
+article .installer .bopt.prv {{ border-style:dashed; }}
 article .installer .bopt.none .bt b {{ color:var(--dim); }}
 /* Windows' high contrast drops the gold, so the frame is heavier and the
    tag boxed: the words still say "our pick". */
@@ -3191,11 +3204,40 @@ article ol.guide p.else {{ margin:0.375rem 0 0; font-size:0.8125rem; line-height
    and the firmware on disk. The facts wrap under the picture on a phone. */
 article .hwb {{ display:flex; flex-wrap:wrap; align-items:flex-start;
         gap:0.875rem 1.5rem; margin:0.75rem 0 1.25rem; }}
-article .hwb dl {{ flex:1 1 18rem; min-width:0; margin:0; display:grid;
+article .hwb dl, article dl.hwf {{ flex:1 1 18rem; min-width:0; margin:0; display:grid;
         grid-template-columns:auto minmax(0, 1fr); gap:0.25rem 1rem; }}
-article .hwb dt, article .hwb dd {{ margin:0; line-height:1.5; }}
-article .hwb dt {{ color:var(--dim); }}
-article .hwb dd .exp {{ color:var(--dim); }}
+article .hwb dt, article .hwb dd, article dl.hwf dt, article dl.hwf dd {{ margin:0;
+        line-height:1.5; }}
+article .hwb dt, article dl.hwf dt {{ color:var(--dim); }}
+article .hwb dd .exp, article dl.hwf dd .exp {{ color:var(--dim); }}
+/* Site 1.5.7 (Rob: "it's a lot of reading"): beside the picture only its
+   badges, the build on offer and BUY; the facts and the prose fold into a
+   Details button under it, a native <details>. Our picks wear the thin
+   gold frame and label the installer's tiles wear. */
+article .hwb .hwq {{ flex:1 1 14rem; min-width:0; display:flex; flex-direction:column;
+        gap:0.5rem; padding-top:0.5rem; }}
+article .hwb .hwq p {{ margin:0; line-height:1.5; }}
+article .hwb .hwtags {{ display:flex; flex-wrap:wrap; gap:0.375rem; }}
+article .hwb .hwtags span {{ font-size:0.6875rem; line-height:1.4; text-transform:uppercase;
+        letter-spacing:0.04em; padding:0 0.375rem; border:1px solid #3a3a46;
+        border-radius:0.1875rem; color:var(--dim); white-space:nowrap; }}
+article .hwb .hwtags .rec, article .hwb .hwtags .tag {{ color:var(--warm);
+        border-color:#8a6d39; }}
+article .hwb.rec {{ border:1px solid #8a6d39; border-radius:0.5rem; padding:0.5rem 0.75rem 0.75rem; }}
+article details.hwd {{ margin:-0.25rem 0 1rem; }}
+article details.hwd > summary {{ display:inline-block; list-style:none; cursor:pointer;
+        color:var(--dial); font-size:0.875rem; padding:0.375rem 0.875rem;
+        border:1px solid var(--dial); border-radius:0.375rem; }}
+article details.hwd > summary::-webkit-details-marker {{ display:none; }}
+article details.hwd > summary::before {{ content:"+ "; }}
+article details.hwd[open] > summary::before {{ content:"− "; }}
+article details.hwd > summary:hover {{ background:#102630; }}
+article details.hwd > summary:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
+article details.hwd[open] > summary {{ margin-bottom:0.875rem; }}
+article details.hwd dl.hwf {{ margin:0 0 1rem; }}
+@media (forced-colors: active) {{
+  article .hwb.rec {{ border:2px solid CanvasText; }}
+}}
 /* The seal (site 1.2.5): a ribbon over the picture's top-left corner,
    sitting a little outside it so it reads as laid on, not drawn in. */
 article .hwb .hwpic {{ position:relative; flex:none; padding:0.5rem 0 0 0.5rem; }}
