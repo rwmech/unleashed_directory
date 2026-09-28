@@ -4,6 +4,7 @@
   "wordmark_label": "µnleashed BBS: the project's home",
   "suffix": ".NET",
   "suffix_url": "/",
+  "tagline": "The next-generation BBS",
   "panel": true,
   "nav": [
     {"label": "Communities online", "url": "/", "kind": "local"},

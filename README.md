@@ -88,7 +88,7 @@ Settings come from the environment, so a deployment never edits the code:
 | `DIRECTORY_URL` | `https://unleashedbbs.net` | this directory's own address, for canonical links and link previews when no domain is set |
 | `DIRECTORY_LIST_DOMAIN` | | the domain it answers as |
 | `DIRECTORY_HOME_URL` | | the project's own site: named in the footer, and where a path this server does not have is sent. Empty for a directory of your own |
-| `DIRECTORY_HEADER` | `/etc/unleashed-directory/header.json` | the header: wordmark, suffix and menu, as JSON. None gives a neutral header; see INSTALL.md |
+| `DIRECTORY_HEADER` | `/etc/unleashed-directory/header.json` | the header: wordmark, suffix, tagline and menu, as JSON. None gives a neutral header; see INSTALL.md |
 | `DIRECTORY_DOCS_DIR` | `docs/` | the guides: a checkout of `unleashed_documentation`, or its `pages/`, `shots/` and `skins/` |
 | `DIRECTORY_FIRMWARE_DIR` | `firmware/` | a folder of firmware releases, read-only, for the update arrow and the guides' gates |
 | `DIRECTORY_PENDING_HOURS` | `3` | continuous heartbeats before a listing is public |

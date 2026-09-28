@@ -3453,6 +3453,7 @@ def main():
                   '<div class="masthead"><a class="home dname" href="/">'
                   + html.escape(S.SITE_NAME) + "</a>" in page3
                   and 'class="sfx"' not in page3 and "<svg class=\"logo\"" not in page3
+                  and 'class="tagline"' not in page3
                   and "unleashedbbs.com" not in page3[page3.index('<div class="masthead">'):
                                                       page3.index("</nav>")]
                   and nav3.count("<a") == 6 and '<a class="here" href="/how">' in nav3)
@@ -3484,7 +3485,7 @@ def main():
             time.sleep(0.05)
             with open(hdr_path, "w", encoding="utf-8") as f:
                 json.dump({"wordmark": True, "suffix": "<b>.ORG</b>", "suffix_url": "/",
-                           "panel": False,
+                           "tagline": "Our <i>club</i>", "panel": False,
                            "nav": [{"label": "Boards", "url": "/", "kind": "local"},
                                    {"label": "Rules", "url": "/rules", "kind": "local"},
                                    {"label": "Elsewhere", "url": "https://example.org/",
@@ -3493,7 +3494,8 @@ def main():
             nav3 = re.search(r"<nav>.*?</nav>", body3).group(0)
             check("an operator's own file is read again when it changes, escaped, "
                   "and says the whole header: its menu, its suffix, no panel",
-                  '<a class="sfx" href="/">&lt;b&gt;.ORG&lt;/b&gt;</a>' in body3
+                  '<a class="sfx" href="/">&lt;b&gt;.ORG&lt;/b&gt;</a></div>'
+                  '<p class="tagline">Our &lt;i&gt;club&lt;/i&gt;</p></div>' in body3
                   and '<div class="ticker">' not in body3
                   and nav3 == ('<nav><a href="/">Boards</a><a class="here" href="/rules">'
                                'Rules</a><a href="https://example.org/">Elsewhere</a></nav>')
@@ -3510,6 +3512,7 @@ def main():
         check("the parser refuses what a header cannot be",
               all(_raises(S.header_parse, t) for t in (
                   "[]", '{"nav": {}}', '{"suffix": "' + "x" * 13 + '"}',
+                  '{"tagline": "' + "x" * 61 + '"}', '{"tagline": 1}',
                   '{"nav": [{"label": "A", "url": "https://x/", "kind": "local"}]}',
                   '{"nav": [{"label": "A", "url": "//evil/", "kind": "local"}]}',
                   '{"wordmark": "yes"}', '{"nav": [{"label": "", "url": "/"}]}')))
@@ -3989,9 +3992,13 @@ def main():
         resting = head_css[at:mv]
         moving = head_css[mv:head_css.index("\n}\n", mv)]
         check("every face carries the panel beside the wordmark",
-              all(re.search(r'<div class="masthead"><div class="brand"><a class="home" '
-                            r'[^>]*><svg class="logo"', p)
+              all(re.search(r'<div class="masthead"><div class="mcol"><div class="brand">'
+                            r'<a class="home" [^>]*><svg class="logo"', p)
                   and ticker_of(p) for p in faces.values()))
+        check("and the header file's tagline under the wordmark and .NET (2.0.4)",
+              all('.NET</a></div><p class="tagline">The next-generation BBS</p></div>'
+                  '<div class="ticker">' in p for p in faces.values())
+              and all(".masthead p.tagline {" in p for p in faces.values()))
         check("with all ten freedoms, each with the line saying what it means",
               len(wanted) == 10
               and all(all(f"<b>{l}</b> <i>{n}</i>" in ticker_of(p)

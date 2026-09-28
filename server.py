@@ -290,6 +290,8 @@ NAV_SECTION = {
 # top of every page is: the wordmark and where it goes, a short suffix set
 # after it as plain text (".NET" on unleashedbbs.net, so the directory reads
 # as part of unleashedbbs.com and the wordmark takes a reader back there),
+# a tagline under them (2.0.4, "The next-generation BBS" on
+# unleashedbbs.net, as on .com and .org; none in the neutral header),
 # whether the freedoms panel shows, and the menu, item by item. The
 # project's own file is deploy/header.unleashedbbs.json, which setup.sh
 # installs only for unleashedbbs.net.
@@ -308,6 +310,8 @@ NAV_SECTION = {
 #     "wordmark_label": "Example: home",     what a screen reader says
 #     "suffix": ".NET",                      12 characters at most, or ""
 #     "suffix_url": "/",
+#     "tagline": "The next-generation BBS",  a quiet line under the wordmark,
+#                                            60 characters at most, or ""
 #     "panel": true,                         the freedoms beside the wordmark
 #     "nav": [ {"label": "Communities online", "url": "/", "kind": "local"},
 #              {"label": "Example", "url": "https://example.com/",
@@ -322,7 +326,7 @@ NAV_SECTION = {
 HEADER_FILE   = os.environ.get("DIRECTORY_HEADER", "/etc/unleashed-directory/header.json")
 HEADER_MAX    = 16 * 1024          # a header file bigger than this is not one
 HEADER_KEYS   = ("wordmark", "wordmark_url", "wordmark_label", "suffix",
-                 "suffix_url", "panel", "nav")
+                 "suffix_url", "tagline", "panel", "nav")
 HEADER_ITEMS  = 12
 _header_lock  = threading.Lock()
 _header_seen  = {"key": None, "cfg": None}
@@ -337,7 +341,8 @@ def header_neutral():
             continue
         nav.append((label, site_url(target, "list", path), True))
     return {"wordmark": False, "wordmark_url": "/", "wordmark_label": "",
-            "suffix": "", "suffix_url": "/", "panel": True, "nav": tuple(nav)}
+            "suffix": "", "suffix_url": "/", "tagline": "", "panel": True,
+            "nav": tuple(nav)}
 
 
 def _header_url(value, local, what):
@@ -389,6 +394,8 @@ def header_parse(text):
     if "suffix_url" in raw:
         url = raw["suffix_url"]
         cfg["suffix_url"] = _header_url(url, str(url).startswith("/"), "suffix_url")
+    if "tagline" in raw:
+        cfg["tagline"] = _header_text(raw["tagline"], 60, "tagline")
     if "nav" in raw:
         items = raw["nav"]
         if not isinstance(items, list) or len(items) > HEADER_ITEMS:
@@ -500,13 +507,20 @@ HEADER_CSS = """<style>
   .masthead a.sfx { font-size:1rem; }
   .masthead a.home.dname { font-size:1.375rem; }
 }
+/* The tagline (2.0.4): one quiet line under the wordmark, the same rules as
+   the project's site, in its dim grey and small type. The wordmark, any
+   suffix and the line are one column, so the freedoms panel is untouched. */
+.masthead .mcol { flex:none; }
+.masthead p.tagline { margin:-0.125rem 0 0.5rem; color:var(--dim);
+        font-size:0.8125rem; line-height:1.3; letter-spacing:0.06em; }
+@media (max-width: 900px) { .masthead p.tagline { font-size:0.75rem; } }
 </style>"""
 
 
 def head_html(role, here=""):
     """The top of every page, from the header file or the neutral header:
-    the wordmark or the directory's name, the suffix after it, the freedoms
-    beside them, then the menu."""
+    the wordmark or the directory's name, the suffix after it, the tagline
+    under them, the freedoms beside them, then the menu."""
     cfg = header_cfg()
     href = html.escape(cfg["wordmark_url"], quote=True)
     if cfg["wordmark"]:
@@ -522,6 +536,9 @@ def head_html(role, here=""):
         mark = ('<div class="brand">' + mark + '<a class="sfx" href="'
                 + html.escape(cfg["suffix_url"], quote=True) + '">'
                 + html.escape(cfg["suffix"]) + "</a></div>")
+    if cfg["tagline"]:
+        mark = ('<div class="mcol">' + mark + '<p class="tagline">'
+                + html.escape(cfg["tagline"]) + "</p></div>")
     panel = ticker_html(nav_index(role, here, cfg["nav"])) if cfg["panel"] else ""
     return (HEADER_CSS + '<div class="masthead">' + mark + panel + "</div>"
             + nav_html(role, here, cfg["nav"]))

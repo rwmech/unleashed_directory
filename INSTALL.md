@@ -223,6 +223,7 @@ A file that uses every key:
   "wordmark_label": "Example BBS: our home page",
   "suffix": ".NET",
   "suffix_url": "/",
+  "tagline": "Our club's board list",
   "panel": true,
   "nav": [
     {"label": "Boards", "url": "/", "kind": "local"},
@@ -239,6 +240,7 @@ A file that uses every key:
 | `wordmark_label` | | what a screen reader says for the wordmark link, 80 characters at most |
 | `suffix` | none | up to 12 characters of plain text set after the wordmark, on its baseline, such as `.NET` |
 | `suffix_url` | `/` | where the suffix goes |
+| `tagline` | none | up to 60 characters of plain text, one small line under the wordmark |
 | `panel` | `true` | the freedoms panel beside the wordmark, on a wide screen |
 | `nav` | your pages | the menu, up to 12 items, in order |
 

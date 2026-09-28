@@ -14,6 +14,16 @@
 
 # Changelog
 
+## 2.0.4, 2026-09-28
+
+- **"The next-generation BBS" under the wordmark** (Rob: "Lets start
+  calling this the next generation BBS"), on unleashedbbs.net as on .com
+  and .org. The header file takes a `tagline`, 60 characters of plain
+  text at most, set small in the dim grey under the wordmark and its
+  suffix; the freedoms panel beside them does not move. The project's
+  file says "The next-generation BBS"; the neutral header has none, and
+  INSTALL.md lists the key for other operators. Escaped like the rest.
+
 ## 2.0.3, 2026-09-27
 
 - **The header comes from a file** (Rob: "a config file so someone (not
