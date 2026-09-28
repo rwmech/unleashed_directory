@@ -1992,6 +1992,23 @@ def closed_checks(S):
         check("a quiet board keeps what it last said, beside its state",
               listed.get("Quiet Shut", {}).get("closed") is True
               and listed.get("Quiet Shut", {}).get("state") == "offline")
+        # 2.0.6: the page and the JSON are one list (a report on 2026-09-28
+        # had / saying "No communities listed yet" beside a JSON of five).
+        # Every board the JSON carries is a row on / and on /directory, up
+        # or quiet, open or closed; a pending board is on neither; and the
+        # count under the heading is the JSON's count.
+        for where in ("/", "/directory"):
+            _c, shown = page(where)
+            names = [n for n, _k, _h in list_rows(shown)]
+            m = re.search(r"<span class='n'>([\d,]+)</span> communit", shown)
+            check(f"{where} lists exactly the boards /api/boards.json does, "
+                  "online and offline, and no pending one",
+                  len(listed) > 5 and sorted(names) == sorted(listed)
+                  and "New And Shut" not in names
+                  and {b["state"] for b in listed.values()} == {"online", "offline"}
+                  and "No boards listed yet" not in shown)
+            check(f"{where} counts the same boards the JSON lists",
+                  bool(m) and int(m.group(1).replace(",", "")) == len(listed))
 
         code, full = page("/directory")
         shut = badge_row(full, "Shut Shop")

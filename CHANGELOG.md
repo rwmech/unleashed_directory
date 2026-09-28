@@ -14,6 +14,18 @@
 
 # Changelog
 
+## 2.0.6, 2026-09-28
+
+- **The suite holds the page and the JSON to one list.** A report had `/`
+  saying "No communities listed yet" beside an `/api/boards.json` of five
+  boards. It did not reproduce: both read the same query (`state IN
+  ('online','offline')`, unchanged since 1.3.18), and the live page and a
+  copy seeded from the live JSON both list all five. The closed-boards
+  test now checks that `/` and `/directory` list exactly the boards the
+  JSON carries, up or quiet, open or closed, never a pending one, and that
+  the count under the heading is the JSON's. Proven by narrowing the
+  page's query to `online` alone: four checks fail. No server change.
+
 ## 2.0.5, 2026-09-28
 
 - **The tagline is a science-fiction subtitle now** (Rob: "should be
