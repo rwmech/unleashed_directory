@@ -3276,6 +3276,11 @@ article .guidetop {{ margin:0.5rem 0 1.5rem; }}
         column-gap:2.5rem; align-items:start; }}
 }}
 article .guidetop .gmain h2 {{ margin-top:0; }}
+/* Five steps on a 1366 x 768 first screen, under the directory's header:
+   a little less air between steps than /install, whose steps sit beside
+   the card and have room. */
+article .guidetop ol.guide {{ margin-top:0.5rem; }}
+article .guidetop ol.guide > li {{ padding-bottom:0.5rem; }}
 article .guidetop .gside svg.art {{ max-width:100%; height:auto; }}
 article .guidetop .gside p {{ font-size:0.875rem; color:var(--dim); }}
 article .lcards {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(14rem, 1fr));
