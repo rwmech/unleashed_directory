@@ -3215,8 +3215,9 @@ JOIN_STEP = ('<div class="joinstep" role="note"><h2>First time? You need a free 
              + '</p><p class="more">' + md_inline(
                  "Then type a board's address and port into the app, or click "
                  "the address if your app is set up for links. "
-                 "[Apps for joining](/docs/terminals) has more choices, and "
-                 "[First call](/docs/firstcall) what to expect when you connect.")
+                 "More choices are on [the apps for joining page](/docs/terminals), "
+                 "and what to expect when you connect on [the first call "
+                 "page](/docs/firstcall).")
              + "</p></div>")
 
 
@@ -3372,6 +3373,9 @@ been steady this past week. Cached for a few seconds.</dd>
 <dt><code>POST /announce</code></dt>
 <dd>How a board lists itself. One JSON object, about 200 bytes, repeated every few
 minutes. Plain HTTP on purpose: the boards are microcontrollers with no TLS stack.</dd>
+<dt><code>GET /feed.xml</code></dt>
+<dd>New boards as RSS, newest first: exactly what the public list carries, with no
+account and nothing here that knows who is reading.</dd>
 <dt><code>GET /health</code></dt>
 <dd>Answers <code>ok</code>, for uptime checks.</dd>
 </dl>
@@ -3436,9 +3440,9 @@ servers     = http://unleashedbbs.net/announce</pre>
 whatever it is. The rest is the plugin's section. On the board itself,
 <code>CONFIG board</code> and <code>CONFIG announce</code> are the same settings
 as forms.</p>
-<p>Any of this directory's names will take a heartbeat, but <code>.net</code> is the
-one meant for machines: <code>.com</code> is the list people read and
-<code>.org</code> is what the project is for.</p>
+<p>Send it to <code>unleashedbbs.net</code>, the directory's own address. The
+project's other names, <code>.com</code> for its site and <code>.org</code> for
+the manifesto, pass a heartbeat on here too.</p>
 <p>Switch it on and wait. A listing becomes public after three hours of
 uninterrupted heartbeats, which is what keeps drive-by spam off the page, and
 it disappears when the heartbeats stop. <code>ANNOUNCE</code> on your board

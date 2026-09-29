@@ -2242,8 +2242,8 @@ def skins_checks(S):
     check("it opens with the status: coming soon, the firmware in testing, the Makerfabs "
           "first, linked to its entry on /hardware",
           body.index('<p class="aside">') < body.index("<h2")
-          and "Skins are coming soon for display-enabled boards: the firmware with skins "
-              "is in testing." in flat_note
+          and "Skins are coming for ESP32-S3 boards with a screen: the roadmap says "
+              "when." in " ".join(re.sub(r"<[^>]+>", "", note).split())
           and 'href="https://unleashedbbs.com/hardware#makerfabs-esp32-s3-parallel-tft-3-5-v1-0"' in note
           and "480 by 320" in flat_note
           and not re.search(r"firmware \d", note))
@@ -2263,8 +2263,7 @@ def skins_checks(S):
     check("and the two zips as links, still marked coming soon for display boards",
           '<a href="/skins/skins.zip">Download the stock skins for the card</a>' in stock
           and '<a href="/skins/skins-upload.zip">Download them as pairs to send</a>' in stock
-          and "<b>Coming soon for display-enabled boards: the firmware with skins is in "
-              "testing.</b>" in " ".join(stock.split())
+          and "Skins are coming, on the roadmap." in " ".join(re.sub(r"<[^>]+>", "", stock).split())
           and all(os.path.isfile(os.path.join(DOCS_DIR, "skins", z))
                   for z in ("skins.zip", "skins-upload.zip"))
           and "ZIP-URL" not in sk and "STOCK-SKINS-ZIP" not in sk
@@ -3952,7 +3951,7 @@ def main():
                   in js_
               and 'href="https://apps.apple.com/us/app/muffinterm/id1583236494"' in js_
               and 'href="https://sourceforge.net/projects/syncterm/"' in js_
-              and 'href="/docs/terminals">Apps for joining</a>' in js_
+              and 'href="/docs/terminals">the apps for joining page</a>' in js_
               and 'class="gl"' in js_)
         # Site 1.3.1 (Rob's own app on Android): Termius, beside TERMinator,
         # on the join step and on /terminals.
@@ -4308,9 +4307,10 @@ def main():
                 flat_set5 = " ".join(set5.split())
                 check("with 1.1.0 on disk, /forward gives each board its own Port and "
                       "explains Outside, and the account for older firmware is gone",
-                      "From firmware 1.1.0 that is a setting" in fwd5
-                      and "<b>Port</b> (<code>port</code>)" in fwd5
-                      and "<b>Outside</b>: The port callers dial from the internet" in fwd5
+                      "1.1.0 that is <b>Port</b> on" in " ".join(fwd5.split())
+                      and 'href="/docs/setup#network"' in fwd5
+                      and "which is <b>Outside</b> on" in " ".join(fwd5.split())
+                      and 'href="/docs/setup#announce"' in fwd5
                       and "Every board listens on 6400" not in fwd5
                       and "::: until" not in fwd5 and "::: from" not in fwd5)
                 check("and /setup has the network page with its Port, and Outside on "

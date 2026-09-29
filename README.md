@@ -13,7 +13,7 @@
  ===========================================================================
 -->
 
-# unleashed BBS directory
+# µnleashed BBS directory
 
 A list of BBS boards that are up right now. Boards announce themselves with a small heartbeat every few minutes; this keeps the list and serves it as a web page and as JSON.
 

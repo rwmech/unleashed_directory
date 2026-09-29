@@ -14,6 +14,19 @@
 
 # Changelog
 
+## 2.0.11, 2026-09-29
+
+- **The consolidation pass** (with the site's 1.5.15 and the guides): /how
+  says where to send a heartbeat as the split left things (.net is the
+  directory's own address, .com and .org pass it on); /data lists
+  `/feed.xml` beside the JSON; the join box under the search no longer
+  uses a page's title as a sentence's subject ("More choices are on the
+  apps for joining page"). The suite's checks on the guides follow their
+  new words: skins "coming, on the roadmap", still with no version on the
+  page; /forward pointing at the network and announce pages of /setup for
+  **Port** and **Outside** rather than repeating them. README's title
+  carries its micro sign.
+
 ## 2.0.10, 2026-09-29
 
 - **Shared rules for the site's 1.5.10** (sitekit 1.2.2): the line under a
