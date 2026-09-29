@@ -14,6 +14,19 @@
 
 # Changelog
 
+## 2.0.12, 2026-09-29
+
+- **The guides' setup hub** (sitekit 1.3.0, tty-ux's sysop guide spec):
+  the shared engine gains `::: guide`, /install's numbered steps, with an
+  optional `#id` a step so an old anchor lands on it; link cards, `::: cards`
+  with one `title | url | description | tag | #id` line a card (told apart
+  from /kids' prose cards by their shape); the `::: guidetop` wrap that puts
+  the steps beside a drawing; and the `::: gopublic` banner. /docs/setup is
+  the hub, and its sections moved whole to /docs/first-login, config,
+  backups, chat, forums, info, announce and ssh.
+- **The glossary's "board"** is "one BBS", since the directory lists other
+  software too.
+
 ## 2.0.11, 2026-09-29
 
 - **The consolidation pass** (with the site's 1.5.15 and the guides): /how

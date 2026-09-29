@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.2.2"
+SITEKIT_VERSION = "1.3.0"
 import struct
 
 import html
@@ -484,8 +484,8 @@ GLOSSARY = {
     "BBS": "A bulletin board system: a small online community on one "
            "computer, which people connect to from theirs to chat, leave "
            "messages and share files.",
-    "board": "Short for bulletin board, a BBS. On this site, one µnleashed "
-             "device and the community that meets on it.",
+    "board": "Short for bulletin board, a BBS. On this site, one BBS and "
+             "the community that meets on it.",
     "sysop": "The system operator: the host who runs a board, sets its "
              "rules and looks after it.",
     "caller": "Someone connected to a board: a visitor or a member. The word "
@@ -666,7 +666,115 @@ def md_block(kind, lines):
     fn = BLOCKS.get(kind)
     if fn is not None:
         return fn(lines)
+    if kind == "cards" and _link_card_lines(lines):
+        return link_cards_html(lines)
     return md_cards(kind, lines)
+
+
+# --------------------------------------------------------------------------
+# The numbered path (/install's since site 1.3.15; shared since sitekit 1.3.0
+# for the guides' setup hub). One step a line:
+#
+#     ::: guide
+#     Flash it | One short line, in the page's own Markdown.
+#     Call it | Another line. | #first-become-the-sysop
+#     :::
+#
+# An optional third field "#id" puts that id on the step, so an old anchor
+# lands on it. The look is article ol.guide's, already in PAGE. The site's
+# own guide_html builds /install's (with its picks) on these two functions,
+# byte for byte what it drew before.
+# --------------------------------------------------------------------------
+def guide_steps(lines):
+    """The steps of a ::: guide block, as (title, text, id)."""
+    steps = []
+    for raw in lines:
+        if "|" not in raw:
+            continue
+        parts = raw.split("|")
+        sid = ""
+        if len(parts) >= 3 and re.fullmatch(r"#[a-z0-9-]+", parts[-1].strip()):
+            sid, parts = parts[-1].strip()[1:], parts[:-1]
+        title, text = parts[0].strip(), "|".join(parts[1:]).strip()
+        if title:
+            steps.append((title, text, sid))
+    return steps
+
+
+def guide_list_html(steps, body=None, extra=None):
+    """The numbered list: body(text) makes a step's line (md_inline unless
+    given), and extra(k) anything drawn under step k's line."""
+    if not steps:
+        return ""
+    body = body or md_inline
+    out = ['<ol class="guide">']
+    for k, (title, text, sid) in enumerate(steps, 1):
+        idattr = f' id="{sid}"' if sid else ""
+        out.append(f'<li{idattr}><span class="n" aria-hidden="true">{k}</span><div class="gs">'
+                   f'<p class="t">{md_inline(title)}</p><p class="d">{body(text)}</p>')
+        if extra:
+            out.append(extra(k))
+        out.append("</div></li>")
+    out.append("</ol>")
+    return "".join(out)
+
+
+BLOCKS["guide"] = lambda lines: guide_list_html(guide_steps(lines))
+
+
+# --------------------------------------------------------------------------
+# Link cards (sitekit 1.3.0, the guides' setup hub): a grid of small boxes,
+# each a link to a page with one line about it.
+#
+#     ::: cards
+#     Chat and mail | /docs/chat | The room, private messages, limits. | | #chat
+#     Forums | /docs/forums | Topics, and who may post. | Needs a card | #forums
+#     :::
+#
+# One card a line: title | url | description | tag | #id, the last two
+# optional. The same "::: cards" name as /kids' prose cards, told apart by
+# their shape: those start each card with "## ", these are one line each
+# with a url in the second field.
+# --------------------------------------------------------------------------
+def _link_card_lines(lines):
+    rows = [ln for ln in lines if ln.strip()]
+    return bool(rows) and all(
+        not ln.startswith("## ") and ln.count("|") >= 2
+        and ln.split("|")[1].strip().startswith(("/", "https://", "#")) for ln in rows)
+
+
+def link_cards_html(lines):
+    out = ['<div class="lcards">']
+    for ln in (l for l in lines if l.strip()):
+        f = [p.strip() for p in ln.split("|")] + ["", ""]
+        title, url, desc, tag, sid = f[0], f[1], f[2], f[3], f[4]
+        idattr = (f' id="{sid[1:]}"' if re.fullmatch(r"#[a-z0-9-]+", sid) else "")
+        out.append(f'<a class="card"{idattr} href="{html.escape(url, quote=True)}">'
+                   f'<span class="ct">{md_inline(title)}</span>'
+                   f'<span class="cd">{md_inline(desc)}</span>'
+                   + (f'<span class="cg">{md_inline(tag)}</span>' if tag else "")
+                   + "</a>")
+    out.append("</div>")
+    return "".join(out)
+
+
+def guidetop_html(lines):
+    """The ::: guidetop wrap (sitekit 1.3.0): the steps on the left and,
+    from its first "::: art" line on, a drawing and a note on the right;
+    one column under 901px, steps first."""
+    split = next((i for i, ln in enumerate(lines) if ln.strip().startswith("::: art")),
+                 len(lines))
+    return ('<div class="guidetop"><div class="gmain">' + md_render("\n".join(lines[:split]))
+            + '</div><div class="gside">' + md_render("\n".join(lines[split:]))
+            + "</div></div>")
+
+
+WRAPS["guidetop"] = guidetop_html
+
+# A decision with a precondition, set apart from the cards (the hub's Going
+# public): a warm left border, the lines inside in the page's Markdown.
+BLOCKS["gopublic"] = lambda lines: ('<div class="gopublic">'
+                                    + md_render("\n".join(lines)) + "</div>")
 
 
 # --------------------------------------------------------------------------
@@ -3157,6 +3265,31 @@ article .install-top > .steps > p.aside:first-child {{ margin:0 0 1.25rem; }}
    a phone it comes before the card, where the markup puts it. The first
    step carries our picks, each board's name a label for its radio in the
    card (--dial, dotted, filled like its row when that board is picked). */
+/* The guides' setup hub (sitekit 1.3.0, tty-ux's sysop guide spec of
+   2026-09-29): the five steps beside the setup drawing on a desktop, one
+   column on a phone; link cards, four across at 1366, three from 901, one
+   on a phone, bordered in the line ol.guide draws between its steps; and
+   the Going public banner in the S3 note's hand. */
+article .guidetop {{ margin:0.5rem 0 1.5rem; }}
+@media (min-width: 901px) {{
+  article .guidetop {{ display:grid; grid-template-columns:minmax(0, 38rem) minmax(0, 1fr);
+        column-gap:2.5rem; align-items:start; }}
+}}
+article .guidetop .gmain h2 {{ margin-top:0; }}
+article .guidetop .gside svg.art {{ max-width:100%; height:auto; }}
+article .guidetop .gside p {{ font-size:0.875rem; color:var(--dim); }}
+article .lcards {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(14rem, 1fr));
+        gap:0.75rem; margin:0.5rem 0 1.25rem; }}
+article .lcards a.card {{ display:block; border:1px solid #2c3a44; border-radius:0.375rem;
+        padding:0.75rem 0.875rem; text-decoration:none; color:var(--ink); }}
+article .lcards a.card:hover, article .lcards a.card:focus-visible {{ border-color:var(--struct); }}
+article .lcards .ct {{ display:block; color:var(--struct); font-size:0.9375rem; line-height:1.5; }}
+article .lcards .cd {{ display:block; font-size:0.8125rem; line-height:1.5; color:var(--dim); }}
+article .lcards .cg {{ display:block; margin-top:0.25rem; font-size:0.6875rem;
+        letter-spacing:0.08em; text-transform:uppercase; color:var(--warm); }}
+article .gopublic {{ max-width:48rem; margin:1rem 0 1.25rem; padding:0.5rem 0 0.5rem 0.875rem;
+        border-left:3px solid var(--warm); }}
+article .gopublic p {{ margin:0; }}
 article ol.guide {{ list-style:none; margin:1.25rem 0 0.5rem; padding:0; }}
 article ol.guide > li {{ position:relative; display:grid;
         grid-template-columns:1.75rem minmax(0, 1fr); column-gap:0.75rem;
