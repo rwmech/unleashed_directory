@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.2.1"
+SITEKIT_VERSION = "1.2.2"
 import struct
 
 import html
@@ -3090,6 +3090,8 @@ article .installer .bsel p {{ margin:0; font-size:0.75rem; line-height:1.3;
         color:var(--dim); min-width:0; }}
 article .installer .bsel p b {{ display:block; color:var(--ink); font-size:0.8125rem; }}
 article .installer .bsel .sep {{ color:var(--faint); }}
+/* A maker's own shop, and who it suits (site 1.5.10): its own line. */
+article .installer .bsel .shop {{ display:block; }}
 article .installer .bsel a.secure {{ white-space:nowrap; }}
 article .installer .bsel a.secure svg.lockg {{ width:0.6em; height:0.76em;
         margin:0 0.3em 0 0; vertical-align:-0.06em; overflow:visible; }}
@@ -3217,6 +3219,7 @@ article .hwb dd .exp, article dl.hwf dd .exp {{ color:var(--dim); }}
 article .hwb .hwq {{ flex:1 1 14rem; min-width:0; display:flex; flex-direction:column;
         gap:0.5rem; padding-top:0.5rem; }}
 article .hwb .hwq p {{ margin:0; line-height:1.5; }}
+article .hwb .hwq p.hwshop {{ font-size:0.875rem; color:var(--dim); }}
 article .hwb .hwtags {{ display:flex; flex-wrap:wrap; gap:0.375rem; }}
 article .hwb .hwtags span {{ font-size:0.6875rem; line-height:1.4; text-transform:uppercase;
         letter-spacing:0.04em; padding:0 0.375rem; border:1px solid #3a3a46;

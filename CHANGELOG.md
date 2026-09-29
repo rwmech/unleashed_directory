@@ -14,6 +14,12 @@
 
 # Changelog
 
+## 2.0.10, 2026-09-29
+
+- **Shared rules for the site's 1.5.10** (sitekit 1.2.2): the line under a
+  board on /hardware and on the picked board's line on /install that says
+  who a maker's own shop suits. Nothing the directory draws uses them.
+
 ## 2.0.9, 2026-09-28
 
 - **No update arrow for a preview of the newest release.** A hardware
