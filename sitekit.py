@@ -811,7 +811,7 @@ def link_cards_html(lines):
         ic = card_icon(icon)
         out.append(f'<a class="card{" hasi" if ic else ""}"{idattr} '
                    f'href="{html.escape(url, quote=True)}">' + ic
-                   + '<span class="cb">'
+                   + '<span class="cbody">'
                    f'<span class="ct">{md_inline(title)}</span>'
                    f'<span class="cd">{md_inline(desc)}</span>'
                    + (f'<span class="cg">{md_inline(tag)}</span>' if tag else "")
@@ -3365,8 +3365,9 @@ article .gopublic p {{ margin:0; }}
 article svg.ci {{ flex:none; width:1.75rem; height:1.75rem; margin-top:0.125rem; fill:none;
         stroke:var(--dial); stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }}
 article .gopublic svg.ci {{ stroke:var(--warm); }}
-article .lcards a.card.hasi {{ display:flex; gap:0.625rem; align-items:flex-start; }}
-article .lcards a.card .cb {{ display:block; min-width:0; }}
+article .lcards a.card.hasi {{ display:grid; grid-template-columns:1.75rem minmax(0, 1fr);
+        column-gap:0.625rem; align-items:start; }}
+article .lcards a.card .cbody {{ display:block; min-width:0; }}
 article ol.guide {{ list-style:none; margin:1.25rem 0 0.5rem; padding:0; }}
 article ol.guide > li {{ position:relative; display:grid;
         grid-template-columns:1.75rem minmax(0, 1fr); column-gap:0.75rem;
