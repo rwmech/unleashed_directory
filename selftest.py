@@ -2862,10 +2862,10 @@ def main():
               "will not start with a card" not in get("/setup")[1]
               and "does not stop the board booting" in " ".join(get("/sdcard")[1].split()))
         # NEW-1: /how links the rules it was said to cover.
-        check("/how links the house rules, as /setup says it does",
+        check("/how links the house rules, as /docs/announce says it does",
               'href="/rules"' in get("/how")[1]
               and "[the house\nrules](/rules)" in
-                  open(os.path.join(DOCS_DIR, "pages", "setup.md"), encoding="utf-8").read())
+                  open(os.path.join(DOCS_DIR, "pages", "announce.md"), encoding="utf-8").read())
 
 
         print("Busy hours")
@@ -3189,20 +3189,34 @@ def main():
         # and nothing that looks like a firmware image ever goes near the
         # repository.
         print("The setup guide")
-        code, setup = get("/setup")
+        # Since 2.0.12 (tty-ux's sysop guide spec) /docs/setup is the hub and
+        # its sections live on pages of their own; "setup" here is all of
+        # them together, and "hub" the hub alone.
+        code, hub = get("/setup")
+        guide_pages = ("first-login", "config", "backups", "chat", "forums", "info",
+                       "announce", "sdcard", "ssh")
+        setup = hub + "".join(get("/docs/" + p)[1] for p in guide_pages)
         flat_s = " ".join(setup.split())
         check("there is a setup page, under Build one",
-              code == 200 and '<a class="here" href="/docs">Guides</a>' in setup)
+              code == 200 and '<a class="here" href="/docs">Guides</a>' in hub)
+        check("the hub: five steps, eleven cards, Going public, and each guide page there",
+              hub.count('<span class="n" aria-hidden="true">') == 5
+              and hub.count('<a class="card"') == 11
+              and '<div class="guidetop">' in hub and '<div class="gopublic">' in hub
+              and all(get("/docs/" + p)[0] == 200 for p in guide_pages))
         check("with every core CONFIG page",
               all(has_h(setup, 2, p)
                   for p in ("board", "limits", "accounts", "backup", "staff", "wifi")))
         check("and every plugin page",
-              all(has_h(setup, 3, p)
-                  for p in ("chat", "files", "forums", "info", "announce", "sd"))
+              all(has_h(setup, 3, p) for p in ("files", "sd"))
+              and all(has_h(setup, 1, t) for t in ("Chat and mail", "Forums",
+                                                   "Information pages",
+                                                   "The directory listing"))
               and has_h(setup, 3, "serial and example"))
         check("it starts with becoming the sysop, and points at the password step",
               has_h(setup, 2, "First, become the sysop")
-              and "<code>unleashed</code>" in setup and 'href="https://unleashedbbs.com/install"' in setup)
+              and '<li id="first-become-the-sysop">' in hub
+              and "<code>unleashed</code>" in hub and 'href="https://unleashedbbs.com/install"' in hub)
         # The screens are the board's own, drawn as the site's art: a grid of
         # text pinned to its columns, not a picture.
         shots = re.findall(r'<svg class="art shot"[^>]*role="img"[^>]*aria-label="[^"]+"', setup)
@@ -3230,12 +3244,10 @@ def main():
         check("and says the listing waits for the password to change",
               "the board will not list itself while the default password is still set"
               in flat_s)
-        body_s = setup.split("</nav>")[1]
-        check("/setup: Visit the web installer, and Build from source beside it",
-              body_s.count('class="btn"') == 1 and body_s.count('class="btn2"') == 1
-              and '<div class="cta"><p class="acts"><a class="btn" '
-                  'href="https://unleashedbbs.com/install">Visit the web installer</a>' in body_s
-              and '<a class="btn2" href="https://unleashedbbs.com/build'
+        body_s = hub.split("</nav>")[1]
+        check("/setup: the web installer in step 1, and Build from source beside the drawing",
+              'href="https://unleashedbbs.com/install">the web installer</a>' in body_s
+              and '<a href="https://unleashedbbs.com/build'
                   '#for-developers-build-from-source">Build from source</a>' in body_s)
         check("/setup: and no button there says Install",
               not re.search(r'class="btn2?"[^>]*>[^<]*Install', body_s))
@@ -3259,11 +3271,11 @@ def main():
               and '<h1 id="top">Top!</h1>' in ids)
         check("and unique on the page, a second of the same name numbered",
               '<h2 id="wi-fi-2">Wi-Fi</h2>' in ids)
-        page_ids = re.findall(r'<h[1-3] id="([^"]+)"', get("/docs/setup")[1])
+        page_ids = re.findall(r'<h[1-3] id="([^"]+)"', get("/docs/config")[1])
         check("including across the pieces a page is rendered in"
               + ("" if len(page_ids) == len(set(page_ids)) else "  <- duplicate ids"),
               (not HAVE_DOCS) or (len(page_ids) > 10 and len(page_ids) == len(set(page_ids))
-                                  and "first-become-the-sysop" in page_ids
+                                  and "how-config-works" in page_ids
                                   and "board" in page_ids))
 
 
@@ -4303,14 +4315,15 @@ def main():
                       "1.0.0 → 1.1.0." in badge_row(fetch("/directory", base2)[2].decode("utf-8"),
                                                          "Behind Board"))
                 fwd5 = " ".join(fetch("/docs/forward", base2)[2].decode("utf-8").split())
-                set5 = fetch("/docs/setup", base2)[2].decode("utf-8")
+                set5 = (fetch("/docs/config", base2)[2].decode("utf-8")
+                        + fetch("/docs/announce", base2)[2].decode("utf-8"))
                 flat_set5 = " ".join(set5.split())
                 check("with 1.1.0 on disk, /forward gives each board its own Port and "
                       "explains Outside, and the account for older firmware is gone",
                       "1.1.0 that is <b>Port</b> on" in " ".join(fwd5.split())
-                      and 'href="/docs/setup#network"' in fwd5
+                      and 'href="/docs/config#network"' in fwd5
                       and "which is <b>Outside</b> on" in " ".join(fwd5.split())
-                      and 'href="/docs/setup#announce"' in fwd5
+                      and 'href="/docs/announce"' in fwd5
                       and "Every board listens on 6400" not in fwd5
                       and "::: until" not in fwd5 and "::: from" not in fwd5)
                 check("and /setup has the network page with its Port, and Outside on "
