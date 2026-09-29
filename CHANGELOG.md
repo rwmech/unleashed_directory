@@ -14,6 +14,15 @@
 
 # Changelog
 
+## 2.0.13, 2026-09-29
+
+- **Icons on the setup hub's cards** (sitekit 1.3.1, Rob: "icons, icons
+  everywhere"): a sixth field on a `::: cards` line names one of
+  CARD_ICONS, line art in the site's hand, beside the title so a card is no
+  taller; the Going public banner carries a globe.
+- **The cards' tags are one form** (Rob): SD card required, Camera
+  required, S3 board required, Firmware 1.2.0+.
+
 ## 2.0.12, 2026-09-29
 
 - **The guides' setup hub** (sitekit 1.3.0, tty-ux's sysop guide spec):

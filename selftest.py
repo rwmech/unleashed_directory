@@ -3201,7 +3201,7 @@ def main():
               code == 200 and '<a class="here" href="/docs">Guides</a>' in hub)
         check("the hub: five steps, eleven cards, Going public, and each guide page there",
               hub.count('<span class="n" aria-hidden="true">') == 5
-              and hub.count('<a class="card"') == 11
+              and hub.count('<a class="card hasi"') == 11 and hub.count('<svg class="ci"') == 12
               and '<div class="guidetop">' in hub and '<div class="gopublic">' in hub
               and all(get("/docs/" + p)[0] == 200 for p in guide_pages))
         check("with every core CONFIG page",

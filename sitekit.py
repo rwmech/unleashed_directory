@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.3.0"
+SITEKIT_VERSION = "1.3.1"
 import struct
 
 import html
@@ -728,11 +728,11 @@ BLOCKS["guide"] = lambda lines: guide_list_html(guide_steps(lines))
 #
 #     ::: cards
 #     Chat and mail | /docs/chat | The room, private messages, limits. | | #chat
-#     Forums | /docs/forums | Topics, and who may post. | Needs a card | #forums
+#     Forums | /docs/forums | Topics, and who may post. | SD card required | #forums | forums
 #     :::
 #
-# One card a line: title | url | description | tag | #id, the last two
-# optional. The same "::: cards" name as /kids' prose cards, told apart by
+# One card a line: title | url | description | tag | #id | icon, the last three
+# optional (icon since sitekit 1.3.1, a name in CARD_ICONS). The same "::: cards" name as /kids' prose cards, told apart by
 # their shape: those start each card with "## ", these are one line each
 # with a url in the second field.
 # --------------------------------------------------------------------------
@@ -743,17 +743,79 @@ def _link_card_lines(lines):
         and ln.split("|")[1].strip().startswith(("/", "https://", "#")) for ln in rows)
 
 
+# A card's icon (sitekit 1.3.1, Rob: "icons, icons everywhere"): the sixth
+# field names one of these. Line art on a 32-unit square in the hand of the
+# site's other small drawings (the install buttons', the sats'): --dial
+# strokes at 1.4, round ends, no fill, so it reads at 24 to 28 px. Beside
+# the title, not above it, so a card is no taller for having one.
+CARD_ICONS = {
+    # A speech bubble, and an envelope in front of it.
+    "chat": ('<path d="M4 5 H20 V15 H11 L7 19 V15 H4 Z"/>'
+             '<path d="M15 18 H29 V28 H15 Z M15 18 L22 24 L29 18"/>'),
+    # Three messages stacked, each answering the one above.
+    "forums": ('<path d="M5 5 H25 V11 H5 Z M9 14 H27 V20 H9 Z M13 23 H27 V29 H13 Z"/>'
+               '<path d="M7 11 V17 H9 M11 20 V26 H13"/>'),
+    # A micro SD card, its contacts along the top.
+    "sdcard": ('<path d="M9 4 H20 L25 9 V28 H9 Z"/>'
+               '<path d="M12.5 5.5 V9.5 M15.5 5.5 V9.5 M18.5 5.5 V9.5"/>'),
+    # An information sign.
+    "info": ('<circle cx="16" cy="16" r="12"/><path d="M16 14.5 V23"/>'
+             '<circle cx="16" cy="10" r="0.9"/>'),
+    # A camera.
+    "camera": ('<path d="M4 10 H11 L13 7 H19 L21 10 H28 V25 H4 Z"/>'
+               '<circle cx="16" cy="17.5" r="5"/>'),
+    # A satellite: a body, two panels and an antenna.
+    "sat": ('<path d="M13 13 H19 V20 H13 Z"/>'
+            '<path d="M3 12.5 H10 V20.5 H3 Z M22 12.5 H29 V20.5 H22 Z"/>'
+            '<path d="M10 16.5 H13 M19 16.5 H22 M16 13 V8 M13 5.5 Q16 3 19 5.5"/>'),
+    # A strip of lamps, one lit.
+    "lights": ('<path d="M3 20 H29"/><circle cx="7" cy="20" r="2.6"/>'
+               '<circle cx="13" cy="20" r="2.6"/><circle cx="19" cy="20" r="2.6"/>'
+               '<circle cx="25" cy="20" r="2.6"/>'
+               '<path d="M19 11 V14 M14.5 12.5 L16.5 14.5 M23.5 12.5 L21.5 14.5"/>'),
+    # A small screen on its stand.
+    "screen": ('<path d="M4 6 H28 V22 H4 Z M16 22 V27 M11 27 H21"/>'
+               '<path d="M8 11 H16 M8 15 H21"/>'),
+    # A box, and an arrow going into it.
+    "backup": ('<path d="M5 15 H27 V28 H5 Z M5 15 L8 11 H13 M19 11 H24 L27 15"/>'
+               '<path d="M16 3 V19 M12 15 L16 19 L20 15"/>'),
+    # A list, and a pin beside it.
+    "listing": ('<path d="M4 7 H17 M4 13 H17 M4 19 H14 M4 25 H14"/>'
+                '<path d="M24 28 C20.5 23 19.5 21 19.5 18 A4.5 4.5 0 0 1 28.5 18 '
+                'C28.5 21 27.5 23 24 28 Z"/><circle cx="24" cy="18" r="1.5"/>'),
+    # A padlock.
+    "lock": ('<path d="M9 15 H23 V28 H9 Z M12 15 V11 A4 4 0 0 1 20 11 V15"/>'
+             '<path d="M16 20 V23"/>'),
+    # The world, for going public.
+    "globe": ('<circle cx="16" cy="16" r="12"/><path d="M4 16 H28"/>'
+              '<path d="M16 4 C10.5 9 10.5 23 16 28 C21.5 23 21.5 9 16 4"/>'),
+}
+
+
+def card_icon(name):
+    """One of CARD_ICONS as a small inline drawing, hidden from a screen
+    reader (the title beside it says the same), or "" for a name it lacks."""
+    art = CARD_ICONS.get(name)
+    if not art:
+        return ""
+    return ('<svg class="ci" viewBox="0 0 32 32" aria-hidden="true" '
+            f'focusable="false">{art}</svg>')
+
+
 def link_cards_html(lines):
     out = ['<div class="lcards">']
     for ln in (l for l in lines if l.strip()):
-        f = [p.strip() for p in ln.split("|")] + ["", ""]
-        title, url, desc, tag, sid = f[0], f[1], f[2], f[3], f[4]
+        f = [p.strip() for p in ln.split("|")] + ["", "", ""]
+        title, url, desc, tag, sid, icon = f[0], f[1], f[2], f[3], f[4], f[5]
         idattr = (f' id="{sid[1:]}"' if re.fullmatch(r"#[a-z0-9-]+", sid) else "")
-        out.append(f'<a class="card"{idattr} href="{html.escape(url, quote=True)}">'
+        ic = card_icon(icon)
+        out.append(f'<a class="card{" hasi" if ic else ""}"{idattr} '
+                   f'href="{html.escape(url, quote=True)}">' + ic
+                   + '<span class="cb">'
                    f'<span class="ct">{md_inline(title)}</span>'
                    f'<span class="cd">{md_inline(desc)}</span>'
                    + (f'<span class="cg">{md_inline(tag)}</span>' if tag else "")
-                   + "</a>")
+                   + "</span></a>")
     out.append("</div>")
     return "".join(out)
 
@@ -773,8 +835,9 @@ WRAPS["guidetop"] = guidetop_html
 
 # A decision with a precondition, set apart from the cards (the hub's Going
 # public): a warm left border, the lines inside in the page's Markdown.
-BLOCKS["gopublic"] = lambda lines: ('<div class="gopublic">'
-                                    + md_render("\n".join(lines)) + "</div>")
+BLOCKS["gopublic"] = lambda lines: ('<div class="gopublic">' + card_icon("globe")
+                                    + '<div class="gpb">' + md_render("\n".join(lines))
+                                    + "</div></div>")
 
 
 # --------------------------------------------------------------------------
@@ -3292,9 +3355,18 @@ article .lcards .ct {{ display:block; color:var(--struct); font-size:0.9375rem; 
 article .lcards .cd {{ display:block; font-size:0.8125rem; line-height:1.5; color:var(--dim); }}
 article .lcards .cg {{ display:block; margin-top:0.25rem; font-size:0.6875rem;
         letter-spacing:0.08em; text-transform:uppercase; color:var(--warm); }}
-article .gopublic {{ max-width:48rem; margin:1rem 0 1.25rem; padding:0.5rem 0 0.5rem 0.875rem;
+article .gopublic {{ display:flex; gap:0.75rem; align-items:flex-start; max-width:48rem;
+        margin:1rem 0 1.25rem; padding:0.5rem 0 0.5rem 0.875rem;
         border-left:3px solid var(--warm); }}
+article .gopublic .gpb {{ min-width:0; }}
 article .gopublic p {{ margin:0; }}
+/* The cards' and the banner's icons (sitekit 1.3.1): beside the words, the
+   site's line-art hand, so a card is no taller for having one. */
+article svg.ci {{ flex:none; width:1.75rem; height:1.75rem; margin-top:0.125rem; fill:none;
+        stroke:var(--dial); stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }}
+article .gopublic svg.ci {{ stroke:var(--warm); }}
+article .lcards a.card.hasi {{ display:flex; gap:0.625rem; align-items:flex-start; }}
+article .lcards a.card .cb {{ display:block; min-width:0; }}
 article ol.guide {{ list-style:none; margin:1.25rem 0 0.5rem; padding:0; }}
 article ol.guide > li {{ position:relative; display:grid;
         grid-template-columns:1.75rem minmax(0, 1fr); column-gap:0.75rem;
