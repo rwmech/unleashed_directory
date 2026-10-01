@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.3.1"
+SITEKIT_VERSION = "1.4.0"
 import struct
 
 import html
@@ -838,6 +838,33 @@ WRAPS["guidetop"] = guidetop_html
 BLOCKS["gopublic"] = lambda lines: ('<div class="gopublic">' + card_icon("globe")
                                     + '<div class="gpb">' + md_render("\n".join(lines))
                                     + "</div></div>")
+
+
+# "Applies to versions" (sitekit 1.4.0, Rob, 2026-10-01: "guides should
+# also have a 'Applies to versions'"). Every guide, on the site and in the
+# guides, opens with one, straight under its title:
+#
+#     ::: applies
+#     Firmware 1.2.0, camsat 1.1.0
+#     :::
+#
+# The lines inside are the versions, in the page's own Markdown, and only
+# released versions. md_meta skips ":::" blocks, so a page's description is
+# still its first sentence. A change that makes a guide wrong updates the
+# guide in the same change, and its line moves with it.
+# --------------------------------------------------------------------------
+APPLIES_LABEL = "Applies to versions:"
+
+
+def applies_html(lines):
+    """The ::: applies block: one quiet line, or nothing when it is empty."""
+    text = " ".join(l.strip() for l in lines if l.strip())
+    if not text:
+        return ""
+    return f'<p class="applies"><b>{APPLIES_LABEL}</b> {md_inline(text)}</p>'
+
+
+BLOCKS["applies"] = applies_html
 
 
 # --------------------------------------------------------------------------
@@ -1862,6 +1889,9 @@ nav a.here {{ background:var(--name); color:var(--bg);
 h1 {{ color:var(--ink); font-size:1.25rem; font-weight:normal; letter-spacing:0.125rem;
      margin:0 0 0.375rem; text-transform:uppercase; }}
 p.lead {{ color:var(--dim); margin:0 0 1.25rem; }}
+/* A guide's "Applies to versions" line (sitekit 1.4.0), under its title. */
+p.applies {{ color:var(--dim); font-size:0.75rem; line-height:1.35; margin:0 0 0.625rem; }}
+p.applies b {{ color:var(--ink); font-weight:normal; }}
 /* The glossary (site 1.3.0): a BBS word with a dotted underline, and its
    one-line definition under it on hover, on focus and on a tap. The
    definition is in the markup and display:none until wanted, so it costs

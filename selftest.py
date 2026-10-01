@@ -2334,9 +2334,14 @@ def skins_checks(S):
     # The stock skin's own name is c64, and that is what CONFIG lists, so it
     # appears as a name; the machine is never named in prose.
     prose = re.sub(r"<code>c64</code>|skin-c64\.png|alt=\"c64:", "", flat)
-    check("the page names no C64 in prose and no firmware version",
+    # The version lives in the page's Applies to versions line (sitekit
+    # 1.4.0), and, once a release carries skins, in the note gated on it.
+    unversioned = re.sub(r'<p class="applies">.*?</p>', "", flat)
+    check("the page names no C64 in prose and no firmware version outside its "
+          "Applies to versions line",
           "C64" not in prose and "Commodore" not in prose and "c64" not in prose
-          and not re.search(r"\b1\.[12]\.\d+\b", flat))
+          and not re.search(r"\b1\.[12]\.\d+\b", unversioned)
+          and '<p class="applies"><b>Applies to versions:</b> Firmware 1.2.0</p>' in flat)
     check("no word from the banned list, and no em dash",
           "\u2014" not in body
           and not re.search(r"\b(simply|just|easy|easily|of course|obviously)\b",
@@ -3992,6 +3997,30 @@ def main():
               + (f"  <- {dead_at[:4]}" if dead_at else ""),
               not dead_at and 'href="https://sourceforge.net/projects/syncterm/"'
               in get("/docs/terminals")[1])
+
+        # Rob, 2026-10-01: every guide opens with "Applies to versions",
+        # sitekit 1.4.0's ::: applies, straight under its title, with a
+        # released version in it; and the block renders nothing when empty.
+        import sitekit as _sk
+        no_applies = []
+        if HAVE_DOCS:
+            for n in sorted(os.listdir(os.path.join(DOCS_DIR, "pages"))):
+                if not n.endswith(".md"):
+                    continue
+                path = "/docs" if n == "index.md" else "/docs/" + n[:-3]
+                if not re.search(r'</h1>\s*<p class="applies"><b>Applies to versions:</b> '
+                                 r'[^<]*\d+\.\d+\.\d+', get(path)[1]):
+                    no_applies.append(path)
+        check("every guide opens with its Applies to versions line, under its title"
+              + (f"  <- {no_applies[:4]}" if no_applies else ""),
+              HAVE_DOCS and not no_applies
+              and _sk.applies_html(["Firmware 1.2.0, camsat 1.1.0"])
+                  == '<p class="applies"><b>Applies to versions:</b> Firmware 1.2.0, '
+                     "camsat 1.1.0</p>"
+              and _sk.applies_html(["", "  "]) == ""
+              and "applies" in _sk.BLOCKS
+              and _sk.md_meta("# T\n\n::: applies\nFirmware 1.2.0\n:::\n\nFirst line.")[1]
+                  == "First line.")
 
         # The Telnet BBS Guide, on /how.
         hw = get("/how")[1]

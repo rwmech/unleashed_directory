@@ -14,6 +14,22 @@
 
 # Changelog
 
+## 2.0.14, 2026-10-01
+
+- **"Applies to versions" on every guide** (sitekit 1.4.0, Rob: "guides
+  should also have a 'Applies to versions'"). `::: applies` is a shared
+  block: one quiet line under a guide's title, "Applies to versions:" and
+  the released versions it is true for, nothing when it is empty, and
+  skipped by md_meta so a page's description is still its first sentence.
+  Every guide in unleashed_documentation carries one (Firmware 1.2.0), and
+  the suite fails a guide served without one. On the setup hub it costs
+  35px of the first screen at 1366 x 768.
+- **The skins guide may name its version now that a release carries
+  skins**: the suite's "no firmware version" check reads the page outside
+  its Applies to versions line.
+- README: guides are kept current in the same change that makes them
+  wrong, and their line moves with them.
+
 ## 2.0.13, 2026-09-29
 
 - **Icons on the setup hub's cards** (sitekit 1.3.1, Rob: "icons, icons
