@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.3.1"
+SITEKIT_VERSION = "1.3.4"
 import struct
 
 import html
@@ -212,6 +212,19 @@ FLASH_FAMILIES = {
     "esp32s3-ws43b": ("ESP32-S3", 0x0),
     "esp32s3-ws2": ("ESP32-S3", 0x0),
     "esp32s3-eth": ("ESP32-S3", 0x0),
+    # The Makerfabs' hardware v2.0 (MF35V2 1.0.0, firmware 1.2.1): the board
+    # Makerfabs sell now, and a set of its own because the v2.0 is an N16R8
+    # with OCTAL PSRAM, which moved the panel's write, data/command and chip
+    # select pins off 35 to 37. The v1.0's image looks for quad PSRAM on an
+    # octal part and drives those three pins into octal PSRAM's; neither
+    # image starts the other board. The S3's 8 MB layout, read from its own
+    # partitions.bin like every set.
+    "esp32s3-mf35v2": ("ESP32-S3", 0x0),
+    # The Guition ESP32-S3-4848S040 (G4848 1.0.0, firmware 1.2.1), the 4 inch
+    # square panel sold as the AITRIP and by others: the S3's chip family
+    # again, on the S3's 8 MB layout. Seven sets on one family now, so the
+    # picker asks which board and never guesses.
+    "esp32s3-g4848": ("ESP32-S3", 0x0),
     "esp32c3": ("ESP32-C3", 0x0),
 }
 
@@ -3193,11 +3206,18 @@ article a.buy:focus-visible {{ outline:3px solid #ffd35c; outline-offset:2px; }}
    a dashed border) or Coming soon, and BUY, on the right. The picked
    board's full name, how to tell it, a bigger picture and Secure (SSH) are
    said once in its section, .bsel, above the buttons. */
-article .installer fieldset.boards {{ border:0; margin:0.375rem 0 0; padding:0;
+/* The row gap is NOT free space (site 1.6.0): each tile's BUY badge is
+   absolutely placed at top:-0.5rem and is opaque, so it hangs 10.6px above
+   its own tile's top border and eats into the gap. At 0.4375rem the badge
+   overlaps the tile above by about 1.3px and sits on its border, which is
+   how it has always read; tightened to 0.3125rem it put about 4px of red
+   INSIDE the tile above, visibly crowding it on several rows. Take height
+   from above the tiles instead. */
+article .installer fieldset.boards {{ border:0; margin:0; padding:0;
         min-width:0; display:grid;
         grid-template-columns:repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
         gap:0.4375rem 0.5rem; }}
-article .installer fieldset.boards legend {{ padding:0; margin:0 0 0.625rem;
+article .installer fieldset.boards legend {{ padding:0; margin:0 0 0.375rem;
         font-size:0.8125rem; color:var(--dim); }}
 article .installer fieldset.boards legend a {{ margin-left:0.5rem; }}
 /* On a phone there is no fold rule, so the tiles get room for their
@@ -3207,7 +3227,7 @@ article .installer fieldset.boards legend a {{ margin-left:0.5rem; }}
 }}
 article .installer .brow {{ position:relative; min-width:0; }}
 article .installer .bopt {{ position:relative; display:flex; flex-wrap:nowrap;
-        align-items:center; gap:0.375rem; padding:0.0625rem 0.5rem 0.0625rem 0.375rem;
+        align-items:center; gap:0.375rem; padding:0 0.5rem 0 0.375rem;
         border:1px solid #2c3a44; border-radius:0.375rem; cursor:pointer;
         min-width:0; }}
 article .installer .bopt input {{ flex:none; margin:0; accent-color:var(--dial); }}
@@ -3257,7 +3277,7 @@ article .installer .brow > a.buy {{ position:absolute; top:-0.5rem; right:0.5rem
    section, so the rules that show a section show it too. */
 article .installer .bsel {{ display:flex; gap:0.625rem; align-items:center; }}
 article .installer .bsel svg.art.board {{ flex:none; width:3rem; height:1.875rem; }}
-article .installer .bsel p {{ margin:0; font-size:0.75rem; line-height:1.3;
+article .installer .bsel p {{ margin:0; font-size:0.75rem; line-height:1.25;
         color:var(--dim); min-width:0; }}
 article .installer .bsel p b {{ display:block; color:var(--ink); font-size:0.8125rem; }}
 article .installer .bsel .sep {{ color:var(--faint); }}
@@ -3268,7 +3288,7 @@ article .installer .bsel a.secure svg.lockg {{ width:0.6em; height:0.76em;
         margin:0 0.3em 0 0; vertical-align:-0.06em; overflow:visible; }}
 article .installer .bsel a.secure svg.lockg .lk {{ fill:none; stroke:currentColor;
         stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }}
-article .installer .bsec {{ display:flex; flex-direction:column; gap:0.375rem; }}
+article .installer .bsec {{ display:flex; flex-direction:column; gap:0.3125rem; }}
 article .installer .bsec > * {{ margin:0; }}
 /* What a board needs done before either button: an instruction rather than
    a warning, so the calm box and not the amber one. */
@@ -3281,7 +3301,7 @@ article .installer .first b {{ color:var(--dial); }}
 article .installer p.soon {{ color:var(--dim); border:1px dashed #3a3a46;
         border-radius:0.375rem; padding:0.625rem 0.75rem; font-size:0.8125rem; }}
 article .installer .vers {{ display:flex; flex-wrap:wrap; gap:0.25rem 1rem;
-        margin:0.25rem 0 0; font-size:0.8125rem; color:var(--ink); }}
+        margin:0; font-size:0.8125rem; color:var(--ink); }}
 article .installer .vers label {{ cursor:pointer; }}
 /* The title, the card and the steps, and from the site's one breakpoint up
    two columns: title and steps on the left, the card on the right spanning
@@ -3310,7 +3330,27 @@ article .install-top > .steps > p.aside:first-child {{ margin:0 0 1.25rem; }}
    sit side by side, and its top padding 0.75rem. Measured over 127.0.0.1 at
    1366 x 768 with the dev board picked, off a screenshot of the real
    buttons: Update ends at 708px with the eight boards, and at 748px with a
-   ninth tile added. */
+   ninth tile added.
+   Site 1.6.0 (ten boards, the Makerfabs v2.0 and the Guition): a fifth row
+   of tiles, and with a second release offered as well the Update button
+   ended at about 809px, off the first screen. Measured off the pixels of a
+   1366x768 screenshot rather than by eye, which is the only way worth
+   measuring it: the button's fill is a long run of one colour, so a short
+   script says which rows it covers. The room came back from above and below
+   the tiles, NOT from the row gap (see the note on the gap): the tiles' own
+   top and bottom padding to 0, the legend's margin 0.625rem to 0.375rem, the
+   fieldset's 0.375rem to 0, .bsec's gap 0.375rem to 0.3125rem, .bsel's line
+   height 1.3 to 1.25 and .vers' top margin to 0. Update then ends at about
+   770px with ten boards and two releases, against 769px for eight boards and
+   two releases: the two new tiles cost one pixel.
+   **Both of those are ON the fold, not inside it**, and that is the open
+   item, not this change: the site's own notes already carry Rob's complaint
+   that Update "starts at the very bottom edge of the first screen at
+   1366x768". Every gap worth taking has been taken, so an eleventh board, or
+   fixing the fold properly, is a decision rather than another 2px: three
+   columns of tiles with shorter names, a scrolling picker, boards grouped by
+   chip, shorter buttons, or saying plainly that the button is below the fold.
+   That one is Rob's. */
 @media (min-width: 901px) {{
   article .install-top {{ display:grid; grid-template-columns:minmax(0, 1fr) 28rem;
         grid-template-rows:auto 1fr; column-gap:2rem; align-items:start; }}

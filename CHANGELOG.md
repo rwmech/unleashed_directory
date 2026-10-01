@@ -14,6 +14,32 @@
 
 # Changelog
 
+## 2.0.15, 2026-10-01
+
+<!-- 2.0.14 is taken: the guides' capture work (branch guide-2026-09-29) was
+     committed under it before this, and lands when it is pushed. -->
+
+- **Two more image sets in the shared engine** (sitekit 1.3.4, firmware
+  1.2.1): `esp32s3-mf35v2`, the Makerfabs ESP32-S3 Parallel TFT 3.5"
+  hardware v2.0, and `esp32s3-g4848`, the Guition ESP32-S3-4848S040 square
+  panel. Both are the ESP32-S3's chip family with the bootloader at 0x0,
+  and both are placed by their own partitions.bin like every other set.
+  Nothing here serves them; the main site's installer does, and `sitekit.py`
+  is shared byte for byte, so the row has to be in this copy.
+- **The install card's picker is tighter** (sitekit 1.3.4), because those two
+  boards give it a fifth row of tiles and pushed the **Update my board**
+  button off the first screen at 1366 x 768: measured off the pixels, it
+  ended at about 809px. The tiles' own padding, the legend's and the
+  fieldset's margins, the picked board's gap and line height, and the version
+  line's top margin give it back, and Update ends at about 770px against
+  769px for eight boards. **Not the row gap**, which is not spare space: each
+  tile's BUY badge hangs above its own top border into it, and tightening the
+  gap put about 4px of opaque red inside the tile above.
+  **The card is full, and the fold is an open item**: eight boards and ten
+  alike put Update on the last pixel of the first screen, not inside it. The
+  next board, or fixing that, is a decision rather than another 2px. Nothing
+  in this site draws that card; the rule lives in the shared engine.
+
 ## 2.0.13, 2026-09-29
 
 - **Icons on the setup hub's cards** (sitekit 1.3.1, Rob: "icons, icons
