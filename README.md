@@ -208,6 +208,17 @@ SELECT * FROM reports ORDER BY at DESC;
 | [CHANGELOG.md](CHANGELOG.md) | what changed |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | what it depends on, which is close to nothing |
 
+### Guides stay current
+
+Every guide, here, in [the guides](https://github.com/rwmech/unleashed_documentation)
+this server renders at `/docs`, and on the project's site, is kept current in
+the same change that makes it wrong: a change to this server, the firmware
+or camsat that alters what a guide says updates the guide in that change.
+Each guide opens with an **Applies to versions** line (`::: applies`, from
+`sitekit.py` since 1.4.0) naming the released versions it is true for, never
+one that is not out yet, and that line moves with the guide. At each
+release, every guide's line is checked. The suite fails a guide without one.
+
 ## Licence
 
 GNU General Public License v3 or later, the same terms as
