@@ -1107,6 +1107,28 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   direction only. Fix is to skip `offline` rows in the admission count and
   re-evaluate `queued` on each heartbeat. Not yet done, Rob has seen it.
 
+- **`deploy/setup.sh` does not install `shots`, and the suite has been saying
+  so.** `server.py` reads a folder beside itself that setup.sh never copies
+  into `/srv/unleashed_directory`, so the live server does not have it. The
+  check `everything the server reads beside itself is installed by setup.sh`
+  has been failing on `shots` (the /setup captures) on `main` for some time,
+  confirmed by stashing during the 2.0.16 work. **This is the exact shape of
+  the 0.17.x outage that check was written after**, and the only reason it is
+  not biting is that whatever reads `shots` degrades instead of raising,
+  which is the other half of that rule and the half currently holding the
+  site up on its own. Fix setup.sh, and do not rely on the degrading: a
+  reader that starts raising turns this into an outage with no warning.
+  Queued 2026-10-04.
+
+- **`and every field those forms show is explained in a table` fails**, also
+  on `main` and also found by stashing. Sixteen field labels the captured
+  CONFIG forms show are missing from the guide's table in the documentation
+  repo: Board nam, POSIX TZ, NTP serve, Idle minu, Onboard L, Land on a,
+  Sysop's a, Silent and its two hours rows, Stop taki, Folder on, Area name,
+  Read, Upload fi, Delete an. The check exists so the prose and the captured
+  screens cannot disagree, and right now they do. It is a documentation-repo
+  fix, not a server one. Queued 2026-10-04.
+
 ## Reference
 
 - The BBS side lives in `esp32-bbs`, plugin `src/plugins/announce.cpp`.
