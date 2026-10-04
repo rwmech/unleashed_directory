@@ -53,7 +53,7 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 ===========================================================================
 """
 
-SITEKIT_VERSION = "1.3.4"
+SITEKIT_VERSION = "1.3.6"
 import struct
 
 import html
@@ -2079,6 +2079,28 @@ td {{ padding:0.375rem 0.5rem; border-bottom:1px solid #161616; vertical-align:t
    the rule is what says "press this". */
 .addr .nodial {{ color:var(--dim); display:inline-block; padding:0.375rem 0;
         overflow-wrap:anywhere; }}
+/* A board that also takes an encrypted connection (site 2.0.16): a second
+   address line under the first, led by a padlock in the link's own blue and
+   the word SSH, then the port to dial. Only the boards that have it carry
+   anything: a telnet board's line is exactly as it was, and there is no open
+   padlock anywhere on the page. The line is display:block because the
+   address above it is an inline-block, which would otherwise sit the two
+   side by side. */
+.addr .sshline {{ display:block; }}
+/* Inline, not the inline-block the first address is: an inline-block takes
+   the whole line box to lay itself out in, so it dropped below the mark
+   beside it the moment the two together were wider than the column. Inline,
+   the address simply carries on after the words and wraps where it must. */
+.addr .sshline a, .addr .sshline .nodial {{ display:inline; padding:0; }}
+/* The mark leads the line and never breaks: the address beside it is an
+   inline-block that takes the whole column to wrap in, so anything after it
+   lands on a line of its own, which is where the words SSH ended up until
+   they were moved in front. */
+.addr .sshlbl {{ color:var(--dim); white-space:nowrap; }}
+.addr .lock {{ color:var(--dial); display:inline-block; width:0.8125rem;
+        height:0.8125rem; margin-right:0.25rem; vertical-align:-0.0625rem;
+        fill:none; stroke:currentColor; stroke-width:1.8;
+        stroke-linecap:round; stroke-linejoin:round; }}
 /* Closed by its sysop: a marker in the human colour, boxed so it reads as a
    state and not as a callers figure, and inline-block so on a phone, where
    the state is pinned at 15ch, it wraps inside its box. */
@@ -3084,6 +3106,9 @@ main > table tr:not(:first-child):nth-child(odd of :not([hidden])) {{ background
   /* The one field a phone has no heading for and no label inside it. */
   main > table td.addr::before {{ content:attr(data-label) " ";
         color:var(--faint); }}
+  /* The SSH line is not touched here: its own rule above is a class more
+     specific than this one, so it keeps display:inline and no padding at
+     every width, whatever the order in the sheet. */
   .addr a, .addr .nodial {{ padding:0.5rem 0; }}
   /* "Temporarily closed" is wider than the pinned 15ch, so it takes two
      lines; min-content keeps its box tight round them rather than 15ch
@@ -3852,6 +3877,39 @@ PAGE = PAGE.replace("@PITCH_FACE@", (
     '@font-face {{ font-family:"Pitch"; src:url("/font/%s") format("%s"); '
     'font-weight:%d; font-style:normal; font-display:swap; }}'
     % (_face, "truetype" if _face.endswith(".ttf") else "woff", _weight)))
+
+
+# --------------------------------------------------------------------------
+# The SSH padlock (sitekit 1.3.6): a body, a shackle closed onto it and the
+# keyhole, in the same 24 unit square and line weight as the directory's
+# camera and its causes, in currentColor. It lives here rather than in either
+# server because both board lists draw it: the directory's own rows and the
+# live list on the main site, which is built from the directory's JSON. Two
+# copies of one drawing is how two drawings end up slightly different.
+#
+# It is a positive mark and it goes on the boards that have SSH only. Rob
+# considered a closed or open padlock on every listing and said no: most
+# boards are plain telnet, the cheap ESP32 this project deliberately supports
+# cannot run SSH at all, and an open padlock down most of the page would mark
+# nearly the whole list as unsafe and read as shaming the boards that are
+# working exactly as intended. The honest account of what an open line means
+# is in words, in the house rules and the guides, where it can be read
+# properly. The CSS for it is .addr .lock, with .addr .sshline above.
+# --------------------------------------------------------------------------
+LOCK_ART = ('<rect x="4.6" y="10.4" width="14.8" height="10.1" rx="1.8"/>'
+            '<path d="M8.3 10.4 V7.4 C8.3 5.4 10 3.7 12 3.7'
+            ' C14 3.7 15.7 5.4 15.7 7.4 V10.4"/>'
+            '<circle cx="12" cy="15.4" r="1.25" fill="currentColor" stroke="none"/>')
+
+
+def lock_svg(cls=""):
+    """The padlock, hidden from a screen reader: everywhere it is drawn the
+    words beside it say what it means, and on an address line the link it
+    sits beside carries SSH in its own accessible name. cls is for that
+    address line, which sizes it against the text rather than as a chip."""
+    attr = ' class="%s"' % cls if cls else ""
+    return ('<svg%s viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            "%s</svg>" % (attr, LOCK_ART))
 
 
 def human_ago(seconds):

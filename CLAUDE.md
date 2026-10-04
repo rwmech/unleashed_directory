@@ -843,6 +843,61 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   for: the chips are native checkboxes, which already say checked to a
   screen reader, and ARIA in HTML does not allow `aria-pressed` on one.
   A search opens a folded row that has a match.
+- **SSH: a second address line, and a padlock only where there is one
+  (2.0.16, Rob; firmware 1.2.2 sends it).** One announce field, `ssh_port`,
+  a whole number 1 to 65535, and nothing beside it: present means both "this
+  board takes an encrypted connection" and "here is where", absent means no
+  SSH. **It is the outside port**, after the router, the same rule `port`
+  already follows, because the page publishes it as an address. Out of
+  range, a string or a JSON `true` count as not sent (`PORT_MAX` is the one
+  figure both ports are checked against, so they cannot drift). Stored in
+  its own column, in `/api/boards.json` as `ssh_port`, in the feed under the
+  address to dial, and in PROTOCOL.md with the rule that a directory which
+  does not understand it must ignore it rather than refuse the payload.
+  - **The row shows it as a second address line**, under the first and
+    never instead of it: the padlock, the word SSH, then host and port, an
+    `ssh://` link with the same "if a program is registered" note the
+    telnet line carries, and words rather than a link on a closed board,
+    following the line above it.
+  - **No open padlock anywhere** (Rob, who considered a lock-or-open-lock on
+    every listing and rejected it). Most boards are plain telnet and the
+    cheap ESP32 cannot run SSH at all, so an open padlock would mark nearly
+    the whole list unsafe and read as shaming the board this project
+    deliberately supports. A telnet-only row keeps the one plain line, with
+    no mark, no warning colour and no "not secure" label. The honest account
+    of what an open line means stays in words on /rules and in the guides.
+    `LOCK_ART`'s comment says this, so the next person to reach for
+    symmetry finds the reason before the code.
+  - **It is a badge and a filter chip but not a chip under a board's name.**
+    `BADGE_BY_KEY` carries it (so `/badges` explains it and `/?b=ssh` works,
+    and so its key is reserved against badges.json like every other), and
+    `ROW_ORDER` deliberately does not, because what it says is where to dial
+    rather than what the board has. **Update available** is the same shape
+    and the precedent: an arrow on the software badge on a row, a badge of
+    its own on /badges.
+  - **The mark leads the line; trailing, it was orphaned.** `.addr a` is an
+    inline-block, so it takes the whole column to wrap in and anything after
+    it starts a new line: with the word SSH after the address, most
+    hostnames pushed it onto a line by itself. The padlock and the word go
+    first, `white-space:nowrap`, and the SSH address is `display:inline` so
+    it carries on after them and wraps where it must. The phone breakpoint
+    needs no repeat: `.addr .sshline a` is one class more specific than the
+    `.addr a` padding there, so it wins whatever the order in the sheet.
+    Measured in headless Chrome at 1920 and 1366.
+  - **The drawing lives in sitekit** (`lock_svg`, 1.3.6), not in either
+    server, because the main site's live list draws the same padlock on the
+    same second address line from this server's JSON.
+  - **The link says SSH in its own accessible name** (code review). The word
+    is in the mark, outside the anchor, so to anything that enumerates links
+    rather than reading the cell the two addresses in a row differed only by
+    their port digits. A `title` is a description, not an accessible name.
+  - **It found a pre-existing hole on the line this change touched:**
+    `{"port": true}` was listed on port 1, because a JSON `true` is an `int`
+    in Python and `1 <= True <= 65535`, while `{"port": false}` was a 400.
+    The general shape, and the reason to re-read a line you edit for any
+    reason: a bool slips through every `isinstance(x, int)` range check, and
+    the only reason this one was caught is that the new sibling check beside
+    it spells out `not isinstance(sshp, bool)`.
 - **Support and interests since 0.22.2.** Amateur radio moved to the
   interests (Radio and sky), slug unchanged; `SUPPORT_MOVED` files a `ham`
   still sent as support with the interests, and `row_support` /

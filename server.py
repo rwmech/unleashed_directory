@@ -191,7 +191,8 @@ CREATE TABLE IF NOT EXISTS boards (
     tracked_since INTEGER NOT NULL DEFAULT 0,
     interests    TEXT NOT NULL DEFAULT '',
     sd           INTEGER,
-    closed       INTEGER NOT NULL DEFAULT 0
+    closed       INTEGER NOT NULL DEFAULT 0,
+    ssh_port     INTEGER
 );
 -- Heartbeats received, one row per board per UTC hour, for the last week
 -- and a bit. The steady badge is worked out from it: see steady_boards().
@@ -650,6 +651,8 @@ def setup():
 # every row written before it reads as open, which is what those boards were:
 # a closed board on firmware 1.1.0 does not announce at all. It is not a
 # badge, but it is added the same way, so it lives in the same list.
+# ssh_port came in site 2.0.16 and is NULL for "no SSH", which every row
+# written before it is, and which is also every board that cannot run it.
 BADGE_COLUMNS = (("system",        "TEXT NOT NULL DEFAULT ''"),
                  ("terminals",     "TEXT NOT NULL DEFAULT ''"),
                  ("guests",        "INTEGER"),
@@ -658,7 +661,8 @@ BADGE_COLUMNS = (("system",        "TEXT NOT NULL DEFAULT ''"),
                  ("tracked_since", "INTEGER NOT NULL DEFAULT 0"),
                  ("interests",     "TEXT NOT NULL DEFAULT ''"),
                  ("sd",            "INTEGER"),
-                 ("closed",        "INTEGER NOT NULL DEFAULT 0"))
+                 ("closed",        "INTEGER NOT NULL DEFAULT 0"),
+                 ("ssh_port",      "INTEGER"))
 
 
 def tidy(value, limit):
@@ -1194,8 +1198,15 @@ def announce(payload, address):
     if not name:
         return 400, {"error": "a board needs a name"}, {}
 
+    # A JSON true is an int in Python and 1 <= True <= 65535, so a board
+    # sending {"port": true} was listed on port 1 while {"port": false} was a
+    # 400: the one field allowed to refuse a heartbeat refused every wrong
+    # type but that one. Found by the code review of the ssh_port change,
+    # which reads as a matched pair with this line against PORT_MAX and does
+    # exclude a bool. An impossible port is a 400, as PROTOCOL.md says.
     port = payload.get("port", 6400)
-    if not isinstance(port, int) or not 1 <= port <= 65535:
+    if (not isinstance(port, int) or isinstance(port, bool)
+            or not 1 <= port <= PORT_MAX):
         return 400, {"error": "port out of range"}, {}
 
     token    = tidy(payload.get("token"), 64)
@@ -1249,6 +1260,15 @@ def announce(payload, address):
     sd = payload.get("sd")
     fields["sd"] = (sd if isinstance(sd, int) and not isinstance(sd, bool)
                     and 1 <= sd <= SD_MAX else None)
+    # The port a caller dials for an encrypted connection (site 2.0.16,
+    # firmware 1.2.2): the OUTSIDE port, after the router, exactly as port
+    # is, because the page publishes it as an address. Absent, or anything
+    # that is not a whole port number, means this board has no SSH, which is
+    # every board that cannot run it and every board from before the field.
+    # A JSON true is an int in Python and is not a port.
+    sshp = payload.get("ssh_port")
+    fields["ssh_port"] = (sshp if isinstance(sshp, int) and not isinstance(sshp, bool)
+                          and 1 <= sshp <= PORT_MAX else None)
     # Closed by its sysop, "Stop taking calls" (site 1.3.10, firmware 1.1.1):
     # only a JSON true closes a board. Absent, false, "yes", 1 or anything
     # else is open, because a word that might mean closed must not take a
@@ -1583,14 +1603,23 @@ NEW_DAYS   = 7
 # Anything outside 1 to SD_MAX is ignored rather than refused.
 SD_MAX     = 4096
 
+# The highest port number there is, so the board's own port and the SSH port
+# it announces are checked against one figure rather than two that can drift.
+PORT_MAX   = 65535
+
 # The small badges, in the order they appear: key, letters, colour class,
 # name, and what it means, which the tooltip says after the name. The first
-# nine are sent by the board and the last two are worked out here. The SD
+# ten are sent by the board and the last two are worked out here. The SD
 # card's letters here are what the legend and the filter show; on a board's
 # row the badge carries the size as well, "SD32". The camera (site 1.2.8,
 # Rob: "This BBS can take pictures") has no letters: it is a drawing,
 # CAMERA_SVG, in the features' blue, and its tooltip is Rob's sentence,
-# from LETTER_TIPS, rather than the name and the meaning run together.
+# from LETTER_TIPS, rather than the name and the meaning run together. SSH
+# (site 2.0.16) is drawn too, a closed padlock, and is the one badge a board
+# does not wear under its name: it is on the second address line instead,
+# because what it says is where to dial rather than what the board has. It
+# is in this table for the filter and for /badges, and so its key is
+# reserved against the causes and interests like every other.
 LETTER_BADGES = (
     ("petscii", "P",  "term",   "PETSCII",
      "a Commodore 64 or 128 gets colour and graphics here, not just text."),
@@ -1607,13 +1636,21 @@ LETTER_BADGES = (
     ("sd",     "SD", "feat",   "SD card",
      "an SD card is in use on the board. On a board's row the badge carries "
      "the card's size in GB, as printed on the card: SD32 is a 32 GB card."),
+    ("ssh",     "",   "feat",   "SSH",
+     "this board also takes an encrypted connection. Its row has a second "
+     "address line, with this padlock on it, for the port to dial with an "
+     "SSH program. A board without one is listed exactly as it always was."),
     ("new",     "N",  "new",    "New",    "listed here for less than a week."),
     ("steady",  "S",  "steady", "Steady",
      "answered more than 95% of the heartbeats it was due over the last seven days."),
 )
 
-# A badge whose tooltip is its own sentence rather than "Name: meaning".
-LETTER_TIPS = {"camera": "This BBS can take pictures."}
+# A badge whose tooltip is its own sentence rather than "Name: meaning". SSH
+# has one because its meaning has to explain where the badge shows, which is
+# the legend's job and far too long to hang off a chip.
+LETTER_TIPS = {"camera": "This BBS can take pictures.",
+               "ssh": "SSH: this board also takes an encrypted connection. "
+                      "Its address says which port."}
 
 # The camera badge's drawing (site 1.2.8): a camera body with its hump, the
 # lens and a glint in it, in the same 24 unit square and line weight as the
@@ -1627,6 +1664,12 @@ CAMERA_SVG = ('<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
               '<circle cx="12" cy="13.5" r="3.5"/>'
               '<circle cx="12" cy="13.5" r="1.1" fill="currentColor" stroke="none"/>'
               "</svg>")
+
+# The SSH padlock is `lock_svg` in sitekit (1.3.6), with LOCK_ART beside it
+# and the reasoning for drawing it only where there is one. It is there
+# rather than here because the main site's live list, which is built from
+# this server's JSON, draws the same padlock on the same second address
+# line, and two copies of one drawing drift.
 
 # How long a board has been listed, counted from the day it first went
 # public. Only the highest reached is shown. A month is 30 days and a year
@@ -2302,7 +2345,8 @@ def _badge_table():
         tip="Runs on: Compaq 486, in the board's own words.", filt=False)
     where = {"petscii": "<code>petscii</code> <span class='src'>in terminals</span>",
              "guests":  "<code>guests</code> <span class='src'>set to true</span>",
-             "sd":      "<code>sd</code> <span class='src'>its size in GB</span>"}
+             "sd":      "<code>sd</code> <span class='src'>its size in GB</span>",
+             "ssh":     "<code>ssh_port</code> <span class='src'>the port to dial</span>"}
     for key, letters, cls, name, means in LETTER_BADGES:
         if key in ("new", "steady"):
             add("directory", key, name, cls, letters, _cap(means),
@@ -2393,6 +2437,8 @@ def badge_symbol(b):
         return UP_ARROW
     if b["key"] == "camera":
         return CAMERA_SVG
+    if b["key"] == "ssh":
+        return lock_svg()
     return html.escape(b["sym"])
 
 
@@ -2487,6 +2533,8 @@ def row_keys(r, now, steady=False, latest=""):
     keys.update(label for days, label, _w in AGES if age >= days * 86400)
     if row_sd(r):
         keys.add("sd")
+    if row_ssh(r):
+        keys.add("ssh")
     keys.update(row_support(r))
     keys.update(row_interests(r))
     return keys
@@ -2501,6 +2549,17 @@ def row_sd(r):
     except (KeyError, IndexError):
         return None
     return sd if isinstance(sd, int) and 1 <= sd <= SD_MAX else None
+
+
+def row_ssh(r):
+    """The port a board's row says to dial for SSH, or None (site 2.0.16).
+    A row made before the column existed, a test's own dict without it, and
+    every board that does not run SSH all read the same way: nothing."""
+    try:
+        sshp = r["ssh_port"]
+    except (KeyError, IndexError):
+        return None
+    return sshp if isinstance(sshp, int) and 1 <= sshp <= PORT_MAX else None
 
 
 def row_closed(r):
@@ -2738,6 +2797,9 @@ def board_json(r, steady):
     out["features"]  = unpick(r["features"])
     # The card's size in GB, or null (site 1.1.0).
     out["sd"]        = row_sd(r)
+    # The port to dial for an encrypted connection, or null for a board that
+    # does not take one (site 2.0.16). The outside port, as port is.
+    out["ssh_port"]  = row_ssh(r)
     # Closed by its sysop, as its last heartbeat said: true or false, never
     # null (site 1.3.10). A quiet board keeps what it last said; state says
     # whether it is still answering.
@@ -2826,6 +2888,44 @@ def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False, latest="
         # site was explaining a URL shape it did not emit.
         target = f"[{where}]" if ":" in where else where
         dial = html.escape(f"telnet://{target}:{r['port']}", quote=True)
+        # A board that also takes an encrypted connection gets a second
+        # address line under the first (site 2.0.16): the padlock and the
+        # word SSH, then where to dial. The first line is untouched, and a
+        # board with no ssh_port has no second line and no padlock of any
+        # kind: see LOCK_ART for why there is no open padlock anywhere here.
+        #
+        # A closed board follows its own first line: words, not a link,
+        # because nothing on this page should send a reader to a board that
+        # will only tell them it is shut.
+        #
+        # The mark leads the line rather than trailing it. Trailing, it was
+        # orphaned onto a line of its own the moment a hostname was wide
+        # enough to wrap, which on this column is most of them: the address
+        # is an inline-block and takes the whole width to wrap in, so
+        # anything after it starts a new line. Leading, it stays attached to
+        # what it labels however the address breaks, and the line reads as a
+        # sub-line of the address above it.
+        sshp = row_ssh(r)
+        mark = f"<span class='sshlbl'>{lock_svg('lock')}SSH</span> "
+        if not sshp:
+            ssh_line = ""
+        elif shut:
+            ssh_line = (f"<span class='sshline'>{mark}<span class='nodial'>"
+                        f"{html.escape(where)} {sshp}</span></span>")
+        else:
+            ssh = html.escape(f"ssh://{target}:{sshp}", quote=True)
+            # The word SSH is in the mark, outside the anchor, so the two
+            # links in this cell differ only by their port digits to anything
+            # that enumerates links rather than reading the cell: a screen
+            # reader's links list, a rotor, "read all links". A title is a
+            # description, not an accessible name, so it does not close that.
+            # The anchor says SSH itself (code review).
+            name = html.escape(f"SSH {where} {sshp}", quote=True)
+            ssh_line = (f"<span class='sshline'>{mark}<a href='{ssh}' "
+                        f"aria-label='{name}' "
+                        f"title='Encrypted. Opens your SSH program, if one is "
+                        f"registered for ssh:// links.'>"
+                        f"{html.escape(where)} {sshp}</a></span>")
         # Three columns, not six. Six of them wrapped at the sizes Rob reads
         # the page at, and a column that wraps is not carrying its own
         # weight: Sysop held one short name and Up-for held one short
@@ -2877,6 +2977,7 @@ def board_rows(rows, now, charts=None, steady=None, sel=(), any_=False, latest="
                 f"title='Opens your terminal program, if one is registered for "
                 f"telnet:// links.'>"
                 f"{html.escape(where)} {r['port']}</a>")
+            + ssh_line
             + "</td><td class='status' data-label='State'>"
             + (f"<span class='state closed'><span class='shut'>"
                f"{html.escape(label)}</span> {fresh}</span>" if shut else
@@ -3313,6 +3414,21 @@ def feed_xml():
                     f"<br>Address: {where}")
         else:
             body = f"{desc}<br>Dial: {where}"
+        # An encrypted way in, if the board sent one (site 2.0.16): under the
+        # address it belongs with, because it is the second address and not
+        # something the board has. A feed reader has no padlock to show.
+        #
+        # The same line whether the board is closed or open, unlike the one
+        # above it, and the code review asked why. Because what changes above
+        # is an imperative: "Dial:" tells a reader to go, and a closed board
+        # must not be told to, so it reads "Address:" instead. "SSH:" is
+        # already a label and asks nobody to do anything, so it has no closed
+        # form to switch to. The page differs because a link is an imperative
+        # too; plain text in a feed is not. Revisit if the label ever grows
+        # a verb.
+        if row_ssh(r):
+            body += "<br>SSH: " + html.escape(
+                f"{r['host'] or r['address']} {row_ssh(r)}")
         if owner:
             body += f"<br>Sysop: {owner}"
         # What the board has told us about itself, in words: a feed reader
@@ -3367,7 +3483,9 @@ has and how many are busy, whether it is up, whether its sysop has closed it for
 (<code>closed</code>, true or false), and how long it has been up. Then what
 the <a href="/badges">badges</a> are made of: what the board said it runs and which
 version, what it runs on, speaks,
-allows and is running, the size of its SD card, what it supports and is into, as
+allows and is running, the size of its SD card, the port to dial for an encrypted
+connection if it takes one (<code>ssh_port</code>, a number or null), what it
+supports and is into, as
 the short codes on the badges page, when it was first listed, and whether it has
 been steady this past week. Cached for a few seconds.</dd>
 <dt><code>POST /announce</code></dt>
@@ -3494,6 +3612,16 @@ the same JSON:</p>
 any case: <code>LTRCY</code> is literacy and <code>ELCTR</code> electronics.
 What each badge means, with every code, is on <a href="/badges">the badges
 page</a>, and the exact rules for each field are in the protocol.</p>
+
+<p><b>If your board also takes SSH.</b> Send the port callers dial for it,
+the one on the outside of your router, and your listing gets a second address
+line with a padlock on it:</p>
+
+<pre>"ssh_port":6422</pre>
+
+<p>Leave it out and your listing is exactly as it was. Most boards are plain
+telnet, nothing here marks one down for it, and no listing gets an open
+padlock.</p>
 
 <p><b>The same rules apply to everyone.</b> Three hours of uninterrupted
 heartbeats before a listing goes public, and it disappears when the heartbeats

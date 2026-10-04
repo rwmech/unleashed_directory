@@ -577,6 +577,9 @@ def badge_checks(S, db):
             "guests": True,
             "features": ["doors", "chat", "Files", "gopher"],
             "sd": 32,
+            # Site 2.0.16: the port callers dial for an encrypted connection,
+            # on the outside of the router.
+            "ssh_port": 6422,
             # A code in any case, and two old slugs the codes replaced (site
             # 1.1.0): "CHIPTUNE" and "electronics" are aliases of CHPTN and
             # ELCTR, and have to arrive as those.
@@ -586,10 +589,10 @@ def badge_checks(S, db):
     junk = {"name": "Junk Fields", "port": 6400, "token": "",
             "system": ["not", "a", "string"], "terminals": "petscii",
             "guests": "yes", "features": {"chat": True}, "support": "lgbtq",
-            "interests": "c64", "sd": "32"}
+            "interests": "c64", "sd": "32", "ssh_port": 70000}
     # Site 1.2.8: a board with a camera running says so in its features.
     shut = {"name": "No Guests", "port": 6400, "token": "", "guests": False,
-            "sd": True, "features": ["Camera", "webcam"]}
+            "sd": True, "features": ["Camera", "webcam"], "ssh_port": True}
     code, got = post_from(full, "198.51.100.7")
     check("a heartbeat carrying every badge field is accepted", code == 200)
     code, gotj = post_from(junk, "198.51.100.8")
@@ -629,6 +632,27 @@ def badge_checks(S, db):
           and S.SUPPORT_MOVED == ("ham",))
     check("sd: the card's size, a whole number of GB, is kept as a number",
           bb.get("sd") == 32)
+    # Site 2.0.16 (Rob): one field says both that a board has SSH and where
+    # to dial it. A port out of range, or a JSON true (which is an int in
+    # Python), is not a port, and neither costs the heartbeat.
+    check("ssh_port: a whole port number is kept, and a board that sends none "
+          "has none",
+          bb.get("ssh_port") == 6422 and S.PORT_MAX == 65535
+          and listed.get("Badge Board", {}).get("ssh_port") == 6422)
+    # A JSON true is an int in Python, so {"port": true} used to be listed on
+    # port 1 while {"port": false} was a 400 (code review of this change).
+    # The field that can refuse a heartbeat now refuses every wrong type.
+    for bad in (True, False):
+        code_b, _b = post_from({"name": "Bool Port", "port": bad, "token": ""},
+                               "198.51.100.11")
+        check(f"a port sent as {str(bad).lower()} is refused, not listed on port 1",
+              code_b == 400)
+    check("a port past 65535, and a true, count as not sent",
+          jb.get("ssh_port") is None
+          and listed.get("No Guests", {}).get("ssh_port", 0) is None
+          and S.row_ssh({"ssh_port": 0}) is None
+          and S.row_ssh({"ssh_port": 65535}) == 65535
+          and S.row_ssh({}) is None)
     check("a field of the wrong type counts as not sent, and the board is "
           "still listed",
           jb.get("system") == "" and jb.get("terminals") == []
@@ -898,7 +922,7 @@ def badge_checks(S, db):
                     r"<span class='bname'>Badge Board</span>", page) is not None
           and re.search(r'<tr data-b="([^"]*)"><td class=\'name\' data-label=\'Board\'>'
                         r"<span class='bname'>Badge Board</span>", page).group(1)
-          == "chat doors files guests petscii sd new lgbtq c64 elctr chptn ham")
+          == "chat doors files guests petscii sd ssh new lgbtq c64 elctr chptn ham")
     # Site 1.2.8 (Rob): "This BBS can take pictures".
     cam_row = badge_row(page, "No Guests")
     check("a board sending camera carries the camera badge, drawn, in the "
@@ -908,6 +932,48 @@ def badge_checks(S, db):
           + "</span>" in cam_row)
     check("and a board that does not send it has none",
           "This BBS can take pictures" not in row and S.CAMERA_SVG not in row)
+    # Site 2.0.16 (Rob): a board that sent ssh_port gets a second address
+    # line with a closed padlock and the word SSH. The first line is
+    # untouched, and the padlock is not one of the badges under the name:
+    # what it says is where to dial.
+    addr = row.split("<td class='addr'")[1].split("</td>")[0]
+    check("a board with SSH keeps its telnet line and gains a second address "
+          "line: the padlock and the word SSH, then the port",
+          "<a href='telnet://198.51.100.7:6400'" in addr
+          and "<span class='sshline'><span class='sshlbl'>" + S.lock_svg("lock")
+              + "SSH</span> <a href='ssh://198.51.100.7:6422' "
+              "aria-label='SSH 198.51.100.7 6422' "
+              "title='Encrypted. Opens your SSH program, if one is registered "
+              "for ssh:// links.'>198.51.100.7 6422</a></span>" in addr
+          and addr.index("telnet://") < addr.index("ssh://"))
+    # The word SSH is outside the anchor, so without a name of its own the
+    # two links in this cell differ only by their port digits to anything
+    # that lists links rather than reading the cell (code review).
+    check("the SSH link says SSH in its own accessible name, so a links list "
+          "can tell the two addresses apart",
+          "aria-label='SSH 198.51.100.7 6422'" in addr
+          and addr.count("aria-label=") == 1)
+    lock_css = page.split(".addr .lock {")[1].split("}")[0] if ".addr .lock {" in page else ""
+    check("the padlock is a closed one, drawn in the line's own colour, and "
+          "hidden from a screen reader because the word SSH is there",
+          'class="lock" viewBox="0 0 24 24" aria-hidden="true" focusable="false"' in addr
+          and "stroke:currentColor;" in lock_css and "fill:none;" in lock_css
+          and "color:var(--dial);" in lock_css
+          and ".addr .sshline { display:block; }" in page
+          and ".addr .sshlbl { color:var(--dim); white-space:nowrap; }" in page)
+    check("the padlock is not a badge under the name, and the SSH badge is not "
+          "in the row's fixed order",
+          "lock" not in row.split("<td class='addr'")[0]
+          and "ssh" not in S.ROW_ORDER)
+    # Rob's decision, and the reason it is worth a check: most boards are
+    # telnet, the cheap ESP32 cannot run SSH at all, and an open padlock down
+    # most of the page would read as marking those boards unsafe.
+    for name in ("Junk Fields", "No Guests"):
+        plain = badge_row(page, name)
+        check(f"a board with no SSH port gets no second line and no padlock "
+              f"of any kind ({name})",
+              "sshline" not in plain and "ssh://" not in plain
+              and "class=\"lock\"" not in plain and "SSH" not in plain)
     check("nothing a board sent reaches the page unescaped",
           "<b>&</b>" not in page and "<script>alert" not in page
           and 'data-tip="Runs on: Compaq 486 &lt;b&gt;&amp;&lt;/b&gt;, in the '
@@ -965,6 +1031,12 @@ def badge_checks(S, db):
           and "SD card: 32 GB" in feed
           and "Speaks: ANSI, PETSCII" in feed and "Guests welcome" in feed
           and "No guests: an account is needed" in feed)
+    # Site 2.0.16: the SSH address sits with the one above it, because it is
+    # the second address and not something the board has. No padlock: a feed
+    # reader has nowhere to draw one.
+    check("the feed gives the SSH address under the one to dial",
+          "Dial: 198.51.100.7 6400&lt;br&gt;SSH: 198.51.100.7 6422" in feed
+          and feed.count("SSH: ") == 1)
 
     # ----------------------------------------------------------------------
     # Site 0.22.0 (Rob): a Filter button over the list, a pane of every
@@ -998,7 +1070,10 @@ def badge_checks(S, db):
           and 'value="sd" data-n="SD card"' in pane
           and 'value="camera" data-n="Camera"' in pane
           and '<span class="cb k-feat" data-tip="This BBS can take pictures.">'
-              + S.CAMERA_SVG in pane)
+              + S.CAMERA_SVG in pane
+          # Site 2.0.16: SSH is a chip like any other, drawn as the padlock.
+          and 'value="ssh" data-n="SSH"' in pane
+          and S.lock_svg() in pane and "ssh" in S.FILTER_KEYS)
     check("the pane is a GET form of checkboxes, one per badge, in the page's "
           "order, with all or any beside them",
           '<form class="fpane" id="fform" method="get" action="/directory"' in pane
@@ -1083,6 +1158,13 @@ def badge_checks(S, db):
     check("and ?b=sd finds the boards with an SD card in use",
           [n for n, _k, h in sd_rows if not h] == ["Badge Board"]
           and all(("sd" in k) != h for _n, k, h in sd_rows))
+    # Site 2.0.16: somebody who wants an encrypted line can ask for one. A
+    # positive choice, which is the only way this is offered: nothing on the
+    # page lets a reader single out the boards that are plain telnet.
+    ssh_rows = list_rows(get("/?b=SSH")[1])
+    check("and ?b=ssh finds the boards that take an encrypted connection",
+          [n for n, _k, h in ssh_rows if not h] == ["Badge Board"]
+          and all(("ssh" in k) != h for _n, k, h in ssh_rows))
     check("a slug this directory does not know is ignored",
           list_rows(get("/?b=petscii&b=nazis")[1]) == rows1
           and not any(h for _n, _k, h in list_rows(get("/?b=nazis")[1]))
@@ -1245,7 +1327,7 @@ def badge_checks(S, db):
           and 'href="#how-steady-is-worked-out"' in leg)
     check("every row is on the page with no script: one per badge, the steps "
           "of Listed sharing one",
-          len(trs) == len(S.BADGES) - 5 == 82
+          len(trs) == len(S.BADGES) - 5 == 83
           and '<tr data-k="' in leg and " hidden>" not in leg.split("</nav>")[1]
           .replace("data-js hidden>", ""))
     check("each says where it comes from: the field a board sends, or worked "
@@ -1258,6 +1340,14 @@ def badge_checks(S, db):
           "rides on the badge",
           "<b>SD card</b>" in leg and "SD32 is a 32 GB card." in leg
           and 'class="bd k-feat" role="img" tabindex="0" aria-label="SD card: ' in leg)
+    # Site 2.0.16: SSH is on the legend too, drawn, saying where it shows on
+    # a board's row and that a board without it is listed as it always was.
+    check("SSH is in the legend, drawn as the padlock, with the field a board "
+          "sends and where it shows",
+          "<b>SSH</b>" in leg and S.lock_svg() in leg
+          and "<code>ssh_port</code> <span class='src'>the port to dial</span>" in leg
+          and "second address line, with this padlock on it" in leg
+          and "listed exactly as it always was" in leg)
     # Site 1.0.0: a µnleashed board behind the newest release. On a row it
     # is an arrow on the software badge; here and in the filter, a badge.
     check("Update available is in the legend, in dim cyan, and a chip in the filter",
@@ -1360,6 +1450,15 @@ def badge_checks(S, db):
           'href="/badges"' in get("/how")[1] and '"support":["ltrcy"]' in get("/how")[1]
           and '"interests":["c64","elctr","ham"]' in get("/how")[1]
           and '"sd":32' in get("/how")[1])
+    # Matched on phrases that do not straddle a line break in the source: an
+    # embedded "\n" pins a test to where a paragraph happens to wrap, and the
+    # next copy pass would fail it for nothing (code review).
+    how = " ".join(get("/how")[1].split())
+    check("and it tells a board with SSH what to send, and says a telnet board "
+          "is not marked down for it",
+          '"ssh_port":6422' in how
+          and "the one on the outside of your router" in how
+          and "no listing gets an open padlock" in how)
 
     # ----------------------------------------------------------------------
     print("Rows: every other one striped, and the hover")
@@ -1531,9 +1630,11 @@ def badge_checks(S, db):
         was_mem.executescript(OLD_SCHEMA_0211)
         had = {r[1] for r in was_mem.execute("PRAGMA table_info(boards)")}
         was_mem.close()
-        check("its table gains interests, sd and closed and nothing else, and "
-              "matches a new one",
-              cols == want and cols - had == {"interests", "sd", "closed"} and had <= cols)
+        check("its table gains interests, the SD card, closed and the SSH port "
+              "and nothing else, and matches a new one",
+              cols == want
+              and cols - had == {"interests", "sd", "closed", "ssh_port"}
+              and had <= cols)
         r = con.execute("SELECT * FROM boards WHERE token=?", ("b" * 32,)).fetchone()
         check("the old row keeps every badge it had, and simply has no interests yet",
               r["name"] == "Badge Keeper" and r["beats"] == 777 and r["support"] == "ham"
@@ -1631,8 +1732,10 @@ def badge_checks(S, db):
         was_mem.executescript(OLD_SCHEMA_100)
         had = {r[1] for r in was_mem.execute("PRAGMA table_info(boards)")}
         was_mem.close()
-        check("its table gains sd and closed and nothing else, and matches a new one",
-              cols == want and cols - had == {"sd", "closed"} and had <= cols)
+        check("its table gains the SD card, closed and the SSH port and nothing "
+              "else, and matches a new one",
+              cols == want and cols - had == {"sd", "closed", "ssh_port"}
+              and had <= cols)
         r = con.execute("SELECT * FROM boards WHERE token=?", ("c" * 32,)).fetchone()
         con.close()
         check("the old row is untouched: its slugs as they were, and no SD card",
@@ -1936,6 +2039,9 @@ def closed_checks(S):
                      name.lower().replace(" ", "-") + ".example", 6400, 10, busy, mins,
                      state, now - 86400, now - ago, now - 86400, now - 86400,
                      "chat", closed))
+    # Site 2.0.16: one open board and one closed one with an SSH port, so the
+    # second address line is checked both ways round.
+    con.execute("UPDATE boards SET ssh_port=6422 WHERE name IN ('Busy Open','Shut Shop')")
     con.commit()
     con.close()
     portc = PORT + 4
@@ -2030,6 +2136,22 @@ def closed_checks(S):
               "address in --dim with no dotted rule",
               ".state.closed .shut { display:inline-block; color:var(--warm);" in full
               and ".addr .nodial { color:var(--dim);" in full)
+        # Site 2.0.16: the SSH line follows the line above it. An open board
+        # gets a link; a closed one gets words, because nothing here should
+        # send a reader to a board that will only say it is shut.
+        check("an open board's SSH line is a link to dial, under its telnet one",
+              "<a href='ssh://busy-open.example:6422'" in busy
+              and "<span class='sshline'><span class='sshlbl'>" in busy
+              and "SSH</span> " in busy
+              and busy.index("telnet://") < busy.index("ssh://"))
+        check("a closed board's SSH line is words too, with the padlock and no "
+              "ssh:// link",
+              "<span class='sshline'><span class='sshlbl'>" in shut
+              and "<span class='nodial'>shut-shop.example 6422</span>" in shut
+              and "ssh://" not in shut and 'class="lock"' in shut)
+        check("and a board with no SSH port has no second line at all",
+              "sshline" not in badge_row(full, "Idle Open")
+              and "sshline" not in badge_row(full, "Quiet Place"))
         order = [n for n, _k, _h in list_rows(full)]
         up_open = [n for n, b in listed.items()
                    if b["state"] == "online" and not b["closed"]]
@@ -2119,6 +2241,19 @@ def closed_checks(S):
               and "Only `true` closes" in proto and "It is not a listing state" in proto)
         check("and the data page says the JSON carries it",
               "(<code>closed</code>, true or false)" in inspect.getsource(S.data_page))
+        # Site 2.0.16: the same two, for ssh_port. /data is a hand-written
+        # copy of the field list, which is the shape that drifts, so it is
+        # pinned the way closed already is (code review).
+        check("PROTOCOL.md documents ssh_port: a number, the outside port, and "
+              "absent meaning no SSH",
+              "| `ssh_port` | number | no |" in proto and "## SSH" in proto
+              and "It is the outside port" in proto
+              and "Absent means no SSH" in proto
+              and "Out of range counts as not sent" in proto
+              and "must not refuse the payload over it" in proto)
+        check("and the data page says the JSON carries the SSH port",
+              "<code>ssh_port</code>, a number or null"
+              in " ".join(inspect.getsource(S.data_page).split()))
 
     finally:
         serverc.terminate()
@@ -2172,11 +2307,12 @@ def closed_checks(S):
         was_mem.executescript(OLD_SCHEMA_139)
         had = {x[1] for x in was_mem.execute("PRAGMA table_info(boards)")}
         was_mem.close()
-        check("its table gains closed and nothing else, and matches a new one",
-              cols == want and cols - had == {"closed"} and had <= cols)
-        check("the old row is untouched and reads as open",
+        check("its table gains closed and the SSH port and nothing else, and "
+              "matches a new one",
+              cols == want and cols - had == {"closed", "ssh_port"} and had <= cols)
+        check("the old row is untouched, reads as open and has no SSH",
               r["closed"] == 0 and r["sd"] == 32 and r["beats"] == 700
-              and r["state"] == "online")
+              and r["state"] == "online" and r["ssh_port"] is None)
         row8 = badge_row(home8[2].decode("utf-8"), "Before Closed")
         listed8 = {b["name"]: b for b in json.loads(
             fetch("/api/boards.json", base8)[2].decode("utf-8"))["boards"]}

@@ -4,6 +4,8 @@ The small marks under a board's name on the [board list](/directory). Some are s
 
 Under each name, the first line is what the board is: the software and its version, then the machine it runs on. The second line is the rest, in the same order on every board, so each badge sits in the same place as you scroll: PETSCII, guests, what is running and the SD card, what this directory worked out, then the causes and the interests, those two in alphabetical order.
 
+Two of them are not a badge of their own under a name. **SSH** is on a board's address instead, as a second line with a padlock on it, because what it says is where to dial; a board that does not take an encrypted connection has the one plain line it always had, and nothing marks it down for that. **Update available** is a small arrow on the end of the software badge. Both are here, and both can be filtered on.
+
 Each cause and interest has a short code of up to six letters and digits, such as `MNTLH` for mental health or `APPLE2` for the Apple II. The code is what a board sends, and the search box finds a badge by its code as well as by its name.
 
 <!-- The tables below are drawn from BADGES in server.py, the same list the board list's filter uses, so the key cannot disagree with it. The causes and interests, with their codes and aliases, come from badges.json (site 1.1.0); change one there, and give a new one a drawing in server.py. Within a group the tables list the badges alphabetically by name; a board's row uses ROW_ORDER instead (site 1.0.0). -->

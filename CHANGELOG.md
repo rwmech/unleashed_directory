@@ -14,6 +14,93 @@
 
 # Changelog
 
+## 2.0.16, 2026-10-04
+
+- **The directory knows which boards take an encrypted connection**
+  (sitekit 1.3.5, firmware 1.2.2 sends it). One new optional announce field,
+  `ssh_port`, a whole number from 1 to 65535: the port a caller dials for
+  SSH **through the router**, so the outside port, exactly as `port` already
+  is. One field answers both questions at once, so there is no separate
+  "this board has SSH" flag, and **absent means no SSH**, which is every
+  board from before the field and every board that cannot run it. Out of
+  range, a string or a JSON `true` count as not sent and never cost the
+  heartbeat. Every heartbeat replaces it, as the badges do, so a board whose
+  SSH is switched off loses it with its next beat. PROTOCOL.md has the rules
+  and says a directory that does not understand the field must ignore it
+  rather than refuse the payload.
+- **A listing that sends one gets a second address line**, under the first:
+  a closed padlock, the word SSH, then the host and that port, as an
+  `ssh://` link with the same "if a program is registered for these links"
+  note the telnet line carries. A closed board's SSH line is words rather
+  than a link, following the line above it. The first line is untouched.
+- **The padlock is a positive mark and nothing else is marked** (Rob). A
+  telnet-only listing is exactly as it was: no open padlock, no warning
+  colour, no "not secure" label. Most boards are plain telnet, the cheap
+  ESP32 this project deliberately supports cannot run SSH at all, and an
+  open padlock down most of the page would read as shaming boards that are
+  working exactly as intended. The honest account of what an open line means
+  stays in words, where it can be read properly.
+- **SSH is a badge on /badges and a chip in the filter, but not a chip under
+  a board's name.** `/?b=ssh` lists the boards that take one, the way
+  `?b=sd` lists the boards with a card. It is the one badge a row does not
+  wear, because what it says is where to dial rather than what the board
+  has, and the address line says that better than a letter could. Same shape
+  as **Update available**, which is an arrow on the software badge on a row
+  and a badge of its own here.
+- `/api/boards.json` carries `ssh_port`, a number or `null`, and the feed
+  gives the SSH address under the one to dial.
+- The `boards` table gains an `ssh_port` column, added like every badge
+  column, `NULL` on every row written before it.
+- **The mark leads the line rather than trailing it**, which is a layout
+  thing worth writing down: the address is an inline-block, so it takes the
+  whole column to wrap in and anything after it lands on a line of its own.
+  Trailing, the word SSH was orphaned under the address on most hostnames.
+  Leading, it stays attached, and the SSH address itself is `display:inline`
+  so it simply carries on after the words. Measured in headless Chrome at
+  1920 and 1366.
+- **The padlock is `lock_svg` in the shared engine** (sitekit 1.3.6), not in
+  either server, because the main site's live list draws the same padlock on
+  the same second address line from this server's JSON. Two copies of one
+  drawing is how two drawings end up slightly different.
+
+**From the code review of this change**, in the order it ranked them:
+
+- **The SSH link now says SSH in its own accessible name.** The word is in
+  the mark, outside the anchor, so to anything that enumerates links rather
+  than reading the cell (a screen reader's links list, a rotor, "read all
+  links") the two addresses in a row differed only by their port digits. A
+  `title` is a description and not an accessible name, so it did not close
+  that. The anchor carries `aria-label="SSH <host> <port>"`.
+- **A board sending `{"port": true}` was listed on port 1.** A JSON `true`
+  is an `int` in Python and `1 <= True <= 65535`, while `{"port": false}`
+  was a `400`: the one field allowed to refuse a heartbeat refused every
+  wrong type except that one. Found because this change pointed that line at
+  `PORT_MAX` and put a sibling check beside it that does exclude a bool. An
+  impossible port is a `400`, which is what PROTOCOL.md already said.
+  Pre-existing, back to the first commit.
+- **`/data` names `ssh_port`**, because PROTOCOL.md promises the JSON
+  carries it and `/data` is the hand-written copy of that field list, which
+  is the shape that drifts. `closed` and `sd` are both pinned there by the
+  suite; `ssh_port` is now too.
+- **The feed's SSH line is the same whether a board is open or closed, on
+  purpose**, and the reason is written down beside it: what changes above it
+  is an imperative. "Dial:" tells a reader to go and a closed board must not
+  be told to, so it reads "Address:" instead; "SSH:" is already a label and
+  asks nobody to do anything. The page differs because a link is an
+  imperative too, and plain text in a feed is not.
+- /badges said two badges are "not under a name"; only SSH is. Update
+  available is an arrow on the end of the software badge, which is under the
+  name. Now "not a badge of their own under a name".
+- A new check matched on a phrase that straddled a line break in the /how
+  source, which pins a test to where a paragraph happens to wrap. The checks
+  there read the page with its whitespace collapsed.
+
+**For the next render pass, because it cost an hour here:** on this machine
+`chrome --headless=new --screenshot` through PowerShell's call operator
+returns before Chrome has written the file, so every screenshot silently
+produced nothing while `--dump-dom` worked. `Start-Process -Wait
+-NoNewWindow` fixes it. Nothing to do with the page.
+
 ## 2.0.15, 2026-10-01
 
 <!-- 2.0.14 is taken: the guides' capture work (branch guide-2026-09-29) was

@@ -49,6 +49,7 @@ Connection: close
 | `description` | string | no | one line, up to 120 characters |
 | `host` | string | no | the name to list. Empty means "use the address this arrived from" |
 | `port` | number | **yes** | the port callers dial, 1 to 65535 |
+| `ssh_port` | number | no | the port callers dial for an encrypted connection, 1 to 65535. Absent means the board has no SSH. See [SSH](#ssh) |
 | `nodes` | number | no | how many caller lines the board has |
 | `busy` | number | no | how many are in use right now |
 | `uptime` | number | no | seconds since the board booted |
@@ -109,7 +110,29 @@ A directory works out some badges for itself, from its own records, and a board 
 
 `software` and `version` are shown together, as the board sent them, on the board's first badge ("unleashed 1.0.0", "Mystic 1.12"), and both are in `/api/boards.json`. When `software` is `unleashed` and `version` is older than the newest µnleashed release the directory knows of (unleashedbbs.net reads the releases the project's installer offers), unleashedbbs.net marks that badge with a small arrow, **update available**, linked to how to update. Versions are compared as three numbers, part by part, so 1.0.10 is newer than 1.0.9, and a pre-release such as `1.0.1-rc.1` is older than `1.0.1`; a version that is not three numbers is never marked. Other software is never marked, because a directory cannot know another program's newest version.
 
-The board list at unleashedbbs.net can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest codes (or any of their aliases, in any case), the feature words, `sd` for a board with an SD card in use, `petscii`, `guests`, `new`, `steady`, `update`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
+The board list at unleashedbbs.net can be filtered on any of these badges, by a person or by a link: `/?b=petscii&b=ham` lists the boards carrying all of them, and adding `&m=any` lists the boards carrying any of them. The keys are the support and interest codes (or any of their aliases, in any case), the feature words, `sd` for a board with an SD card in use, `ssh` for one that takes an encrypted connection, `petscii`, `guests`, `new`, `steady`, `update`, and `1m`, `6m`, `1y`, `2y`, `5y` or `10y` for listed at least that long. That is a convenience of this directory's page, not part of the protocol.
+
+## SSH
+
+Some boards take an encrypted connection as well as a plain one. A board that does says so by sending the port a caller dials for it, and nothing else: there is no separate "this board has SSH" flag, because one field answers both questions at once and a board that cannot say where has not said anything useful.
+
+```
+{"name":"The Rusty Modem","host":"","port":6400,"ssh_port":6422,
+ "nodes":10,"busy":0,"uptime":3600,"interval":10,"token":""}
+```
+
+| Rule | |
+|---|---|
+| **It is the outside port** | The port a caller dials, after the router, exactly as `port` already is. A board listening on 6422 and forwarded straight through sends 6422; a board whose router forwards 2222 inwards to its 6422 sends 2222. A directory publishes it as an address, so it has to be the address a stranger can reach rather than the board's own idea of itself. |
+| **Absent means no SSH** | No field, no SSH, and the listing is exactly as it was before this field existed. Most boards are plain telnet and many always will be: a microcontroller with no room for a crypto library is still a BBS. This field is how the boards that have the room say so, not a mark against the ones that do not. |
+| **Every heartbeat replaces it** | The same as the badges. Send it only while SSH is actually running and listening, and stop sending it when it is not, so a board whose SSH is switched off loses it with its next heartbeat. |
+| **Out of range counts as not sent** | A JSON number, a whole one, from 1 to 65535. A string, a fraction, a `true` or anything outside the range is ignored. None of it ever makes the heartbeat fail. |
+
+A directory that does not understand the field ignores it, as it ignores any field it does not know. It must not refuse the payload over it.
+
+What a directory shows is up to it. unleashedbbs.net gives such a board a second address line under the first, with a closed padlock and the word SSH, and the board list can be filtered on it. A board with no `ssh_port` keeps the one plain line it always had, with no padlock of any kind: an open padlock on every other listing would read as a warning against boards that are working exactly as intended. `/api/boards.json` carries `ssh_port` as a number, or `null`.
+
+µnleashed sends it from firmware 1.2.2, from the boards that can run SSH. Third-party software may send it too: there is nothing µnleashed-specific in it.
 
 ## Closed boards
 
