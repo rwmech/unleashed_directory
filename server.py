@@ -3324,6 +3324,54 @@ LIST_FOOT = ("The 24 hour figures under a board's state are how many calls it "
              '"Up for" is measured here and cannot be fudged.')
 
 
+# --------------------------------------------------------------------------
+# /api/list.json (directory 2.0.18): the board rows, drawn here, for the
+# main site's own Communities online page.
+#
+# Why rendered HTML rather than more JSON. Since the split (2026-09-26) the
+# site drew its own rows from /api/boards.json, which meant two renderers
+# for one listing, and they drifted exactly as two copies do: the site's
+# rows never grew the badges, the hardware label, the 24 hour figures or
+# the day chart, so .com showed a plainer board than .net and Rob read it
+# as an old page. A second JSON field would not have fixed that, because
+# the drift was in the drawing and not in the data.
+#
+# So the drawing happens once, here, where the badge tables, the update
+# arrow, the charts and "steady" already live, and the site drops the rows
+# into its own table. The CSS they need is in sitekit.py, which both
+# servers already share byte for byte, so the rows style themselves on
+# either site with nothing copied.
+#
+# The counts travel with the rows because the site's heading needs them and
+# it can no longer add them up from the data it is no longer given. foot
+# travels for the same reason: LIST_FOOT is the only place that says what
+# the 24 hour figures and "up for" mean, and a second copy of that sentence
+# on the site is the drift starting again.
+#
+# No filter and no search: those are this directory's, they need the
+# browser script, and the site says so and links here. sel is empty, so
+# board_matches() passes every board and no row is hidden.
+# --------------------------------------------------------------------------
+def list_fragment():
+    """The board list as the site embeds it: the rows this directory draws,
+    the three figures its heading needs, and the footnote under them."""
+    # The same cache the front page and /directory read (one key, so one DB
+    # read, one settle() and one chart build per window however many of the
+    # three are asked for). Called raw, this endpoint doubled all of it, and
+    # settle() WRITES, so a window with a reader on each page did two of
+    # those as well.
+    now, rows, charts, steady = cached("indexdata", PAGE_CACHE, index_data)
+    live = [r for r in rows if r["state"] == "online" and not row_closed(r)]
+    return json.dumps({
+        "at": now,
+        "listed": len(rows),
+        "live": len(live),
+        "on": sum(r["busy"] or 0 for r in live),
+        "rows": board_rows(rows, now, charts, steady, (), False, newest_release()),
+        "foot": LIST_FOOT,
+    })
+
+
 # The one step between "Try one first" and a board (site 1.3.0): joining
 # needs an app, and nothing on a phone or a computer opens a board by
 # itself. The apps are /terminals' picks, checked on their stores on
@@ -3525,6 +3573,13 @@ connection if it takes one (<code>ssh_port</code>, a number or null), what it
 supports and is into, as
 the short codes on the badges page, when it was first listed, and whether it has
 been steady this past week. Cached for a few seconds.</dd>
+<dt><code>GET /api/list.json</code></dt>
+<dd>The same boards already drawn as table rows, with the three figures above the
+list and the footnote under it. It exists so the main site can show this list without
+a second copy of the drawing, which is how the two pages came to disagree; the markup
+it returns is this directory's and may change with it, so anything that wants the data
+rather than the page should read <code>/api/boards.json</code> instead. Cached for a
+few seconds.</dd>
 <dt><code>POST /announce</code></dt>
 <dd>How a board lists itself. One JSON object, about 200 bytes, repeated every few
 minutes. Plain HTTP on purpose: the boards are microcontrollers with no TLS stack.</dd>
@@ -4595,6 +4650,9 @@ class Handler(BaseHTTPRequestHandler):
                 return json.dumps({"boards": [board_json(r, r["id"] in steady)
                                               for r in rows]}, indent=1)
             self.reply(200, cached("json", PAGE_CACHE, build),
+                       "application/json; charset=utf-8")
+        elif path == "/api/list.json":
+            self.reply(200, cached("listfrag", PAGE_CACHE, list_fragment),
                        "application/json; charset=utf-8")
         elif path == "/feed.xml":
             self.reply(200, cached("feed", PAGE_CACHE, feed_xml),

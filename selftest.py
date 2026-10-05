@@ -2694,6 +2694,54 @@ def main():
         check("it carries no token", "token" not in listed[0])
         check("and no moderator notes", "note" not in listed[0])
 
+        # Directory 2.0.18: the drawn list, for the main site's own
+        # Communities online page. It exists because the site used to draw
+        # its own rows from the JSON above, which meant two renderers for
+        # one listing, and the site's never grew the badges, the hardware
+        # label, the 24 hour figures or the day chart. So the rows are drawn
+        # once, here, and the site drops them into its table.
+        print("The drawn list, for the main site")
+        code, frag_raw = get("/api/list.json")
+        frag = json.loads(frag_raw)
+        _, dirpage = get("/directory")
+        check("/api/list.json answers with the rows, the three figures and the "
+              "footnote",
+              code == 200
+              and set(frag) == {"at", "listed", "live", "on", "rows", "foot"}
+              and isinstance(frag["at"], int)
+              and frag["listed"] == len(listed)
+              and frag["foot"] == S.LIST_FOOT)
+        check("the rows are table rows and nothing else: no table, no filter, "
+              "no page around them",
+              frag["rows"].startswith("<tr") and frag["rows"].endswith("</tr>")
+              and "<table" not in frag["rows"] and "<script" not in frag["rows"]
+              and "fchips" not in frag["rows"])
+        check("no board is hidden in them: the filter is the directory's page, "
+              "not the fragment",
+              " hidden>" not in frag["rows"])
+        # The Board cell only, not the whole row. The State cell carries
+        # human_short() and human_streak(), which step at 90 s and then every
+        # 60 s, so two GETs either side of a boundary differ by one character
+        # and the check would fail for the clock rather than for a drift. It
+        # would present as an unreproducible one-line diff, which is worse
+        # than not checking it. PAGE_CACHE is 0 here, so sharing the
+        # directory's cache does not close that; comparing the cell that has
+        # no clock in it does.
+        def board_cell(page, name):
+            mark = f"<span class='bname'>{name}</span>"
+            return page.split(mark)[1].split("</td>")[0] if mark in page else ""
+        check("and the Board cell is the one this directory's own page draws, "
+              "character for character, which is the whole point of the endpoint",
+              board_cell(frag["rows"], "The Rusty Modem") != ""
+              and board_cell(frag["rows"], "The Rusty Modem")
+                  == board_cell(dirpage, "The Rusty Modem"))
+        check("so the badges travel with them",
+              '<span class="badges">' in frag["rows"]
+              and 'class="bd k-soft"' in frag["rows"])
+        check("the drawn list carries no token and no moderator note either",
+              "token" not in frag["rows"] and "note" not in frag["rows"]
+              and token not in frag_raw)
+
         print("A stranger cannot take the listing over")
         code, other, _ = post({"name": "The Rusty Modem", "owner": "Impostor",
                                "description": "hijack attempt", "port": 6400,

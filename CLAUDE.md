@@ -8,8 +8,37 @@ This repository is the directory only (unleashedbbs.net). Three repos now:
 |---|---|---|---|
 | unleashed_directory (this) | GPL-3.0-or-later, public | unleashedbbs.net | the list, announce, badges, data, how, rules; renders the guides at `/docs`; `sitekit.py`, the canonical page engine |
 | unleashed_documentation | CC BY-SA 4.0, public | unleashedbbs.net/docs (via this server) | the guides' Markdown, the captured screens, the stock skins |
-| unleashed_site | all rights reserved, private | unleashedbbs.com, .org | pitch, installer and fetcher, hardware, satellites, marketing pages, manifesto, author; the live list drawn from this server's JSON |
+| unleashed_site | all rights reserved, private | unleashedbbs.com, .org | pitch, installer and fetcher, hardware, satellites, marketing pages, manifesto, author; the live list, drawn HERE and embedded there |
 
+- **The site's board list is drawn here, not there** (2.0.18, 2026-10-05).
+  `/api/list.json` answers the rows `/directory` itself draws, the three
+  figures above the list and `LIST_FOOT`; the site drops them into its own
+  table and draws no board row. The filter and the search stay here: they
+  need this page's browser script.
+  - **The reason, and it is the kind of thing worth not relearning.** From
+    the split until 2.0.18 the site built its own rows from
+    `/api/boards.json`, so one listing had two renderers. They drifted the
+    way two copies of anything drift: the rows here grew the badges, the
+    hardware label, the 24 hour figures, the day chart and the SSH padlock,
+    and the site's grew only the padlock, because that one was hand-copied
+    across at the time. Rob read the result as an old page. Every field the
+    site needed was already in the JSON, so **no amount of extra data would
+    have closed it: the drift was in the drawing.**
+  - **The guard everyone would have blamed was passing.** `sitekit.py` was
+    byte for byte identical in both repositories throughout, 1.3.6 on each,
+    and the site's suite checks precisely that. A drift guard on a shared
+    file says nothing about two files that were never copies. **Ask "which
+    half of this is shared", not "is the shared file in sync".**
+  - **It was cheap only because the CSS was already shared.** Everything
+    those rows need to look right, the badge chips, their tooltips, the
+    sparkline and the day chart, is in `sitekit.py`. The alternative,
+    moving `BADGES`, the art, the aliases, `row_keys` and the update arrow
+    into the shared file, is about nine hundred lines plus a layer to read
+    the site's dicts, and `steady` and `newest_release()` are this
+    server's anyway.
+  - **Anything that wants the data still reads `/api/boards.json`**, whose
+    field names are a contract. `/api/list.json` returns this page's markup
+    and may change with this page; `/data` says so.
 - **`sitekit.py` is edited here and copied byte-for-byte into the site**,
   whose suite fails on a stale copy. Bump `SITEKIT_VERSION` with every
   change. Everything below that talks about the installer, BOARDS, the

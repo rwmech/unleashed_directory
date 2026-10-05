@@ -37,6 +37,7 @@ longer means hosting anybody's installer or pitch.
 | `/badges` | what every badge means, searchable |
 | `/how`, `/rules` | how to get listed, and the house rules |
 | `/data`, `/api/boards.json`, `/feed.xml` | the data: what the API gives, the JSON, and new boards as RSS |
+| `/api/list.json` | the same boards already drawn as table rows, for the main site's own list page, so one listing has one renderer |
 | `/announce` | the heartbeat, `POST` only |
 | `/docs/<page>`, `/skins/<file>` | the guides and the stock display skins, when a checkout of [unleashed_documentation](https://github.com/rwmech/unleashed_documentation) is given to it |
 | `/health` | `ok`, for uptime checks |

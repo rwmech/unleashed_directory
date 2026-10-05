@@ -14,6 +14,55 @@
 
 # Changelog
 
+## 2.0.18, 2026-10-05
+
+- **`GET /api/list.json`: the board rows, drawn here, for the main site's
+  Communities online page** (Rob, 2026-10-05: "communities online is not
+  showing the same as .net, fix that in a web lane", and
+  "unleashedbbs.com/directory is old"). It answers the rows this
+  directory's own page draws, the three figures above the list and the
+  footnote under it, cached for a few seconds like the other endpoints.
+  `/api/boards.json` is untouched: anything that wants the data rather
+  than the page still reads that, and the new endpoint's markup is this
+  directory's and may change with it, which `/data` now says.
+- **Why rendered markup rather than more JSON, which is the interesting
+  part.** Since the split (2026-09-26) the main site drew its own rows from
+  `/api/boards.json`, so one listing had two renderers, and they drifted
+  exactly as two copies of anything drift. The directory's rows grew the
+  badges, the hardware label, the 24 hour figures, the day chart and then
+  the SSH padlock; the site's never grew the first four. Every field they
+  needed was already in the JSON, so no amount of extra data would have
+  closed it: **the drift was in the drawing, and only moving the drawing
+  closes it.** The rows are drawn once now, here, where the badge tables,
+  the update arrow, the charts and "steady" already live.
+- **What made it cheap is `sitekit.py`**, the page engine both servers
+  already share byte for byte: every style those rows need, the badge
+  chips, their tooltips, the sparkline and the day chart, is in it
+  already, so the rows style themselves on either site with nothing
+  copied and no stylesheet moved.
+- **Worth recording, because the obvious suspect was innocent.**
+  `sitekit.py` was byte for byte identical in both repositories the whole
+  time, at 1.3.6 on each, and the site's suite has a check that says so
+  which was passing. A drift guard on the shared file cannot see a drift
+  between two files that were never copies, and that is what this was: two
+  independent implementations of one listing. The guard was not weak, it
+  was pointed at the wrong half.
+- **It shares the `indexdata` cache** with the front page and `/directory`,
+  rather than calling `index_data()` raw. Raw, each window cost a second
+  database read, a second chart build and a second `settle()`, and
+  `settle()` writes, so a window with a reader on each page did two of
+  those as well.
+- Only `/directory` ever had the filter and the search, and they stay
+  here: both need this page's browser script. The fragment carries no
+  filter selection, so `board_matches()` passes every board and no row
+  comes back hidden, which the suite checks along with the Board cell being
+  the one `/directory` itself serves, character for character. **The Board
+  cell, not the whole row**, because the State cell carries `human_short()`
+  and `human_streak()`, which step at 90 seconds and then every minute: two
+  GETs either side of a boundary differ by one character, and that check
+  would have failed for the clock rather than for a drift, presenting as an
+  unreproducible one-line diff.
+
 ## 2.0.17, 2026-10-05
 
 - **This directory publishes four listings from one address, not one**
