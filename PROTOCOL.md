@@ -188,15 +188,17 @@ Two limits, and a directory implementing this protocol should apply both, the sa
 | Limit | unleashedbbs.net | Counts |
 |---|---|---|
 | **Per board** | one accepted announce every 30 seconds | A board is its listing when it sends a token the directory issued, wherever it posts from. A post with no token, or a token the directory does not know, is the address it came from plus the `port` it announced. |
-| **Per address** | 20 accepted announces in any one minute | Every announce from one source address, whatever board it says it is. |
+| **Per address** | 30 accepted announces in any one minute | Every announce from one source address, whatever board it says it is. |
 
-**Per board, not per address.** Several boards can share one public address, one port each, which is how a sysop with two boards behind one home router has to run them. Each has its own clock, so one board's heartbeat never gets another board's update refused. A board's first announce, before it has a token, also starts the clock of the listing it creates, so the first heartbeat that carries the new token is timed from it.
+**Per board, not per address.** Several boards can share one public address, one port each, which is how a sysop with two boards behind one home router has to run them. Each has its own clock, so one board's heartbeat never gets another board's update refused. For the same reason unleashedbbs.net publishes up to four listings from one address rather than one; another directory may choose differently, and the protocol does not fix the number. A board's first announce, before it has a token, also starts the clock of the listing it creates, so the first heartbeat that carries the new token is timed from it.
 
-**The per-address ceiling is the abuse stop**, because tokens are free and a per-board clock alone would let one address post as many boards as it likes. It sits well above what real boards send: a directory lets one address hold only a handful of listings, and each is held to two announces a minute.
+**The per-address ceiling is the abuse stop**, because tokens are free and a per-board clock alone would let one address post as many boards as it likes. It has to sit above what the address's own listings can send between them, which is the handful of entries one address may hold multiplied by what the per-board clock allows each of them in a minute; set below that, it refuses real boards before it ever refuses a stranger. unleashedbbs.net holds at most seven entries from one address, two announces a minute each, so 14 is its real ceiling and the limit is 30.
 
-**A refused announce changes nothing.** It moves no clock and counts against no ceiling, so a board that is told `429` and waits the right time is heard. A board should treat `429` as "try again later", keep its data, and send its next heartbeat or update when it is due; retrying at once only earns another `429`.
+**An announce refused for going too often changes nothing.** It moves no clock and counts against no ceiling, so a board that is told `429` and waits the right time is heard. A board should treat `429` as "try again later", keep its data, and send its next heartbeat or update when it is due; retrying at once only earns another `429`.
 
-The figures are this directory's settings (`DIRECTORY_MIN_SECONDS` and `DIRECTORY_ADDRESS_PER_MINUTE`); another directory may choose its own. The one-listing-per-address rule below is a separate thing and is not a rate limit: it decides whether a new listing is published or queued.
+**The one exception, and it is deliberate:** an announce refused because the address already holds all the entries it may (`too many listings from this address`) has already been counted against that address's minute by the time it is refused. Uncounted, a flood against a full address would never meet the per-address ceiling at all, which is the one thing that ceiling is for. It is still a `429` and a board still treats it the same way.
+
+The figures are this directory's settings (`DIRECTORY_MIN_SECONDS` and `DIRECTORY_ADDRESS_PER_MINUTE`); another directory may choose its own. The listings-per-address rule below is a separate thing and is not a rate limit: it decides whether a new listing is published or queued.
 
 ## The token
 
@@ -209,6 +211,8 @@ Minted by the directory on the first announce, random, and tied to that listing.
 **What it must not be:** derived from anything public. A token computed from the board's name, or from its MAC address, is a lock whose key is printed on the door, and since both the firmware and this server are open source, everybody has the algorithm. Random, server-issued, or it is decoration.
 
 A directory that receives an unknown token treats the request as a brand new listing. It never transfers an existing one.
+
+**So a board can tell that its token was not recognised, and should.** A reply to a brand new listing carries `beats` of 1 and an `X-Listing-Token` that is not the one the board sent. A board that sent a token and gets both of those back has just started a second entry and left its old one to go stale, which is what a truncated or mistyped token does. It is worth saying on the board rather than silently saving the new one: a sysop who pasted a token short has no other way to find out.
 
 ## Listing states
 

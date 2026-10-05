@@ -45,15 +45,41 @@ Environment=DIRECTORY_HEADER=/etc/unleashed-directory/header.json
 Environment=DIRECTORY_FIRMWARE_DIR=/srv/unleashed_site/firmware
 Environment=DIRECTORY_PENDING_HOURS=3
 Environment=DIRECTORY_EXPIRE_DAYS=7
-Environment=DIRECTORY_PER_ADDRESS=1
+# Four, not the shipped one (2.0.17). Several of the project's own boards
+# sit behind one home address, one port each as the go-public guide says to
+# run them, and with one published listing per address the second and third
+# are queued for ever: the published ones never consult this again, so the
+# newcomer waits behind siblings that will not leave. Four is three boards
+# and room for one that has lost its token and is listing itself again
+# beside its own husk, which is what a reflash or a restore does. So it is
+# three boards and one spare rather than a round number: a FOURTH board
+# behind this address means five here, or the newcomer queues exactly as
+# HQ did. Two things move with it: ADDRESS_PER_MINUTE below, and the row
+# cap, which the code reads as PER_ADDRESS + SPARE_ROWS. It also decides
+# how many husks of one board can be published rather than queued, which
+# is what dedupe is now for (see CLAUDE.md).
+Environment=DIRECTORY_PER_ADDRESS=4
+# Pinned at the shipped default rather than left to it, because the
+# arithmetic in the next comment adds it to PER_ADDRESS: left implicit, a
+# change to the code this unit overrides would falsify a comment here.
+Environment=DIRECTORY_SPARE_ROWS=3
 # The rate limit (site 1.3.12). MIN_SECONDS is per board: its token, or
 # its address and port when it has none, so two boards behind one home
 # address each have their own clock. ADDRESS_PER_MINUTE is the abuse stop:
-# accepted announces from one address in a minute, whatever boards it posts
-# as. One address holds at most four listings, each held to two a minute,
-# so 20 is well clear of real boards. A refused post moves neither.
+# announces from one address in a minute, whatever boards it posts as.
+#
+# It has to stay clear of what this address's own boards send. The address
+# holds at most PER_ADDRESS + SPARE_ROWS = 4 + 3 rows, and MIN_SECONDS
+# holds each of the seven to two counted posts inside the minute, so 14 is
+# the real ceiling and 30 is about twice it.
+#
+# A post refused for going too often moves neither clock. One refused at
+# the row cap ("too many listings from this address") has already been
+# counted against the minute by the time it is refused, which is
+# deliberate: uncounted, a flood against a full address would never meet
+# this ceiling at all.
 Environment=DIRECTORY_MIN_SECONDS=30
-Environment=DIRECTORY_ADDRESS_PER_MINUTE=20
+Environment=DIRECTORY_ADDRESS_PER_MINUTE=30
 # Who may tell the server where a request came from. Caddy reaches it over
 # loopback, so loopback is the whole list. X-Forwarded-For is a header any
 # stranger can send, and it is believed only on a connection from one of

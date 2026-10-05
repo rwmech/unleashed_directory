@@ -24,8 +24,9 @@ Design:       Standard library only, SQLite for storage, one file. A
               Anti-spam, in the order it does the work:
                 - a listing is not public until it has sustained
                   heartbeats for PENDING_HOURS
-                - one automatic listing per address; the rest queue for a
-                  human, counted per /64 on IPv6
+                - PER_ADDRESS automatic listings per address, one as
+                  shipped and four on this deployment; the rest queue for
+                  a human, counted per /64 on IPv6
                 - a rate limit on the endpoint
                 - a report link, and a moderator
 
@@ -118,6 +119,20 @@ PENDING_HOURS = float(os.environ.get("DIRECTORY_PENDING_HOURS", "3"))
 # than that and there is no row left to relist.
 RELIST_DAYS   = float(os.environ.get("DIRECTORY_RELIST_DAYS", "4"))
 EXPIRE_DAYS   = float(os.environ.get("DIRECTORY_EXPIRE_DAYS", "7"))
+# How many listings one address may have published without a human looking.
+# One as shipped, which is the right default for a directory that mostly
+# meets strangers: addresses are the scarce resource, so this is the control
+# that actually bites, and the rest queue rather than being refused. A
+# deployment where several boards a human already trusts share one address,
+# one port each as the go-public guide tells a sysop to do, raises it; a
+# board that then loses its token is not queued behind its own siblings.
+# Raising it means raising ADDRESS_PER_MINUTE with it: see the note there.
+# It is also read by the row cap below as PER_ADDRESS + SPARE_ROWS, so
+# raising it by three raised how many rows an address may accumulate from
+# four to seven, which is what that arithmetic rests on. And it decides
+# how many husks of one board may be published rather than queued: see
+# Known holes in CLAUDE.md. The project's own deployment runs 4
+# (deploy/unleashed-directory.service).
 PER_ADDRESS   = int(os.environ.get("DIRECTORY_PER_ADDRESS", "1"))
 # The heartbeat rate limit is per BOARD (site 1.3.12): the least time
 # between two accepted announces from one board. A board is its listing when
@@ -128,12 +143,34 @@ PER_ADDRESS   = int(os.environ.get("DIRECTORY_PER_ADDRESS", "1"))
 # the other board's caller-join update refused.
 MIN_SECONDS   = int(os.environ.get("DIRECTORY_MIN_SECONDS", "30"))
 # And a ceiling per ADDRESS, the abuse stop the per-board clock is not:
-# accepted announces from one address in any one minute. Tokens are free,
-# so the per-board clock alone lets one address post as many boards as it
-# likes. One address can hold PER_ADDRESS + SPARE_ROWS listings (4 as
-# shipped) and each board is held to two announces a minute by MIN_SECONDS,
-# so 20 is more than twice what one address full of real boards can send,
-# and still caps a loop at one post every three seconds. 0 switches it off.
+# announces from one address in any one minute that got as far as being
+# counted. Tokens are free, so the per-board clock alone lets one address
+# post as many boards as it likes: a stranger varying the port gets a fresh
+# rate key every time, and MIN_SECONDS never bites. This is what caps that
+# on IPv4, because such a post is counted here and only then refused at the
+# row cap below. On IPv6 it does not: this counts the exact address while
+# every cap below counts the /64, so rotating the low bits buys a fresh
+# minute as well as a fresh rate key. See Known holes in CLAUDE.md; the row
+# cap still holds the listings, so what is loose is post volume.
+#
+# What it has to stay clear of is arithmetic rather than a number to
+# remember, and it moves when PER_ADDRESS does. One address holds at most
+# PER_ADDRESS + SPARE_ROWS rows; every one of them can be a board that
+# heartbeats, a queued one included; and MIN_SECONDS holds each to
+# 59 // MIN_SECONDS + 1 counted posts inside the window, which is fixed
+# from an address's first counted post rather than sliding, so a post past
+# the end of it opens a window of its own (measured: two at 30, the second
+# window starting on the post that made the third). So an address full of
+# real boards sends at most (PER_ADDRESS + SPARE_ROWS) * that, which is 8
+# at the settings shipped here, and this wants to be about twice it: 20 is
+# comfortable and holds a sustained loop to one counted post every three
+# seconds, though a fixed window means a burst can put this many at the end
+# of one window and as many again at the start of the next. Raise
+# PER_ADDRESS without raising this and an address full of its own boards
+# eventually meets the ceiling instead of a stranger doing it. The
+# project's deployment runs PER_ADDRESS 4 and this 30
+# (deploy/unleashed-directory.service, which shows that arithmetic).
+# 0 switches it off.
 ADDRESS_PER_MINUTE = int(os.environ.get("DIRECTORY_ADDRESS_PER_MINUTE", "20"))
 # How many extra entries one address may hold beyond its published one,
 # waiting for a human. Small on purpose: it is the stop on a board that has
@@ -3595,8 +3632,12 @@ minutes from anything that can make an HTTP request:</p>
 
 <p>The reply carries an <code>X-Listing-Token</code> header. Keep it and send it
 back in <code>token</code> on every later heartbeat: that is what stops somebody
-else taking over your entry. Send it whole. It is 32 characters and a fragment of
-one will be refused.</p>
+else taking over your entry. <b>Send it whole.</b> It is 32 characters, and a
+token this directory does not recognise is not refused: it is a brand new
+listing, never a transfer, so a cut or mistyped token quietly starts a second
+entry and leaves your old one to go stale. The reply tells you: a brand new
+listing comes back with <code>beats</code> of 1 and a token that is not the one
+you sent.</p>
 
 <p><b>Badges, if you want them.</b> Seven optional fields put small badges under
 your board's name: what it runs on in your own words, what terminals it speaks,

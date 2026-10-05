@@ -185,13 +185,16 @@ DELETE FROM boards WHERE id=7;
 
 All of them live in `/etc/systemd/system/unleashed-directory.service` as environment lines. Change one, then `systemctl daemon-reload && systemctl restart unleashed-directory`.
 
+The **Default** column is what `server.py` uses when nothing sets the variable. The unit in `deploy/` is unleashedbbs.net's own and already carries values for this deployment rather than those defaults, as it does for `DIRECTORY_URL` and `DIRECTORY_NAME`: it runs `DIRECTORY_PER_ADDRESS=4` and `DIRECTORY_ADDRESS_PER_MINUTE=30` (the two move together, see below). `setup.sh` installs that unit as it stands, so a directory of your own wants those two lines read and set to whatever suits it.
+
 | Variable | Default | What it does |
 |---|---|---|
 | `DIRECTORY_PENDING_HOURS` | `3` | continuous heartbeats before a listing goes public |
 | `DIRECTORY_EXPIRE_DAYS` | `7` | silence before a listing is deleted |
-| `DIRECTORY_PER_ADDRESS` | `1` | automatic listings per address, per `/64` on IPv6 |
+| `DIRECTORY_PER_ADDRESS` | `1` | automatic listings per address, per `/64` on IPv6. Raise it where several boards you trust share one address, and raise the line below with it |
 | `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one board |
-| `DIRECTORY_ADDRESS_PER_MINUTE` | `20` | most accepted announces from one address in a minute. `0` switches it off |
+| `DIRECTORY_ADDRESS_PER_MINUTE` | `20` | most announces from one address in a minute that got as far as being counted. `0` switches it off. It has to stay about twice `(PER_ADDRESS + SPARE_ROWS) x (60 / MIN_SECONDS)`, or an address full of real boards meets it |
+| `DIRECTORY_SPARE_ROWS` | `3` | extra entries one address may hold beyond its published ones, waiting for a human |
 | `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page is reused |
 | `DIRECTORY_NAME` | | the title on the page |
 | `DIRECTORY_HEADER` | `/etc/unleashed-directory/header.json` | the header file: see [Your header](#your-header) |

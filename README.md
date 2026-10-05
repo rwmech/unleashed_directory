@@ -96,8 +96,21 @@ Settings come from the environment, so a deployment never edits the code:
 | `DIRECTORY_EXPIRE_DAYS` | `7` | silence before a listing is deleted and its name freed |
 | `DIRECTORY_PER_ADDRESS` | `1` | automatic listings per address, per `/64` on IPv6. The rest queue for a human |
 | `DIRECTORY_MIN_SECONDS` | `30` | minimum gap between accepted heartbeats from one board: its token, or its address and port when it has none |
-| `DIRECTORY_ADDRESS_PER_MINUTE` | `20` | most accepted announces from one address in a minute, whatever boards it posts as. `0` switches it off |
+| `DIRECTORY_ADDRESS_PER_MINUTE` | `20` | most announces from one address in a minute that got as far as being counted, whatever boards it posts as. `0` switches it off |
+| `DIRECTORY_SPARE_ROWS` | `3` | extra entries one address may hold beyond its published ones, waiting for a human |
 | `DIRECTORY_PAGE_CACHE` | `10` | seconds the rendered page and feed are reused |
+
+Those are the defaults. **`DIRECTORY_PER_ADDRESS` and
+`DIRECTORY_ADDRESS_PER_MINUTE` move together:** one address may hold
+`PER_ADDRESS + SPARE_ROWS` entries, each of which the per-board clock allows
+`60 / MIN_SECONDS` announces a minute, so publishing more listings per address
+raises what that address's own boards send and the per-minute ceiling has to
+stay about twice it. Set it below and the limit refuses real boards before it
+ever refuses a stranger. unleashedbbs.net runs 4 and 30; see
+`deploy/unleashed-directory.service`, which shows the arithmetic. **That unit
+is this deployment's own** and `setup.sh` installs it as it stands, the way it
+does for `DIRECTORY_URL` and `DIRECTORY_NAME`, so a directory of your own wants
+both lines read and set to suit it rather than inheriting them.
 
 ## Keeping it current
 

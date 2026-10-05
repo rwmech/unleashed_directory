@@ -87,12 +87,15 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   our own proxy appended and the only part it vouches for; the leftmost is
   whatever the caller typed, and taking it is how this was wrong until
   0.11.4. Three things key off the address, so getting it wrong is not
-  cosmetic: `X-Seen-Address` (a board's rough DDNS), the one listing per
-  address cap, and report dedupe.
+  cosmetic: `X-Seen-Address` (a board's rough DDNS), the listings-per-address
+  cap, and report dedupe.
 - **If the forwarded headers ever stop arriving, the directory can publish
-  exactly one board.** Every heartbeat collapses to one `group_key`, so one
-  listing goes public and the rest queue for ever, the fifth distinct board
-  evicts the stalest, and every board then shares one address's ceiling of
+  no more boards than one address may.** Every heartbeat collapses to one
+  `group_key`, so `DIRECTORY_PER_ADDRESS` listings go public (four on this
+  deployment, one as shipped) and every other board queues for ever, the
+  one past `PER_ADDRESS + SPARE_ROWS` (the eighth here, the fifth as
+  shipped) evicts the stalest entry if it has gone quiet and is refused if
+  it has not, and every board then shares one address's ceiling of
   `DIRECTORY_ADDRESS_PER_MINUTE` (the per-board clock survives, since
   1.3.12 it is keyed on the token). The server prints its trusted list at
   startup and logs one warning on an announce with no forwarded headers, so
@@ -112,6 +115,105 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
   the row is read after `settle()`**: the first cut read the whole row
   first, and the UPDATE wrote its pre-settle state back, so a board could
   never go public. The suite caught it.
+- **The deployment publishes four listings per address, not one** (Rob,
+  2026-10-05, in the unit file; `server.py`'s default stays 1, but
+  `setup.sh` installs that unit verbatim, so somebody installing from this
+  repository inherits 4 and 30 the same way they inherit `DIRECTORY_URL`,
+  and README.md and INSTALL.md now say so beside their table of defaults).
+  What it cost to learn is the reason it is written down. On 2026-10-04 Rob moved Unleashed HQ to a new
+  board and typed the old board's token in; the token was **26 characters
+  against the 32 this directory mints** (`secrets.token_hex(16)`), the
+  firmware's own floor is 16, so it passed every check on the board and
+  went out looking valid. An unknown token is a brand new listing and
+  never a transfer, so HQ arrived as a stranger at an address already
+  holding two published boards, and with `PER_ADDRESS` at 1 the new row
+  was `queued` and stayed there: the queued re-check asks whether the
+  siblings have gone, and the siblings are Rob's other two boards and are
+  not going anywhere. HQ went stale and off the page with nothing said, and
+  a session went into finding out why.
+  - **Four, because that is three boards and one husk.** Rob runs three
+    behind one home address, one port each, which is what the go-public
+    guide tells every sysop to do, and the fourth slot is for a board that
+    has lost its token and is listing itself again beside its own
+    remains, which is what a reflash or a restore does.
+  - **It is not retroactive, and the count of where it is read is itself
+    an example of the shape below.** I wrote "exactly two places" and the
+    review found three, all on the way in: the queued re-check, a brand
+    new row's state, and the row cap, which is `PER_ADDRESS + SPARE_ROWS`.
+    The one I left out is the one that matters most, because raising
+    `PER_ADDRESS` by three raised the rows an address may accumulate from
+    four to seven, and that seven is the whole basis of the
+    `ADDRESS_PER_MINUTE` arithmetic in the next paragraph. A heartbeat
+    with a known token returns before all three, so no published listing
+    meets the setting again.
+  - **A queued row recovers by itself, once nothing else is in the way.**
+    The re-check runs on every heartbeat, so one beat makes it `pending`
+    and the pending hours publish it. But that re-check does not ask
+    whether its published siblings are still answering (the Known hole
+    below), so husks sitting in `pending` or `online` still count: the
+    order that works is deploy, `dedupe`, then one heartbeat.
+  - **The other half of the change: `PER_ADDRESS` is also how many husks
+    of one board may be published.** A token-loss row at an occupied
+    address used to be `queued`, and `settle()` never promotes `queued`,
+    so it was invisible until the reaper. With a free slot it is `pending`
+    instead, and `settle()` promotes on the pending hours alone without
+    asking whether it is still answering, so a ghost listing reaches the
+    page under the board's own name. `dedupe` is the cleanup, which is a
+    job it did not have before; the fix is one clause in `settle()`.
+  - **`ADDRESS_PER_MINUTE` had to move with it, and that is the general
+    lesson.** Its comment justified 20 with arithmetic derived from
+    `PER_ADDRESS`, "4 as shipped ... more than twice what one address full
+    of real boards can send", so raising one setting quietly falsified the
+    comment on the other and narrowed the margin from 2.5x to 1.4x. One
+    address holds `PER_ADDRESS + SPARE_ROWS` rows, every one of which can
+    be a board that heartbeats (a queued one included), and `MIN_SECONDS`
+    allows each two counted posts in the fixed 60 second window, so seven
+    rows is a real ceiling of 14 and the deployment runs 30. The comments
+    state the rule now and name the dependency in both directions; a
+    figure in them says which settings it assumes. **This is the count
+    written beside a table again**, the shape that has already shipped
+    here as a form showing 5 of 7 fields and `max_users` at 100.
+  - **And it made `dbtool.sh dedupe` dangerous**, which is the half a
+    settings change is least likely to be checked for. It kept the entry
+    each address was heard from last and deleted every other, which is
+    correct while an address publishes one listing and would have
+    destroyed two of Rob's three boards, with their charts, the first
+    time he tidied up after a lost token. It now takes only entries that
+    have stopped answering, by the same three-missed-intervals test the
+    server's own eviction uses, and leaves anything still beating
+    whatever an address holds. **A maintenance tool encodes the policy
+    that was in force when it was written**: changing the policy means
+    reading every tool that acts on it.
+  - **Then the rewrite put the same fault back twice, and the code review
+    found both. Worth keeping, because each is a general shape.**
+    - **"Newest" is not "alive".** A board that has lost its token mints a
+      row on every heartbeat, so it is by construction its address's newest
+      entry. With the other boards dark for half an hour, two being flashed
+      say, every real listing was "past the newest and quiet" and the
+      survivor would have been the worthless row. The guard was protecting
+      by recency, which was the OLD rule's assumption carried into the new
+      one; the fix is `beats <= 1` (an abandoned row posted once and never
+      came back, since `server.py` inserts 1 and only the known-token path
+      increments it) **or** an established sibling still answering, which
+      is what tells "that row is dead" from "this whole address is off".
+      Requiring a live sibling alone does nothing, because the churning
+      husk IS a live sibling.
+    - **A predicate with a clock in it, re-evaluated per statement, across
+      a human.** `q()` is one `sqlite3` process a call, so the count, the
+      list and each delete each ran the predicate again with
+      `strftime('now')` moved on and the y/N prompt in between: a board
+      that crossed its grace while the operator read the screen was
+      deleted without being printed, and one that crossed between two
+      deletes lost its chart and kept its listing, which is the orphan
+      class the same change set out to close. The old predicate was
+      clock-free, so this shape was safe until it was not. The ids are
+      pinned once now. **A destructive command must decide once, and
+      delete what it showed.**
+    - The same review added a floor of one minute to the grace (a restored
+      or hand-edited `interval_min` of 0 made it 0) and skipped rows
+      carrying the schema's empty `group_key` rather than judging
+      strangers as each other's siblings. Both are states only this tool
+      ever meets, which is the argument for guarding them here.
 - `role_for(host)` serves three faces from one process by Host header: the
   board list, the argument (the manifesto), and the machine-readable data.
 - Pages are cached and the cache is dropped only when `settle()` actually
@@ -1098,14 +1200,110 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
 
 ## Known holes
 
-- `PER_ADDRESS` counts rows of any state, so a board that loses its token is
-  queued behind its own dead listing until the 7 day reaper clears it.
-- `queued` is a dead end: `settle()` only promotes `pending`, and the update
-  path only moves `offline` back to `pending`. A queued board heartbeats
-  forever, so it never expires either, and never gets promoted.
-- Both are the same root cause: state transitions were written in one
-  direction only. Fix is to skip `offline` rows in the admission count and
-  re-evaluate `queued` on each heartbeat. Not yet done, Rob has seen it.
+- **The two holes written here were fixed and this said otherwise until
+  2026-10-05.** They were "`PER_ADDRESS` counts rows of any state" and
+  "`queued` is a dead end", with the fix named as skipping dead rows in the
+  admission count and re-evaluating `queued` on each heartbeat. Both are in
+  the code: a new row's `live` count skips a published row that has stopped
+  answering, and the update path re-asks the question on every heartbeat
+  from a queued board. The note stayed, reading "not yet done", and was read
+  as current while HQ's queuing was diagnosed. A known hole has to be struck
+  out by whatever closes it, or it costs more than it saved.
+- **The two admission counts do not agree, and only one of them checks
+  whether a sibling is alive.** A brand new row skips published rows that
+  have gone quiet; the queued re-check counts every sibling in `pending` or
+  `online` whatever its `last_seen`. So a board sitting in `queued` is still
+  held back by a published sibling that stopped answering days ago, until
+  the reaper clears it, while the same board posting as a stranger would be
+  let in. **The fix is one helper both paths read**, something like
+  `livePublished(con, group, skip_id)` returning the count the new-row path
+  computes, called from the queued re-check as well; and **it wants a test
+  of its own**, a queued board behind a sibling that is published and has
+  stopped answering, which is why it was not done inside a settings commit.
+  It bites much less now that an address publishes four.
+
+- **`settle()` promotes a `pending` row without asking whether it still
+  answers**, and the page lists `online`. Raising `PER_ADDRESS` made this
+  reachable: a token-loss husk now lands in a free published slot as
+  `pending` instead of `queued`, so the pending hours publish a listing
+  that stopped beating hours ago, under the real board's name, until the
+  reaper or `dedupe` takes it. The fix is one clause in `settle()`; it
+  wants a test, and `PER_ADDRESS` 4 is what makes it worth writing.
+- **`PER_ADDRESS` is advisory for a returning board.** The `offline` to
+  `online` branch restores a board that comes back inside `RELIST_DAYS`
+  without consulting the cap, and `settle()` only ever demotes, so an
+  address can hold more live rows than it is allowed: four published, a
+  fifth queued, one of the four goes quiet and offline, the queued one is
+  promoted into the gap, the quiet one returns. Harmless, but
+  `dbtool.sh status` shows `live 5` and an operator should not read that
+  as the server being broken.
+- **The per-address minute counts the exact address; every cap counts the
+  `/64`.** `addrminute` is keyed on `address` while `PER_ADDRESS`,
+  `SPARE_ROWS` and the row cap are keyed on `group_key`, so on IPv6
+  rotating the low bits of a residential `/64` buys a fresh minute and a
+  fresh per-board rate key on every post. The row cap still holds the
+  listings to seven a `/64`, so what is loose is post volume and database
+  churn rather than listing spam, which is why it has not bitten. The fix
+  is one argument: pass `group` rather than `address` to `rate_refused`
+  and `rate_record`. It changes nothing for IPv4, where the two are equal.
+- **The suite does not pin the setting this release is about.** The env
+  dicts in `selftest.py` override `DIRECTORY_MIN_SECONDS` and
+  `DIRECTORY_ADDRESS_PER_MINUTE` but inherit `DIRECTORY_PER_ADDRESS` from
+  the environment, and two checks ("the second listing is queued, not
+  published", "One address cannot fill the table") depend on it being 1
+  and the row cap being 4. Run the suite anywhere that variable is
+  exported and both silently test something else. One line per env dict
+  (`DIRECTORY_PER_ADDRESS="1", DIRECTORY_SPARE_ROWS="3"`) fixes it. And
+  nothing tests the new policy (four published, the fifth queued) or the
+  `dedupe` predicate, which is now the most dangerous SQL in the
+  repository: its only coverage is a scratch script outside the tree, and
+  the case that broke the first cut was one that script did not contain.
+- **`prune`'s state list predates this change.** It takes `offline` and
+  `queued`, which was the complete set of husk states while an occupied
+  address queued everything; a husk is now created `pending`, so prune
+  ignores it until `settle()` has walked it through `online` to `offline`.
+  `dedupe` covers it and the end state is reached, but the usage text
+  "delete quiet/queued entries" has a gap in it.
+
+- **Three documentation drifts, found 2026-10-05 while raising
+  `PER_ADDRESS`, all in other repositories and all a small docs pass.**
+  Written here because here is where the next person looking at this will
+  be; none is a server change.
+  - `sitekit.py` has two comments that read as if an address publishes one
+    listing: "One automatic listing per address, per /64 on v6" (~96) and
+    the no-forwarded-headers warning's "one listing gets published and the
+    rest queue for ever" (~357). The point each makes still holds, so this
+    is wording. **Not fixed deliberately:** that file is copied byte for
+    byte into `unleashed_site` with a recorded hash, so editing it is a
+    cross-repo change plus a `SITEKIT_VERSION` bump, and it did not belong
+    in a settings commit. One line for whoever next edits sitekit.
+  - `unleashed_site/CLAUDE.md` (~1201) carries the same stale "Known
+    holes" paragraph that was struck out here, "not yet done, Rob has seen
+    it", and will mislead the next reader there the way it misled this one.
+  - **One token for up to four directories, which is the ninety rows by
+    design.** The firmware has a single `token` setting for its `servers`
+    list and overwrites it with whatever a reply carries whenever it
+    differs, posting to each directory in turn. So a board listed in two
+    directories sends each of them the other's token, and **the
+    documented two-directory configuration mints a fresh listing at a
+    directory on every round, for ever.** It is also why the directory
+    must NOT start refusing a token by its shape, which is the obvious
+    answer to this release's bug and would delist every board that lists
+    anywhere else. The refusal belongs on the board (the queued 1.2.2
+    CONFIG announce check), and the token-per-directory question belongs
+    with it.
+  - `PROTOCOL.md`'s "Record the listing against the source address, or
+    against `host` when the board supplies one" is not what the server
+    does: the group is always `group_of(address)` and `host` is only a
+    stored field. Pre-existing, and worth striking next time PROTOCOL is
+    open, because a reader could conclude Rob's three boards were three
+    groups and that `PER_ADDRESS` never applied to them.
+  - `unleashed_documentation/pages/announce.md` tells a sysop the token is
+    "issued by the directory the first time ... leave it alone" and never
+    says it is **32 characters**, which is the one line that would have
+    prevented the whole hunt; and it gives **Push secs** as "as shipped,
+    `60`" where the firmware's `kNudgeDef` has been 32 since 1.1.2, so it
+    wants a `::: from 1.1.2` block.
 
 - **`deploy/setup.sh` does not install `shots`, and the suite has been saying
   so.** `server.py` reads a folder beside itself that setup.sh never copies
