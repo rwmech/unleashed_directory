@@ -1029,6 +1029,47 @@ Not preferences. The process. Getting these wrong wastes Rob's time.
     reason: a bool slips through every `isinstance(x, int)` range check, and
     the only reason this one was caught is that the new sibling check beside
     it spells out `not isinstance(sshp, bool)`.
+  - **Nothing has sent it yet, and that is worth knowing before anyone
+    wonders why no padlock has appeared** (2026-10-06). `PROTOCOL.md` says
+    µnleashed sends `ssh_port` from firmware 1.2.2, and 1.2.2 is not
+    released: no branch on any board sends the field, so every listing is
+    still one plain address line and will be until that firmware ships.
+    The field, the parsing, the second line and the filter are all here and
+    correct; they are simply waiting. Third-party software may send it
+    today and would be drawn.
+- **A page that claims what the firmware does carries the release it was
+  read against** (2026-10-06, from the main site's 1.6.6 and recorded here
+  because the rule is not that repository's alone). Rob asked twice why the
+  roadmap on .com had gone stale (2026-09-28 and 2026-10-06), and the
+  answer both times had been a careful edit, which is a promise rather than
+  a mechanism. The site now keeps one figure, `ROADMAP_ASOF`, prints it on
+  the page, says on the page when the installer is offering a release that
+  figure does not cover, and fails its suite when the two disagree.
+  - **The loud half is the page, not the suite.** Autopublish deploys a
+    push within half a minute and the fetcher pulls a release the same way,
+    so a page that reads its own staleness off disk admits it in that half
+    minute, where a suite check waits for somebody to run the suite.
+  - **What it applies to here:** anything on this server that names a
+    firmware version as a fact rather than as a protocol minimum.
+    `PROTOCOL.md`'s "from firmware 1.2.2" is deliberately not one of those:
+    it is the contract both sides build to, and it is right to say the
+    version before the firmware exists. A *page* telling a reader what a
+    board can do today is the thing that needs the figure.
+  - **And the hole the rule exposed, which every gated page here shares:**
+    a `::: from <version>` block renders nothing in a checkout, because the
+    one release in `firmware/` is the committed 0.23.0 fixture and it is
+    older than everything anything gates on, so every check ever written
+    against a gated page tested the pre-release half and the live state was
+    untested. The main site's roadmap checks now render the page against a
+    stub release and assert both halves; the same is owed to any page here
+    that gates on a version.
+  - **The teeth are on the page, not in the suite**, and that distinction
+    is the part to carry over if this is ever done here: neither deployment
+    runs its own selftest, so a check comparing a page against the releases
+    on disk can only fire in a checkout, where the releases are a pinned
+    fixture. What fires is the page reading its own staleness at render
+    time. A suite check is the backstop, and it earns teeth only by
+    comparing against something that moves in a developer's own tree.
 - **Support and interests since 0.22.2.** Amateur radio moved to the
   interests (Radio and sky), slug unchanged; `SUPPORT_MOVED` files a `ham`
   still sent as support with the interests, and `row_support` /
