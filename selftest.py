@@ -3410,8 +3410,14 @@ def main():
         # The prose and the captures cannot disagree about a field's name:
         # every label the board drew on the board and file area forms is a
         # row in the page's tables.
+        # The 40 column captures, because this reads the 9 character label
+        # column (row[1:10]) and only a 40 column form has one: the guides'
+        # captures moved to 80 columns, where those ten bytes are the FRONT
+        # of a 20 character label, and the check then asked the prose to
+        # explain a field called "Board nam". The pages document both
+        # widths, so the narrow capture is the one whose labels are whole.
         drawn = []
-        for shot in ("config-board", "config-area"):
+        for shot in ("config-board-40", "config-area-40"):
             doc = json.load(open(os.path.join(DOCS_DIR, "shots", shot + ".json"),
                                  encoding="utf-8"))
             for row, attr in zip(doc["rows"], doc["attrs"]):

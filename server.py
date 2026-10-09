@@ -4463,6 +4463,33 @@ SHOTS = {
         "Download all and Delete sysop."),
 }
 
+# Every other capture the guides carry, by its own file name, with the alt
+# text tojson.py wrote from the screen itself.
+# ----------------------------------------------------------------------
+# The eight above are hand-written prose and keep it: they are better than
+# a machine's reading of a grid, and the selftest quotes four of them.
+# Everything else is derived, because a list of names written beside a
+# directory of files is the one shape that has drifted here again and
+# again: the guides grew to 28 captures against the 8 named here, and the
+# other 20 reached eleven live pages as the words "art: shot-config-chat"
+# in a paragraph of their own. Deriving means a capture added to the
+# guides draws as soon as a page names it, with nothing to remember here.
+#
+# The cost is measured, not guessed: all 48 captures as SVG are 213 KB of
+# strings built once at import, 4.5 KB each, against the 36 KB the eight
+# already cost. A capture whose file will not parse still costs one
+# picture and never the server (shot_svg's own guard).
+for _f in sorted(SHOTS_DIR.glob("*.json")) if SHOTS_DIR.is_dir() else ():
+    _key = "shot-" + _f.stem
+    if _key in SHOTS:
+        continue
+    try:
+        _alt = json.loads(_f.read_text(encoding="utf-8")).get("alt", "")
+    except (OSError, ValueError):
+        continue
+    if _alt:
+        SHOTS[_key] = (_f.stem, _alt)
+
 SETUP_ALT = (
     "Three steps. A board on a USB cable, flashed from the browser. Wi-Fi "
     "waves, where the board is told your network. A screen showing the BOARD "
